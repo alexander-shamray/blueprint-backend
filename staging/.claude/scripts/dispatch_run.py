@@ -338,7 +338,9 @@ def _result_problem(data, group, issues):
     outcome, review_end, pr, oid, reason = (data[k] for k in ("outcome", "review_end", "pr", "merge_oid", "reason"))
     if outcome not in OUTCOMES:
         return f"outcome {outcome!r} is not one of {', '.join(OUTCOMES)}"
-    if review_end not in REVIEW_ENDS and not (review_end is None and outcome != "merged"):
+    # A merge with no review end is a relaunch step 0 ended on a PR already merged, so no round ran.
+    unreviewed = outcome != "merged" or data["rounds"] == []
+    if review_end not in REVIEW_ENDS and not (review_end is None and unreviewed):
         return f"review_end {review_end!r} is not one of {', '.join(REVIEW_ENDS)}"
     if outcome == "merged" and not (_number(pr) and _oid(oid)):
         return "a merged result needs its pr number and the whole 40-character merge_oid"

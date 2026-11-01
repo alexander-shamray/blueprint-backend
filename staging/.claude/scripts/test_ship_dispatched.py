@@ -112,14 +112,59 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
     def test_step_6_neither_exits_nor_removes_the_worktree(self):
         step = ship_step_6()
         skip = between(flat(step), SKIP_WRITE, "(why:")
-        self.assertIn("lines 2 to 7", skip)
+        self.assertIn("only lines 1 and 8 run", skip)
         self.assertIn("no ExitWorktree", skip)
         self.assertIn("no git-worktree-remove.sh", skip)
         # The numbers name lines of the eight-line block, so the block is read for them.
-        numbered = {m.group(2): m.group(1) for m in re.finditer(r"^(.*)# (\d)\. ", step, re.MULTILINE)}
+        numbered = {m.group(2): m.group(1) for m in re.finditer(r"^(.*)# (\d)\.(?: |$)", step, re.MULTILINE)}
+        self.assertEqual(sorted(numbered), [str(n) for n in range(1, 9)])
         self.assertIn("ExitWorktree", numbered["2"])
         self.assertIn("git-worktree-remove.sh", numbered["7"])
-        self.assertIn("pr-state.sh", numbered["1"], "line 1, the verification, is the one kept")
+        self.assertIn("pr-state.sh", numbered["1"], "line 1, the verification, is kept")
+        self.assertIn("git worktree prune", numbered["8"], "line 8, the prune, is kept")
+
+    def test_step_0_leaves_a_finished_worktree_to_the_dispatcher(self):
+        # A relaunch onto a branch that merged meets step 0's teardown before step 6's skip.
+        step = flat(between(ship(), "0. **Start from the main checkout", "1. **`/branch`**"))
+        rule = between(step, "Under --dispatched, a finished branch", "(why:")
+        self.assertIn("the *already merged* row's included", rule)
+        for skipped in ("no ExitWorktree", "no teardown below", "no git-worktree-remove.sh"):
+            with self.subTest(skipped=skipped):
+                self.assertIn(skipped, rule)
+        self.assertIn("verify MERGED from pr-for-branch.sh and pr-state.sh, write the result and end the run", rule)
+        self.assertLess(step.index(rule), step.index("Then the teardown."), "the rule precedes what it skips")
+
+    def test_every_ending_the_report_names_is_a_result_the_dispatcher_accepts(self):
+        # Built from the endings table's own cells, so a rule the validator refuses fails here, not at night.
+        skeleton = result_skeleton()
+        table = between(ship_report(), "| Ending |", "\n\n")
+        rows = [[cell.strip() for cell in ln.strip("|").split("|")] for ln in table.splitlines()[2:]]
+        endings = {}
+        for label, outcome_cell, end_cell, reason_cell in rows:
+            outcome = re.match(r"`([a-z-]+)`", outcome_cell).group(1)
+            merged = outcome == "merged"
+            ends = [None] if end_cell.startswith("`null`") else ["clean"] + ([None] if "`null`" in end_cell else [])
+            for review_end in ends:
+                data = {**skeleton, "issues": [826, 827], "outcome": outcome,
+                        "pr": 1700 if merged else None, "merge_oid": "a" * 40 if merged else None,
+                        "rounds": [] if "rounds: []" in outcome_cell else [
+                            {"kind": "full", "raised": 2, "fixed": 1, "refused": 1}],
+                        "review_end": review_end, "reason": None if reason_cell == "`null`" else reason_cell}
+                with self.subTest(ending=label, review_end=review_end):
+                    got = dispatch_run.validate_result(data, "G1", [826, 827])
+                    self.assertIsInstance(got, dispatch_run.Result, getattr(got, "why", ""))
+            endings[label] = outcome
+        self.assertEqual(set(endings.values()), set(dispatch_run.OUTCOMES))
+        self.assertEqual(endings["Step 0 found the PR merged, the predicate holding"], "merged")
+        self.assertIn("closed unmerged", table)
+
+    def test_filed_is_defined_as_the_spec_defines_it(self):
+        self.assertIn("filed is every issue filed or commented on, by number", flat(ship_report()))
+
+    def test_the_report_leaves_the_teardown_to_the_dispatcher(self):
+        merge_line = flat(between(ship_report(), "- **The merge and the workspace**", "\n\n"))
+        self.assertIn('Under --dispatched, the pull, containment and removal are the dispatcher\'s: say '
+                      '"teardown left to /dispatch"', merge_line)
 
     def test_the_three_hand_back_cases_are_named(self):
         section = flat(between(ship(), "## It runs to the end", "## Resume, don't restart"))

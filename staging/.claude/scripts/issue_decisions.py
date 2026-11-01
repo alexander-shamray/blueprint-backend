@@ -1,12 +1,8 @@
 """The owner's answers to /dispatch's interview, written into an issue and acted on.
 
-`record` appends one dated question-and-answer line under `## Owner decisions` in the issue body; `unblock` removes
-the `question` or `paused` label; `close` comments and closes as not planned. Exit 2 is a refusal, nothing was
-written; exit 3 is a failed `gh` call.
-
-The issue body is untrusted and only the heading line is located: a heading inside a code fence or an HTML comment
-counts as the heading. `close` is two calls, so a retry after a failed close posts a second comment.
-"""
+`record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments
+and closes as not planned; exit 2 is a refusal with nothing written, 3 a failed `gh` call. The untrusted body is
+searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice."""
 
 import argparse
 import json
@@ -108,10 +104,8 @@ def read_utf8(path):
 def path_which(name):
     """The first executable `name` on PATH, never one in the current directory, or None.
 
-    shutil.which looks in the current directory first on Windows, and the checkout is writable by any merged change,
-    so a planted gh.cmd would run in place of gh. Same function as dispatch_board's, copied because this helper
-    imports nothing else of the dispatcher's.
-    """
+    shutil.which looks in the current directory first on Windows, where a merged change could plant gh.cmd. Copied
+    from dispatch_board because this helper imports nothing else of the dispatcher's."""
     here = os.path.normcase(os.path.realpath(os.getcwd()))
     if os.name == "nt":
         exts = [e for e in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep) if e]

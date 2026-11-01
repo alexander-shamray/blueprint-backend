@@ -337,6 +337,13 @@ class ResultTests(unittest.TestCase):
             with self.subTest(change=change):
                 self.assertIsInstance(self.check({**MERGED_S1, **change}), dr.Invalid)
 
+    def test_a_relaunch_onto_a_merged_branch_has_no_review_to_end(self):
+        # /ship's step 0 ends a relaunch whose PR already merged before any round runs.
+        relaunch = {**MERGED_S1, "rounds": [], "review_end": None}
+        self.assertIsInstance(self.check(relaunch), dr.Result)
+        self.assertIsInstance(self.check({**relaunch, "rounds": MERGED_S1["rounds"]}), dr.Invalid,
+                              "a review that ran has an end")
+
     def test_a_hand_back_or_stop_needs_a_reason(self):
         self.assertIsInstance(self.check(HANDED_S1), dr.Result)
         self.assertIsInstance(self.check({**HANDED_S1, "outcome": "stopped", "review_end": "ceiling"}), dr.Result)

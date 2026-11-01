@@ -13,16 +13,23 @@ scratch=$1
 shift
 root=$(cd "$(dirname "$0")/.." && pwd)
 
-# The scratch directory is emptied first; inside a work tree that would delete
-# checked-out files, so a parent git recognises is refused. The scratch's own
-# repository, the one the last dry run made, is not a parent.
-mkdir -p -- "$scratch"
-if (cd -- "$scratch/.." && git rev-parse --show-toplevel >/dev/null 2>&1); then
-  echo "dry_run: $scratch is inside a git work tree; give a scratch directory" >&2
-  exit 2
+# The scratch directory is emptied first, so only one that is absent, empty or
+# marked by an earlier dry run is taken; anything else may be a real tree.
+marker=.dispatch-dry-run
+if [ -e "$scratch" ] || [ -L "$scratch" ]; then
+  if [ -L "$scratch" ] || [ ! -d "$scratch" ]; then
+    echo "dry_run: refused: $scratch is not a directory" >&2
+    exit 2
+  fi
+  entries=$(ls -A -- "$scratch")
+  if [ -n "$entries" ] && [ ! -f "$scratch/$marker" ]; then
+    echo "dry_run: refused: $scratch holds files and no $marker, so it is not a dry run's" >&2
+    exit 2
+  fi
 fi
 rm -rf -- "${scratch:?}"
 mkdir -p -- "$scratch"
+: > "$scratch/$marker"
 
 (cd -- "$root" && git archive --format=tar HEAD) | (cd -- "$scratch" && tar -xf -)
 cp -R -- "$root/staging/.claude/." "$scratch/.claude/"
@@ -36,6 +43,7 @@ rm -rf -- "$scratch/staging"
   cd -- "$scratch"
   git init -q -b main
   git config core.longpaths true  # some ADR slugs pass Windows' 260 under a scratch path
+  echo "/$marker" >> .git/info/exclude  # a tracked root file would fail test_harness_denies
   git add -A
   git -c user.name=dry-run -c user.email=dry-run@invalid -c commit.gpgsign=false \
     commit -q --no-verify -m "dry run"
