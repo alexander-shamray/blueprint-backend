@@ -5,6 +5,7 @@ list, each re-reading the file at the moment it writes. Exit 2 is a refusal: not
 """
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -17,16 +18,23 @@ from pathlib import Path
 SECTIONS = ("In progress", "Remaining", "Tracking", "Paused")
 WAVE_COLUMNS = ("Wave", "Group", "#", "Task", "Labels", "Depends on", "Model", "Parallel with / conflicts")
 HEADERS = {
-    "In progress": ("#", "What", "Branch or PR", "State"),
+    "In progress": ("Group", "#", "What", "Branch or PR", "State"),
     "Remaining": WAVE_COLUMNS,
     "Tracking": WAVE_COLUMNS,
     "Paused": ("#", "Task", "Labels", "Why paused", "Resume when"),
 }
 # Where the task and the issue number sit in each section's row.
-TASK_AT = {"In progress": 1, "Remaining": 3, "Tracking": 3, "Paused": 1}
+TASK_AT = {"In progress": 2, "Remaining": 3, "Tracking": 3, "Paused": 1}
+NUMBER_AT = {"In progress": 1, "Remaining": 2, "Tracking": 2, "Paused": 0}
 WAVE, GROUP, TASK, LABELS, DEPENDS, MODEL, CONFLICTS = 0, 1, 3, 4, 5, 6, 7
 EXTENSIONS = "cs|csproj|py|sh|md|json|ya?ml|sql|ps1|props|slnx|toml"
 BARE_PATH = re.compile(rf"(?<![\w./\\-])([\w.\\/-]+\.(?:{EXTENSIONS}))(?!\w)", re.IGNORECASE)
+KNOWN_FILE = re.compile(rf"\.(?:{EXTENSIONS})$", re.IGNORECASE)
+CLAUDE_TREE = re.compile(r"(^|[^\w])\.claude([/\\]|\b)", re.IGNORECASE)
+# An issue in Depends on is written #n, after n, waits on n or n's; a bare number is a count, not an issue.
+ISSUE_REF = re.compile(
+    r"(?:#|\b(?:after|waits on|wait on|waiting on|blocked by)\s+#?)(\d{2,6})\b(?!\s*(?:day|week|hour|month|min))"
+    r"|\b(\d{2,6})'s\b", re.IGNORECASE)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 NUMBER = re.compile(r"(?<![\w-])#?(\d{2,6})(?![\w-])")
 GROUP_ID = re.compile(r"\b[A-Z]\d+\b")
@@ -71,6 +79,8 @@ class Claim:
     groups: frozenset[str]
     issues: frozenset[int]
     unknown: bool
+    # The group letter a running group's In progress row still carries, so a conflicts cell naming it holds.
+    ident: str = ""
 
 
 # Parsing
@@ -139,10 +149,10 @@ def _row(section, line):
     cells = _cells(line)
     if len(cells) != len(HEADERS[section]):
         raise Refusal(f"{section} row has {len(cells)} cells, the header {len(HEADERS[section])}: {line[:60]}")
-    first = re.fullmatch(r"#?(\d+)", cells[2 if section in ("Remaining", "Tracking") else 0])
+    first = re.fullmatch(r"#?(\d+)", cells[NUMBER_AT[section]])
     if first:
         number, key = int(first.group(1)), f"#{int(first.group(1))}"
-    elif "owed" in cells[2 if section in ("Remaining", "Tracking") else 0].casefold():
+    elif "owed" in cells[NUMBER_AT[section]].casefold():
         number = None
         key = "owed:" + hashlib.sha1(cells[TASK_AT[section]].encode("utf-8")).hexdigest()[:8]
     else:
@@ -152,6 +162,11 @@ def _row(section, line):
         if not re.fullmatch(r"\d+", cells[WAVE]):
             raise Refusal(f"{key} has wave {cells[WAVE]!r}, not a number")
         wave, group = int(cells[WAVE]), cells[GROUP]
+    elif section == "In progress":
+        # The group it carried in Remaining, kept so a conflicts cell naming it still sees it; a dash is none.
+        if cells[0] != "—" and not re.fullmatch(GROUP_ID.pattern, cells[0]):
+            raise Refusal(f"{key} has Group {cells[0]!r}, not a group id or a dash")
+        group = None if cells[0] == "—" else cells[0]
     return Row(section, wave, group, number, key, cells, line)
 
 
@@ -207,7 +222,8 @@ def extract_paths(text):
     for quoted in re.findall(r"`([^`]+)`", text):
         for piece in quoted.split():
             path = _normalise(piece)
-            if "/" in path or re.search(r"\.[a-z][a-z0-9]+$", path):
+            # A slash command or a dotted identifier is not a file: it would make an empty claim look known.
+            if KNOWN_FILE.search(path) or ("/" in path and not path.startswith("/")):
                 found.add(path)
     found.update(_normalise(m) for m in BARE_PATH.findall(text))
     found.discard("")
@@ -234,7 +250,7 @@ def group_claim(group, bodies):
 
 
 def in_progress_claim(row, bodies):
-    paths = set(extract_paths(row.cells[1]))
+    paths = set(extract_paths(row.cells[TASK_AT["In progress"]]))
     unknown = False
     if row.number is not None:
         if row.number in bodies:
@@ -242,7 +258,8 @@ def in_progress_claim(row, bodies):
         else:
             unknown = True
     issues = frozenset() if row.number is None else frozenset({row.number})
-    return Claim(frozenset(paths), frozenset(), issues, unknown or not paths)
+    ident = row.group or ""
+    return Claim(frozenset(paths), frozenset({ident} - {""}), issues, unknown or not paths, ident)
 
 
 def _touch(a, b):
@@ -278,8 +295,9 @@ def _blocker(row, open_issues, today, bodies):
     depends = row.cells[DEPENDS]
     if depends.strip().casefold() != "none":
         dates = DATE.findall(depends)
-        numbers = _numbers(depends)
-        if not dates and not numbers:
+        numbers = {int(a or b) for a, b in ISSUE_REF.findall(DATE.sub(" ", depends))}
+        stray = re.search(r"\d", ISSUE_REF.sub(" ", DATE.sub(" ", depends)))
+        if (not dates and not numbers) or stray:
             # Free text is never judged here; step 0 turns a human wait into OWNER.
             return "depends on text the helper cannot judge"
         blocking = sorted(n for n in numbers if n in open_issues)
@@ -293,7 +311,7 @@ def _blocker(row, open_issues, today, bodies):
             if due > today:
                 return f"waits until {text}"
     reach = f"{row.cells[TASK]} {row.cells[CONFLICTS]} {bodies.get(row.number, '')}"
-    if any(".claude" in path.split("/") for path in extract_paths(reach)):
+    if CLAUDE_TREE.search(reach.replace("\\", "/")):
         return "edits .claude/"
     return None
 
@@ -314,7 +332,7 @@ def pick(candidates, ready_map, claims, running, taken, slots):
     """Up to `slots` group ids to launch. `candidates` is every group, running ones included, so a running
     group's issues are known; the earliest wave goes first and table order breaks a tie."""
     held = [(claims[g.id], g.id, _own_issues(g)) for g in candidates if g.id in running and g.id in claims]
-    held += [(claim, "", set(claim.issues)) for claim in taken]
+    held += [(claim, claim.ident, set(claim.issues)) for claim in taken]
     unknown = Claim(frozenset(), frozenset(), frozenset(), True)
     chosen = []
     order = sorted(range(len(candidates)), key=lambda i: (candidates[i].wave, i))
@@ -390,8 +408,9 @@ def move_to_in_progress(text, group, branch, worktree, today):
     for row in group.rows:
         if row.line not in present:
             raise Refusal(f"{row.key} is not in Remaining as {group.id} expects it")
-    new = [_line((f"#{r.number}" if r.number is not None else OWED, r.cells[TASK],
-                  f"`{branch}`, `{worktree}`", f"dispatched {today.isoformat()}"), cr) for r in group.rows]
+    new = [_line((group.id, f"#{r.number}" if r.number is not None else OWED, r.cells[TASK],
+                  f"`{branch}`, `{worktree}`", f"dispatched {today.isoformat()}"), cr)
+           for r in group.rows]
     _remove(lines, "Remaining", {r.key for r in group.rows})
     _append(lines, "In progress", new)
     return "\n".join(lines)
@@ -435,6 +454,8 @@ def place(text, wave, group, issue, task=None, labels=None, depends=None, model=
     for section in (tasks.in_progress, tasks.remaining, tasks.tracking, tasks.paused):
         if any(r.key == key for r in section):
             raise Refusal(f"{key} already has a row; a row lives in one table only")
+    if any(r.group == group for r in tasks.in_progress):
+        raise Refusal(f"{group} is held by an In progress row; a re-cut never reuses its letter and number")
     existing = next((g for g in groups(tasks) if g.id == group), None)
     cells = (str(wave), group, str(issue), task or "Filed by /dispatch; read the issue", labels or "code",
              depends or "OWNER", model or (existing.model if existing else "Opus"), conflicts or "none")
@@ -454,9 +475,15 @@ def _read(path):
 
 def _write(path, text):
     temporary = f"{path}.{os.getpid()}.tmp"
-    with open(temporary, "w", encoding="utf-8", newline="") as handle:
-        handle.write(text)
-    os.replace(temporary, path)
+    try:
+        with open(temporary, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        os.replace(temporary, path)
+    except OSError as error:
+        # Windows refuses a replace while another process holds the file open.
+        with contextlib.suppress(OSError):
+            os.remove(temporary)
+        raise Refusal(f"could not write {path}: {error}") from None
 
 
 def _unavailable(*_):
@@ -486,8 +513,8 @@ def board(text, today, bodies, open_issues):
     for group in groups(tasks):
         claim = group_claim(group, bodies)
         ok, why = ready(group, open_issues, today, bodies)
-        by = next((r.key for c, r in held
-                   if overlaps(claim, group.id, _own_issues(group), c, r.key, set(c.issues))), None)
+        by = next((c.ident or r.key for c, r in held
+                   if overlaps(claim, group.id, _own_issues(group), c, c.ident or r.key, set(c.issues))), None)
         out.append(" | ".join((group.id, f"wave {group.wave}", "ready" if ok else f"not ready: {why}",
                                "free" if by is None else f"taken by {by}", f"{len(claim.paths)} paths")))
     return out or ["no groups in Remaining"]
@@ -498,12 +525,17 @@ def _sidecar(run, group):
 
 
 def _tasks_command(args, today):
+    # The group names a file under the run, so only a group letter and number may reach the path.
+    if not re.fullmatch(GROUP_ID.pattern, args.group):
+        raise Refusal(f"{args.group!r} is not a group id")
+    sidecar = _sidecar(args.run, args.group)
+    after = []
+
     def update(text):
         tasks = parse_tasks(text)
         if args.action == "place":
             return place(text, args.wave, args.group, args.issue, args.task, args.labels, args.depends,
                          args.model, args.conflicts)
-        sidecar = _sidecar(args.run, args.group)
         if args.action == "move":
             group = next((g for g in groups(tasks) if g.id == args.group), None)
             if group is None:
@@ -511,18 +543,28 @@ def _tasks_command(args, today):
             slug = args.group.lower()
             result = move_to_in_progress(text, group, args.branch or f"chore/dispatch-{slug}",
                                          args.worktree or f".claude/worktrees/dispatch-{slug}", today)
-            sidecar.parent.mkdir(parents=True, exist_ok=True)
-            _write(sidecar, json.dumps({"keys": [r.key for r in group.rows], "rows": [r.line for r in group.rows]}))
+            record = json.dumps({"keys": [r.key for r in group.rows], "rows": [r.line for r in group.rows]})
+            after.append(lambda: (sidecar.parent.mkdir(parents=True, exist_ok=True), _write(sidecar, record)))
             return result
+        held = {r.key for r in tasks.in_progress if r.group == args.group}
+        if not held:
+            raise Refusal(f"no In progress row carries Group {args.group}")
+        if args.action == "done":
+            return delete_in_progress(text, held)
+        # The In progress row no longer holds the wave, labels, depends, model or conflicts, so `back` needs these.
         if not sidecar.is_file():
             raise Refusal(f"{sidecar} is missing; {args.group} was not moved by this run")
-        recorded = json.loads(_read(sidecar))
-        if args.action == "done":
-            return delete_in_progress(text, set(recorded["keys"]))
-        return return_to_remaining(text, recorded["rows"], set(recorded["keys"]))
+        rows = [line for line in json.loads(_read(sidecar))["rows"] if _row("Remaining", line).key in held]
+        unrecorded = held - {_row("Remaining", line).key for line in rows}
+        if unrecorded:
+            raise Refusal(f"{sidecar} does not hold {', '.join(sorted(unrecorded))}; they cannot go back")
+        return return_to_remaining(text, rows, held)
 
-    # The file is read here, at the moment of the write, so another session's edit since `board` is kept.
+    # The file is read here, at the moment of the write, so another session's edit since `board` is kept; the
+    # sidecar follows the list, so a refused write leaves no record of a move that did not happen.
     _write(args.tasks, update(_read(args.tasks)))
+    for step in after:
+        step()
 
 
 def main(argv=None, body_source=_unavailable, open_source=_unavailable):
