@@ -25,7 +25,7 @@ KNOWN_DIFFERENCES = Path(__file__).resolve().parents[1] / "known-differences.txt
 # it that `sys.path` resolves first, and the secret scan its verify module loads.
 SCAFFOLD = "tools/new-service"
 LANDED = "refs/remotes/origin/main"
-# The child's whole environment: Windows' interpreter does not start without SYSTEMROOT.
+# The only caller variables the child keeps: Windows' interpreter does not start without SYSTEMROOT.
 KEPT_ENVIRONMENT = ("SYSTEMROOT",)
 
 SERVICES = "src/Services/"
@@ -138,7 +138,7 @@ def landed(repo_root: Path, commit: str) -> bool:
 def vouch(repo_root: Path, parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
     """Refuse to run a parent's scaffold that neither landed nor is the shipped one.
 
-    `load_scan_gate`'s rule, made before the tree runs, where that check compares
+    Modelled on `load_scan_gate`'s rule, made before the tree runs, where that check compares
     the tree with itself. A landed parent ran through review, so it stands as it is."""
     if landed(repo_root, parent):
         return
@@ -175,7 +175,7 @@ def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
     vouch(repo_root, scaffolded.parent, directory)
     kept = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
-    # -B stops writing bytecode, not reading it; an empty prefix means no pyc vouch never saw is run.
+    # -B stops writing bytecode, not reading it; an empty prefix means no __pycache__ in the tree is read.
     with tempfile.TemporaryDirectory(prefix="scaffold-bytecode-") as bytecode:
         result = subprocess.run(
             [sys.executable, "-B", "-X", f"pycache_prefix={bytecode}", str(script), *scaffolded.argv,
