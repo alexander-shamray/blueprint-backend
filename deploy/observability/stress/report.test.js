@@ -12,6 +12,7 @@ import {
     INBOX_LATCH,
     MINIMUM_RANGE_SECONDS,
     OUTSIDE_SHARE,
+    P95_JUMP_FLOOR_MS,
     clientRow,
     clockSkewMs,
     containerOwner,
@@ -589,16 +590,18 @@ test('a jump the gateway\'s own p95 explains is placed in the platform, at the s
     assert.equal(p95Where(edge, steady).detail, 'in the platform, the gateway\'s own p95 30 ms to 530 ms');
 });
 
-test('a jump in k6\'s own connection setup is placed there, ahead of any waiting', () => {
+test('k6\'s connection setup, outside the journey\'s figure, is noted beside a jump and never placed as it', () => {
     const row = { ...steady, step: 2, p95: 300, blockedP95: 3001, connectingP95: 3000, waitingP95: 290 };
     const where = p95Where(row, steady);
 
-    assert.equal(where.where, 'setup');
-    assert.equal(where.detail, 'in connection setup, blocked p95 1 ms to 3001 ms, connecting p95 0 ms to 3000 ms: ' +
-        'k6\'s own connections, not the platform');
-    assert.equal(p95Where({ ...row, blockedP95: null }, steady).where, 'setup', 'connecting alone is setup');
-    assert.equal(p95Where({ ...row, blockedP95: 2, connectingP95: 0, gatewayP95: 280 }, steady).where, 'platform',
-        'a setup that barely moved leaves the rise to waiting');
+    assert.equal(where.where, 'path', 'the jump is in waiting, which the gateway did not see');
+    assert.equal(where.detail, 'outside the gateway, waiting p95 35 ms to 290 ms against the gateway\'s own p95 ' +
+        '30 ms to 30 ms: the path from k6 to the gateway\'s listener, not a service; k6\'s connection setup rose ' +
+        'too, outside the journey\'s figure, blocked p95 1 ms to 3001 ms, connecting p95 0 ms to 3000 ms');
+    assert.match(p95Where({ ...row, blockedP95: null }, steady).detail, /connecting p95 0 ms to 3000 ms$/,
+        'connecting alone is a setup rise');
+    assert.doesNotMatch(p95Where({ ...row, blockedP95: 1 + P95_JUMP_FLOOR_MS, connectingP95: 0 }, steady).detail,
+        /connection setup/, 'a setup rise at the jump\'s floor is not noted');
 });
 
 test('a jump with no rise in setup or waiting is in the transfer, and one with no gateway reading says so', () => {

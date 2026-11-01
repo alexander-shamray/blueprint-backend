@@ -41,9 +41,9 @@ export function promRange(holdSeconds) {
 
 // WHERE A P95 JUMP SITS. Every journey request passes the gateway, so a rise
 // in k6's waiting the gateway's own p95 never saw is the path between them, as
-// a port forward retrying a connection is, and one in k6's connection setup
-// never reached the platform. P95s do not add, so a rise is outside the
-// gateway when more than this share of waiting's rise is not the gateway's.
+// a port forward retrying a connection is. P95s do not add, so a rise is
+// outside the gateway when more than this share of waiting's rise is not the
+// gateway's. k6's connection setup is outside the journey's figure altogether.
 export const GATEWAY_SERVICE = 'Gateway.Api';
 export const OUTSIDE_SHARE = 0.5;
 
@@ -274,12 +274,7 @@ function growing(middle, end, floor) {
     return beyond(middle, end, GROWTH_RATIO, floor) !== null;
 }
 
-/**
- * Where a journey p95 jump sits: `setup` when k6's connection setup rose more
- * than its waiting, `path` when the gateway's own p95 explains too little of
- * waiting's rise, `platform` when it explains the rest, `transfer` when neither
- * phase rose, `waiting` with no gateway reading; null with no phase figures.
- */
+/** Where a journey p95 jump sits, as `where` and `detail`; null with no phase figures. */
 export function p95Where(row, previous) {
     const rise = (field) =>
         (Number.isFinite(row[field]) && Number.isFinite(previous?.[field]) ? row[field] - previous[field] : null);
@@ -290,38 +285,29 @@ export function p95Where(row, previous) {
     if (waiting === null)
         return null;
 
+    // k6's duration leaves setup out, so a setup rise past the jump's floor is noted beside the jump, never as
+    // where it sits.
     const setup = Math.max(rise('blockedP95') ?? -Infinity, rise('connectingP95') ?? -Infinity);
-
-    if (setup > waiting && setup > 0) {
-        return {
-            where: 'setup',
-            detail: `in connection setup, ${fromTo('blockedP95', 'blocked')}, ` +
-                `${fromTo('connectingP95', 'connecting')}: k6's own connections, not the platform`,
-        };
-    }
+    const note = setup > P95_JUMP_FLOOR_MS
+        ? `; k6's connection setup rose too, outside the journey's figure, ${fromTo('blockedP95', 'blocked')}, ` +
+            `${fromTo('connectingP95', 'connecting')}`
+        : '';
+    const placed = (where, detail) => ({ where, detail: detail + note });
 
     if (waiting <= 0)
-        return { where: 'transfer', detail: `in sending or receiving, ${fromTo('waitingP95', 'waiting')}` };
+        return placed('transfer', `in sending or receiving, ${fromTo('waitingP95', 'waiting')}`);
 
     const gateway = rise('gatewayP95');
 
-    if (gateway === null) {
-        return {
-            where: 'waiting',
-            detail: `in waiting, ${fromTo('waitingP95', 'waiting')}; the gateway's own p95 unread`,
-        };
-    }
+    if (gateway === null)
+        return placed('waiting', `in waiting, ${fromTo('waitingP95', 'waiting')}; the gateway's own p95 unread`);
 
     if (waiting - gateway > waiting * OUTSIDE_SHARE) {
-        return {
-            where: 'path',
-            detail: `outside the gateway, ${fromTo('waitingP95', 'waiting')} against ` +
-                `${fromTo('gatewayP95', 'the gateway\'s own')}: the path from k6 to the gateway's listener, ` +
-                'not a service',
-        };
+        return placed('path', `outside the gateway, ${fromTo('waitingP95', 'waiting')} against ` +
+            `${fromTo('gatewayP95', 'the gateway\'s own')}: the path from k6 to the gateway's listener, not a service`);
     }
 
-    return { where: 'platform', detail: `in the platform, ${fromTo('gatewayP95', 'the gateway\'s own')}` };
+    return placed('platform', `in the platform, ${fromTo('gatewayP95', 'the gateway\'s own')}`);
 }
 
 /** The signals a step crossed, measured against the step before it. */
