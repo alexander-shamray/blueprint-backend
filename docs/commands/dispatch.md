@@ -40,23 +40,39 @@ merge is verified, and a removal the helper refuses is named in the report
 
 ## One writer of the task list
 
-From step 0 to the report the dispatcher is the list's only writer, and
-every write goes through `dispatch_board.py tasks`, never `Edit` (spec §4).
-The list lives outside the checkout, so a file grant on it would be the one
-write this command holds that no helper checks; each `tasks` action re-reads
+From step 0 to the report the dispatcher is the list's only writer (spec
+§4). That every write goes through `dispatch_board.py tasks`, never `Edit`,
+is this design's own rule, taken when the plan was reviewed: the list lives
+outside the checkout, so a file grant on it would be the one write this
+command holds that no helper checks. Each `tasks` action re-reads
 the file at the moment it writes, so another session's edit since the last
 read is kept, not overwritten.
 
 **The rebuild is judgement written as a file.** Step 0 re-cuts groups and
 moves rows by the note's rules 1 to 10, which no helper can apply. So the
 session writes the whole rebuilt list under the run, and `tasks rewrite`
-replaces the live list with it only when the live list is still byte for
-byte the copy `board --run` read, the owner's note above the sections is
-unchanged, the result parses into groups, and every group this run still
-holds keeps its *In progress* rows. A rebuild made from a stale read is
+replaces the live list with it only when the run was opened by `start`, the
+live list is still byte for byte the copy `board --run` read, the owner's
+note above the sections is unchanged, the result parses into groups, and
+*In progress* is exactly as it was. A rebuild made from a stale read is
 refused rather than merged, and is made again from a fresh `board`. The
 interview's answers change the list by the same route, in the same step
 (spec §5).
+
+**In progress is never rebuilt.** At step 0 the run has moved nothing, so a
+guard keyed to this run's groups would hold no row, and a rebuild could drop
+or edit another session's, which the spec's §4 leaves alone. So the whole
+section has to come through unchanged, whatever the run's state says: this
+run's own rows change only through `move`, `done` and `back`, and a stale
+row of another session's is named to the owner rather than deleted. The
+rebuild's cleanup of closed and merged rows is therefore *Remaining*,
+*Tracking* and *Paused* only.
+
+`--run` takes the run's name, as every other subcommand does, and is
+resolved under `artifacts/dispatch/` to a run `start` opened; `board --run`
+creates no directory of its own. A mistyped or path-shaped name is refused
+before anything is read or written, so the copy and the issue bodies never
+land outside the run.
 
 `tasks place` adds a filed issue's row, its missing cells set to the
 cautious value, `OWNER` among them, and records the issue in the run's
@@ -189,7 +205,15 @@ Raw `gh issue edit`, `close` and `create` are denied, because the issue
 writes are `issue_decisions.py`'s, which accepts only the decision entry's
 shape, and `gh-issue-create.sh`'s.
 
-Git writes are the fork and removal helpers and `git pull --ff-only`;
-everything else is a read. Files are written only under
-`artifacts/dispatch/`. Nothing the night does widens a grant: a refusal
-nobody is awake to see is what the guards are for (spec §2).
+The git grants that write are the fork and removal helpers and
+`git pull --ff-only`. `git log:*` reaches `--output=`, an arbitrary file
+write, which the guard hook refuses in every spelling but one the shell
+computes at run time, as `docs/harness-boundaries.md`'s *Output deny and
+shell-expansion residuals* states; the dispatcher's reads never pass it.
+`Edit(artifacts/dispatch/**)` is for the question, answer, rebuild and
+report files; it also reaches the helper-owned `state.json` and
+`tasks.read.md`, which the session never edits, a gap outside the guards'
+threat model (`docs/harness-boundaries.md`, *The guards' threat model*).
+`pr-state.sh` is not granted: `verify` reads it inside the helper. Nothing
+the night does widens a grant: a refusal nobody is awake to see is what the
+guards are for (spec §2).
