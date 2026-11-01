@@ -419,7 +419,7 @@ class ASendToAPeerExchangeBindsNothing(unittest.TestCase):
             "The send is refused and the message goes nowhere", run_against(definitions))
 
     def test_a_queue_two_services_send_to_by_queue_address_is_refused(self):
-        # The source before the change: each holder bound Privacy's queue, so each held the read that consumes it.
+        # Every holder sending by `queue:` binds Privacy's queue, so each holds the read that consumes it.
         failures = run_with_sources(real(), 'new("exchange:privacy-completions")', 'new("queue:privacy-completions")')
         self.assertIn(
             f"`privacy-completions`: 5 services send to it ({self.HOLDERS}), and {self.HOLDERS} by "
@@ -592,7 +592,7 @@ class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
         return run_against(definitions)
 
     def test_the_fault_read_before_the_narrowing_is_refused(self):
-        # The grant every account held: one alternative covering every namespace's fault exchange.
+        # One alternative covering every namespace's fault exchange.
         failures = self.failures_with("MassTransit:(ReceiveFault$|Fault--))")
         self.assertIn(
             "catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Payments.V1:Anything--`, the fault "
