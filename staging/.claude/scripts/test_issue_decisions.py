@@ -16,6 +16,7 @@ from unittest import mock
 
 import issue_decisions as ID
 
+RUN = "20261101-220000"
 RECORDER = """\
 import json
 import pathlib
@@ -25,15 +26,26 @@ here = pathlib.Path(__file__).parent
 args = sys.argv[1:]
 with open(here / "calls.jsonl", "a", encoding="utf-8") as log:
     log.write(json.dumps(args) + "\\n")
+# A file swapped after the helper checked it and before gh opened it.
+if (here / "swap.json").exists():
+    swap = json.loads((here / "swap.json").read_text(encoding="utf-8"))
+    pathlib.Path(swap["path"]).write_bytes(swap["text"].encode("utf-8"))
+
+
+def body_file():
+    name = args[args.index("--body-file") + 1]
+    return sys.stdin.buffer.read() if name == "-" else pathlib.Path(name).read_bytes()
+
+
 if args[:2] == ["repo", "view"]:
     print("acme/widgets")
 elif args[:2] == ["issue", "view"]:
     body = (here / "body.txt").read_bytes().decode("utf-8")
     sys.stdout.buffer.write(json.dumps({"body": body}, ensure_ascii=False).encode("utf-8"))
 elif args[:2] == ["issue", "edit"] and "--body-file" in args:
-    (here / "written.bin").write_bytes(pathlib.Path(args[args.index("--body-file") + 1]).read_bytes())
+    (here / "written.bin").write_bytes(body_file())
 elif args[:2] == ["issue", "comment"]:
-    (here / "comment.bin").write_bytes(pathlib.Path(args[args.index("--body-file") + 1]).read_bytes())
+    (here / "comment.bin").write_bytes(body_file())
 if (here / "fail").exists() and args[:2] in (["issue", "edit"], ["issue", "close"]):
     sys.stderr.write("boom\\n")
     sys.exit(1)
@@ -54,6 +66,13 @@ class StubGh(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, {"PATH": str(self.stub) + os.pathsep + os.environ["PATH"]})
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The helper resolves a run under its own checkout; here that is the scratch directory.
+        root = mock.patch.object(ID, "ROOT", self.dir)
+        root.start()
+        self.addCleanup(root.stop)
+        self.run_path = self.dir / "artifacts" / "dispatch" / RUN
+        self.run_path.mkdir(parents=True)
+        (self.run_path / "state.json").write_text('{"run": "%s", "groups": {}}\n' % RUN, encoding="utf-8")
 
     def calls(self):
         log = self.stub / "calls.jsonl"
@@ -67,10 +86,16 @@ class StubGh(unittest.TestCase):
             code = ID.main(argv)
         return code, err.getvalue()
 
-    def write(self, name, text):
-        path = self.dir / name
+    def write(self, name, text, under=None):
+        """A file the run wrote under its own directory, or under `under` when a case needs one outside it."""
+        path = (self.run_path if under is None else under) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(text.encode("utf-8"))
         return str(path)
+
+    def record(self, number, question, answer, *extra):
+        return self.run_main(["record", number, "--question-file", question, "--answer-file", answer, "--run", RUN,
+                              *extra])
 
 
 class Shapes(unittest.TestCase):
@@ -135,32 +160,26 @@ class Cli(StubGh):
         (self.stub / "body.txt").write_bytes(b"Original.\n")
         question = self.write("q.txt", "Lift the pause on 1677?\n")
         answer = self.write("a.txt", "Yes, after 1671.\n")
-        code, err = self.run_main(
-            ["record", "1677", "--question-file", question, "--answer-file", answer, "--date", "2026-11-01",
-             "--run-dir", str(self.dir)]
-        )
+        code, err = self.record("1677", question, answer, "--date", "2026-11-01")
         self.assertEqual((code, err), (0, ""))
         calls = self.calls()
         self.assertEqual(calls[0], ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])
         self.assertEqual(calls[1], ["issue", "view", "1677", "--repo", "acme/widgets", "--json", "body"])
-        self.assertEqual(calls[2][:5], ["issue", "edit", "1677", "--repo", "acme/widgets"])
-        self.assertEqual(calls[2][5], "--body-file")
+        self.assertEqual(calls[2], ["issue", "edit", "1677", "--repo", "acme/widgets", "--body-file", "-"])
         self.assertEqual(len(calls), 3)
         self.assertEqual(
             (self.stub / "written.bin").read_bytes().decode("utf-8"),
             "Original.\n\n## Owner decisions\n\n- 2026-11-01: Q: Lift the pause on 1677? A: Yes, after 1671.\n",
         )
-        self.assertFalse(Path(calls[2][6]).exists())
 
     def test_a_russian_answer_with_an_em_dash_reaches_the_body_byte_for_byte(self):
         (self.stub / "body.txt").write_bytes("Текст.\n".encode("utf-8"))
         question = self.write("q.txt", "Снять паузу — после 1671?\n")
         answer = self.write("a.txt", "Да — после 1671, не раньше.\n")
-        code, err = self.run_main(
-            ["record", "1677", "--question-file", question, "--answer-file", answer, "--date", "2026-11-01"]
-        )
+        code, err = self.record("1677", question, answer, "--date", "2026-11-01")
         self.assertEqual((code, err), (0, ""))
-        expected = "Текст.\n\n## Owner decisions\n\n- 2026-11-01: Q: Снять паузу — после 1671? A: Да — после 1671, не раньше.\n"
+        expected = ("Текст.\n\n## Owner decisions\n\n"
+                    "- 2026-11-01: Q: Снять паузу — после 1671? A: Да — после 1671, не раньше.\n")
         self.assertEqual((self.stub / "written.bin").read_bytes(), expected.encode("utf-8"))
 
     def test_a_non_numeric_issue_is_refused_before_gh_runs(self):
@@ -168,16 +187,14 @@ class Cli(StubGh):
         answer = self.write("a.txt", "a")
         for number in ("abc", "12x", "-1", "0", "1677 --web"):
             with self.subTest(number=number):
-                code, err = self.run_main(["record", number, "--question-file", question, "--answer-file", answer])
+                code, err = self.record(number, question, answer)
                 self.assertEqual(code, 2)
                 self.assertTrue(err.startswith("refused: "))
         self.assertEqual(self.calls(), [])
 
     def test_a_double_section_body_is_refused_and_nothing_is_written(self):
         (self.stub / "body.txt").write_text("## Owner decisions\n\n## Owner decisions\n", encoding="utf-8")
-        code, err = self.run_main(
-            ["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a")]
-        )
+        code, err = self.record("5", self.write("q", "q"), self.write("a", "a"))
         self.assertEqual(code, 2)
         self.assertFalse(any(call[:2] == ["issue", "edit"] for call in self.calls()))
 
@@ -189,37 +206,80 @@ class Cli(StubGh):
         self.assertEqual(self.run_main(["unblock", "1677", "bug"])[0], 2)
 
     def test_close_comments_then_closes_as_not_planned(self):
-        (self.dir / "run").mkdir()
-        comment = self.write("run/c.txt", "Нет работы — закрываю.\n")
-        run = str(self.dir / "run")
-        self.assertEqual(self.run_main(["close", "9", "--comment-file", comment, "--run-dir", run]), (0, ""))
+        comment = self.write("interview/9-close.txt", "Нет работы — закрываю.\n")
+        self.assertEqual(self.run_main(["close", "9", "--comment-file", comment, "--run", RUN]), (0, ""))
         calls = self.calls()
-        self.assertEqual(calls[1], ["issue", "comment", "9", "--repo", "acme/widgets", "--body-file", comment])
+        self.assertEqual(calls[1], ["issue", "comment", "9", "--repo", "acme/widgets", "--body-file", "-"])
+        self.assertEqual((self.stub / "comment.bin").read_bytes(), "Нет работы — закрываю.\n".encode("utf-8"))
         self.assertEqual(
             calls[2], ["issue", "close", "9", "--repo", "acme/widgets", "--reason", "not planned"]
         )
 
     def test_close_takes_only_a_short_comment_the_run_wrote_under_its_directory(self):
         # The comment is posted to GitHub as it stands, so the file is held to the run and to an answer's size.
-        run = self.dir / "run"
-        (run / "interview").mkdir(parents=True)
         cases = {
-            "no --run-dir": ([], self.write("run/interview/a.txt", "No work.")),
-            "outside the run": (["--run-dir", str(run)], self.write("elsewhere.txt", "No work.")),
-            "a sibling with the run's name as a prefix": (["--run-dir", str(run)],
-                                                          self.write("run-other.txt", "No work.")),
-            "over the cap": (["--run-dir", str(run)],
-                             self.write("run/interview/b.txt", "x" * (ID.COMMENT_LIMIT + 1))),
-            "empty": (["--run-dir", str(run)], self.write("run/interview/c.txt", " \n")),
-            "a missing run dir": (["--run-dir", str(self.dir / "nope")], self.write("run/interview/d.txt", "ok")),
+            "no --run": ([], self.write("interview/a.txt", "No work.")),
+            "outside the run": (["--run", RUN], self.write("elsewhere.txt", "No work.", under=self.dir)),
+            "a sibling with the run's name as a prefix": (["--run", RUN], self.write(
+                f"{RUN}-other.txt", "No work.", under=self.run_path.parent)),
+            "over the cap": (["--run", RUN], self.write("interview/b.txt", "x" * (ID.COMMENT_LIMIT + 1))),
+            "empty": (["--run", RUN], self.write("interview/c.txt", " \n")),
         }
         for name, (extra, comment) in cases.items():
             with self.subTest(case=name):
                 code, _ = self.run_main(["close", "9", "--comment-file", comment, *extra])
                 self.assertEqual(code, 2)
                 self.assertEqual(self.calls(), [])
-        within = self.write("run/interview/e.txt", "x" * ID.COMMENT_LIMIT)
-        self.assertEqual(self.run_main(["close", "9", "--comment-file", within, "--run-dir", str(run)]), (0, ""))
+        within = self.write("interview/e.txt", "x" * ID.COMMENT_LIMIT)
+        self.assertEqual(self.run_main(["close", "9", "--comment-file", within, "--run", RUN]), (0, ""))
+
+    def test_the_run_is_a_name_the_helper_resolves_never_a_directory_the_caller_names(self):
+        # A caller-chosen directory would let any file be called the run's; only a run `start` opened is one.
+        elsewhere = self.dir / "elsewhere"
+        comment = self.write("c.txt", "No work.", under=elsewhere)
+        question, answer = self.write("q.txt", "q", under=elsewhere), self.write("a.txt", "a", under=elsewhere)
+        unstarted = "20261101-230000"
+        (self.run_path.parent / unstarted).mkdir()
+        unstarted_comment = self.write("c.txt", "No work.", under=self.run_path.parent / unstarted)
+        cases = {
+            "a directory for a name": [str(elsewhere), comment],
+            "a path-shaped name": ["../../elsewhere", comment],
+            "a run start never opened": [unstarted, unstarted_comment],
+            "the old --run-dir": None,
+        }
+        for name, given in cases.items():
+            with self.subTest(case=name):
+                if given is None:
+                    code, err = self.run_main(["close", "9", "--comment-file", comment, "--run-dir", str(elsewhere)])
+                    record = self.run_main(["record", "9", "--question-file", question, "--answer-file", answer,
+                                            "--run-dir", str(elsewhere)])
+                else:
+                    run, path = given
+                    code, err = self.run_main(["close", "9", "--comment-file", path, "--run", run])
+                    record = self.run_main(["record", "9", "--question-file", question, "--answer-file", answer,
+                                            "--run", run])
+                self.assertEqual((2, 2), (code, record[0]))
+                self.assertEqual(self.calls(), [])
+
+    def test_record_reads_its_question_and_answer_only_from_the_run(self):
+        # Both reach a public issue body, so a one-line secret elsewhere on disk is never posted as an answer.
+        inside = self.write("q.txt", "q")
+        outside = self.write("token.txt", "ghp_notarealtoken", under=self.dir)
+        for question, answer in ((outside, self.write("a.txt", "a")), (inside, outside)):
+            with self.subTest(question=Path(question).name, answer=Path(answer).name):
+                code, err = self.record("5", question, answer)
+                self.assertEqual(code, 2)
+                self.assertIn("is not under the run's directory", err)
+        self.assertEqual(self.calls(), [])
+
+    def test_close_posts_the_text_it_checked_even_when_the_file_is_swapped_after(self):
+        # gh reopening the path would read whatever is there by then; the checked text goes on stdin instead.
+        comment = self.write("interview/9-close.txt", "No work is needed.\n")
+        swap = {"path": comment, "text": "x" * (10 * ID.COMMENT_LIMIT)}
+        (self.stub / "swap.json").write_text(json.dumps(swap), encoding="utf-8")
+        self.assertEqual(self.run_main(["close", "9", "--comment-file", comment, "--run", RUN]), (0, ""))
+        self.assertEqual((self.stub / "comment.bin").read_bytes(), b"No work is needed.\n")
+        self.assertNotIn(comment, [arg for call in self.calls() for arg in call])
 
     def test_a_gh_planted_in_the_cwd_is_not_run_and_the_one_on_path_is(self):
         work = self.dir / "work"
@@ -238,49 +298,44 @@ class Cli(StubGh):
         self.assertFalse((work / "ran").exists())
 
     def test_a_question_holding_the_answer_marker_is_refused_by_the_cli(self):
-        code, err = self.run_main(
-            ["record", "5", "--question-file", self.write("q", "x A: y"), "--answer-file", self.write("a", "z")]
-        )
+        code, err = self.record("5", self.write("q", "x A: y"), self.write("a", "z"))
         self.assertEqual(code, 2)
         self.assertEqual(self.calls(), [])
 
-    def test_a_missing_run_dir_is_refused_before_gh_runs(self):
+    def test_a_missing_run_is_refused_before_gh_runs(self):
         code, err = self.run_main(
             ["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"),
-             "--run-dir", str(self.dir / "nope")]
+             "--run", "20261101-230000"]
         )
         self.assertEqual(code, 2)
-        self.assertIn("--run-dir", err)
+        self.assertIn("state.json is missing", err)
         self.assertEqual(self.calls(), [])
 
-    def test_a_failed_edit_exits_3_and_leaves_no_temp_file(self):
+    def test_a_failed_edit_exits_3_and_leaves_nothing_in_the_run(self):
         (self.stub / "body.txt").write_text("x\n", encoding="utf-8")
         (self.stub / "fail").write_text("", encoding="utf-8")
-        run = self.dir / "run"
-        run.mkdir()
-        code, err = self.run_main(
-            ["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"),
-             "--run-dir", str(run)]
-        )
+        question, answer = self.write("q", "q"), self.write("a", "a")
+        before = sorted(p.name for p in self.run_path.iterdir())
+        code, err = self.record("5", question, answer)
         self.assertEqual(code, 3)
-        self.assertEqual(list(run.iterdir()), [])
+        self.assertEqual(before, sorted(p.name for p in self.run_path.iterdir()))
 
     def test_the_default_date_is_today(self):
         (self.stub / "body.txt").write_text("x\n", encoding="utf-8")
-        self.run_main(["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a")])
+        self.record("5", self.write("q", "q"), self.write("a", "a"))
         written = (self.stub / "written.bin").read_text(encoding="utf-8")
         self.assertIn(f"- {date.today().isoformat()}: Q: q A: a", written)
 
     def test_a_crlf_body_keeps_crlf(self):
-        args = ["--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"), "--date", "2026-11-01"]
+        question, answer = self.write("q", "q"), self.write("a", "a")
         (self.stub / "body.txt").write_bytes(b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-10-31: Q: a A: b\r\n")
-        self.run_main(["record", "5", *args])
+        self.record("5", question, answer, "--date", "2026-11-01")
         self.assertEqual(
             (self.stub / "written.bin").read_bytes(),
             b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-10-31: Q: a A: b\r\n- 2026-11-01: Q: q A: a\r\n",
         )
         (self.stub / "body.txt").write_bytes(b"One.\r\n")
-        self.run_main(["record", "5", *args])
+        self.record("5", question, answer, "--date", "2026-11-01")
         self.assertEqual(
             (self.stub / "written.bin").read_bytes(),
             b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-11-01: Q: q A: a\r\n",

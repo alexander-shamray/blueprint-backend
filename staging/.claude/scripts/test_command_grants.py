@@ -154,7 +154,8 @@ class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
                 self.assertTrue(any(bash_deny_matches(rule, command) for rule in denied))
         # The control: a deny that refused these would take the night's only launcher and writer with it.
         for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1 --description d",
-                        "py -3.12 .claude/scripts/issue_decisions.py record 1 --question-file q --answer-file a",
+                        "py -3.12 .claude/scripts/issue_decisions.py record 1 --question-file q --answer-file a "
+                        "--run 20261101-220000",
                         "bash .claude/scripts/gh-issue-create.sh bug low code hand"):
             with self.subTest(reachable=command):
                 self.assertFalse(any(bash_deny_matches(rule, command) for rule in denied))
