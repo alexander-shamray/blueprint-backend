@@ -1455,7 +1455,7 @@ starts them; [`docs/commands/dispatch.md`](commands/dispatch.md) argues it.
 **What holds them.** The permission mode is the settings' own: the launcher
 passes no skip flag and the command denies `claude` as a shell word, so
 `dispatch_board.py run` is the only way in. Every guard hook runs in an
-executor as in any session. Beyond `/ship`'s seven stops, `--dispatched`
+executor as in any session. Beyond the stops `/ship` names, `--dispatched`
 hands a change back unmerged in three cases: an edit under `.claude/`, a
 resource only the owner has, and a decision the issue leaves to the owner.
 It also changes the executor: it never tears down its workspace, step 6 runs
@@ -1494,4 +1494,6 @@ crash, never a success.
   reaches a headless executor is untested (`artifacts/dispatch/spike.md`),
   so an executor may run on past the limit.
 - The `Edit(artifacts/dispatch/**)` grant also reaches the helper-owned
-  `state.json`; that gap is outside the guards' threat model.
+  `state.json`. No step edits it, so an honest mistake does not reach it,
+  and a session setting out to defeat the helper's checks is what *The
+  guards' threat model* puts outside what the guards defend.

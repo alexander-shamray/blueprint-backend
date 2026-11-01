@@ -352,11 +352,11 @@ Beside those, how a change is made here:
   `/branch` adds the *In progress* row and `/ship` step 6 deletes it. One
   exception: a session running under `--dispatched` writes nothing, and its
   dispatcher writes for it from the run's start to its report
-  (`.claude/commands/dispatch.md`). It
-  lives outside the checkout because Claude Code's isolation refuses a
-  session moved into `.claude/worktrees/` with `EnterWorktree` every path
-  in the main checkout outside that worktree, and admits one that no
-  checkout contains, so every session writes it from wherever it stands.
+  (`.claude/commands/dispatch.md`). It lives outside the checkout because
+  Claude Code's isolation refuses a session moved into
+  `.claude/worktrees/` with `EnterWorktree` every path in the main
+  checkout outside that worktree, and admits one that no checkout
+  contains, so every session writes it from wherever it stands.
   The permission check still sees a path outside the project: under
   `acceptEdits` the write prompts, as `docs/harness-boundaries.md`,
   *Settings self-lock and permission root*, measured, unless the user's own
