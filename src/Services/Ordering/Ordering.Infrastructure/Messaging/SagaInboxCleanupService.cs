@@ -57,8 +57,12 @@ public sealed class SagaInboxCleanupService(
         SELECT Taken = CONVERT(bit, CASE WHEN @taken >= 0 THEN 1 ELSE 0 END);
         """;
 
+    // Only while this session holds it: one SqlClient reconnected after a fault is a new session, holding nothing.
     private const string EndPassSql =
-        $"EXEC sp_releaseapplock @Resource = '{PassLock}', @LockOwner = 'Session';";
+        $"""
+        IF APPLOCK_MODE('public', '{PassLock}', 'Session') <> 'NoLock'
+            EXEC sp_releaseapplock @Resource = '{PassLock}', @LockOwner = 'Session';
+        """;
 
     // Compiled once, for CA1848 (ADR-019).
     private static readonly Action<ILogger, int, Exception?> Removed =
@@ -123,8 +127,13 @@ public sealed class SagaInboxCleanupService(
         }
         finally
         {
-            // Not the pass's token: a shutdown still releases the lock before the connection goes back.
-            await connection.ExecuteAsync(new CommandDefinition(EndPassSql, cancellationToken: CancellationToken.None));
+            // Not the pass's token: a shutdown still releases the lock before the connection goes back. A broken
+            // connection's session has ended, freeing the lock, and its fault is the pass's to report, not this.
+            if (connection.State == ConnectionState.Open)
+            {
+                await connection.ExecuteAsync(
+                    new CommandDefinition(EndPassSql, cancellationToken: CancellationToken.None));
+            }
         }
     }
 
