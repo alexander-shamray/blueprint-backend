@@ -45,17 +45,34 @@ public sealed class InboxEndpointExtensionsTests
 
         alone.ShouldNotBeEmpty("the saga's endpoint takes the inbox alone, so a scan finding none read nothing");
         alone.ShouldBe(Callers(root, ".UseSourceExchangeCheck(").Where(c => c != Helper), ignoreOrder: true);
-        foreach (string file in alone)
+        foreach (string file in alone.Append(Helper))
         {
+            // Each check typed before its inbox, or a refused delivery writes the inbox's row first.
             string text = File.ReadAllText(Path.Combine(root, file));
-            Occurrences(text, ".UseSourceExchangeCheck(").ShouldBe(
-                Occurrences(text, "UseConsumeFilter(typeof(InboxFilter<>)"),
-                file);
+            int[] checks = Positions(text, ".UseSourceExchangeCheck(");
+            int[] inboxes = Positions(text, "UseConsumeFilter(typeof(InboxFilter<>)");
+            checks.Length.ShouldBe(inboxes.Length, file);
+            for (int i = 0; i < inboxes.Length; i++)
+            {
+                checks[i].ShouldBeLessThan(inboxes[i], file);
+                if (i > 0)
+                    checks[i].ShouldBeGreaterThan(inboxes[i - 1], file);
+            }
         }
     }
 
-    private static int Occurrences(string text, string call) =>
-        text.Split(call, StringSplitOptions.None).Length - 1;
+    private static int[] Positions(string text, string call)
+    {
+        List<int> found = [];
+        for (int at = text.IndexOf(call, StringComparison.Ordinal);
+             at >= 0;
+             at = text.IndexOf(call, at + call.Length, StringComparison.Ordinal))
+        {
+            found.Add(at);
+        }
+
+        return [.. found];
+    }
 
     private static string[] Callers(string root, string call) =>
     [
