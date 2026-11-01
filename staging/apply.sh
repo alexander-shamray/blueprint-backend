@@ -61,12 +61,16 @@ step() {
       TESTS="$s/test_dispatch_run.py"
       CODE="$s/dispatch_run.py .claude/commands/dispatch.md"
       local runs=test_dispatch_run.RunDirectoryTests
+      # Before, start takes no --tasks, so argparse exits 2 in the two cases that call it; the resume-line case
+      # reaches the old rule through report, unchanged, and fails by its assertion.
+      EXPECT="^SystemExit: 2$"
       CASES="$runs.test_a_reported_run_stays_open_while_in_progress_holds_its_rows"
+      CASES+=" $runs.test_the_resume_line_follows_the_listed_rows_not_the_statuses"
       CASES+=" $runs.test_a_group_whose_worktree_is_gone_holds_the_run_while_its_rows_are_listed"
       MODULES="test_dispatch_run"
       BODY=("The last change kept a reported run open while any group's status in state.json was neither done nor returned. Some groups never reach either: an active one whose worktree is gone, which resume only refuses, and a verified or handed one whose In progress rows the owner removed by hand, which tasks done and back then refuse. Such a run reopened on every later /dispatch, skipped the interview and held a slot for a ghost, and a stop file left in it ended every night at the first wake."
         "start now takes --tasks, and a reported run stays open only while the list's In progress still holds the keys it recorded for a group it has not closed. The list is read once, and only when a reported run has such a group; one that cannot be read keeps the run open and start says why on a kept open line. The report's resume line follows the same test, and an active group whose worktree is gone goes under Needs a human, its rows named as what holds the run open. The runbook's start line gains --tasks, and its Resume says the list is the test."
-        "The two reopening cases fail before the code and pass after; apply.sh checks both.") ;;
+        "The three cases fail before the code and pass after: the two that call start because it took no --tasks, and the resume-line case, through report, because the old rule kept a run open for rows the owner had removed. apply.sh checks all three.") ;;
   esac
 }
 
