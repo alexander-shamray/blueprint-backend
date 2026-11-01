@@ -990,11 +990,28 @@ switch to `main` is refused, and from a linked worktree
 `git fetch origin main:main` is refused too, git declining to move a branch
 another worktree has checked out; local `main` is then not pulled, so the
 containment read has nothing true to ask. A refused line would end a merged
-run on a stop. So step 6 verifies the merge from the remote, line 1, and
-stops there; the dispatcher re-verifies the PR and its oid from GitHub,
-fast-forwards the main checkout, checks that `main` contains the merge, and
-removes the worktree from the main checkout with the same helper, reporting a
-refusal (the design's §6.4).
+run on a stop. So only lines 1 and 8 run: step 6 verifies the merge from
+the remote and prunes, which is safe from anywhere; the dispatcher
+re-verifies the PR and its oid from GitHub, fast-forwards the main checkout,
+checks that `main` contains the merge, and removes the worktree from the main
+checkout with the same helper, reporting a refusal (the design's §6.4). The
+report then says "teardown left to /dispatch" where an interactive run names
+the pull, the containment read and the removal, so the absent lines read as
+handed over rather than forgotten.
+
+**A relaunch meets the same worktree at step 0, so step 0 skips it too.** A
+session that ends on the five-hour window, or crashes, is relaunched in the
+same worktree, and its PR may have merged meanwhile; step 0 then finds a
+finished branch, whose row would `ExitWorktree` and tear the directory down
+before step 6's skip is ever read. Under the token it does neither: it reads
+`MERGED` from `pr-for-branch.sh` and `pr-state.sh`, writes the result and
+ends the run, and the dispatcher tears down as it does after step 6. That
+result is `merged` with `rounds: []` and no `review_end`, because the review
+never ran in this session, and the validator accepts a merge without a
+review end only when no round is listed, so a run that did review cannot
+omit how the review ended. A merged PR whose workspace still holds work is a
+hand-back naming that work, since step 0 keeps such a workspace rather than
+adopt it; a closed one is a stop, `closed unmerged`.
 
 **A result on every end, because a missing result reads as a crash.** The
 dispatcher reads the file, never the reply: a reply is prose, in whatever
@@ -1006,9 +1023,10 @@ run. A crash is relaunched once, and a deliberate stop must never be retried
 would be run again as if the session had died. The file is written on a
 merge, a hand-back, each of the seven stops and a run step 0 ended alike, and
 a session that dies writes nothing, which the dispatcher reads from its exit.
-The runbook shows the shape as a skeleton rather than prose because
-`test_ship_dispatched.py` parses it and holds its keys and its alternatives
-equal to the validator's, so the two cannot drift.
+The runbook shows the shape as a skeleton rather than prose, and each ending
+as a table row, because `test_ship_dispatched.py` parses both: it holds the
+keys and alternatives equal to the validator's and runs a result built from
+every row through the validator, so the two cannot drift.
 
 **The path comes from the prompt, not from a convention.** The group is the
 argument's leading `#<group>-<n>[+<n>]` tag, which the launcher builds, and
