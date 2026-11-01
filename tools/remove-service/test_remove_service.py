@@ -546,6 +546,8 @@ class CommandLineTests(unittest.TestCase):
 
     def test_a_run_removes_the_service_and_says_nothing_else_names_it(self):
         root = self.copy()
+        # The count's subject, planted: the scaffold leaves no bytecode, so nothing else here is not UTF-8.
+        (root / "unsearched.bin").write_bytes(b"\xff\xfe")
 
         code, out, err = self.run_main(PROBE, "--repo-root", str(root))
 
