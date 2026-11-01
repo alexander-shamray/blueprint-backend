@@ -974,7 +974,11 @@ group's rows to *In progress* when it forked the worktree, and it re-reads the
 file before every write; an executor writing beside it, `/branch` step 5's
 row or step 6's deletion, would be a second writer racing the first, and a
 row deleted before the dispatcher verified the merge would hide a claimed
-merge that did not happen. Both writes are skipped.
+merge that did not happen. Both writes are skipped, and so is every other:
+CLAUDE.md's working rule has a session that files or closes an issue update
+the list, so the runbook says the list is written nowhere under the token,
+and an issue the executor files reaches it only through the result's
+`filed`, which the dispatcher places.
 
 **The workspace is the worktree the session starts in**, and nothing new
 makes it so: the branch there is clean and holds nothing `origin/main` lacks,

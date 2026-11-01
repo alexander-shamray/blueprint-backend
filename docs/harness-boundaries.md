@@ -1460,11 +1460,13 @@ hands a change back unmerged in three cases: an edit under `.claude/`, a
 resource only the owner has, and a decision the issue leaves to the owner.
 It also changes the executor: it never tears down its workspace, step 6 runs
 only lines 1 and 8, step 0's finished teardown is skipped, and it never
-writes the task list. The dispatcher grants no agent type and denies every
-one, because it spawns sessions.
+writes the task list, not even for an issue it files or closes, which goes
+only in its result's `filed`. The dispatcher grants no agent type and
+denies every one, because it spawns sessions.
 
 **No grant was added for this.** Both spikes, one on docs and one on code,
-ran with `permission_denials` empty (`artifacts/dispatch/spike.md`). The
+ran with `permission_denials` empty
+(`docs/superpowers/plans/2026-11-01-dispatch-spike.md`). The
 reason is the owner's user settings: `defaultMode` is `auto`, a `claude -p`
 session inherits it, and `/ship`'s frontmatter grants auto-approve its
 helpers. This repository's settings set no mode, so the executor depends on
@@ -1472,9 +1474,11 @@ a setting outside the repository; on a machine without it the first prompt
 hands every executor back.
 
 **The dispatcher writes the task list alone.** It writes only through
-`dispatch_board.py tasks`, with no `Edit` grant on the file. `tasks rewrite`
-refuses any change to the *In progress* section and refuses a run with no
-`state.json`. After `verify`, the dispatcher pulls with `--ff-only`, checks
+`dispatch_board.py tasks`, with no `Edit` grant on the file. Every `tasks`
+action refuses a run with no `state.json`, `tasks rewrite` refuses any
+change to the *In progress* section, and `done` and `back` touch only the
+rows the run's own move recorded, `done` only once `verify` has passed.
+After `verify`, the dispatcher pulls with `--ff-only`, checks
 containment with `git merge-base --is-ancestor`, runs `tasks done` and
 removes the worktree with `git-worktree-remove.sh`.
 
@@ -1491,8 +1495,9 @@ crash, never a success.
   spec's §2, its last anti-goal).
 - No script reads the weekly figure. Token Weather's pause notice in the
   dispatcher's own session ends the night (spec §8). Whether that pause
-  reaches a headless executor is untested (`artifacts/dispatch/spike.md`),
-  so an executor may run on past the limit.
+  reaches a headless executor is untested
+  (`docs/superpowers/plans/2026-11-01-dispatch-spike.md`), so an executor
+  may run on past the limit.
 - The `Edit(artifacts/dispatch/**)` grant also reaches the helper-owned
   `state.json`. No step edits it, so an honest mistake does not reach it,
   and a session setting out to defeat the helper's checks is what *The
