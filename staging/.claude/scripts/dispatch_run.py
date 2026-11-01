@@ -250,6 +250,11 @@ def launch(root, run, gid, tasks_path, branch, worktree):
     listed = _worktree_branches(git(root, "worktree", "list", "--porcelain"))
     if listed.get(_same_path(os.path.join(root, worktree))) != f"refs/heads/{branch}":
         raise Refusal(f"{worktree} is not a worktree on {branch}")
+    # A group sent back after a refused run and launched again must not read that old refusal as this launch's.
+    try:
+        (directory / f"{gid}.refused.json").unlink(missing_ok=True)
+    except OSError as error:
+        raise Refusal(f"could not remove {gid}'s earlier refusal: {error}") from None
     entry.update(status="running", model=group.model, issues=[r.number for r in group.rows], branch=branch,
                  worktree=worktree, launched=now().isoformat(), crashes=0)
     save_state(directory, state)
