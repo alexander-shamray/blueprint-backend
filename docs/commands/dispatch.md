@@ -70,9 +70,12 @@ rebuild's cleanup of closed and merged rows is therefore *Remaining*,
 
 `--run` takes the run's name, as every other subcommand does, and is
 resolved under `artifacts/dispatch/` to a run `start` opened; `board --run`
-creates no directory of its own. A mistyped or path-shaped name is refused
-before anything is read or written, so the copy and the issue bodies never
-land outside the run.
+and every `tasks` action refuse any other, so neither creates a directory of
+its own. A mistyped or path-shaped name is refused before anything is read
+or written, so the copy and the issue bodies never land outside the run.
+`done` and `back` touch only the rows this run's `move` recorded, never
+another session's row that happens to carry the same group, and `done` only
+once `verify` has passed.
 
 `tasks place` adds a filed issue's row, its missing cells set to the
 cautious value, `OWNER` among them, and records the issue in the run's
@@ -119,6 +122,9 @@ running group may touch a path it may touch; the spec leaves the extraction
 to the builder as long as it errs towards exclusive, and it does: a claim
 with no paths at all overlaps everything and runs alone, and a conflicts
 cell naming a group or an issue keeps the two apart whatever their paths.
+That holds in both directions after a move: the *In progress* row has no
+conflicts cell, so `wake` reads a running group's claim from the rows the
+run recorded when it moved them.
 
 Another session's *In progress* row is left alone and its paths are taken,
 what its branch has changed counting with what its text names (spec §4). That
@@ -162,12 +168,23 @@ filed, then asks `wake` what to launch; the outcome table is the spec's
 §6.4. A hand-back or a stop goes back into its wave marked `OWNER` and is
 not retried; a crash is relaunched once (spec §2).
 
+A `run` that starts no executor — no `claude` on the path, a stale file it
+cannot remove, the stop file — would otherwise hold its slot all night,
+since `result` has no session to read. So it leaves `<group>.refused.json`
+beside the session record, never a write to `state.json`, which is the
+dispatcher's alone, and `result` records the group `crashed-before-launch`,
+which frees the slot and goes back like a hand-back: whatever refused one
+launch would refuse the next.
+
 ## When the night ends
 
 Only the spec's §8 ends the night: the week's limit, nothing ready and
 nothing running, or the owner's stop file, `<run>/STOP`, which `wake` reads
 on every wake. Each ends it the same way: launch nothing more, let running
-executors reach their own end, then write the report. A night where `wake`
+executors reach their own end, then write the report. A relaunch is a
+launch too, so `run` and `wait` read the stop file as well: a crashed or
+rate-limited group the owner stopped goes back to its wave rather than
+starting again. A night where `wake`
 names nothing to launch and no background task of this session is left to
 wake it has nothing left that can change, so it ends too; a group still
 held by an earlier dispatcher's executor is reported as interrupted.
