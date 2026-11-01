@@ -318,6 +318,9 @@ On a running gateway an operator sets it in a mounted file the gateway
 follows, rendered by the chart's `routeSwitch.off`, and a reload that sets it
 where it may not be, or names no route, is refused with the configuration
 before it kept ([ADR-119](adr/ADR-119-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md)).
+The file contributes that entry and no other key, so whoever may write it
+cannot change a route's match, policy or cluster
+([ADR-187](adr/ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md)).
 
 ### API versioning and deprecation at the edge
 
