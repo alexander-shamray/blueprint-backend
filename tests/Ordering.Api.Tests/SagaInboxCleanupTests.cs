@@ -95,6 +95,68 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
             .ShouldBe("1,2");
     }
 
+    // Three replicas each ran every bucket and queued behind each other's deletes (ADR-189).
+    [Fact]
+    public async Task A_pass_while_another_replica_holds_the_pass_lock_removes_nothing()
+    {
+        await InsertAsync(1, delivered: LongAgo);
+        await InsertAsync(2, delivered: LongAgo);
+
+        await using SqlConnection replica = new(fixture.ConnectionString);
+        await replica.OpenAsync(TestContext.Current.CancellationToken);
+        (await TakePassLockAsync(replica)).ShouldBeTrue();
+
+        (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await CountAsync()).ShouldBe(2);
+
+        await using (SqlCommand release = new(
+            $"EXEC sp_releaseapplock @Resource = '{SagaInboxCleanupService.PassLock}', @LockOwner = 'Session';",
+            replica))
+            await release.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+
+        (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
+
+        // Released by the pass itself: a pooled session keeps a session lock until it is next reused.
+        (await TakePassLockAsync(replica)).ShouldBeTrue();
+    }
+
+    // The delete's checks waited on consumers' rows in flight, holding the cleanup index meanwhile (ADR-189).
+    [Fact]
+    public async Task A_bucket_whose_row_a_transaction_holds_is_given_up_and_the_others_are_removed()
+    {
+        // One id a bucket, as CleanupBucket is the id's low four bits.
+        long[] ids = [.. Enumerable.Range(0, OrderingDbContext.InboxStateCleanupBuckets).Select(i => (long)i)];
+        foreach (long id in ids)
+            await InsertAsync(id, delivered: LongAgo);
+
+        await using SqlConnection consumer = new(fixture.ConnectionString);
+        await consumer.OpenAsync(TestContext.Current.CancellationToken);
+        await using SqlTransaction transaction = consumer.BeginTransaction();
+        await using (SqlCommand hold = new(
+            "UPDATE ordering.InboxState SET ReceiveCount = ReceiveCount + 1 WHERE Id = 5;", consumer, transaction))
+            await hold.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+
+        // A delete that waited on the open transaction would wait until this token, not pass.
+        using CancellationTokenSource bound =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        bound.CancelAfter(TimeSpan.FromSeconds(30));
+
+        (await Cleanup().CleanUpAsync(bound.Token)).ShouldBe(ids.Length - 1);
+
+        (await fixture.ScalarAsync<string>(
+            """
+            SELECT Value = STRING_AGG(CONVERT(varchar(20), Id), ',')
+            FROM ordering.InboxState
+            WHERE ConsumerId = {0}
+            """,
+            Consumer))
+            .ShouldBe("5");
+
+        await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+
+        (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+    }
+
     [Fact]
     public async Task The_cleanup_delete_seeks_its_bucket_s_expired_rows_rather_than_scanning()
     {
@@ -134,6 +196,21 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
 
     private SagaInboxCleanupService Cleanup() =>
         fixture.Factory.Services.GetRequiredService<SagaInboxCleanupService>();
+
+    private static async Task<bool> TakePassLockAsync(SqlConnection connection)
+    {
+        await using SqlCommand take = new(
+            $"""
+            DECLARE @taken int;
+            EXEC @taken = sp_getapplock
+                @Resource = '{SagaInboxCleanupService.PassLock}', @LockMode = 'Exclusive', @LockOwner = 'Session',
+                @LockTimeout = 0;
+            SELECT CONVERT(bit, CASE WHEN @taken >= 0 THEN 1 ELSE 0 END);
+            """,
+            connection);
+
+        return (bool)(await take.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
 
     private Task InsertAsync(long id, DateTime? delivered, DateTime? received = null) =>
         fixture.ExecuteAsync(
