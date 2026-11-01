@@ -75,7 +75,8 @@ def record(run, gid, pid=None, **fields):
     parsed = [db._row("Remaining", row) for row in rows]
     slug = gid.lower()
     entry = {"keys": [r.key for r in parsed], "rows": rows, "issues": [r.number for r in parsed], "model": "Opus",
-             "branch": f"chore/dispatch-{slug}", "worktree": f".claude/worktrees/dispatch-{slug}", "crashes": 0}
+             "branch": f"chore/dispatch-{slug}", "worktree": f".claude/worktrees/dispatch-{slug}", "crashes": 0,
+             "launched": NOW.isoformat()}
     entry.update(fields)
     os.makedirs(entry["worktree"], exist_ok=True)
     state = dr.load_state(directory)
@@ -523,8 +524,9 @@ class ClassifyTests(InRoot):
 
 
 class ResultCommandTests(InRoot):
-    def absorb(self, data, envelope=SUCCESS, code=0, crashes=0):
-        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE, crashes=crashes)
+    def absorb(self, data, envelope=SUCCESS, code=0, crashes=0, **fields):
+        record(RUN, "S1", **{"status": "running", "branch": BRANCH, "worktree": WORKTREE, "crashes": crashes,
+                             **fields})
         target = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         if data is None:
@@ -570,6 +572,62 @@ class ResultCommandTests(InRoot):
         record(RUN, "S1", status="running")
         self.assertIn("refused: S1 has no session record; its executor has not exited",
                       run_cli(["result", RUN, "S1"]))
+
+    def test_a_merge_with_no_round_is_clean_only_on_a_relaunch_this_launch_read_a_session_of(self):
+        # Ruling R15's shape is a relaunch onto a PR an earlier session merged; from a first session nobody
+        # reviewed it, so it still verifies and lands but is flagged for the report's Needs a human.
+        bare = {**MERGED_S1, "rounds": [], "review_end": None}
+        earlier = (NOW - timedelta(hours=1)).isoformat()
+        cases = {
+            "a first session": (bare, {}, True),
+            "a relaunch after a crash": (bare, {"status": "relaunch", "crashes": 1, "absorbed": earlier}, False),
+            "a relaunch after the window": (bare, {"status": "window", "absorbed": earlier}, False),
+            "a relaunch status with no earlier session read": (bare, {"status": "relaunch", "crashes": 1}, True),
+            "a launch run again over a read session": (bare, {"absorbed": earlier}, True),
+            "a first session with no rounds but a review end": ({**bare, "review_end": "clean"}, {}, True),
+            "a reviewed merge from a first session": (MERGED_S1, {}, False),
+        }
+        for name, (data, fields, unreviewed) in cases.items():
+            with self.subTest(case=name):
+                line = self.absorb(data, **fields)[0]
+                entry = group_state(RUN, "S1")
+                self.assertEqual("merged-claimed", entry["status"])
+                self.assertEqual(unreviewed, entry["unreviewed"])
+                self.assertEqual("S1: merged-claimed pr #1690" + (" - merged with no review round" if unreviewed
+                                                                  else ""), line)
+
+    def test_a_refusal_older_than_the_launch_is_not_this_launchs(self):
+        # Only a `run` of this launch leaves a marker that sends the group back unread.
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        marker = state_dir() / "S1.refused.json"
+        for name, body in (("older than the launch", {"refused": "stop file",
+                                                      "at": (NOW - timedelta(seconds=1)).isoformat()}),
+                           ("undated", {"refused": "stop file"})):
+            with self.subTest(marker=name):
+                marker.write_text(json.dumps(body), encoding="utf-8")
+                self.assertNotIn("launched nothing", run_cli(["resume", RUN]))
+                self.assertIn("refused: S1 has no session record; its executor has not exited",
+                              run_cli(["result", RUN, "S1"]))
+                self.assertEqual("running", group_state(RUN, "S1")["status"])
+        marker.write_text(json.dumps({"refused": "stop file", "at": NOW.isoformat()}), encoding="utf-8")
+        self.assertIn("S1: crashed-before-launch - run refused before launch: stop file",
+                      run_cli(["result", RUN, "S1"]))
+
+    def test_a_refusal_beside_a_session_record_is_refused_rather_than_either_picked(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        (state_dir() / "S1.refused.json").write_text(
+            json.dumps({"refused": "stop file", "at": NOW.isoformat()}), encoding="utf-8")
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 0, "started": NOW.isoformat(), "ended": NOW.isoformat(), "stdout": json.dumps(SUCCESS),
+             "stderr": ""}), encoding="utf-8")
+        before = (state_dir() / "state.json").read_bytes()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            self.assertEqual(2, db.main(["result", RUN, "S1"]))
+        self.assertEqual("refused: S1 has both S1.refused.json and a session record, so which ended its launch is "
+                         "unknown\n", out.getvalue())
+        self.assertEqual(before, (state_dir() / "state.json").read_bytes())
+        self.assertIn("result S1: its executor ended and its result was not read", run_cli(["resume", RUN]))
 
 
 class MergeCheckTests(InRoot):
@@ -799,7 +857,7 @@ class WakeTests(InRoot):
                                       "--branch", BRANCH, "--worktree", WORKTREE]))
         state = dr.load_state(state_dir())
         state["groups"]["S1"].update(status="running", model="Opus", issues=[1682, 1683], branch=BRANCH,
-                                     worktree=WORKTREE, crashes=0)
+                                     worktree=WORKTREE, crashes=0, launched=NOW.isoformat())
         dr.save_state(state_dir(), state)
         make_worktree(WORKTREE)
         real_unlink = Path.unlink
@@ -1054,6 +1112,18 @@ class ReportTests(InRoot):
         self.assertIn(f"S1 #1690 merged as {OID}, not confirmed in main: its rows are still In progress and "
                       "worktree .claude/worktrees/dispatch-s1 is left in place",
                       self.section(lines, "## Needs a human"))
+
+    def test_a_merge_nobody_reviewed_lands_but_is_not_reported_as_merged(self):
+        # `result` flags a merge with no round from a session that cannot have reviewed it earlier.
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=[], review_end=None,
+               filed=[1701], unreviewed=True)
+        lines = self.report()
+        self.assertEqual(["none"], self.section(lines, "## Merged"))
+        self.assertIn(f"S1 #1690 merged with no review round, as {OID}: #1682, #1683; filed #1701",
+                      self.section(lines, "## Needs a human"))
+        record(RUN, "S1", status="verified", pr=1690, merge_oid=OID, rounds=[], review_end=None, unreviewed=True)
+        self.assertTrue(self.section(self.report(), "## Needs a human")[0].startswith(
+            f"S1 #1690 merged as {OID}, merged with no review round, not confirmed in main"))
 
 
 class TranscriptTests(unittest.TestCase):
