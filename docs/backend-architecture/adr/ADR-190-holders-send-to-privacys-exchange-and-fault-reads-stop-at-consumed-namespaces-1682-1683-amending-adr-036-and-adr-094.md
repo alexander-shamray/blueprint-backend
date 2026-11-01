@@ -46,8 +46,9 @@ name still reaches the queue, so a holder could delete it: ADR-036's
 owes that context's fault exchanges a `read`, and the gate fails until the
 grant names it, and a test bus that runs under a service's account and
 faults a message of its own type sets `PublishFaults` off, since that
-type's fault exchange is in no namespace the account reads; the gate reads
-only `src/`, so the refusal shows only as that bus hanging.
+type's fault exchange is in no namespace the account reads; the gate takes
+the namespaces an account consumes from `src/` alone, so the refusal shows
+only as that bus hanging.
 **The narrowing is per namespace, not per type**: a fault
 exchange is named for one message type, and an account still reads the one
 a peer's consumer publishes for a message in a namespace both consume, so
