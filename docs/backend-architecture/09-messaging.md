@@ -3779,9 +3779,9 @@ cfg.ReceiveEndpoint(
 >
 > **And the source check stands in front of it on every endpoint.** The
 > envelope's message type picks the consumer and the publisher writes the
-> envelope, so the saga's queue, which binds Inventory's exchanges beside
-> Payments', would take a `PaymentAuthorised` named in a `StockReleased`
-> publish. `SourceExchangeFilter<T>` passes a delivery on only through the
+> envelope, so a queue binding two publishers' exchanges would take one
+> publisher's event named in an envelope the other published to its own.
+> `SourceExchangeFilter<T>` passes a delivery on only through the
 > consumed type's exchange, the endpoint's own or the delayed exchange in
 > front of it, and leaves the rest to park in `<queue>_skipped`; outside the
 > inbox, a refused delivery writes no row
