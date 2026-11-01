@@ -2,8 +2,7 @@
 
 `record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments
 and closes as not planned; exit 2 is a refusal with nothing written, 3 a failed `gh` call. The untrusted body is
-searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice.
-`record` and `close` take the run's name and read only files under that run; gh gets the checked text on stdin."""
+searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice."""
 
 import argparse
 import json
