@@ -844,7 +844,10 @@ function holderState(wait) {
     if (wait.holderWait)
         return `waiting ${wait.holderWait}`;
 
-    return wait.holderStatus === 'sleeping' ? 'idle in its transaction' : wait.holderStatus ?? 'gone';
+    if (wait.holderStatus === 'sleeping')
+        return wait.holderTransactions > 0 ? 'idle in its transaction' : 'idle';
+
+    return wait.holderStatus ?? 'gone';
 }
 
 /**
