@@ -252,6 +252,26 @@ class RunDirectoryTests(InRoot):
         self.assertEqual((3, f"{RUN}\n"), (code, out))
         self.assertIn("kept open: the task list missing.md could not be read", err)
 
+    def test_the_resume_line_follows_the_listed_rows_not_the_statuses(self):
+        # A verified or window group whose rows the owner removed by hand holds nothing, whatever its status.
+        dr.new_run(".", 2, "en", NOW)
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        make_worktree(WORKTREE)
+        for status in ("window", "verified", "handed-back"):
+            for listed, resumed in (("todo.md", True), ("cleared.md", False)):
+                with self.subTest(status=status, rows="listed" if resumed else "removed"):
+                    state = dr.load_state(state_dir())
+                    state["groups"]["S1"].update(status=status, worktree=WORKTREE)
+                    dr.save_state(state_dir(), state)
+                    with open("cleared.md", "w", encoding="utf-8", newline="") as handle:
+                        handle.write(FIXTURE)
+                    report = run_cli(["report", RUN, "--tasks", listed, "--today", "2026-11-02"],
+                                     body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+                    self.assertEqual(resumed, f"it resumes run {RUN}" in report, report)
+
     def test_a_group_whose_worktree_is_gone_holds_the_run_while_its_rows_are_listed(self):
         with open("todo.md", "w", encoding="utf-8", newline="") as handle:
             handle.write(FIXTURE)
