@@ -30,8 +30,8 @@ OUTCOMES = ("merged", "handed-back", "stopped")
 REVIEW_ENDS = ("clean", "comments-rule", "plan", "ceiling")
 ROUND_KEYS = ("kind", "raised", "fixed", "refused")
 ROUND_KINDS = ("full", "recheck")
-RESULT_KEYS = ("group", "issues", "outcome", "pr", "merge_oid", "rounds", "review_end", "filed", "reason",
-               "workspace", "decisions")
+RESULT_KEYS = ("group", "issues", "outcome", "pr", "title", "merge_oid", "rounds", "review_end", "filed",
+               "reason", "workspace", "decisions")
 RESULT_CAP = 1 << 20
 OID = re.compile(r"[0-9a-f]{40}")
 SESSION_ID = re.compile(r"[A-Za-z0-9-]{1,80}")
@@ -393,6 +393,7 @@ class Result:
     issues: tuple[int, ...]
     outcome: str
     pr: int | None
+    title: str | None
     merge_oid: str | None
     rounds: tuple[dict, ...]
     review_end: str | None
@@ -439,6 +440,9 @@ def _result_problem(data, group, issues):
         return "a merged result needs its pr number and the whole 40-character merge_oid"
     if (pr is not None and not _number(pr)) or (oid is not None and not _oid(oid)):
         return "pr or merge_oid is neither null nor a pr number and a whole oid"
+    # The PR's title as /pr opened it; null where this session did not open the PR, as a relaunch onto a merge.
+    if data["title"] is not None and not (isinstance(data["title"], str) and data["title"].strip()):
+        return "title is neither null nor text"
     if outcome != "merged" and not (isinstance(reason, str) and reason.strip()):
         return f"a {outcome} result needs a reason"
     if reason is not None and not isinstance(reason, str):
@@ -466,7 +470,8 @@ def validate_result(data, group, issues):
     why = _result_problem(data, group, issues)
     if why:
         return Invalid(why)
-    return Result(data["group"], tuple(data["issues"]), data["outcome"], data["pr"], data["merge_oid"],
+    return Result(data["group"], tuple(data["issues"]), data["outcome"], data["pr"], data["title"],
+                  data["merge_oid"],
                   tuple(data["rounds"]), data["review_end"], tuple(data["filed"]), data["reason"],
                   data["workspace"], tuple(data["decisions"]))
 
@@ -854,7 +859,7 @@ def absorb(root, run, gid, run_refused=None):
     if end.resets_at is not None:
         entry["resets_at"] = end.resets_at.isoformat()
     if isinstance(result, Result):
-        entry.update(pr=result.pr, merge_oid=result.merge_oid, filed=list(result.filed),
+        entry.update(pr=result.pr, title=result.title, merge_oid=result.merge_oid, filed=list(result.filed),
                      review_end=result.review_end, rounds=list(result.rounds), decisions=list(result.decisions))
     entry["transcript"] = transcript
     save_state(directory, state)
@@ -1131,6 +1136,13 @@ def _issues_text(numbers):
     return ", ".join(f"#{n}" for n in numbers if _number(n)) if isinstance(numbers, list) and numbers else "none"
 
 
+def _pr_text(entry):
+    # The executor's title: one_line keeps a line break in it from forging a report line of its own.
+    title = entry.get("title")
+    shown = f' "{one_line(title, 200)}"' if isinstance(title, str) and title.strip() else ""
+    return f"#{entry.get('pr')}{shown}"
+
+
 def _rounds_text(rounds):
     if not isinstance(rounds, list) or not rounds:
         return "no review rounds in this session"
@@ -1177,7 +1189,7 @@ def report(root, run, tasks_path, today, body_source, open_source):
         ended = entry.get("closed_from") if status in ("done", "returned") else status
         if ended == "verified" and status == "done" and entry.get("unreviewed"):
             # It landed, but nobody reviewed it: the one kind of merge that is not a merge needing nothing.
-            needs.append(f"{gid} #{entry.get('pr')} {UNREVIEWED}, as {entry.get('merge_oid')}: "
+            needs.append(f"{gid} {_pr_text(entry)} {UNREVIEWED}, as {entry.get('merge_oid')}: "
                          f"{_issues_text(entry.get('issues'))}; filed {_issues_text(entry.get('filed'))}"
                          + _decisions_text(entry.get("decisions")))
         elif ended == "verified" and status == "done":
@@ -1185,13 +1197,13 @@ def report(root, run, tasks_path, today, body_source, open_source):
             review = ("no rounds reported; a branch-reviewer round in its transcript"
                       if entry.get("review_seen") == "transcript"
                       else f"{_rounds_text(entry.get('rounds'))}; review {entry.get('review_end') or 'not run'}")
-            merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
+            merged.append(f"{gid} {_pr_text(entry)} merged as {entry.get('merge_oid')}: "
                           f"{_issues_text(entry.get('issues'))}; {review}; filed {_issues_text(entry.get('filed'))}"
                           + _decisions_text(entry.get("decisions")))
         elif status == "verified":
             # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
             unreviewed = f", {UNREVIEWED}" if entry.get("unreviewed") else ""
-            needs.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}{unreviewed}, "
+            needs.append(f"{gid} {_pr_text(entry)} merged as {entry.get('merge_oid')}{unreviewed}, "
                          "not confirmed in main: "
                          f"its rows are still In progress and worktree {entry.get('worktree')} is left in place"
                          + _decisions_text(entry.get("decisions")))

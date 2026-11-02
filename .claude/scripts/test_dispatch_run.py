@@ -30,13 +30,15 @@ HEAD = "5ffc18315aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 BRANCH = "chore/dispatch-s1"
 WORKTREE = ".claude/worktrees/dispatch-s1"
 S1_ROWS = [row for row in REMAINING_ROWS.splitlines() if "| S1 |" in row]
-MERGED_S1 = {"group": "S1", "issues": [1682, 1683], "outcome": "merged", "pr": 1690, "merge_oid": OID,
+MERGED_S1 = {"group": "S1", "issues": [1682, 1683], "outcome": "merged", "pr": 1690,
+             "title": "fix(harness): narrow the RabbitMQ read grants", "merge_oid": OID,
              "rounds": [{"kind": "full", "raised": 5, "fixed": 5, "refused": 0},
                         {"kind": "recheck", "raised": 2, "fixed": 1, "refused": 1}],
              "review_end": "clean", "filed": [1701], "reason": None,
              "workspace": {"worktree": WORKTREE, "removed": False},
              "decisions": ["kept the narrower grant, the issue's recommended option"]}
-HANDED_S1 = {**MERGED_S1, "outcome": "handed-back", "pr": None, "merge_oid": None, "review_end": None,
+HANDED_S1 = {**MERGED_S1, "outcome": "handed-back", "pr": None, "title": None, "merge_oid": None,
+             "review_end": None,
              "reason": "needs a provider key only the owner has"}
 USAGE = {"input_tokens": 20, "cache_creation_input_tokens": 5265, "cache_read_input_tokens": 754597,
          "output_tokens": 2814, "output_tokens_details": {"thinking_tokens": 199}}
@@ -444,6 +446,14 @@ class ResultTests(unittest.TestCase):
             with self.subTest(change=change):
                 self.assertIsInstance(self.check({**MERGED_S1, **change}), dr.Invalid)
 
+    def test_a_title_is_null_or_text(self):
+        # A relaunch that step 0 ended on a merged PR did not open it, so it may not know the title.
+        self.assertEqual(MERGED_S1["title"], self.check(MERGED_S1).title)
+        self.assertIsInstance(self.check({**MERGED_S1, "title": None}), dr.Result)
+        for bad in ("", "   ", 7, ["a title"]):
+            with self.subTest(title=bad):
+                self.assertEqual("title is neither null nor text", self.check({**MERGED_S1, "title": bad}).why)
+
     def test_a_relaunch_onto_a_merged_branch_has_no_review_to_end(self):
         # /ship's step 0 ends a relaunch whose PR already merged before any round runs.
         relaunch = {**MERGED_S1, "rounds": [], "review_end": None}
@@ -676,6 +686,10 @@ class ResultCommandTests(InRoot):
             encoding="utf-8")
         with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
             return run_cli(["result", RUN, "S1"]).splitlines()
+
+    def test_result_records_the_prs_title(self):
+        self.assertEqual("S1: merged-claimed pr #1690", self.absorb(MERGED_S1)[0])
+        self.assertEqual(MERGED_S1["title"], group_state(RUN, "S1")["title"])
 
     def test_usage_sums_every_session_the_group_ran(self):
         earlier = {"input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 50}
@@ -1416,6 +1430,21 @@ class ReportTests(InRoot):
         self.assertTrue(any(text.endswith("left in place; decisions: left the provider alone") for text in needs),
                         needs)
         self.assertEqual(1, lines.count("## Merged"))
+
+    def test_each_merge_line_names_its_pr_title_on_one_line(self):
+        # The title is the executor's text, so a line break in it must not forge a report line.
+        title = "Narrow the grants\n## Merged forged"
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, title=title, merge_oid=OID,
+               rounds=MERGED_S1["rounds"], review_end="clean", filed=[])
+        lines = self.report()
+        merged = self.section(lines, "## Merged")
+        self.assertTrue(merged[0].startswith(f'S1 #1690 "Narrow the grants ## Merged forged" merged as {OID}: '),
+                        merged)
+        self.assertEqual(1, lines.count("## Merged"))
+        record(RUN, "S1", status="verified", pr=1690, title=title, merge_oid=OID, rounds=[], review_end=None,
+               unreviewed=True)
+        self.assertTrue(self.section(self.report(), "## Needs a human")[0].startswith(
+            f'S1 #1690 "Narrow the grants ## Merged forged" merged as {OID}, merged with no review round'))
 
     def test_a_merge_main_does_not_hold_yet_is_not_reported_as_merged(self):
         # verify passed, then the pull or the containment read failed, so `tasks done` never ran.
