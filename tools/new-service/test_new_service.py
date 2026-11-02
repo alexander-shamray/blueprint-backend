@@ -721,8 +721,10 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertNotIn("partial class AddOutboxRetentionIndex", snapshot)
         self.assertIn('modelBuilder.Entity("Common.Infrastructure.Inbox.InboxMessage"', snapshot)
         self.assertIn('.HasDatabaseName("IX_Outbox_Processed")', snapshot)
-        # DropInboxHandledAtIndex is the last, so an earlier designer still holds the index (ADR-186).
+        # DropInboxHandledAtIndex drops it, so a designer before that one still holds the index (ADR-186).
         self.assertNotIn("IX_Inbox_HandledAt", snapshot)
+        # IncludeProcessedAtInClaimIndex is the last, so an earlier designer leaves the column out (ADR-194).
+        self.assertIn('new[] { "Lane", "Attempts", "LockedUntil", "ProcessedAt" }', snapshot)
 
     def test_the_inbox_migration_keeps_no_claim_about_the_templates_own_row(self):
         # The template carries this table while binding no receive endpoint,
@@ -2614,7 +2616,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Six and not seven, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("92 files created, 6 updated", out)
+            self.assertIn("94 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

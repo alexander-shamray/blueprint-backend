@@ -177,7 +177,7 @@ namespace Payments.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_Outbox_Unprocessed")
                         .HasFilter("[ProcessedAt] IS NULL");
 
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ClaimBucket", "OccurredAt"), new[] { "Lane", "Attempts", "LockedUntil" });
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ClaimBucket", "OccurredAt"), new[] { "Lane", "Attempts", "LockedUntil", "ProcessedAt" });
 
                     b.ToTable("OutboxMessages", "payments");
                 });

@@ -36,6 +36,9 @@ public sealed class OutboxMessage
     /// <summary>The bucket's expression: a mask, not a modulo, which a negative key would take below zero.</summary>
     public static readonly string ClaimBucketSql = $"CONVERT(tinyint, [Id] & {ClaimBuckets - 1})";
 
+    /// <summary>The filtered claim index, which the outbox gauges name in a hint as well (ADR-194).</summary>
+    public const string UnprocessedIndex = "IX_Outbox_Unprocessed";
+
     public long Id { get; private set; }
 
     public Guid MessageId { get; private set; }
