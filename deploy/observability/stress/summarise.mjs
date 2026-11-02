@@ -42,6 +42,7 @@ import {
     queryStoreLine,
     queryStoreRow,
     queryStoreSql,
+    queuesLine,
     sqlDelta,
     sqlcmdArgs,
 } from './report.js';
@@ -100,6 +101,9 @@ const CONSUMERS = 'group by (service_name, messaging_masstransit_destination) (m
 const OUTBOX_BY_SERVICE = 'max by (service_name) (outbox_oldest_age_seconds)';
 const QUEUE_DEPTHS = `max by (queue) (${WORK_QUEUES})`;
 const ERROR_QUEUE_DEPTHS = 'max by (queue) (rabbitmq_queue_messages{queue=~".+_error"})';
+const QUEUE_HANDLED = (range) => `sum by (queue) (rate(rabbitmq_queue_messages_acked_total{${WORK_FILTER}}[${range}]))`;
+const QUEUE_IN_FLIGHT = (range) =>
+    `max by (queue) (avg_over_time(rabbitmq_queue_messages_unacked{${WORK_FILTER}}[${range}]))`;
 
 // What serviceCrossings() reads: each service's own request types, 5xx share,
 // outbox and queues, the backlogs at the hold's middle and end as the knee's
@@ -112,8 +116,8 @@ async function perService(window, range) {
     const failed = new Set();
     const read = (field, name, expr, atMs) => query(name, expr, atMs, () => failed.add(field));
 
-    const [requestTypes, serverErrors, consumers, outboxMiddle, outboxEnd, queueMiddle, queueEnd, faultStart,
-        faultEnd] = await Promise.all([
+    const [requestTypes, serverErrors, consumers, outboxMiddle, outboxEnd, queueMiddle, queueEnd, queueHandled,
+        queueInFlight, faultStart, faultEnd] = await Promise.all([
         read('requestTypes', 'request.duration p95', 'histogram_quantile(0.95, sum by (le, service_name, request) ' +
             `(rate(request_duration_seconds_bucket[${range}])))`, end),
         read('serverErrors', '5xx share', 'sum by (service_name) (increase(http_server_request_duration_seconds_count' +
@@ -125,6 +129,9 @@ async function perService(window, range) {
         read('outboxes', 'outbox oldest by service, end', OUTBOX_BY_SERVICE, end),
         read('queues', 'queue depth, middle', QUEUE_DEPTHS, middle),
         read('queues', 'queue depth, end', QUEUE_DEPTHS, end),
+        // Over the hold, so they outlive the Prometheus that held them; serviceCrossings() judges neither.
+        query('queue handled rate', QUEUE_HANDLED(range), end),
+        query('queue in flight', QUEUE_IN_FLIGHT(range), end),
         read('faultedQueues', 'error queues, start', ERROR_QUEUE_DEPTHS, window.startMs),
         read('faultedQueues', 'error queues, end', ERROR_QUEUE_DEPTHS, end),
     ]);
@@ -132,6 +139,8 @@ async function perService(window, range) {
     const consumer = new Map(consumers.map((s) => [s.labels.messaging_masstransit_destination, s.labels.service_name]));
     const outboxAtMiddle = byLabel(outboxMiddle, 'service_name');
     const queueAtMiddle = byLabel(queueMiddle, 'queue');
+    const handled = byLabel(queueHandled, 'queue');
+    const inFlight = byLabel(queueInFlight, 'queue');
     const faultAtStart = byLabel(faultStart, 'queue');
 
     return {
@@ -145,6 +154,7 @@ async function perService(window, range) {
         queues: queueEnd.map((s) => ({
             queue: s.labels.queue, service: consumer.get(s.labels.queue) ?? null,
             middle: queueAtMiddle.get(s.labels.queue) ?? null, end: s.value,
+            handledPerSecond: handled.get(s.labels.queue) ?? null, inFlight: inFlight.get(s.labels.queue) ?? null,
         })),
         // An error queue exists only once something faulted, so one absent at the start held none.
         faultedQueues: faultEnd.map((s) => ({
@@ -444,6 +454,12 @@ function markdown(s) {
                     '—') +
                 '; GC ' + ((r.gcPause ?? []).map((g) => `${g.service} ${g.seconds.toFixed(2)}`).join(', ') || '—'),
         ]),
+        '',
+        'Each work queue that held or handled a message: queued at the hold\'s middle → end, then over the hold',
+        'the messages its consumers acknowledged a second and the mean count delivered and not yet acknowledged,',
+        'so a queue that grows is split into arrival and handling:',
+        '',
+        ...s.steps.filter((r) => r.requests > 0).map((r) => queuesLine(r.step, r)),
         '',
         '## Resources',
         '',

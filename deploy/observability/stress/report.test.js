@@ -41,6 +41,7 @@ import {
     lockWaits,
     lockWaitsLine,
     parseLockWaits,
+    queuesLine,
     QUERY_STORE_TOP,
     parseQueryStore,
     queryStoreLine,
@@ -758,4 +759,19 @@ test('a step keeps only the LOCK_WAITS_TOP pairings seen most often', () => {
     assert.equal(row.chains[0].statement, 'UPDATE t3');
     assert.equal(row.chains[0].holder.state, 'running');
     assert.equal(row.seen, LOCK_WAITS_TOP + 4);
+});
+
+test('a step splits each work queue into what it held, what it handled and what was in flight', () => {
+    const queues = [
+        { queue: 'payments-events', middle: 0, end: 0, handledPerSecond: 0, inFlight: 0 },
+        { queue: 'orders-events', middle: 120, end: 13343, handledPerSecond: 41.25, inFlight: 31.6 },
+        { queue: 'shipping-events', middle: 2, end: 0, handledPerSecond: 39.9, inFlight: null },
+    ];
+
+    assert.equal(queuesLine(4, { queues }),
+        '- Step 4: orders-events 120 → 13343 queued, 41.3/s handled, 31.6 in flight; ' +
+        'shipping-events 2 → 0 queued, 39.9/s handled, — in flight');
+    assert.equal(queuesLine(5, { queues: [queues[0]] }), '- Step 5: no work queue held or handled a message');
+    assert.equal(queuesLine(6, { queues: [], serviceReadsFailed: ['queues'] }), '- Step 6: not read',
+        'a failed depth read is no reading, not an idle broker');
 });
