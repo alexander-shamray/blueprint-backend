@@ -79,7 +79,11 @@ once `verify` has passed.
 
 `tasks place` adds a filed issue's row, its missing cells set to the
 cautious value, `OWNER` among them, and records the issue in the run's
-state for the report's *Filed overnight*.
+state for the report's *Filed overnight*. What the interview files or
+closes reaches no `tasks place`, since its row comes from step 0.5's
+rebuild or leaves with the closed issue, so `filed` records it in the
+same list: a close comment is a comment on an issue, which the spec's
+*Filed overnight* counts.
 
 `--dry-run` is the builder's flag the spec's §3 allows: it runs step 0's
 checks and `board`, says what the rebuild would change and what would
@@ -196,6 +200,19 @@ counts only when no session record sits beside it and it is no older than
 the launch, and an earlier launch's marker never ends a later one; a marker
 beside a session record is refused, since either could be the one that
 does not describe this launch.
+
+A run directory that refuses the marker leaves neither file, and `result`
+alone cannot tell that from an executor still running, so it refuses, and
+the group would again hold its slot all night. `run` names both refusals
+on its exit line, which the runbook hands to `result` as `--refused` after
+every exit 2; `result` reads it only when neither file exists. `run`
+removes an earlier pid file before anything can refuse, so a pid file is
+this run's: with none, `result` records `crashed-before-launch`; with one
+whose process has ended, `crash-hand-back`, since the executor ran and may
+have merged and only its worktree says so; with one still alive, it
+refuses. Recording either writes `state.json` in the same directory, so a
+directory refusing every write still holds the slot; what this separates is
+a marker that only another process holds.
 
 ## When the night ends
 
