@@ -46,7 +46,8 @@ SUCCESS = {"type": "result", "subtype": "success", "is_error": False, "api_error
            "session_id": "43b7cd26-0682-471a-a3e5-98c841a5c448", "total_cost_usd": 1.886, "usage": USAGE,
            "permission_denials": [], "result": "PR #1690 is merged; the rate limit docs were not touched."}
 # No limit was observed in the spike, so these are built from the envelope's structured fields and the SDK's
-# rate_limit error kind (ruling R9); they await the first real limit. The result names another reset, never read.
+# rate_limit error kind (ruling R9); they await the first real limit. The result names a later reset, read only
+# where no field names one.
 LIMIT_429 = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "api_error_status": 429,
              "terminal_reason": "error", "resetsAt": "2026-11-02T01:30:00Z",
              "result": "Claude usage limit reached. Your limit resets at 2026-11-02T03:00:00Z."}
@@ -575,7 +576,7 @@ class ClassifyTests(InRoot):
                               code=1)
         end = dr.session_end(raw)
         self.assertIn("—", raw["stdout"])
-        # stdout with no envelope is the executor's own text, so it names no limit.
+        # Nothing in stdout with no envelope says who wrote it, so it names no limit.
         self.assertFalse(end.rate_limited)
         self.assertIsNone(end.resets_at)
         self.assertEqual("relaunch", dr.classify(end, None, 0, NOW))
@@ -625,6 +626,19 @@ class ClassifyTests(InRoot):
                 self.assertEqual((True, False, None), (got.is_error, got.rate_limited, got.resets_at))
                 self.assertEqual("relaunch", dr.classify(got, None, 0, NOW))
                 self.assertEqual("crash-hand-back", dr.classify(got, None, 1, NOW))
+
+    def test_a_refused_sessions_notice_gives_the_reset_no_field_gives(self):
+        # The API's refusal ends the session, so the result is the CLI's notice; read only once a field says so.
+        notice = {**LIMIT_429, "result": "You've hit your limit · resets 2026-11-02T01:30:00Z"}
+        del notice["resetsAt"]
+        got = dr.session_end({"exit": 1, "stdout": json.dumps(notice), "stderr": "", "ended": NOW.isoformat()})
+        self.assertEqual((True, datetime(2026, 11, 2, 1, 30, tzinfo=timezone.utc)), (got.rate_limited, got.resets_at))
+        self.assertEqual("window", dr.classify(got, None, 0, NOW))
+        # The same notice beside a limit read only from stderr gives nothing: no field says the session was refused.
+        unproven = {**notice, "api_error_status": None}
+        got = dr.session_end({"exit": 1, "stdout": json.dumps(unproven), "stderr": "rate_limit_error",
+                              "ended": NOW.isoformat()})
+        self.assertEqual((True, None), (got.rate_limited, got.resets_at))
 
     def test_a_refused_calls_input_names_no_limit(self):
         # A refused call's input is the executor's: a kind and a reset inside it are not the CLI's.
