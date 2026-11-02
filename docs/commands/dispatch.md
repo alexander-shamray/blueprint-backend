@@ -194,19 +194,20 @@ in place of a session record, never a write to `state.json`, which is the
 dispatcher's alone, and `result` records the group `crashed-before-launch`,
 which frees the slot and goes back like a hand-back: whatever refused one
 launch would refuse the next. A relaunch removes the session record it
-follows, already read, before anything can refuse, so a refused relaunch
-leaves the marker alone. The marker sends a group back unread, so it
-counts only when no session record sits beside it and it is no older than
-the launch, and an earlier launch's marker never ends a later one; a marker
-beside a session record is refused, since either could be the one that
-does not describe this launch.
+follows, already read, before its launch checks; where that removal is
+itself refused, the record stays, and one already read is treated as
+absent, since it ended an earlier session rather than this launch. The
+marker sends a group back unread, so it counts only when no unread session
+record sits beside it and it is no older than the launch, and an earlier
+launch's marker never ends a later one; a marker beside an unread record is
+refused, since either could be the one that does not describe this launch.
 
 A run directory that refuses the marker leaves neither file, and `result`
 alone cannot tell that from an executor still running, so it refuses, and
 the group would again hold its slot all night. `run` names both refusals
 on its exit line, which the runbook hands to `result` as `--refused` after
-every exit 2; `result` reads it only when it finds no session record and
-no marker from this launch. `run` removes an earlier pid file before its
+every exit 2; `result` reads it only when it finds no marker from this
+launch and no session record it has not already read. `run` removes an earlier pid file before its
 launch checks: with none, `result` records `crashed-before-launch`; with
 one whose process has ended, `crash-hand-back`, since the executor ran and
 may have merged and only its worktree says so; with one still alive, it
