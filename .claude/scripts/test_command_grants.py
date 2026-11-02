@@ -38,7 +38,8 @@ def bash_deny_matches(rule, command):
 
 
 # Built in to Claude Code, so no profile under .claude/agents lists them and only a deny refuses a spawn of one.
-BUILT_IN_AGENTS = {"general-purpose", "claude", "Explore", "Plan", "claude-code-guide", "statusline-setup"}
+# fork inherits the parent's tools; Agent(fork) was seen refusing one from a command's list on Claude Code 2.1.316.
+BUILT_IN_AGENTS = {"general-purpose", "claude", "Explore", "Plan", "claude-code-guide", "statusline-setup", "fork"}
 
 
 def profiles():
