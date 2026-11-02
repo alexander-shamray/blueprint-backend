@@ -11,9 +11,9 @@ is tuned.
 **Why.** Run 20261102-143055 at `e9f7c0229` took the plan of 20261101-171739
 (two machines, fresh volumes, a 2400 s warm-up at 800 VUs, 180 s holds at
 800, 1600, 2000, 2400, 2800 and 3200 VUs) to the end with no request failing.
-Query Store in Ordering's database, read by the minute, runs the saga's
-`SELECT TOP(2)` on `OrderFulfilmentStates` once for each saga message, so its
-count is the saga's handled rate: about 95, 145, 170, 195, 197 and 191 a
+The saga runs its `SELECT TOP(2)` on `OrderFulfilmentStates` once for each
+message, so that statement's count in Query Store in Ordering's database, read
+by the minute, is the saga's handled rate: about 95, 145, 170, 195, 197 and 191 a
 second at the six steps. Orders placed in a hold rose from 6 255 at 2400 to
 7 491 and 8 431, and the saga queue, which ended 2400's hold at 113 messages,
 went from 2 178 to 3 682 over 2800's second half and from 7 834 to 11 898 over
