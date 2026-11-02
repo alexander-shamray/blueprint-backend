@@ -4,6 +4,11 @@
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
+>
+> **Execution method:** subagent-driven, chosen by the owner on 2026-11-02.
+> Tasks 1–8 run from a session in `C:\dev\ashamray\blueprint-harness`
+> (Task 1 from `C:\dev\ashamray`, since the repository does not exist yet);
+> Task 9's backend pull request runs from a backend session.
 
 **Goal:** Stand up `blueprint-harness` with backend's harness as its payload,
 a sync tool, a drift gate and a sync workflow, and land the first sync pull
