@@ -196,7 +196,11 @@ which frees the slot and goes back like a hand-back: whatever refused one
 launch would refuse the next. A relaunch removes the session record it
 follows, already read, before its launch checks; where that removal is
 itself refused, the record stays, and one already read is treated as
-absent, since it ended an earlier session rather than this launch. The
+absent, since it ended an earlier session rather than this launch. A group
+sent back and launched again in the same run starts afresh, so `launch`
+removes the earlier launch's marker, result copy, session record and pid
+file, and is refused where it cannot: nothing then names that record as
+read, and a later marker beside it would be refused as unread. The
 marker sends a group back unread, so it counts only when no unread session
 record sits beside it and it is no older than the launch, and an earlier
 launch's marker never ends a later one; a marker beside an unread record is
