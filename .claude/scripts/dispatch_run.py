@@ -773,7 +773,7 @@ def _unreviewed(entry, result, crashes):
 
 
 def _unrecorded(directory, state, gid, entry, line):
-    """A `run` that exited refused and left neither a marker nor a session record from this launch.
+    """A `run` that exited refused and left neither a marker from this launch nor a session record not yet read.
 
     With no pid file it launched nothing and could not write its marker; with one, an executor ran and its record
     was not written. _launch removes an earlier pid file first, and one a refusal left is read as the latter.
@@ -796,8 +796,8 @@ def _unrecorded(directory, state, gid, entry, line):
 def absorb(root, run, gid, run_refused=None):
     """Copy, validate and classify one executor's result and session, record them, and say what happened.
 
-    `run_refused` is `run`'s refusal line, given after its exit 2; it is read only when there is no session record
-    and no marker from this launch.
+    `run_refused` is `run`'s refusal line, given after its exit 2; it is read only when there is no marker from this
+    launch and no session record not yet read.
     """
     directory = run_dir(root, run)
     state = load_state(directory)
@@ -823,6 +823,9 @@ def absorb(root, run, gid, run_refused=None):
     if not isinstance(raw, dict):
         raise Refusal(f"{record} is not a session record")
     if raw.get("started") is not None and raw.get("started") == entry.get("absorbed"):
+        if run_refused is not None:
+            # A relaunch refused before _launch removed the earlier, already read record: run's line is the evidence.
+            return _unrecorded(directory, state, gid, entry, run_refused)
         raise Refusal(f"{gid}'s session record was already read")
     worktree = _field(entry, gid, "worktree", _path_text)
     source = Path(root) / worktree / "artifacts" / "dispatch" / run / f"{gid}.json"

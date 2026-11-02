@@ -771,6 +771,20 @@ class ResultCommandTests(InRoot):
                          run_cli(["result", RUN, "S1", "--refused", line]).splitlines()[0])
         self.assertEqual("crash-hand-back", group_state(RUN, "S1")["status"])
 
+    def test_a_refused_relaunch_that_left_the_read_record_goes_back_on_its_refusal_line(self):
+        # The refusal came before _launch removed the earlier session's record and pid, both already read.
+        earlier = (NOW - timedelta(hours=1)).isoformat()
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE, crashes=1, absorbed=earlier)
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 1, "started": earlier, "ended": earlier, "stdout": "boom", "stderr": ""}), encoding="utf-8")
+        (state_dir() / "S1.pid").write_text(f"{finished_pid()}\n", encoding="utf-8")
+        self.assertIn("refused: S1's session record was already read", run_cli(["result", RUN, "S1"]))
+        self.assertEqual("relaunch", group_state(RUN, "S1")["status"])
+        line = "refused: could not remove the stale S1.json: [Errno 13] Permission denied"
+        self.assertEqual(f"S1: crash-hand-back - its executor ran and left no session record: {line}",
+                         run_cli(["result", RUN, "S1", "--refused", line]).splitlines()[0])
+        self.assertEqual("crash-hand-back", group_state(RUN, "S1")["status"])
+
     def test_a_refusal_line_beside_a_marker_or_a_session_record_is_not_read(self):
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
         (state_dir() / "S1.refused.json").write_text(
