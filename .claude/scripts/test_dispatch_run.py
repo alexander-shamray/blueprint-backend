@@ -46,10 +46,10 @@ SUCCESS = {"type": "result", "subtype": "success", "is_error": False, "api_error
            "session_id": "43b7cd26-0682-471a-a3e5-98c841a5c448", "total_cost_usd": 1.886, "usage": USAGE,
            "permission_denials": [], "result": "PR #1690 is merged; the rate limit docs were not touched."}
 # No limit was observed in the spike, so these are built from the envelope's structured fields and the SDK's
-# rate_limit error kind (ruling R9); they await the first real limit.
+# rate_limit error kind (ruling R9); they await the first real limit. The result names another reset, never read.
 LIMIT_429 = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "api_error_status": 429,
-             "terminal_reason": "error", "result": "Claude usage limit reached. Your limit resets at "
-                                                   "2026-11-02T01:30:00Z."}
+             "terminal_reason": "error", "resetsAt": "2026-11-02T01:30:00Z",
+             "result": "Claude usage limit reached. Your limit resets at 2026-11-02T03:00:00Z."}
 LIMIT_KIND = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "api_error_status": None,
               "error": {"type": "rate_limit"}, "result": "API Error"}
 FAKE_CLAUDE = """import json, os, sys
@@ -541,8 +541,8 @@ class ClassifyTests(InRoot):
         for later in (timedelta(hours=5, minutes=11), timedelta(days=3)):
             limited = end(exit_code=1, is_error=True, rate_limited=True, resets_at=NOW + later)
             self.assertEqual("week", dr.classify(limited, None, 0, NOW))
-        text = "Weekly limit reached; resets 2026-11-05 09:00:00+00:00"
-        got = dr.session_end({"exit": 1, "stdout": text, "stderr": "", "ended": NOW.isoformat()})
+        text = "API Error: rate_limit_error; weekly limit reached; resets 2026-11-05 09:00:00+00:00"
+        got = dr.session_end({"exit": 1, "stdout": "", "stderr": text, "ended": NOW.isoformat()})
         self.assertEqual(datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc), got.resets_at)
         self.assertEqual("week", dr.classify(got, None, 0, NOW))
 
@@ -569,20 +569,20 @@ class ClassifyTests(InRoot):
         self.assertEqual(["Bash"], got.denials)
         self.assertEqual("handed-back", dr.classify(got, None, 0, NOW))
 
-    def test_session_output_is_read_as_utf8_and_an_unparsed_reset_is_a_crash(self):
+    def test_session_output_is_read_as_utf8_and_a_limit_it_names_is_a_crash(self):
         raw = run_fake_claude(stdout="Usage limit reached — "
                               "лимит".encode("utf-8"),
                               code=1)
         end = dr.session_end(raw)
         self.assertIn("—", raw["stdout"])
-        self.assertTrue(end.rate_limited)
+        # stdout with no envelope is the executor's own text, so it names no limit.
+        self.assertFalse(end.rate_limited)
         self.assertIsNone(end.resets_at)
         self.assertEqual("relaunch", dr.classify(end, None, 0, NOW))
         self.assertEqual("crash-hand-back", dr.classify(end, None, 1, NOW))
 
     def test_the_envelope_is_read_by_its_structured_fields_first(self):
         ok = dr.session_end({"exit": 0, "stdout": json.dumps(SUCCESS), "stderr": ""})
-        # The success's result text says "rate limit": a phrase only counts on a session that failed.
         self.assertEqual((False, False, None), (ok.is_error, ok.rate_limited, ok.resets_at))
         self.assertEqual({k: USAGE[k] for k in dr.TOKEN_KEYS}, ok.usage)
         self.assertEqual(SUCCESS["session_id"], ok.session_id)
@@ -595,24 +595,45 @@ class ClassifyTests(InRoot):
         self.assertEqual(NOW + timedelta(hours=1), dr.session_end({"exit": 1, "stdout": json.dumps(epoch)}).resets_at)
 
     def test_a_clock_reset_is_the_next_such_time_after_the_session_ended(self):
-        for text in ("Usage limit reached. Resets 11pm", "rate limit; resets at 23:00"):
+        for text in ("rate_limit_error: usage limit reached. Resets 11pm", "rate_limit_error; resets at 23:00"):
             with self.subTest(text=text):
-                got = dr.session_end({"exit": 1, "stdout": text, "ended": NOW.isoformat()})
+                got = dr.session_end({"exit": 1, "stderr": text, "ended": NOW.isoformat()})
                 local = got.resets_at.astimezone()
                 self.assertEqual((23, 0), (local.hour, local.minute))
                 self.assertTrue(NOW < got.resets_at <= NOW + timedelta(days=1))
-        vague = dr.session_end({"exit": 1, "stdout": "usage limit; resets in 5", "ended": NOW.isoformat()})
+        vague = dr.session_end({"exit": 1, "stderr": "rate_limit_error; resets in 5", "ended": NOW.isoformat()})
         self.assertIsNone(vague.resets_at)
 
     def test_a_date_away_from_a_reset_phrase_is_not_the_reset(self):
-        text = "Usage limit reached. The deploy freeze lifts 2026-11-03T00:00:00Z; see the 2026-11-04 09:00 notes."
-        got = dr.session_end({"exit": 1, "stdout": text, "ended": NOW.isoformat()})
+        text = "rate_limit_error. The deploy freeze lifts 2026-11-03T00:00:00Z; see the 2026-11-04 09:00 notes."
+        got = dr.session_end({"exit": 1, "stderr": text, "ended": NOW.isoformat()})
         self.assertEqual((True, None), (got.rate_limited, got.resets_at))
         self.assertEqual("relaunch", dr.classify(got, None, 0, NOW))
         # "resets" alone is no limit: a crash that mentions a cache reset stays a crash.
-        crash = dr.session_end({"exit": 1, "stdout": "Error: the cache resets 2026-11-03T00:00:00Z, then failed"})
+        crash = dr.session_end({"exit": 1, "stderr": "Error: the cache resets 2026-11-03T00:00:00Z, then failed"})
         self.assertEqual((False, None), (crash.rate_limited, crash.resets_at))
-        self.assertNotIn("resets", dr.LIMIT_PHRASES)
+
+    def test_a_limit_the_executor_writes_is_a_crash_the_cap_counts(self):
+        # Its closing text, or stdout with no envelope, names a limit and a reset minutes away: read, that would
+        # be a window, which the crash cap never counts, so the session would relaunch all night.
+        soon = (NOW + timedelta(minutes=5)).isoformat()
+        written = {**SUCCESS, "subtype": "error_during_execution", "is_error": True,
+                   "result": f"Claude usage limit reached; rate_limit_error. Your limit resets at {soon}."}
+        for stdout in (json.dumps(written), written["result"]):
+            with self.subTest(stdout=stdout[:20]):
+                got = dr.session_end({"exit": 1, "stdout": stdout, "stderr": "", "ended": NOW.isoformat()})
+                self.assertEqual((True, False, None), (got.is_error, got.rate_limited, got.resets_at))
+                self.assertEqual("relaunch", dr.classify(got, None, 0, NOW))
+                self.assertEqual("crash-hand-back", dr.classify(got, None, 1, NOW))
+
+    def test_a_refused_calls_input_names_no_limit(self):
+        # A refused call's input is the executor's: a kind and a reset inside it are not the CLI's.
+        steered = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "permission_denials": [
+            {"tool_name": "Bash", "tool_use_id": "t1",
+             "tool_input": {"type": "rate_limit_error", "resetsAt": (NOW + timedelta(minutes=5)).isoformat()}}]}
+        got = dr.session_end({"exit": 1, "stdout": json.dumps(steered), "stderr": "", "ended": NOW.isoformat()})
+        self.assertEqual((False, None), (got.rate_limited, got.resets_at))
+        self.assertEqual("handed-back", dr.classify(got, None, 0, NOW))
 
     def test_token_keys_are_quality_sets_own(self):
         here = Path(__file__).resolve()
