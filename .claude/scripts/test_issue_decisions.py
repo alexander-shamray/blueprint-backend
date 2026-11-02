@@ -131,6 +131,12 @@ class Shapes(unittest.TestCase):
             ID.entry(date(2026, 11, 1), "A: is this the answer?", "no")
         self.assertTrue(ID.entry(date(2026, 11, 1), "AB: a label?", "yes"))
 
+    def test_a_question_closing_on_the_answer_marker_is_refused(self):
+        # The entry would read "Q: Pick plan A: A: yes", and a split on the first " A: " answers "A: yes".
+        with self.assertRaisesRegex(ID.Refusal, "the question holds 'A: '"):
+            ID.entry(date(2026, 11, 1), "Pick plan A:", "yes")
+        self.assertTrue(ID.entry(date(2026, 11, 1), "Pick plan A?", "yes"))
+
     def test_an_empty_body_gets_the_section_with_no_blank_lines_before_it(self):
         line = "- 2026-11-01: Q: q A: a"
         for body in ("", "\n", "  \r\n"):
