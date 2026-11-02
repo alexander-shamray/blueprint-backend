@@ -900,10 +900,10 @@ jobs:
           if-no-files-found: error
 
       # The step above runs on success only, so a red shard keeps its results
-      # here instead: the TRX, blame's sequence file and dump after a hang, and
-      # the first attempt's log. Not on cancel, which the run's concurrency
-      # group does to every superseded push; blame fails a hang long before
-      # the job's timeout would cancel it. Not the stage gate's to read.
+      # here: the TRX, blame's sequence file and dump after a hang, and the first
+      # attempt's log. Not on cancel, which the concurrency group does to every
+      # superseded push; at the shard's usual pace a hang starts inside ten
+      # minutes, retry included, so blame fails it before the 30-minute timeout.
       - name: Keep a failed shard's results
         if: failure()
         uses: actions/upload-artifact@v7
