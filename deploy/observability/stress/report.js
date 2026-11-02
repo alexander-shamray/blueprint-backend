@@ -915,17 +915,21 @@ export function lockWaitsLine(step, row) {
 
 // Each work queue that held or handled anything, deepest at the hold's end first, so a queue that grows is
 // split into arrival and handling: its depth, its consumers' acknowledgements a second and the mean count
-// delivered and not yet acknowledged. A failed depth read is no reading, never an idle broker.
+// delivered and not yet acknowledged. A failed read is no reading, never an idle broker.
 export function queuesLine(step, row) {
     if (row.serviceReadsFailed?.includes('queues'))
         return `- Step ${step}: not read`;
 
     const figure = (value, digits) => (value === null || value === undefined ? '—' : value.toFixed(digits));
-    const active = (row.queues ?? []).filter((q) => q.middle > 0 || q.end > 0 || q.handledPerSecond > 0)
+    const queues = row.queues ?? [];
+    const active = queues.filter((q) => q.middle > 0 || q.end > 0 || q.handledPerSecond > 0)
         .sort((a, b) => b.end - a.end);
 
-    if (active.length === 0)
-        return `- Step ${step}: no work queue held or handled a message`;
+    if (active.length === 0) {
+        return queues.length > 0 && queues.every((q) => q.handledPerSecond === null)
+            ? `- Step ${step}: no work queue held a message; what they handled was not read`
+            : `- Step ${step}: no work queue held or handled a message`;
+    }
 
     return `- Step ${step}: ${active.map((q) => `${q.queue} ${figure(q.middle, 0)} → ${figure(q.end, 0)} queued, ` +
         `${figure(q.handledPerSecond, 1)}/s handled, ${figure(q.inFlight, 1)} in flight`).join('; ')}`;
