@@ -197,7 +197,7 @@ it without a Service in front of it. **`Shipping` is refused without
 
 **`--pure-consumer` renders §4.1's third shape** and implies `--worker`: the
 seven projects without `<Name>.Domain` and `<Name>.Domain.Tests`, and nothing of
-§9.4's outbox or §9.3's mapper — no outbox table or its three migrations, no
+§9.4's outbox or §9.3's mapper — no outbox table or its migrations, no
 dispatcher, publisher or gauges, no collector and no mapper —
 because §3.2 gives such a service nothing to publish. The inbox, the purge, the
 marker table, the migrator, the probes and the bus stay. The render writes a
