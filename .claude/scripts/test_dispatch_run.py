@@ -405,6 +405,45 @@ class LaunchTests(InRoot):
             out = run_cli(["launch", RUN, "S3", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE])
         self.assertIn("refused: S3 is not in this run", out)
 
+    def test_a_launch_after_a_hand_back_removes_the_earlier_launchs_files_or_is_refused(self):
+        # tasks move reset the group, so nothing names the earlier launch's record as read: one a later run met beside
+        # its own marker would be refused as unread, and the group would hold its slot all night.
+        self.write_tasks(FIXTURE)
+        self.move("S1")
+        listed = f"worktree {(self.root / WORKTREE).as_posix()}\nHEAD {HEAD}\nbranch refs/heads/{BRANCH}\n\n"
+        argv = ["launch", RUN, "S1", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE]
+        earlier = (NOW - timedelta(hours=1)).isoformat()
+        names = ("S1.json", "S1.session.json", "S1.pid")
+        (state_dir() / "S1.json").write_text(json.dumps(HANDED_S1), encoding="utf-8")
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 0, "started": earlier, "ended": earlier, "stdout": "{}", "stderr": ""}), encoding="utf-8")
+        (state_dir() / "S1.pid").write_text(f"{finished_pid()}\n", encoding="utf-8")
+        unlink = Path.unlink
+
+        def refuse_record(path, missing_ok=False):
+            if path.name == "S1.session.json":
+                raise PermissionError(13, "Permission denied")
+            unlink(path, missing_ok=missing_ok)
+        with mock.patch.object(dr, "git", lambda root, *args: listed), mock.patch.object(Path, "unlink", refuse_record):
+            out = run_cli(argv)
+        self.assertIn("refused: could not remove the stale", out)
+        self.assertIn("S1.session.json: [Errno 13] Permission denied", out)
+        self.assertNotIn("status", group_state(RUN, "S1"))
+        with mock.patch.object(dr, "git", lambda root, *args: listed):
+            self.assertEqual("", run_cli(argv))
+        for name in names:
+            self.assertFalse((state_dir() / name).exists(), f"the launch kept the earlier launch's {name}")
+        self.assertEqual("running", group_state(RUN, "S1")["status"])
+        # The night's run now cannot remove its own stale files, so its marker stands alone and frees the slot.
+        stale = "could not remove the stale S1.json: [Errno 13] Permission denied"
+
+        def refuse_stale(*paths):
+            raise db.Refusal(stale)
+        with mock.patch.object(dr, "_remove_stale", refuse_stale):
+            self.assertIn(f"refused: {stale}", run_cli(["run", RUN, "S1", "--description", "Narrow the grants"]))
+        self.assertEqual(f"S1: crashed-before-launch - run refused before launch: {stale}",
+                         run_cli(["result", RUN, "S1"]).splitlines()[0])
+
     def test_run_passes_the_prompt_on_stdin_and_no_skip_permissions_flag(self):
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
         stale = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
