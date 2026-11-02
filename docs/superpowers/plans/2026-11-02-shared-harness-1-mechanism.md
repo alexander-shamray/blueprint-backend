@@ -414,20 +414,25 @@ closed with a comment naming the new one.
 
 ### Task 9: Backend's first sync
 
-Two pull requests in `blueprint-backend`, in order.
+Three pull requests in `blueprint-backend`, in order. The locality gate
+judges a pull request with the base commit's `classes.yml`, so the map that
+admits `.harness/**` must be on `main` before any pull request adds a file
+there.
 
 **Files (pull request 1, backend, Class D):**
+- Modify: `.github/locality-gate/classes.yml` alone — `'.harness/**'` added
+  to Class D. It adds no path under `.harness/`, so the base map judges it
+  inside the class.
+
+**Files (pull request 2, backend, Class D):**
 - Create: `.harness/config.json` (from `targets/blueprint-backend.config.json`)
 - Modify: `docs/harness-boundaries.md` — a section *Managed files* stating
   that paths in `.harness/manifest.json` are owned by `blueprint-harness`,
   changed there and never here, and that the drift gate holds it;
-  `docs/change-locality.md` §6, one working rule citing that section;
-  `.github/locality-gate/classes.yml`, `'.harness/**'` added to Class D so
-  a sync pull request is inside its declared class (this pull request edits
-  the map, so run `locality_gate.py` on it by hand — CI judges with the
-  base copy). Check `.gitignore` excludes nothing under `.harness/`.
+  `docs/change-locality.md` §6, one working rule citing that section.
+  Check `.gitignore` excludes nothing under `.harness/`.
 
-**Files (pull request 2, opened by `sync.yml`):** the managed paths,
+**Files (pull request 3, opened by `sync.yml`):** the managed paths,
 `.harness/manifest.json`, `.harness/settings.base.json`,
 `.harness/render.py`, `.github/harness-drift/**`,
 `.github/workflows/harness-drift.yml`, `.claude/settings.json`.
@@ -435,16 +440,18 @@ Two pull requests in `blueprint-backend`, in order.
 - [ ] **Step 1:** Port into the payload every backend change under a managed
   path merged since Task 5's pin (`git log <pin>..origin/main -- <paths>`);
   merge in the harness repository first.
-- [ ] **Step 2:** Pull request 1 through `/ship`; merge on green.
+- [ ] **Step 2:** Pull request 1 through `/ship`; merge on green. Then pull
+  request 2 the same way, cut from a `main` that holds pull request 1.
 - [ ] **Step 3:** Run `sync.yml` by `workflow_dispatch`. Expected diff:
   the manifest, the vendored renderer and base, the drift gate, the
   repository-slug and task-list reads from Task 5 Step 3, and
   `settings.json` reordered only — no other content change. Any other hunk
   is a payload defect: fix it in the harness repository and re-run, never in
   backend.
-- [ ] **Step 4:** One `branch-reviewer` round on the backend-specific part of
-  the diff (config, rendered `settings.json`, the docs section), the diff
-  written under `artifacts/review/`. Merge on green and a clean round.
+- [ ] **Step 4:** One `branch-reviewer` round on pull request 3's
+  backend-specific part (the rendered `settings.json` against the config
+  pull request 2 landed, and the manifest), the diff written under
+  `artifacts/review/`. Merge on green and a clean round.
 - [ ] **Step 5:** Relaunch a backend session; run `measure/stops.py` over its
   next `/ship` and compare with `docs/baseline-2026-11.md`. A rise is a
   defect filed in the harness repository (spec §4).
