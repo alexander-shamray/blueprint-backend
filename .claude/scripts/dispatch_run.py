@@ -1091,7 +1091,7 @@ def _weekly_lines(usage):
     out = out or ["weekly: not read"]
     failed = usage.get("failed")
     if isinstance(failed, dict) and _count(failed.get("count")) and failed["count"]:
-        out.append(f"weekly: reading failed {failed['count']} times, the last at {failed.get('at')}: "
+        out.append(f"weekly: reading failed, {failed['count']} in all, the last at {failed.get('at')}: "
                    f"{one_line(failed.get('why'), 200)}")
     return out
 

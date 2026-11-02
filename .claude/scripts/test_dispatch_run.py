@@ -1246,7 +1246,7 @@ class ReportTests(InRoot):
         dr.take_reading(state_dir(), lambda: {"percentUsed": "x"})
         usage = self.section(self.report(), "## Usage")
         self.assertIn("weekly: not read", usage)
-        self.assertTrue(any(text.startswith(f"weekly: reading failed 1 times, the last at {NOW.isoformat()}: ")
+        self.assertTrue(any(text.startswith(f"weekly: reading failed, 1 in all, the last at {NOW.isoformat()}: ")
                             for text in usage), usage)
 
     def test_each_hand_back_names_its_reason_and_its_worktree(self):
