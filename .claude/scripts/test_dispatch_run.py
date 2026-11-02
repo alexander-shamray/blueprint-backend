@@ -763,6 +763,7 @@ class ResultCommandTests(InRoot):
                 transcript.write_text(text, encoding="utf-8")
                 self.absorb(bare)
                 self.assertEqual(unreviewed, group_state(RUN, "S1")["unreviewed"])
+                self.assertEqual(None if unreviewed else "transcript", group_state(RUN, "S1").get("review_seen"))
         # With no session id the transcript is only the newest in the folder, which may be another session's.
         transcript.write_text(spawn("branch-reviewer"), encoding="utf-8")
         self.absorb(bare, {k: v for k, v in SUCCESS.items() if k != "session_id"})
@@ -1364,6 +1365,13 @@ class ReportTests(InRoot):
         record(RUN, "S1", status="verified", pr=1690, merge_oid=OID, rounds=[], review_end=None, unreviewed=True)
         self.assertTrue(self.section(self.report(), "## Needs a human")[0].startswith(
             f"S1 #1690 merged as {OID}, merged with no review round, not confirmed in main"))
+
+    def test_a_merge_its_transcript_cleared_says_where_its_round_was_seen(self):
+        # It reported no round, so "review not run" would contradict the evidence that put it under Merged.
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=[], review_end=None,
+               filed=[1701], unreviewed=False, review_seen="transcript")
+        self.assertEqual([f"S1 #1690 merged as {OID}: #1682, #1683; no rounds reported; a branch-reviewer round in "
+                          "its transcript; filed #1701"], self.section(self.report(), "## Merged"))
 
 
 class TranscriptTests(unittest.TestCase):

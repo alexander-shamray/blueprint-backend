@@ -758,9 +758,8 @@ RELAUNCHED = ("relaunch", "window", "week")
 def _unreviewed(entry, result, crashes):
     """Whether a merge claims no round from a session that cannot have reviewed it in an earlier one (ruling R15).
 
-    An empty rounds list is a clean merge only on a relaunch of this launch, whose earlier session was read; from a
-    first session it is a merge nobody reviewed, which still verifies and lands but goes to Needs a human.
-    """
+    No rounds is a clean merge on a relaunch whose earlier session was read; from a first session it is one nobody
+    reviewed, which lands but goes to Needs a human, unless absorb finds a reviewer in that session's transcript."""
     if not (isinstance(result, Result) and result.outcome == "merged" and not result.rounds):
         return False
     earlier = entry.get("absorbed") is not None
@@ -810,7 +809,9 @@ def absorb(root, run, gid):
     transcript = transcript_path(str(Path(root) / worktree), end.session_id, _launch_time(directory, gid, entry))
     # Only a transcript the envelope names is this session's: the newest-file fallback may be another's.
     named = transcript if end.session_id is not None else None
-    unreviewed = _unreviewed(entry, result, crashes) and not reviewer_spawned(named)
+    flagged = _unreviewed(entry, result, crashes)
+    seen = flagged and reviewer_spawned(named)
+    unreviewed = flagged and not seen
     if unreviewed:
         reason = UNREVIEWED
     # Summed over every session the group ran this move, so a relaunched group is not reported as its last session.
@@ -818,7 +819,8 @@ def absorb(root, run, gid):
     usage = {key: (spent[key] if _count(spent.get(key)) else 0) + end.usage.get(key, 0) for key in TOKEN_KEYS
              if key in spent or key in end.usage}
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
-                 usage=usage, denials=end.denials, reason=reason, unreviewed=unreviewed)
+                 usage=usage, denials=end.denials, reason=reason, unreviewed=unreviewed,
+                 review_seen="transcript" if seen else None)
     if decision in ("relaunch", "crash-hand-back"):
         entry["crashes"] = crashes + 1
     if end.resets_at is not None:
@@ -1151,9 +1153,12 @@ def report(root, run, tasks_path, today, body_source, open_source):
                          f"{_issues_text(entry.get('issues'))}; filed {_issues_text(entry.get('filed'))}"
                          + _decisions_text(entry.get("decisions")))
         elif ended == "verified" and status == "done":
+            # Cleared by its transcript, it reported no round: saying so beats "review not run", which it was not.
+            review = ("no rounds reported; a branch-reviewer round in its transcript"
+                      if entry.get("review_seen") == "transcript"
+                      else f"{_rounds_text(entry.get('rounds'))}; review {entry.get('review_end') or 'not run'}")
             merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
-                          f"{_issues_text(entry.get('issues'))}; {_rounds_text(entry.get('rounds'))}; "
-                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}"
+                          f"{_issues_text(entry.get('issues'))}; {review}; filed {_issues_text(entry.get('filed'))}"
                           + _decisions_text(entry.get("decisions")))
         elif status == "verified":
             # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
