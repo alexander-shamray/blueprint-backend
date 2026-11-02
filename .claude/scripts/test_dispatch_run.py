@@ -1389,6 +1389,19 @@ class ReportTests(InRoot):
         self.assertIn("S1: 762696 tokens (input 20, cache write 5265, cache read 754597, output 2814)",
                       self.section(lines, "## Usage"))
 
+    def test_what_the_interview_files_or_closes_is_filed_overnight(self):
+        # A close comment is a comment on an issue, so it counts as the spec's filed or commented on.
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID,
+               rounds=MERGED_S1["rounds"], review_end="clean", filed=[1701])
+        for issue in ("1705", "1706", "1705"):
+            self.assertEqual("", run_cli(["filed", RUN, issue]))
+        self.assertEqual([1705, 1706], dr.load_state(state_dir())["placed"])
+        self.assertEqual(["#1701, #1705, #1706"], self.section(self.report(), "## Filed overnight"))
+        for bad in ("0", "-3", "#1705", "\u0661\u0662"):
+            with self.subTest(issue=bad):
+                self.assertIn(f"refused: {bad!r} is not an issue number", run_cli(["filed", RUN, bad]))
+        self.assertIn("is missing; the run was never started", run_cli(["filed", "20261101-230000", "1707"]))
+
     def test_an_unread_week_is_said_so(self):
         dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
         self.assertIn("weekly: not read", self.section(self.report(), "## Usage"))
