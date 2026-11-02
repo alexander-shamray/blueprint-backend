@@ -1072,8 +1072,9 @@ purge, §11.3's JWT validation, both images ([§15.2](15-cicd-deployment.md)) an
 `AddOutbox`, `AddInbox`, `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
 `IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
 `AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts`,
-`KeyOutboxOnRandomId` and `DropInboxHandledAtIndex`, bar the five outbox ones
-for a pure consumer —
+`KeyOutboxOnRandomId`, `DropInboxHandledAtIndex` and
+`IncludeProcessedAtInClaimIndex`, bar the six outbox ones for a pure
+consumer —
 the messaging tables ship with the
 dispatcher that reads them, because a service carrying the dispatcher without
 its table logs a failed claim twice a second from its first boot, and §8.5's
@@ -1106,6 +1107,9 @@ after it undoes, whose `Down` sets the option again.
 copied configuration maps no index on `HandledAt`, so a service without it
 starts with a model its migrations do not match
 ([ADR-186](adr/ADR-186-the-inbox-has-no-index-on-the-time-a-row-was-handled-1648.md)).
+`IncludeProcessedAtInClaimIndex` travels on the same argument one table over:
+the copied configuration includes `ProcessedAt` in the claim index
+([ADR-194](adr/ADR-194-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
 excludes both halves of the pair, `.env.example`

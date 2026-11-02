@@ -502,10 +502,12 @@ CREATE TABLE ordering.OutboxMessages
 -- Filtered index: the dispatcher only ever scans unprocessed rows, and the
 -- index stays small regardless of table size. Led by the bucket, so inserts
 -- land at OutboxMessage.ClaimBuckets ends rather than one, and the claim
--- below reads each bucket oldest first.
+-- below reads each bucket oldest first. ProcessedAt is included though the
+-- filter admits no row where it is set: without it SQL Server looks every
+-- row up in the clustered index to test the filter (ADR-194).
 CREATE INDEX IX_Outbox_Unprocessed
     ON ordering.OutboxMessages (ClaimBucket, OccurredAt)
-    INCLUDE (Lane, Attempts, LockedUntil)
+    INCLUDE (Lane, Attempts, LockedUntil, ProcessedAt)
     WHERE ProcessedAt IS NULL;
 
 -- And its complement, for the retention purge. The two filters are opposites,
@@ -1512,8 +1514,9 @@ correct and expected — which is why consumers must be idempotent.
 
 Retain processed rows for a few days, for debugging and as the last copy of
 a delivered event that [E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)'s rebuild replays, then
-delete them on a schedule. An outbox table nobody prunes grows without bound
-and eventually degrades the filtered index scan.
+delete them on a schedule. An outbox table nobody prunes grows without bound,
+and so does every read that scans it rather than the filtered index
+([ADR-194](adr/ADR-194-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
 
 ```sql
 -- ProcessedAt IS NOT NULL is load-bearing, not defensive. Purging on age
