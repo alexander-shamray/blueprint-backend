@@ -5,7 +5,8 @@ endpoint as it is, with no prefetch or concurrency limit of its own, which
 leaves MassTransit's default, a prefetch the broker reads as 48 a consumer on
 the stress stack, and keeps its statements: its handled rate stops rising near
 195 messages a second at 2400 VUs and its queue grows from 2800, and that stop
-is recorded as the reference machine's CPU, not a limit of the saga. Nothing
+is recorded as the CPU of the machine the stack runs on, not a limit of the
+saga. Nothing
 is tuned.
 **Why.** Run 20261102-143055 at `e9f7c0229` took the plan of 20261101-171739
 (two machines, fresh volumes, a 2400 s warm-up at 800 VUs, 180 s holds at
