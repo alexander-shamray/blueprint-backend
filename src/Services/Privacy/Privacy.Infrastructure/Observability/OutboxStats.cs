@@ -30,11 +30,14 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     {
         _connections = connections;
 
+        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-194).
+        string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
+
         // Composed from the registered table, for the reason OutboxTable gives.
         _oldestSql =
             $"""
             SELECT DATEDIFF_BIG(millisecond, MIN(OccurredAt), SYSDATETIMEOFFSET()) / 1000.0
-            FROM {table.QualifiedName}
+            FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane;
             """;
@@ -42,7 +45,7 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
         _pendingSql =
             $"""
             SELECT COUNT(*)
-            FROM {table.QualifiedName}
+            FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane;
             """;
@@ -51,7 +54,7 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
         _abandonedSql =
             $"""
             SELECT COUNT(*)
-            FROM {table.QualifiedName}
+            FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane
                 AND Attempts >= {OutboxDispatcher.MaxAttempts};

@@ -123,6 +123,24 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Each_read_takes_the_claim_index_alone_on_a_plan_compiled_against_an_empty_outbox()
+    {
+        // A fresh volume's first compile, which stays cached while processed rows pile up for the purge (ADR-194).
+        await fixture.ClearPlanCacheAsync();
+        IOutboxStats stats = NewStats();
+
+        stats.OldestAgeSeconds(OutboxLane.Broker).ShouldBe(0);
+        stats.PendingCount(OutboxLane.Broker).ShouldBe(0);
+        stats.AbandonedCount(OutboxLane.Broker).ShouldBe(0);
+
+        // Alone: the clustered index named beside it is a scan of the table or a lookup for every pending row.
+        const string claimIndexAlone = "[IX_Outbox_Unprocessed]";
+        (await fixture.CachedPlanIndexesAsync("%MIN(OccurredAt)%OutboxMessages%")).ShouldBe(claimIndexAlone);
+        (await fixture.CachedPlanIndexesAsync("%COUNT(*)%OutboxMessages%@lane;%")).ShouldBe(claimIndexAlone);
+        (await fixture.CachedPlanIndexesAsync("%COUNT(*)%OutboxMessages%Attempts >=%")).ShouldBe(claimIndexAlone);
+    }
+
     /// <summary>A fresh instance per read, since the type caches, resolved through the real registration.</summary>
     private IOutboxStats NewStats()
     {
