@@ -38,6 +38,18 @@ printf '%s\\n' "$root"
 (cd "$root" && pwd -W 2>/dev/null || pwd)
 """
 
+# A file at $F, past Windows' 260 characters once checked out, committed in the origin by its index alone, so
+# nothing writes the deep path there, then a second worktree at .claude/worktrees/deep holding it.
+DEEP = """
+set -e
+long() { git -c core.longpaths=true "$@"; }
+blob=$(printf 'deep\\n' | git -C "$O" hash-object -w --stdin)
+git -C "$O" update-index --add --cacheinfo "100644,$blob,$F"
+git -C "$O" -c user.name=t -c user.email=t@t commit -q -m deep
+long -C "$C" fetch -q origin
+long -C "$C" worktree add -q --no-track -b feat/deep .claude/worktrees/deep origin/main
+"""
+
 # A refresh-index.py worker in miniature: it starts after a delay, takes the
 # lock and the outstanding request, says so through a marker file, and lets go
 # after the given number of seconds.
@@ -135,6 +147,19 @@ class RemoveShape(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.present(root))
         self.assertFalse(self.registered(root))
+
+    def test_a_worktree_holding_a_path_past_260_characters_is_removed(self):
+        # Windows' limit: without long paths git unregistered the worktree, then failed on the deep file and left
+        # the directory. The fixture's own git commands ask for long paths, so only the helper's removal is tested.
+        root, _ = self.fixture()
+        deep = "/".join(["d" * 60] * 5) + "/deep.txt"
+        made = run_bash(DEEP, C=f"{root}/checkout", O=f"{root}/origin", F=deep)
+        self.assertEqual(0, made.returncode, made.stderr)
+        self.assertGreater(len(f"{root}/checkout/.claude/worktrees/deep/{deep}"), 260)
+        result = self.remove(f"{root}/checkout", ".claude/worktrees/deep")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(run_bash('[ -e "$W" ]', W=f"{root}/checkout/.claude/worktrees/deep").returncode == 0)
+        self.assertNotIn("feat/deep", run_bash('git -C "$C" worktree list --porcelain', C=f"{root}/checkout").stdout)
 
     def test_untracked_work_is_refused_and_kept(self):
         root, _ = self.fixture()
