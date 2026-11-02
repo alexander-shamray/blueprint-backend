@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Land #1718's fixes on fix/dispatch-refusal-and-titles from staging/<n>/, each step's cases seen failing before
-# its code and passing after, and commit each. The push is /ship's. A failed step puts its files back, so a rerun
+# Land the three /dispatch fixes on fix/dispatch-refusal-and-titles from staging/<n>/, each step's cases seen
+# failing before its code and passing after, and commit each. The push is /ship's. A failed step puts its files back, so a rerun
 # resumes at that step. Each staging/<n>/ holds its step's whole files, so a later step's copy builds on an earlier
 # one's. dry_run.sh sources this file for STEPS, step, land and all_landed.
 set -euo pipefail
@@ -61,6 +61,7 @@ step() {
       SUBJECT="fix(harness): result sends back a group whose refused run could not write its marker"
       PHRASE="whose refused run could not write its marker"
       CODE="$s/dispatch_run.py $c/dispatch.md"
+      EXPECT="SystemExit: 2"  # argparse refuses --refused before its code adds it
       CASES="$r.test_a_run_whose_marker_was_not_written_goes_back_on_its_refusal_line"
       CASES+=" $r.test_a_refusal_line_after_an_executor_started_waits_for_it_or_hands_it_back"
       CASES+=" $r.test_a_refusal_line_beside_a_marker_or_a_session_record_is_not_read"
@@ -87,6 +88,7 @@ step() {
       SUBJECT="fix(harness): Filed overnight counts what the interview filed or closed with a comment"
       PHRASE="Filed overnight counts what the interview filed"
       CODE="$s/dispatch_run.py $c/dispatch.md"
+      EXPECT="SystemExit: 2"  # argparse refuses filed before its code adds it
       CASES="$t.test_what_the_interview_files_or_closes_is_filed_overnight"
       BODY=("Filed overnight listed what the results named and what tasks place recorded, but an issue the interview filed or closed with a comment reaches neither, so the report left it out. Found by #1691's review and carried by #1711 and #1718."
         "A filed subcommand records an issue number in the run's state, beside what tasks place records, and the runbook's interview step runs it for each issue it closes or files. A close comment is a comment on an issue, which the spec's Filed overnight counts."
@@ -132,7 +134,8 @@ put_back() {
 # left it, so no step forgot one. A listing that failed or found nothing would pass every file it did not name.
 all_landed() {
   local path listed missing=0 n last
-  listed=$(git -C "$1" ls-files -- 'staging/*/.claude' | tr -d '\r') || { echo "could not list staging/" >&2; return 1; }
+  listed=$(git -C "$1" ls-files -- 'staging/*/.claude' | tr -d '\r') ||
+    { echo "could not list staging/" >&2; return 1; }
   [ -n "$listed" ] || { echo "git lists nothing under $1/staging/*/.claude" >&2; return 1; }
   while IFS= read -r path; do
     path=${path#staging/*/}
