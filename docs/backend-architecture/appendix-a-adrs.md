@@ -199,6 +199,7 @@ decision looks wrong.
 | **ADR-190** | [Holders send to Privacy's exchange and fault reads stop at consumed namespaces (#1682, #1683), amending ADR-036 and ADR-094](adr/ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md) |
 | **ADR-191** | [A consumer takes a delivery only through its type's exchange or its endpoint's own (#1684), amending ADR-036](adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md) |
 | **ADR-192** | [Fault reads stop at consumed types (#1702), amending ADR-190](adr/ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md) |
+| **ADR-193** | [The fulfilment saga's stop is this machine's CPU (#1714)](adr/ADR-193-the-fulfilment-sagas-stop-is-this-machines-cpu-1714.md) |
 
 ---
 
