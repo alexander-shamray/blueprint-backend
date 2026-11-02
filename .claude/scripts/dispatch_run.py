@@ -669,6 +669,37 @@ def transcript_path(worktree, session_id, since):
     return max(found)[1] if found else None
 
 
+REVIEWER = "branch-reviewer"
+
+
+def reviewer_spawned(transcript):
+    """Whether the session's transcript shows a branch-reviewer spawn that was not refused; False when unreadable.
+
+    A session that re-enters /ship after a compaction reports only the rounds it ran since, so its result can hold
+    none though a round ran before it: the transcript is the session's own record of that round.
+    """
+    spawned, refused = set(), set()
+    try:
+        with open(transcript, encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    message = json.loads(line).get("message")
+                    parts = message.get("content")
+                except (ValueError, AttributeError, RecursionError):
+                    continue
+                for part in parts if isinstance(parts, list) else []:
+                    if not isinstance(part, dict):
+                        continue
+                    if (part.get("type") == "tool_use" and part.get("name") in ("Agent", "Task")
+                            and isinstance(part.get("input"), dict) and part["input"].get("subagent_type") == REVIEWER):
+                        spawned.add(part.get("id"))
+                    elif part.get("type") == "tool_result" and part.get("is_error") is True:
+                        refused.add(part.get("tool_use_id"))
+    except (OSError, TypeError, UnicodeDecodeError):
+        return False
+    return bool(spawned - refused - {None})
+
+
 def _pid(directory, gid):
     try:
         return int(_read(Path(directory) / f"{gid}.pid").strip())
@@ -776,7 +807,10 @@ def absorb(root, run, gid):
     crashes = _field(entry, gid, "crashes", _count, 0)
     decision = classify(end, result, crashes, now())
     reason = _reason(decision, end, result)
-    unreviewed = _unreviewed(entry, result, crashes)
+    transcript = transcript_path(str(Path(root) / worktree), end.session_id, _launch_time(directory, gid, entry))
+    # Only a transcript the envelope names is this session's: the newest-file fallback may be another's.
+    named = transcript if end.session_id is not None else None
+    unreviewed = _unreviewed(entry, result, crashes) and not reviewer_spawned(named)
     if unreviewed:
         reason = UNREVIEWED
     # Summed over every session the group ran this move, so a relaunched group is not reported as its last session.
@@ -792,8 +826,7 @@ def absorb(root, run, gid):
     if isinstance(result, Result):
         entry.update(pr=result.pr, merge_oid=result.merge_oid, filed=list(result.filed),
                      review_end=result.review_end, rounds=list(result.rounds), decisions=list(result.decisions))
-    entry["transcript"] = transcript_path(str(Path(root) / worktree), end.session_id,
-                                          _launch_time(directory, gid, entry))
+    entry["transcript"] = transcript
     save_state(directory, state)
     shown = entry["transcript"] if entry["transcript"] and os.path.isfile(entry["transcript"]) else "not found"
     parts = [f"{gid}: {decision}"]

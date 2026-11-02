@@ -739,6 +739,35 @@ class ResultCommandTests(InRoot):
                 self.assertEqual("S1: merged-claimed pr #1690" + (" - merged with no review round" if unreviewed
                                                                   else ""), line)
 
+    def test_a_merge_with_no_round_is_reviewed_when_the_transcript_shows_a_reviewer_spawned(self):
+        # A session that re-entered /ship after a compaction reports no rounds, though its transcript holds one.
+        bare = {**MERGED_S1, "rounds": [], "review_end": None}
+        transcript = (self.root / "projects" / dr.project_slug(os.path.abspath(WORKTREE))
+                      / (SUCCESS["session_id"] + ".jsonl"))
+        transcript.parent.mkdir(parents=True)
+
+        def spawn(kind, error=None):
+            use = {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Agent",
+                                                                 "input": {"subagent_type": kind}}]}}
+            back = {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1",
+                                                             **({} if error is None else {"is_error": error})}]}}
+            return "\n".join(json.dumps(r) for r in (use, back)) + "\n"
+
+        cases = {"a reviewer spawned": (spawn("branch-reviewer"), False),
+                 "a reviewer spawned and answered": (spawn("branch-reviewer", False), False),
+                 "a reviewer spawn refused": (spawn("branch-reviewer", True), True),
+                 "another agent spawned": (spawn("general-purpose"), True),
+                 "a transcript that is not JSON": ("not json\n", True)}
+        for name, (text, unreviewed) in cases.items():
+            with self.subTest(case=name):
+                transcript.write_text(text, encoding="utf-8")
+                self.absorb(bare)
+                self.assertEqual(unreviewed, group_state(RUN, "S1")["unreviewed"])
+        # With no session id the transcript is only the newest in the folder, which may be another session's.
+        transcript.write_text(spawn("branch-reviewer"), encoding="utf-8")
+        self.absorb(bare, {k: v for k, v in SUCCESS.items() if k != "session_id"})
+        self.assertTrue(group_state(RUN, "S1")["unreviewed"])
+
     def test_a_refusal_older_than_the_launch_is_not_this_launchs(self):
         # Only a `run` of this launch leaves a marker that sends the group back unread.
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
