@@ -126,7 +126,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Each_read_takes_the_claim_index_alone_on_a_plan_compiled_against_an_empty_outbox()
     {
-        // A fresh volume's first compile, which stays cached while processed rows pile up for the purge (ADR-194).
+        // A fresh volume's first compile, which stays cached while processed rows pile up for the purge (ADR-195).
         await fixture.ClearPlanCacheAsync();
         IOutboxStats stats = NewStats();
 

@@ -438,7 +438,7 @@ RANDOM_KEY_MIGRATION = re.compile(r"^\d{14}_KeyOutboxOnRandomId(\.Designer)?\.cs
 # inbox does: the copied configuration maps no such index, so a service
 # without it starts with a model its migrations do not match.
 INBOX_INDEX_DROP_MIGRATION = re.compile(r"^\d{14}_DropInboxHandledAtIndex(\.Designer)?\.cs$")
-# The claim index with ProcessedAt included (ADR-194). It travels because the
+# The claim index with ProcessedAt included (ADR-195). It travels because the
 # copied configuration includes the column, so a service without it starts
 # with a model its migrations do not match.
 CLAIM_INDEX_INCLUDE_MIGRATION = re.compile(r"^\d{14}_IncludeProcessedAtInClaimIndex(\.Designer)?\.cs$")

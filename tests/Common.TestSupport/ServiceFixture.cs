@@ -408,7 +408,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public Task ClearPlanCacheAsync() =>
         ExecuteAsync("ALTER DATABASE SCOPED CONFIGURATION CLEAR PROCEDURE_CACHE;");
 
-    /// <summary>Every index read by the cached plans of statements matching a pattern, sorted (ADR-194).</summary>
+    /// <summary>Every index read by the cached plans of statements matching a pattern, sorted (ADR-195).</summary>
     public Task<string> CachedPlanIndexesAsync(string statementLike) =>
         ScalarAsync<string>(
             """

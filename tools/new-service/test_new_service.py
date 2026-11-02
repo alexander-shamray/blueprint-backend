@@ -723,7 +723,7 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertIn('.HasDatabaseName("IX_Outbox_Processed")', snapshot)
         # DropInboxHandledAtIndex drops it, so a designer before that one still holds the index (ADR-186).
         self.assertNotIn("IX_Inbox_HandledAt", snapshot)
-        # IncludeProcessedAtInClaimIndex is the last, so an earlier designer leaves the column out (ADR-194).
+        # IncludeProcessedAtInClaimIndex is the last, so an earlier designer leaves the column out (ADR-195).
         self.assertIn('new[] { "Lane", "Attempts", "LockedUntil", "ProcessedAt" }', snapshot)
 
     def test_the_inbox_migration_keeps_no_claim_about_the_templates_own_row(self):
