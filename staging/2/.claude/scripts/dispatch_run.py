@@ -796,7 +796,8 @@ def _unrecorded(directory, state, gid, entry, line):
 def absorb(root, run, gid, run_refused=None):
     """Copy, validate and classify one executor's result and session, record them, and say what happened.
 
-    `run_refused` is `run`'s refusal line, given after its exit 2; it is read only when `run` left no file at all.
+    `run_refused` is `run`'s refusal line, given after its exit 2; it is read only when there is no session record
+    and no marker from this launch.
     """
     directory = run_dir(root, run)
     state = load_state(directory)
