@@ -64,7 +64,7 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
 
         // Filtered and covering, so the claim stays cheap while processed rows wait for §9.4's purge; led by the
         // bucket, so inserts land at ClaimBuckets ends and the claim still reads each bucket oldest first (ADR-180).
-        // ProcessedAt, null in every row here, is included: without it each row is looked up for the filter (ADR-194).
+        // ProcessedAt, null in every row here, is included: without it each row is looked up for the filter (ADR-195).
         builder
             .HasIndex(OutboxMessage.ClaimBucketColumn, nameof(OutboxMessage.OccurredAt))
             .HasDatabaseName(OutboxMessage.UnprocessedIndex)

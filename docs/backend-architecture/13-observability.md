@@ -1593,11 +1593,11 @@ stop agreeing on the day somebody tunes it. **All three name §9.4's claim
 index in a hint**, because a plan compiled while the outbox was empty can
 scan the clustered index for as long as it stays cached, and the processed rows
 the purge has yet to delete are what make that scan long
-([ADR-194](adr/ADR-194-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
+([ADR-195](adr/ADR-195-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
 The hint and the third query, from the constructor:
 
 ```csharp
-        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-194).
+        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-195).
         string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
 
         // The dispatcher's cap (§9.4), not a copy that could drift from the loop it describes.

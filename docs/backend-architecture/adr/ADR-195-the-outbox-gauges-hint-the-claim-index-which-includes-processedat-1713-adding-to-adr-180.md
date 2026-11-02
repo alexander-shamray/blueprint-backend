@@ -1,4 +1,4 @@
-# ADR-194 — The outbox gauges hint the claim index, which includes ProcessedAt (#1713), adding to ADR-180
+# ADR-195 — The outbox gauges hint the claim index, which includes ProcessedAt (#1713), adding to ADR-180
 
 **Decision.** Each publishing service's `OutboxStats` reads the outbox
 through a table hint naming `OutboxMessage.UnprocessedIndex`,

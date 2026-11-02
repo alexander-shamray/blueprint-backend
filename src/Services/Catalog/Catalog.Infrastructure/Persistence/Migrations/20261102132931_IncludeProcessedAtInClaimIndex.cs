@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
-/// <summary>Includes ProcessedAt in the claim index, so a read through it needs no lookup (ADR-194).</summary>
+/// <summary>Includes ProcessedAt in the claim index, so a read through it needs no lookup (ADR-195).</summary>
 /// <remarks>
 /// Rebuilt in one statement, since the outbox gauges name the index in a hint and fail while it is absent. Backward
 /// compatible with the version before (§7.4): the name, key and filter are unchanged, and only the leaf gains a column.

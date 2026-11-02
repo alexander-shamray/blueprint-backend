@@ -30,7 +30,7 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     {
         _connections = connections;
 
-        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-194).
+        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-195).
         string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
 
         // Composed from the registered table, for the reason OutboxTable gives.
