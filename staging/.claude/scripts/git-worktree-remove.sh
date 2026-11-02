@@ -83,7 +83,7 @@ PY
     exit 5
   fi
 fi
-# Windows refuses a path past 260 characters unless git asks for long paths,
-# and git, failing to delete such a file, unregisters the worktree anyway, so
-# the directory would be left behind, no longer a worktree.
+# Windows refuses a path past 260 characters unless git asks for long paths:
+# git then refuses a worktree holding files it cannot read, or, failing to
+# delete one, unregisters the worktree anyway and leaves its directory behind.
 git -c core.longpaths=true worktree remove "$path"
