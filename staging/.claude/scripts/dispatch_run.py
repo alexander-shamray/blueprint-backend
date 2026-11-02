@@ -808,7 +808,9 @@ def absorb(root, run, gid):
     decision = classify(end, result, crashes, now())
     reason = _reason(decision, end, result)
     transcript = transcript_path(str(Path(root) / worktree), end.session_id, _launch_time(directory, gid, entry))
-    unreviewed = _unreviewed(entry, result, crashes) and not reviewer_spawned(transcript)
+    # Only a transcript the envelope names is this session's: the newest-file fallback may be another's.
+    named = transcript if end.session_id is not None else None
+    unreviewed = _unreviewed(entry, result, crashes) and not reviewer_spawned(named)
     if unreviewed:
         reason = UNREVIEWED
     # Summed over every session the group ran this move, so a relaunched group is not reported as its last session.

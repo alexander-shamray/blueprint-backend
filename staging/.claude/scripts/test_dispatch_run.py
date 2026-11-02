@@ -763,6 +763,10 @@ class ResultCommandTests(InRoot):
                 transcript.write_text(text, encoding="utf-8")
                 self.absorb(bare)
                 self.assertEqual(unreviewed, group_state(RUN, "S1")["unreviewed"])
+        # With no session id the transcript is only the newest in the folder, which may be another session's.
+        transcript.write_text(spawn("branch-reviewer"), encoding="utf-8")
+        self.absorb(bare, {k: v for k, v in SUCCESS.items() if k != "session_id"})
+        self.assertTrue(group_state(RUN, "S1")["unreviewed"])
 
     def test_a_refusal_older_than_the_launch_is_not_this_launchs(self):
         # Only a `run` of this launch leaves a marker that sends the group back unread.
