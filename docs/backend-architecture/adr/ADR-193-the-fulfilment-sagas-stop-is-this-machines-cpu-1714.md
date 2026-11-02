@@ -28,8 +28,8 @@ stood at 94% at 2000 and 95 to 97% after; run 20261101-171739, before
 shows the same shape, its replicas at 114 to 128% with the host at 90 to 95%.
 A saga change has no measured cost to remove: its statements' time, their
 lock waits included, did not grow where its rate stopped, and ADR-189
-cutting the inbox cleanup's lock wait by 3.5 to 3.8 times at those steps left
-the queue no shorter.
+cutting the inbox cleanup's lock wait by 3.5 to 3.8 times at 2800 and 3200,
+where the queue grows, left it no shorter there.
 **Consequences.** What a saga message spends outside its statements was not
 read: how many deliveries a replica held in flight, how long each took in the
 consumer, and its share of the commit's log flush, which on this
