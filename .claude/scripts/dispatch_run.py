@@ -594,15 +594,17 @@ def session_end(raw):
                for d in (listed if isinstance(listed, list) else [])]
     limited, resets = False, None
     if is_error:
-        # stdout without an envelope is the executor's text too, so only stderr, which the CLI writes, is read as text.
         fields = list(_fields(envelope)) if envelope else []
-        limited = ((envelope or {}).get("api_error_status") == 429
-                   or any(isinstance(v, str) and RATE_LIMIT_KIND.fullmatch(v) for _, v in fields)
-                   or re.search(rf"\b{RATE_LIMIT_KIND.pattern}\b", stderr, re.IGNORECASE) is not None)
+        refused = ((envelope or {}).get("api_error_status") == 429
+                   or any(isinstance(v, str) and RATE_LIMIT_KIND.fullmatch(v) for _, v in fields))
+        limited = refused or re.search(rf"\b{RATE_LIMIT_KIND.pattern}\b", stderr, re.IGNORECASE) is not None
         if limited:
             resets = next((s for s in (_parse_stamp(v) for k, v in fields if k in RESET_KEYS) if s), None)
             ended = _parse_stamp(raw.get("ended")) or now()
-            resets = resets or _text_reset(stderr, ended)
+            # A session the API refused ends on that refusal, so its result is the CLI's notice, not a model turn.
+            # stdout with no envelope is never read: nothing in it says who wrote it.
+            notice = envelope.get("result") if refused and isinstance(envelope.get("result"), str) else ""
+            resets = resets or _text_reset(f"{notice}\n{stderr}", ended)
     session = envelope.get("session_id") if envelope else None
     session = session if isinstance(session, str) and SESSION_ID.fullmatch(session) else None
     return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session)
