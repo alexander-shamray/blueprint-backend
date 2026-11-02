@@ -212,13 +212,23 @@ class PathTests(unittest.TestCase):
         claim = db.group_claim(group_of(line(task="Run `/ship` on `OrderLine.Total`")), {1700: "no files"})
         self.assertTrue(claim.unknown)
 
-    def test_a_backticked_slash_token_is_a_path_only_with_a_dot_or_a_top_level_directory(self):
+    def test_a_backticked_slash_token_is_a_path_only_with_a_dot_or_a_directory_name(self):
         self.assertEqual(frozenset(), db.extract_paths("`and/or` `read/write` `yes/no`"))
         found = db.extract_paths("`tools/quality-sets/` `.github/comment-gate` `v1.2/notes`")
         self.assertEqual({"tools/quality-sets", ".github/comment-gate", "v1.2/notes"}, found)
-        with mock.patch.object(db, "_top_level", lambda: None):
+        with mock.patch.object(db, "_directory_names", lambda: None):
             # A checkout whose directories cannot be listed over-claims, the safe direction.
             self.assertEqual({"and/or"}, db.extract_paths("`and/or`"))
+
+    def test_a_dotless_token_under_a_nested_directory_still_claims(self):
+        # src/Services/Ordering is in the checkout, so a body naming the subtree from below src still claims it.
+        self.assertTrue((db.ROOT / "src" / "Services" / "Ordering").is_dir())
+        self.assertEqual({"services/ordering"}, db.extract_paths("touches `Services/Ordering` only"))
+        # Each claim names one other file, so neither is unknown and only the shared subtree can make them overlap.
+        a = db.group_claim(group_of(line(task="Edit `Services/Ordering` and `a.md`")), {1700: ""})
+        b = db.group_claim(group_of(line(gid="Z2", number=1701, task="`Services/Ordering` and `b.md`")), {1701: ""})
+        self.assertFalse(a.unknown or b.unknown)
+        self.assertTrue(db.overlaps(a, "Z1", {1700}, b, "Z2", {1701}))
 
     def test_paths_are_normalised_case_slashes_and_dot_prefix(self):
         found = db.extract_paths(r"`.\Src\Gateway\Program.cs` and `./Docs/A.MD`")

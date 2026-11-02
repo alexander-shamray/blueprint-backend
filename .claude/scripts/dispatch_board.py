@@ -44,8 +44,9 @@ SEPARATOR = re.compile(r"\|[\s:|-]+\|")
 OWED = "owed (not filed)"
 BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/()-]*")
 CHILD_TIMEOUT = 120
-# The checkout this file is in, whose top-level directories say which backticked slash tokens are paths.
+# The checkout this file is in, whose directory names say which backticked slash tokens are paths.
 ROOT = Path(__file__).resolve().parents[2]
+UNWALKED = {".git", "worktrees", "artifacts", "bin", "obj", "node_modules", "testresults", "__pycache__"}
 
 
 def __getattr__(name):
@@ -231,21 +232,34 @@ def _normalise(token):
     return token.rstrip("/")
 
 
+def _raise(error):
+    raise error
+
+
 @functools.cache
-def _top_level():
-    # Read from the checkout, not listed here, so a directory added later counts; None when it cannot be read.
+def _directory_names():
+    """Every directory name in the checkout, lower-cased, or None when it cannot be walked.
+
+    Read from the checkout, not listed here, so a directory added later counts. Copies of the tree and build output
+    are named but not walked: their names are the checkout's own again.
+    """
+    names = set()
     try:
-        return frozenset(p.name.lower() for p in ROOT.iterdir() if p.is_dir())
+        for _here, dirs, _files in os.walk(ROOT, onerror=_raise):
+            names.update(d.lower() for d in dirs)
+            dirs[:] = [d for d in dirs if d.lower() not in UNWALKED]
     except OSError:
         return None
+    return frozenset(names)
 
 
 def _slash_path(path):
-    # A dotted segment or a top-level directory makes a slash token a path, and `and/or` not; unreadable, all count.
+    # A dot, or a first segment naming a directory anywhere in the checkout, makes a slash token a path and `and/or`
+    # not, so `Services/Ordering` still claims (the argument page: the extraction errs towards exclusive).
     if "/" not in path or path.startswith("/"):
         return False
-    top = _top_level()
-    return top is None or "." in path or path.split("/", 1)[0] in top
+    names = _directory_names()
+    return names is None or "." in path or path.split("/", 1)[0] in names
 
 
 def extract_paths(text):
