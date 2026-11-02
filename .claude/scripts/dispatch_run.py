@@ -300,11 +300,10 @@ def launch(root, run, gid, tasks_path, branch, worktree):
     listed = _worktree_branches(git(root, "worktree", "list", "--porcelain"))
     if listed.get(_same_path(os.path.join(root, worktree))) != f"refs/heads/{branch}":
         raise Refusal(f"{worktree} is not a worktree on {branch}")
-    # A group sent back after a refused run and launched again must not read that old refusal as this launch's.
-    try:
-        (directory / f"{gid}.refused.json").unlink(missing_ok=True)
-    except OSError as error:
-        raise Refusal(f"could not remove {gid}'s earlier refusal: {error}") from None
+    # A group sent back and launched again starts afresh, as its move did: its state no longer names the earlier
+    # launch's session as read, so that launch's marker, result copy, record and pid go now, or this launch is
+    # refused, rather than a later run meeting them beside its own and _refused holding the slot all night.
+    _remove_stale(*(directory / f"{gid}{suffix}" for suffix in (".refused.json", ".json", ".session.json", ".pid")))
     entry.update(status="running", model=group.model, issues=[r.number for r in group.rows], branch=branch,
                  worktree=worktree, launched=now().isoformat(), crashes=0)
     save_state(directory, state)
@@ -346,7 +345,7 @@ def _launch(root, directory, run, gid, entry, description):
     """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
     # A relaunch's earlier session was read, so it goes before the launch checks; a record this removal missed is
     # read as absent beside a marker or a refusal line. Its pid goes too: `result --refused` reads a pid file as an
-    # executor started, and one this removal missed as the cautious side.
+    # executor started, and one this removal missed as the cautious side. An earlier launch's went at `launch`.
     _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json", directory / f"{gid}.pid")
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
