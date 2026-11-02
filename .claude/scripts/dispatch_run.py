@@ -344,9 +344,9 @@ def run_session(root, run, gid, description):
 
 def _launch(root, directory, run, gid, entry, description):
     """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
-    # A relaunch's earlier session was read, so it goes before any check can refuse: a refusal left beside its
-    # record would make `result` refuse the pair, and the group would hold its slot all night. Its pid goes too:
-    # `result --refused` reads a pid file as an executor started, and one this removal missed as the cautious side.
+    # A relaunch's earlier session was read, so it goes before the launch checks; a record this removal missed is
+    # read as absent beside a marker or a refusal line. Its pid goes too: `result --refused` reads a pid file as an
+    # executor started, and one this removal missed as the cautious side.
     _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json", directory / f"{gid}.pid")
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
@@ -713,11 +713,20 @@ def _pid(directory, gid):
         return None
 
 
+def _read_already(directory, gid, entry):
+    """Whether the session record on disk is one `result` already read, a relaunch's earlier session's."""
+    try:
+        started = json.loads(_read(Path(directory) / f"{gid}.session.json")).get("started")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return started is not None and started == entry.get("absorbed")
+
+
 def _refused(directory, gid, entry):
     """Why this launch's last `run` launched nothing, on one line, or None when it launched or has not run.
 
-    The marker sends the group back unread, so it counts only when no session record exists and it is no older
-    than the launch; one beside a session record is refused rather than either being picked.
+    The marker sends the group back unread, so it counts only when no unread session record exists and it is no
+    older than the launch; one beside an unread record is refused rather than either being picked.
     """
     path = Path(directory) / f"{gid}.refused.json"
     try:
@@ -726,7 +735,8 @@ def _refused(directory, gid, entry):
         return None
     except (OSError, ValueError):
         data = None
-    if (Path(directory) / f"{gid}.session.json").exists():
+    # A relaunch refused before _launch removed the earlier record left one already read: it ended no launch.
+    if (Path(directory) / f"{gid}.session.json").exists() and not _read_already(directory, gid, entry):
         raise Refusal(f"{gid} has both {path.name} and a session record, so which ended its launch is unknown")
     data = data if isinstance(data, dict) else {}
     at, launched = _parse_stamp(data.get("at")), _parse_stamp(entry.get("launched"))
