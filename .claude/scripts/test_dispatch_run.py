@@ -164,7 +164,7 @@ class PathWhichTests(InRoot):
             with self.assertRaises(db.Refusal) as caught:
                 db.git(str(self.root), "status")
             self.assertEqual("no git on PATH", str(caught.exception))
-            with self.assertRaises(db.Refusal):
+            with self.assertRaisesRegex(db.Refusal, "^no Git bash found beside the git on PATH$"):
                 db.git_bash()
 
     def test_a_path_entry_that_is_the_cwd_is_skipped(self):
@@ -183,6 +183,12 @@ class RunDirectoryTests(InRoot):
         self.assertIn("refused: --pairs 5", run_cli(["start", "--pairs", "5", "--tasks", "todo.md"]))
         self.assertFalse((self.root / "artifacts").exists())
         self.assertEqual(RUN, dr.new_run(".", 4, "en", NOW))
+
+    def test_pairs_that_is_a_bool_is_refused(self):
+        for pairs in (True, False):
+            with self.assertRaisesRegex(db.Refusal, f"--pairs {pairs} is not a whole number"):
+                dr.new_run(".", pairs, "en", NOW)
+        self.assertFalse((self.root / "artifacts").exists())
 
     def test_lang_defaults_to_en(self):
         self.assertEqual(f"{RUN}\n", run_cli(["start", "--pairs", "2", "--tasks", "todo.md"]))
@@ -636,6 +642,12 @@ class ResultCommandTests(InRoot):
         with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
             return run_cli(["result", RUN, "S1"]).splitlines()
 
+    def test_usage_sums_every_session_the_group_ran(self):
+        earlier = {"input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 50}
+        self.absorb(MERGED_S1, status="relaunch", absorbed="2026-11-01T20:00:00+00:00", usage=earlier)
+        spent = group_state(RUN, "S1")["usage"]
+        self.assertEqual({key: earlier.get(key, 0) + USAGE[key] for key in dr.TOKEN_KEYS}, spent)
+
     def test_result_copies_validates_classifies_records_and_names_the_transcript(self):
         self.assertEqual("transcript: not found", self.absorb(MERGED_S1)[1])
         slug = dr.project_slug(os.path.abspath(WORKTREE))
@@ -817,7 +829,8 @@ class WakeTests(InRoot):
 
     def test_wake_with_nothing_ready_and_nothing_running_is_drained(self):
         lines = self.wake(tasks_of(line(depends="OWNER"), line(number=1701, gid="Z2", labels="question")))
-        self.assertEqual(["stop file: no", "running: none", "free slots: 2", "end: drained"], lines)
+        self.assertEqual(["stop file: no", "running: none", "free slots: 2", "weekly: not read, no source is set",
+                          "end: drained"], lines)
         record(RUN, "S9", status="running")
         lines = self.wake(tasks_of(line(depends="OWNER")))
         self.assertEqual("launch: none", lines[-1])
@@ -825,7 +838,9 @@ class WakeTests(InRoot):
     def test_a_ready_group_only_another_sessions_row_holds_is_not_drained(self):
         # FIXTURE's In progress row is another session's and names the dispatch plan, so a group on it is held.
         held = line(task="Fix `docs/superpowers/plans/2026-11-01-dispatch.md`")
-        self.assertEqual(["stop file: no", "running: none", "free slots: 2", "end: held"], self.wake(tasks_of(held)))
+        self.assertEqual(["stop file: no", "running: none", "free slots: 2", "weekly: not read, no source is set",
+                          "end: held"],
+                         self.wake(tasks_of(held)))
         self.assertEqual("launch: Z1", self.wake(tasks_of(line()))[-1])
         self.assertEqual("end: drained", self.wake(tasks_of(line(depends="OWNER")))[-1])
 
@@ -847,7 +862,7 @@ class WakeTests(InRoot):
         self.assertIn("free slots: 1", lines)
         self.assertEqual("launch: S1", lines[-1])
         record(RUN, "S8", status="relaunch")
-        self.assertEqual(["free slots: 0", "launch: none"], self.wake()[-2:])
+        self.assertEqual(["free slots: 0", "weekly: not read, no source is set", "launch: none"], self.wake()[-3:])
 
     def test_a_week_limit_ends_the_night_until_it_resets(self):
         record(RUN, "S9", status="week")
@@ -860,7 +875,8 @@ class WakeTests(InRoot):
         self.assertIn("wait S9: the week resets unknown", run_cli(["resume", RUN]))
         # A run resumed after the reset relaunches the group, which holds its slot meanwhile.
         record(RUN, "S9", status="week", resets_at=(NOW - timedelta(minutes=1)).isoformat())
-        self.assertEqual(["running: S9", "free slots: 1", "launch: S1"], [self.wake()[i] for i in (1, 3, 4)])
+        self.assertEqual(["running: S9", "free slots: 1", "weekly: not read, no source is set", "launch: S1"],
+                         [self.wake()[i] for i in (1, 3, 4, 5)])
         self.assertIn("relaunch S9", run_cli(["resume", RUN]))
         with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "print('{}')"]):
             self.assertEqual("", run_cli(["run", RUN, "S9", "--description", "Resume after the week"]))
@@ -1104,19 +1120,43 @@ class WeeklyTests(InRoot):
         self.assertIsNone(dr.WEEKLY_SOURCE)
         self.assertIsNone(dr.read_weekly())
         self.assertFalse(dr.week_ends_night(None))
-        self.assertEqual("weekly: not read\n", self.usage())
-        self.assertNotEqual("end: week", self.wake()[-1])
-        self.assertIsNone(dr.load_state(state_dir())["usage"]["start"]["percent_left"])
+        self.assertEqual("weekly: not read, no source is set\n", self.usage())
+        self.assertEqual(["weekly: not read, no source is set", "launch: S1 S3"], self.wake()[-2:])
+        self.assertNotIn("start", dr.load_state(state_dir())["usage"])
+
+    def test_a_real_reading_after_unread_wakes_is_the_start(self):
+        self.wake()
+        self.wake()
+        self.assertEqual(f"weekly: 75% left, resets {self.RESET}\n",
+                         self.usage(lambda: {"percentUsed": 25, "resetsAt": self.RESET}))
+        recorded = dr.load_state(state_dir())["usage"]
+        self.assertEqual((75.0, False), (recorded["start"]["percent_left"], "end" in recorded))
+
+    def test_every_wake_prints_one_weekly_line(self):
+        for source, expected in ((None, "weekly: not read, no source is set"),
+                                 (lambda: {"percentUsed": 40, "resetsAt": self.RESET},
+                                  f"weekly: 60% left, resets {self.RESET}")):
+            lines = self.wake(source)
+            self.assertEqual([expected], [text for text in lines if text.startswith("weekly:")])
 
     def test_a_failed_reading_is_recorded_and_is_not_the_limit(self):
         def broken():
             raise OSError("no token file")
         self.assertEqual("weekly: reading failed: no token file\n", self.usage(broken))
-        failures = dr.load_state(state_dir())["usage"]["failures"]
-        self.assertEqual(["no token file"], [f["why"] for f in failures])
+        failed = dr.load_state(state_dir())["usage"]["failed"]
+        self.assertEqual((1, "no token file"), (failed["count"], failed["why"]))
         with self.assertRaises(dr.ReadingFailed):
             dr.read_weekly(broken)
         self.assertNotEqual("end: week", self.wake(broken)[-1])
+
+    def test_failures_keep_a_count_and_the_last_reason_not_a_list(self):
+        for n in range(5):
+            self.clock = NOW + timedelta(minutes=n)
+            self.usage(lambda n=n: (_ for _ in ()).throw(OSError(f"broken {n}")))
+        usage = dr.load_state(state_dir())["usage"]
+        self.assertEqual({"count": 5, "at": (NOW + timedelta(minutes=4)).isoformat(), "why": "broken 4"},
+                         usage["failed"])
+        self.assertNotIn("failures", usage)
 
     def test_the_next_wake_reads_again_after_a_failure(self):
         calls = []
@@ -1132,7 +1172,7 @@ class WeeklyTests(InRoot):
         self.assertEqual(2, len(calls))
         self.assertNotIn("weekly: reading failed: timed out", second)
         self.assertEqual(90.0, dr.load_state(state_dir())["usage"]["start"]["percent_left"])
-        self.assertEqual(1, len(dr.load_state(state_dir())["usage"]["failures"]))
+        self.assertEqual(1, dr.load_state(state_dir())["usage"]["failed"]["count"])
 
     def test_one_percent_left_ends_the_night_and_two_does_not(self):
         stamp = datetime(2026, 11, 6, tzinfo=timezone.utc)
@@ -1206,8 +1246,8 @@ class ReportTests(InRoot):
         dr.take_reading(state_dir(), lambda: {"percentUsed": "x"})
         usage = self.section(self.report(), "## Usage")
         self.assertIn("weekly: not read", usage)
-        self.assertTrue(any(text.startswith(f"weekly: reading failed at {NOW.isoformat()}: ") for text in usage),
-                        usage)
+        self.assertTrue(any(text.startswith(f"weekly: reading failed 1 times, the last at {NOW.isoformat()}: ")
+                            for text in usage), usage)
 
     def test_each_hand_back_names_its_reason_and_its_worktree(self):
         record(RUN, "S1", status="returned", closed_from="handed-back",
