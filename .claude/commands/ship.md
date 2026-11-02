@@ -47,7 +47,11 @@ checkout and removes the worktree, however the review ended.
   Every other judgement is the
   recommended option, named in the result's `decisions`. The session
   writes the task list nowhere, even when it files or closes an issue:
-  what it files goes only in the result's `filed`. (why:
+  what it files goes only in the result's `filed`. It keeps its turn until
+  the result is written: a step's status is not a reply, so it carries no
+  status table and no apply line, and the next step follows in the same
+  turn; and each shell read is one command its grants name, since nothing
+  answers a prompt for one they do not. (why:
   docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
   reported unconverged, and step 6 merges anyway.
