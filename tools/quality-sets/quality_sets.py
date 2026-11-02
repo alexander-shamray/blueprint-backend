@@ -29,6 +29,9 @@ SHA = re.compile(r"\b[0-9a-f]{40}\b")
 AFFECTED = re.compile(r"(?ms)^## Affected lines\s*\n(.*?)(?=^## |\Z)")
 PINNED = re.compile(r"(?i)\bpinned commit:?\s+([0-9a-f]{7,40})\b")
 FOUND_AT = re.compile(r"(?i)\bfound by\b.*?\bat ([0-9a-f]{7,40})\b")
+# The run's cwd is a tree someone else committed, whose own hooks and MCP servers would start on this host:
+# only the user's settings load (docs/harness-boundaries.md, *Headless dispatched sessions*).
+ISOLATION = ("--setting-sources", "user", "--strict-mcp-config")
 PATH = re.compile(r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*\.(?:cs|py|sh|ps1|md|ya?ml|json|props|csproj|sql|tpl|txt|slnx)\b")
 
 
@@ -268,7 +271,7 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     """
     extra = [arg for d in add_dirs for arg in ("--add-dir", str(d))]
     done = run(claude, "-p", prompt, "--agents", agent_definition(agent), "--agent", agent,
-               "--output-format", "json", *extra, cwd=cwd, check=False)
+               "--output-format", "json", *ISOLATION, *extra, cwd=cwd, check=False)
     text, usage = unwrap(done.stdout)
     if spent is not None:
         spent.update({key: usage[key] for key in TOKEN_KEYS if isinstance(usage.get(key), int)})
