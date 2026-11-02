@@ -46,8 +46,9 @@ def part(name, text):
         raise Refusal(f"the {name} opens with #, which would read as a heading")
     if len(text) > PART_LIMIT:
         raise Refusal(f"the {name} is over {PART_LIMIT} characters")
-    if name == "question" and " A: " in text:
-        raise Refusal("the question holds ' A: ', which a later split would read as the answer")
+    # Read after the entry's "Q: ", so a question opening "A: " is caught as one holding it later is.
+    if name == "question" and " A: " in f" {text}":
+        raise Refusal("the question holds 'A: ', which a later split would read as the answer")
     return text
 
 
@@ -66,6 +67,9 @@ def append_decision(body, line):
     at = [i for i, text in enumerate(lines) if text.rstrip("\r") == HEADING]
     if len(at) > 1:
         raise Refusal(f"the issue body holds {HEADING!r} {len(at)} times")
+    if not body.strip():
+        # Nothing to separate the section from, so it opens the body rather than following blank lines.
+        return f"{HEADING}\n\n{line}\n"
     if not at:
         return body.rstrip("\r\n") + f"{eol}\n{eol}\n{HEADING}{eol}\n{eol}\n{line}{eol}\n"
     start = at[0]
@@ -218,6 +222,9 @@ def main(argv=None):
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:
+        if stop.code:
+            # argparse has printed its usage; the prefix is what the runbook reads exit 2 by.
+            print("refused: the command line does not match the usage above", file=sys.stderr)
         return 2 if stop.code else 0
     try:
         number = issue_number(args.number)
