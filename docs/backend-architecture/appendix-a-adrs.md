@@ -201,6 +201,7 @@ decision looks wrong.
 | **ADR-192** | [Fault reads stop at consumed types (#1702), amending ADR-190](adr/ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md) |
 | **ADR-193** | [The fulfilment saga's stop is this machine's CPU (#1714)](adr/ADR-193-the-fulfilment-sagas-stop-is-this-machines-cpu-1714.md) |
 | **ADR-194** | [Auto-merge stays off on its own argument (#1716), amending ADR-155](adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md) |
+| **ADR-194** | [The outbox gauges hint the claim index, which includes ProcessedAt (#1713), adding to ADR-180](adr/ADR-194-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md) |
 
 ---
 

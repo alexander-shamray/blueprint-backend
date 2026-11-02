@@ -1589,15 +1589,22 @@ to be right. The lane predicate is on all three, because an untagged gauge
 cannot answer the first question its runbook asks, and the abandoned count
 reads the dispatcher's cap rather than writing it again: §9.4 claims rows
 below it, this counts the rows at or above it, and two copies of one number
-stop agreeing on the day somebody tunes it. The third query, from the
-constructor:
+stop agreeing on the day somebody tunes it. **All three name §9.4's claim
+index in a hint**, because a plan compiled while the outbox was empty can
+scan the clustered index for as long as it stays cached, and the processed rows
+the purge has yet to delete are what make that scan long
+([ADR-194](adr/ADR-194-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
+The hint and the third query, from the constructor:
 
 ```csharp
+        // Named, since a plan compiled on an empty outbox can scan the clustered index while it stays cached (ADR-194).
+        string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
+
         // The dispatcher's cap (§9.4), not a copy that could drift from the loop it describes.
         _abandonedSql =
             $"""
             SELECT COUNT(*)
-            FROM {table.QualifiedName}
+            FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane
                 AND Attempts >= {OutboxDispatcher.MaxAttempts};
