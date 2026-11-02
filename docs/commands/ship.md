@@ -937,9 +937,10 @@ a headless session, with the group's tag first and
 `--dispatched <run-dir>` last; the list of what the token changes is the
 dispatch design's §6.2
 (`docs/superpowers/specs/2026-11-01-dispatch-design.md`), and the runbook
-carries that list and two consequences the design left unspelt: step 6's
-lines 3 to 6 go with the worktree's removal, and step 0 skips its teardown
-of a finished branch, which a relaunch meets, for the reasons given below.
+carries that list and three consequences the design left unspelt: step 6's
+lines 3 to 6 go with the worktree's removal, step 0 skips its teardown of a
+finished branch, which a relaunch meets, and the session keeps its turn
+until its result is written, for the reasons given below.
 **An interactive `/ship` reads exactly as
 it did**: every rule the token adds opens "Under `--dispatched`".
 
