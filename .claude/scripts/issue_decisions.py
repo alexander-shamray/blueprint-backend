@@ -46,8 +46,8 @@ def part(name, text):
         raise Refusal(f"the {name} opens with #, which would read as a heading")
     if len(text) > PART_LIMIT:
         raise Refusal(f"the {name} is over {PART_LIMIT} characters")
-    # Read after the entry's "Q: ", so a question opening "A: " is caught as one holding it later is.
-    if name == "question" and " A: " in f" {text}":
+    # Read as the entry holds it, between "Q: " and " A: ", so a question opening or closing on the marker counts.
+    if name == "question" and " A: " in f" {text} ":
         raise Refusal("the question holds 'A: ', which a later split would read as the answer")
     return text
 
