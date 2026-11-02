@@ -13,14 +13,14 @@ is tuned.
 800, 1600, 2000, 2400, 2800 and 3200 VUs) to the end with no request failing.
 The saga runs its `SELECT TOP(2)` on `OrderFulfilmentStates` once for each
 message, so that statement's count in Query Store in Ordering's database, read
-by the minute, is the saga's handled rate: about 95, 145, 170, 195, 197 and 191 a
-second at the six steps. Orders placed in a hold rose from 6 255 at 2400 to
-7 491 and 8 431, and the saga queue, which ended 2400's hold at 113 messages,
-went from 2 178 to 3 682 over 2800's second half and from 7 834 to 11 898 over
-3200's. Each message's statements did not cost more: about 0.48 ms of
-duration and 0.22 ms of CPU at 2400, 0.42 ms and 0.23 ms at 3200, and
-Ordering's whole database used 53 to 56 s of CPU a minute at 2400 and 57 to
-61 s after.
+by the minute, is the saga's handled rate: about 95, 145, 170, 195, 197 and
+191 a second at the six steps. Orders placed in a hold rose from 6 255 at 2400
+to 7 491 and 8 431, and the saga queue, which ended 2400's hold at 113
+messages, went from 2 178 to 3 682 over 2800's second half and from 7 834 to
+11 898 over 3200's. Each message's statements did not cost more: about
+0.48 ms of duration and 0.22 ms of CPU at 2400, 0.42 ms and 0.23 ms at 3200,
+and Ordering's whole database used 53 to 56 s of CPU a minute at 2400 and 57
+to 61 s after.
 What stopped rising was the host. Ordering.Api's three replicas, with no CPU
 limit, each ran at 116 to 126% of a core from 2000 VUs on, while the host
 stood at 94% at 2000 and 95 to 97% after; run 20261101-171739, before
@@ -38,11 +38,11 @@ stack's SQL Server averaged 5.6 ms of `WRITELOG` and 13.9 ms of
 queue's acked rate and in-flight count are not in the stress summary, and
 the run's Prometheus series were gone before this read, so the handled rate
 here is counted from a statement, not the broker. The stop is this machine's:
-a host with more cores, or a database off Docker Desktop's disk, moves it, and
-says nothing about production. Two runs of nearly the same code ended 3200's
-hold at 6 911 and 11 898 queued, so a step's figure is good to about a factor
-of two. A run whose saga rate stops while the host has CPU to spare, or whose
-per-message cost rises, reopens this.
+a host with more cores moves it, a database off Docker Desktop's disk may, and
+neither was run, and it says nothing about production. Two runs of nearly the
+same code ended 3200's hold at 6 911 and 11 898 queued, so a step's figure is
+good to about a factor of two. A run whose saga rate stops while the host has
+CPU to spare, or whose per-message cost rises, reopens this.
 
 ---
 
