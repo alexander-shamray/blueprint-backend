@@ -286,9 +286,10 @@ Beside those, how a change is made here:
   `origin/main`, replays the branch onto it and publishes under a lease, which
   is this repository's spelling of a rebase and `git push --force-with-lease`.
   Set `git config rerere.enabled true` once per clone, so a conflict resolved
-  once is replayed rather than resolved again. Auto-merge is not used while
-  the ruleset requires no status check, as ADR-155 says; `/ship` step 6 merges
-  after its own wait on the checks.
+  once is replayed rather than resolved again. Auto-merge is not used,
+  although the ruleset requires status checks
+  ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)):
+  `/ship` step 6 merges after its own wait on the checks.
 - **A red `main` is reverted first and fixed forward second.**
   `main-red.yml` files `main is red: <workflow>` for a red push run, or
   comments on the open one. The next pull request to land reverts the one that
