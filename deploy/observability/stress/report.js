@@ -926,9 +926,13 @@ export function queuesLine(step, row) {
         .sort((a, b) => b.end - a.end);
 
     if (active.length === 0) {
-        return queues.length > 0 && queues.every((q) => q.handledPerSecond === null)
-            ? `- Step ${step}: no work queue held a message; what they handled was not read`
-            : `- Step ${step}: no work queue held or handled a message`;
+        const unread = queues.filter((q) => q.handledPerSecond === null).length;
+
+        if (unread > 0 && unread === queues.length)
+            return `- Step ${step}: no work queue held a message; what they handled was not read`;
+
+        return `- Step ${step}: no work queue held or handled a message` +
+            (unread > 0 ? `; ${unread} queue${unread === 1 ? '\'s' : 's\''} handling was not read` : '');
     }
 
     return `- Step ${step}: ${active.map((q) => `${q.queue} ${figure(q.middle, 0)} → ${figure(q.end, 0)} queued, ` +

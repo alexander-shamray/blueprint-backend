@@ -777,4 +777,7 @@ test('a step splits each work queue into what it held, what it handled and what 
     assert.equal(queuesLine(7, { queues: [{ ...queues[0], handledPerSecond: null }] }),
         '- Step 7: no work queue held a message; what they handled was not read',
         'an empty handled read says nothing of the handling');
+    assert.equal(queuesLine(8, { queues: [queues[0], { ...queues[0], queue: 'new', handledPerSecond: null }] }),
+        '- Step 8: no work queue held or handled a message; 1 queue\'s handling was not read',
+        'one queue without a rate is named as unread, not counted idle');
 });
