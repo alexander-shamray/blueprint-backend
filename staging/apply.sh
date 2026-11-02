@@ -76,8 +76,9 @@ step() {
       CODE="$s/git-worktree-remove.sh"
       CASES="~test_git_worktree_remove.RemoveShape.test_a_worktree_holding_a_path_past_260_characters_is_removed"
       MODULES="test_git_worktree_remove"
-      BODY=("Review round 1 found that the long-path case could pass on the old helper wherever the host's system or global git config already set core.longpaths, and could not fail at all on Linux, where there is no 260-character limit. The removal now runs with the system config shut out and an empty global one, and the case also holds the helper's spelling of the removal, which any platform can check."
-        "It also found that the helper's comment and the case's had git's order backwards: git deletes the files first and, failing on the deep one, unregisters the worktree anyway. Both now say so."
+      BODY=("Review round 1 found that the long-path case could pass on the old helper wherever the host's system or global git config already set core.longpaths, and could not fail at all on Linux, where there is no 260-character limit. The removal now runs with core.longpaths set off through git's environment config, which outranks every config file but not the helper's own -c, and the case also holds the helper's spelling of the removal, which any platform can check. Shutting the system and global files out instead dropped the host's core.autocrlf too, and git then read the checked-out worktree as modified."
+        "Mutated to drop the -c, the helper failed the case on Windows with Filename too long; restored, it passed."
+        "It also found that the helper's comment and the case's had git's order backwards. Git refuses a worktree holding a file it cannot read, which this case met, or deletes the files first and, failing on one, unregisters the worktree anyway, which run 20261101-195321 met. Both comments now name the two."
         "No behaviour changes; the case holds on both sides.") ;;
   esac
 }
