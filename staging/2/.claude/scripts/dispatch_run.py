@@ -345,8 +345,8 @@ def run_session(root, run, gid, description):
 def _launch(root, directory, run, gid, entry, description):
     """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
     # A relaunch's earlier session was read, so it goes before any check can refuse: a refusal left beside its
-    # record would make `result` refuse the pair, and the group would hold its slot all night. Its pid goes too, so
-    # a pid file is always this run's: `result --refused` reads one as an executor started.
+    # record would make `result` refuse the pair, and the group would hold its slot all night. Its pid goes too:
+    # `result --refused` reads a pid file as an executor started, and one this removal missed as the cautious side.
     _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json", directory / f"{gid}.pid")
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
@@ -773,9 +773,10 @@ def _unreviewed(entry, result, crashes):
 
 
 def _unrecorded(directory, state, gid, entry, line):
-    """A `run` that exited refused and left neither a marker nor a session record: it could not write the marker.
+    """A `run` that exited refused and left neither a marker nor a session record from this launch.
 
-    _launch removes an earlier pid file before anything can refuse, so a pid file says this run started an executor.
+    With no pid file it launched nothing and could not write its marker; with one, an executor ran and its record
+    was not written. _launch removes an earlier pid file first, and one a refusal left is read as the latter.
     """
     why = one_line(line, 200) if isinstance(line, str) and line.strip() else "no reason given"
     path = Path(directory) / f"{gid}.pid"
