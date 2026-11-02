@@ -972,6 +972,15 @@ every other judgement is taken as *It runs to the end* takes it, the
 recommended option, and named in the result's `decisions`, which the morning
 report shows in place of the report nobody read.
 
+**The result carries the PR's title**, which the design's §10 puts on each
+*Merged* line, because the dispatcher holds no helper that reads one:
+`pr-state.sh` and `pr-for-branch.sh` keep fixed field sets free of
+author-written text, and widening either, or granting a title reader, would
+bring GitHub text into a night nobody watches. The executor wrote the title
+through `/pr`, so it stands where its `decisions` do, kept to one line in
+the report. A session that opened no PR, a relaunch step 0 ended on a merge
+among them, writes `null`, and the line shows the number alone.
+
 **The task list has one writer for the night.** The dispatcher moved the
 group's rows to *In progress* when it forked the worktree, and it re-reads the
 file before every write; an executor writing beside it, `/branch` step 5's
