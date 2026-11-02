@@ -576,10 +576,12 @@ journey's figures leave out, and the wait for a first byte, which they hold.
 From Prometheus, read through Grafana as the SLO run reads it and evaluated
 at the step's end: the gateway's own p95 from `http.server.request.duration`,
 the slowest request types' `request.duration`, the oldest outbox row per
-service, the deepest queues, the consumed queues with the lowest consumer
-utilisation, the `_error` queues, `messaging.delivery.lag` overall and for
-the BFF's consumers (the BFF's read model is their projection, so that lag is
-its staleness),
+service, the deepest queues, each work queue's depth at the hold's middle and
+end beside its acknowledgements a second and its mean count in flight, which
+split a growing queue into arrival and handling, the consumed queues with the
+lowest consumer utilisation, the `_error` queues, `messaging.delivery.lag`
+overall and for the BFF's consumers (the BFF's read model is their
+projection, so that lag is its staleness),
 `orders.fulfilment.duration` and the share of orders confirmed, both overdue
 gauges, and, from the runtime meter every service exports, the work waiting
 for a thread-pool thread and the time collections paused it. From
