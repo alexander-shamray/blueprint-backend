@@ -1,4 +1,4 @@
-"""The --dispatched token changes only what the dispatch spec's section 6.2 lists.
+"""The --dispatched token changes only section 6.2's list and the consequences docs/commands/ship.md spells out.
 
 Nobody is awake to read what an executor did with it, so each case reads the
 command text the executor is given, and the file it writes is held to the
