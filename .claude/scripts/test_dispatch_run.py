@@ -444,6 +444,22 @@ class LaunchTests(InRoot):
         self.assertEqual(f"S1: crashed-before-launch - run refused before launch: {stale}",
                          run_cli(["result", RUN, "S1"]).splitlines()[0])
 
+    def test_a_second_launch_of_a_running_group_is_refused_and_keeps_its_executors_files(self):
+        # Removed, the live pid and the unread record would leave resume to relaunch over the executor.
+        self.write_tasks(FIXTURE)
+        self.move("S1")
+        listed = f"worktree {(self.root / WORKTREE).as_posix()}\nHEAD {HEAD}\nbranch refs/heads/{BRANCH}\n\n"
+        argv = ["launch", RUN, "S1", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE]
+        with mock.patch.object(dr, "git", lambda root, *args: listed):
+            self.assertEqual("", run_cli(argv))
+            (state_dir() / "S1.pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
+            (state_dir() / "S1.session.json").write_text("{}\n", encoding="utf-8")
+            out = run_cli(argv)
+        self.assertIn("refused: S1 is running, not moved and unlaunched", out)
+        for name in ("S1.pid", "S1.session.json"):
+            self.assertTrue((state_dir() / name).is_file(), f"a second launch removed the executor's {name}")
+        self.assertEqual("running", group_state(RUN, "S1")["status"])
+
     def test_run_passes_the_prompt_on_stdin_and_no_skip_permissions_flag(self):
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
         stale = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
