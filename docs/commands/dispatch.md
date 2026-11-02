@@ -207,15 +207,16 @@ alone cannot tell that from an executor still running, so it refuses, and
 the group would again hold its slot all night. `run` names both refusals
 on its exit line, which the runbook hands to `result` as `--refused` after
 every exit 2; `result` reads it only when it finds no marker from this
-launch and no session record it has not already read. `run` removes an earlier pid file before its
-launch checks: with none, `result` records `crashed-before-launch`; with
-one whose process has ended, `crash-hand-back`, since the executor ran and
-may have merged and only its worktree says so; with one still alive, it
-refuses. A refusal before that removal, or of it, leaves the earlier pid
-file, which reads as an executor that ran: a hand-back, the cautious side.
-Recording either writes `state.json` in the same directory, so a directory
-refusing every write still holds the slot; what this separates is a marker
-that only another process holds.
+launch and no session record it has not already read. `run` removes an
+earlier pid file before its launch checks: with none, `result` records
+`crashed-before-launch`; with one whose process has ended,
+`crash-hand-back`, since the executor ran and may have merged and only its
+worktree says so; with one still alive, it refuses. A refusal before that
+removal, or of it, leaves the earlier pid file, which reads as an executor
+that ran: a hand-back, the cautious side. Recording either writes
+`state.json` in the same directory, so a directory refusing every write
+still holds the slot; what this separates is a marker that only another
+process holds.
 
 ## When the night ends
 
