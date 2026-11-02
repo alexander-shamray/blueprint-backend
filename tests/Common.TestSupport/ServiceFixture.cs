@@ -404,6 +404,27 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
                 AND i.name = 'IX_Outbox_Unprocessed'
             """);
 
+    /// <summary>Empties this database's plan cache, so the next read compiles against the table as it is.</summary>
+    public Task ClearPlanCacheAsync() =>
+        ExecuteAsync("ALTER DATABASE SCOPED CONFIGURATION CLEAR PROCEDURE_CACHE;");
+
+    /// <summary>Every index read by the cached plans of statements matching a pattern, sorted (ADR-194).</summary>
+    public Task<string> CachedPlanIndexesAsync(string statementLike) =>
+        ScalarAsync<string>(
+            """
+            SELECT Value = ISNULL(STRING_AGG(read_index.name, ',') WITHIN GROUP (ORDER BY read_index.name), '')
+            FROM (
+                SELECT DISTINCT name = plan_object.n.value('@Index', 'nvarchar(128)')
+                FROM sys.dm_exec_query_stats s
+                CROSS APPLY sys.dm_exec_sql_text(s.sql_handle) t
+                CROSS APPLY sys.dm_exec_query_plan(s.plan_handle) p
+                CROSS APPLY p.query_plan.nodes('//*:RelOp/*/*:Object') plan_object(n)
+                WHERE t.text LIKE {0}
+                    AND t.text NOT LIKE '%dm_exec_query_stats%'
+            ) read_index
+            """,
+            statementLike);
+
     /// <summary>Every index of the migrated inbox by name, read from the catalogue (ADR-186).</summary>
     public Task<string> InboxIndexesAsync() =>
         ScalarAsync<string>(
