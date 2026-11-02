@@ -1514,5 +1514,6 @@ not tools, so the agent's `Read`, `Grep` and `Glob` grant does not bound them
 project's SessionStart and UserPromptSubmit hooks and its MCP server all ran
 without the two flags, and none ran with them. The residual is what the tree
 still supplies as text, which reaches the agent as prompt and is the sweeps'
-residual for the same tool set; the operator's own user settings and plugins
-run there as in any session.
+residual for the same tool set. The operator's own user settings, their
+hooks included, still load there; `--strict-mcp-config` with no
+`--mcp-config` starts no MCP server, the operator's own included.
