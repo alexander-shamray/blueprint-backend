@@ -194,6 +194,16 @@ class Agents(unittest.TestCase):
         self.assertEqual(argv[argv.index("--agent") + 1], "bug-auditor")
         self.assertIn("bug-auditor", json.loads(argv[argv.index("--agents") + 1]))
 
+    def test_the_audited_tree_contributes_no_settings_hooks_or_mcp_servers(self):
+        done = mock.Mock(stdout='{"findings": []}', returncode=0)
+        with mock.patch.object(qs, "run", return_value=done) as call:
+            qs.ask("claude", "branch-reviewer", "p", "tree", add_dirs=["slices"])
+        argv = list(call.call_args.args)
+        self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
+        self.assertIn("--strict-mcp-config", argv)
+        self.assertNotIn("--mcp-config", argv)
+        self.assertEqual(argv.count("--setting-sources"), 1)
+
     def test_a_head_the_set_does_not_record_for_the_pr_is_refused_by_name(self):
         entries = [{"pr": 5, "head": "h1", "base": "b"}]
         with self.assertRaisesRegex(SystemExit, "no entry for PR 5 at h9"):

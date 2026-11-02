@@ -48,7 +48,8 @@ cuts a full first round with `sweep-slices.sh` over a throwaway worktree at the
 commit and runs one auditor per slice. **Both run the checkout's own agent
 definition and slicer on the older tree**, because a commit older than the agent
 has no file for it and the question is whether today's reviewer would have found
-what was found then.
+what was found then. Neither loads the older tree's settings, hooks or MCP
+servers (`docs/harness-boundaries.md`, *Headless dispatched sessions*).
 
 An entry counts as **found** when a reported finding names its file, and for a
 review entry also a line within ten of it. That is a proxy, not a judgement that

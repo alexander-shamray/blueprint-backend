@@ -25,7 +25,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
 | Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, their slice lists and ref, and the one sweep that executes. |
-| Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop. |
+| Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop; the quality sets' runs, which load only user settings. |
 
 ## Purpose and provenance of this file
 
@@ -1502,3 +1502,17 @@ crash, never a success.
   `state.json`. No step edits it, so an honest mistake does not reach it,
   and a session setting out to defeat the helper's checks is what *The
   guards' threat model* puts outside what the guards defend.
+
+**The quality sets' scoring runs are headless too, and read only the user's
+settings.** `run review` and `run sweep` in
+`tools/quality-sets/quality_sets.py` start `claude -p` in a detached worktree
+of a recorded or a named commit, whose author need not be the operator. That
+tree's `.claude/settings.json` hooks and `.mcp.json` servers are commands,
+not tools, so the agent's `Read`, `Grep` and `Glob` grant does not bound them
+(#1680). The script's `ISOLATION` passes `--setting-sources user` and
+`--strict-mcp-config`, so neither starts: probed on Claude Code 2.1.316, a
+project's SessionStart and UserPromptSubmit hooks and its MCP server all ran
+without the two flags, and none ran with them. The residual is what the tree
+still supplies as text, which reaches the agent as prompt and is the sweeps'
+residual for the same tool set; the operator's own user settings and plugins
+run there as in any session.
