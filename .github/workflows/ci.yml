@@ -903,7 +903,7 @@ jobs:
       # here: the TRX, blame's sequence file and dump after a hang, and the first
       # attempt's log. Not on cancel, which the concurrency group does to every
       # superseded push; at the shard's usual pace a hang starts inside ten
-      # minutes, retry included, so blame fails it before the 30-minute timeout.
+      # minutes, retry included, so blame fails it before the job's timeout.
       - name: Keep a failed shard's results
         if: failure()
         uses: actions/upload-artifact@v7
