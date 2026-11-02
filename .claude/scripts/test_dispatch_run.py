@@ -785,6 +785,20 @@ class ResultCommandTests(InRoot):
                          run_cli(["result", RUN, "S1", "--refused", line]).splitlines()[0])
         self.assertEqual("crash-hand-back", group_state(RUN, "S1")["status"])
 
+    def test_a_refused_relaunchs_marker_beside_the_read_record_sends_the_group_back(self):
+        # Removing the earlier session's files failed, so run wrote its marker beside the record already read.
+        earlier = (NOW - timedelta(hours=1)).isoformat()
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE, crashes=1, absorbed=earlier)
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 1, "started": earlier, "ended": earlier, "stdout": "boom", "stderr": ""}), encoding="utf-8")
+        (state_dir() / "S1.refused.json").write_text(json.dumps(
+            {"refused": "could not remove the stale S1.json", "at": NOW.isoformat()}), encoding="utf-8")
+        self.assertEqual(["result S1: its run launched nothing and was not read"],
+                         run_cli(["resume", RUN]).splitlines())
+        self.assertEqual("S1: crashed-before-launch - run refused before launch: could not remove the stale S1.json",
+                         run_cli(["result", RUN, "S1"]).splitlines()[0])
+        self.assertEqual("crashed-before-launch", group_state(RUN, "S1")["status"])
+
     def test_a_refusal_line_beside_a_marker_or_a_session_record_is_not_read(self):
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
         (state_dir() / "S1.refused.json").write_text(
