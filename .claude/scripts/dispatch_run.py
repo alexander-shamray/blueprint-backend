@@ -42,10 +42,8 @@ PRE_LAUNCH = "crashed-before-launch"
 # Each ends in `tasks back`, its worktree left for the owner, and the report's Needs a human.
 HANDED = ("handed-back", "stopped", "crash-hand-back", PRE_LAUNCH)
 WINDOW = timedelta(hours=5, minutes=10)
-# No limit was hit in the spike (docs/superpowers/plans/2026-11-01-dispatch-spike.md, Rate-limit text), so the
-# envelope's structured fields are read first and these phrases only on a session that failed; they await the first
-# real limit.
-LIMIT_PHRASES = ("usage limit", "rate limit", "limit reached")
+# A limit is read from fields the CLI writes, never from text the executor writes: a limit with a reset is a window
+# or a week, which the crash cap never counts, so a forged one would relaunch a session all night.
 RATE_LIMIT_KIND = re.compile(r"rate_limit(?:_error|_exceeded)?", re.IGNORECASE)
 ISO_STAMP = r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"
 # A time counts as the reset only right after a reset phrase; any other date in the text is about something else.
@@ -508,13 +506,17 @@ def _envelope(stdout):
     return value if isinstance(value, dict) else None
 
 
+# The envelope's fields the executor writes: its closing text, and each refused call's input.
+STEERED = ("result", "permission_denials")
+
+
 def _fields(value, depth=0):
-    """(key, value) for every field of an envelope at any depth, but its free-text result, which anyone steers."""
+    """(key, value) for every field of an envelope at any depth, but those the executor writes."""
     if depth > 20:
         return
     if isinstance(value, dict):
         for key, item in value.items():
-            if depth == 0 and key == "result":
+            if depth == 0 and key in STEERED:
                 continue
             yield key, item
             yield from _fields(item, depth + 1)
@@ -590,18 +592,17 @@ def session_end(raw):
     listed = envelope.get("permission_denials") if envelope else None
     denials = [one_line(d.get("tool_name") or "unknown" if isinstance(d, dict) else d, 80)
                for d in (listed if isinstance(listed, list) else [])]
-    text = envelope["result"] if envelope and isinstance(envelope.get("result"), str) else stdout
     limited, resets = False, None
     if is_error:
+        # stdout without an envelope is the executor's text too, so only stderr, which the CLI writes, is read as text.
         fields = list(_fields(envelope)) if envelope else []
         limited = ((envelope or {}).get("api_error_status") == 429
                    or any(isinstance(v, str) and RATE_LIMIT_KIND.fullmatch(v) for _, v in fields)
-                   or re.search(rf"\b{RATE_LIMIT_KIND.pattern}\b", stderr, re.IGNORECASE) is not None
-                   or any(phrase in f"{text}\n{stderr}".casefold() for phrase in LIMIT_PHRASES))
+                   or re.search(rf"\b{RATE_LIMIT_KIND.pattern}\b", stderr, re.IGNORECASE) is not None)
         if limited:
             resets = next((s for s in (_parse_stamp(v) for k, v in fields if k in RESET_KEYS) if s), None)
             ended = _parse_stamp(raw.get("ended")) or now()
-            resets = resets or _text_reset(f"{text}\n{stderr}", ended)
+            resets = resets or _text_reset(stderr, ended)
     session = envelope.get("session_id") if envelope else None
     session = session if isinstance(session, str) and SESSION_ID.fullmatch(session) else None
     return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session)
