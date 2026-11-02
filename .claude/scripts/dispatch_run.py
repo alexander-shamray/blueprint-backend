@@ -1270,6 +1270,9 @@ def add_commands(sub):
     w.add_argument("--tasks", required=True)
     w.add_argument("--today")
     sub.add_parser("resume").add_argument("run")
+    f = sub.add_parser("filed")
+    f.add_argument("run")
+    f.add_argument("issue")
     sub.add_parser("usage").add_argument("run")
     r = sub.add_parser("report")
     r.add_argument("run")
@@ -1303,6 +1306,12 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
         print(wait(root, args.run, args.group))
     elif args.command == "wake":
         print("\n".join(wake(root, args.run, args.tasks, today, bodies_from, open_from, branch_from, weekly_from)))
+    elif args.command == "filed":
+        # The interview's filings and closes reach no `tasks place`, so Filed overnight learns of them here.
+        issue = int(args.issue) if args.issue.isdecimal() and args.issue.isascii() else 0
+        if not _number(issue):
+            raise Refusal(f"{args.issue!r} is not an issue number")
+        _note_placed(run_dir(root, args.run), issue)
     elif args.command == "usage":
         print(usage_line(*take_reading(run_dir(root, args.run), weekly_from)))
     elif args.command == "report":
