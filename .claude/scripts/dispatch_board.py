@@ -6,6 +6,7 @@ are dispatch_run.py's, reached from here so one grant covers them all. Exit 2 is
 
 import argparse
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -43,6 +44,8 @@ SEPARATOR = re.compile(r"\|[\s:|-]+\|")
 OWED = "owed (not filed)"
 BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/()-]*")
 CHILD_TIMEOUT = 120
+# The checkout this file is in, whose top-level directories say which backticked slash tokens are paths.
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def __getattr__(name):
@@ -228,13 +231,30 @@ def _normalise(token):
     return token.rstrip("/")
 
 
+@functools.cache
+def _top_level():
+    # Read from the checkout, not listed here, so a directory added later counts; None when it cannot be read.
+    try:
+        return frozenset(p.name.lower() for p in ROOT.iterdir() if p.is_dir())
+    except OSError:
+        return None
+
+
+def _slash_path(path):
+    # A dotted segment or a top-level directory makes a slash token a path, and `and/or` not; unreadable, all count.
+    if "/" not in path or path.startswith("/"):
+        return False
+    top = _top_level()
+    return top is None or "." in path or path.split("/", 1)[0] in top
+
+
 def extract_paths(text):
     found = set()
     for quoted in re.findall(r"`([^`]+)`", text):
         for piece in quoted.split():
             path = _normalise(piece)
             # A slash command or a dotted identifier is not a file: it would make an empty claim look known.
-            if KNOWN_FILE.search(path) or ("/" in path and not path.startswith("/")):
+            if KNOWN_FILE.search(path) or _slash_path(path):
                 found.add(path)
     found.update(_normalise(m) for m in BARE_PATH.findall(text))
     found.discard("")
@@ -629,9 +649,17 @@ def _tasks_command(args, today):
     text = update(_read(args.tasks))
     try:
         _write(args.tasks, text)
-    except Refusal:
+    except Refusal as refused:
+        failed = []
         for step in undo:
-            step()
+            try:
+                step()
+            except (OSError, Refusal) as error:
+                failed.append(str(error))
+        if failed:
+            # The record then names a move the list never got, so the refusal says so beside its own cause.
+            raise Refusal(f"{refused}; and the move's record in state.json was not undone: {'; '.join(failed)}") \
+                from None
         raise
     for step in after:
         step()

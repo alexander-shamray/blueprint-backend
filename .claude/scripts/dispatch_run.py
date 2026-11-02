@@ -5,7 +5,6 @@ covers both halves; the task list's half is imported from it. Only the dispatche
 """
 
 import argparse
-import contextlib
 import json
 import os
 import re
@@ -72,8 +71,8 @@ def _record_move(directory, gid, moved):
     save_state(directory, state)
 
     def undo():
-        with contextlib.suppress(OSError, Refusal):
-            _write(path, before)
+        # A failure is the caller's to report beside the list's, never swallowed here.
+        _write(path, before)
     return undo
 
 
@@ -127,6 +126,9 @@ def save_state(directory, state):
 
 
 def _start_values(pairs, lang):
+    # A bool is an int to Python, so True would otherwise start a run of one pair.
+    if isinstance(pairs, bool) or not isinstance(pairs, int):
+        raise Refusal(f"--pairs {pairs!r} is not a whole number")
     if not 1 <= pairs <= 4:
         raise Refusal(f"--pairs {pairs} is outside 1 to 4")
     if not LANG.fullmatch(lang):
@@ -774,8 +776,12 @@ def absorb(root, run, gid):
     unreviewed = _unreviewed(entry, result, crashes)
     if unreviewed:
         reason = UNREVIEWED
+    # Summed over every session the group ran this move, so a relaunched group is not reported as its last session.
+    spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
+    usage = {key: (spent[key] if _count(spent.get(key)) else 0) + end.usage.get(key, 0) for key in TOKEN_KEYS
+             if key in spent or key in end.usage}
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
-                 usage=end.usage, denials=end.denials, reason=reason, unreviewed=unreviewed)
+                 usage=usage, denials=end.denials, reason=reason, unreviewed=unreviewed)
     if decision in ("relaunch", "crash-hand-back"):
         entry["crashes"] = crashes + 1
     if end.resets_at is not None:
@@ -920,7 +926,8 @@ def usage_line(reading, failure):
     if failure is not None:
         return f"weekly: reading failed: {failure}"
     if reading is None:
-        return "weekly: not read"
+        # read_weekly returns None only without a source, which the spike found none of (WEEKLY_SOURCE's comment).
+        return "weekly: not read, no source is set"
     return f"weekly: {reading.percent_left:g}% left, resets {reading.resets_at.isoformat()}"
 
 
@@ -935,10 +942,13 @@ def take_reading(directory, source):
     usage = state.setdefault("usage", {})
     stamp = now().isoformat()
     if failure is not None:
-        usage.setdefault("failures", []).append({"at": stamp, "why": failure})
-    else:
-        point = {"at": stamp, "percent_left": reading.percent_left if reading else None,
-                 "resets_at": reading.resets_at.isoformat() if reading else None}
+        # A count and the latest reason, so a source broken all night does not grow state.json at every wake.
+        earlier = usage.get("failed") if isinstance(usage.get("failed"), dict) else {}
+        count = earlier.get("count") if _count(earlier.get("count")) else 0
+        usage["failed"] = {"count": count + 1, "at": stamp, "why": failure}
+    elif reading is not None:
+        # Only a real reading is a point, so a first wake with no source leaves the start for a later reading.
+        point = {"at": stamp, "percent_left": reading.percent_left, "resets_at": reading.resets_at.isoformat()}
         usage["end" if "start" in usage else "start"] = point
     save_state(directory, state)
     return reading, failure
@@ -967,10 +977,9 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
     out.append(f"free slots: {slots}")
     if stop:
         return out + ["end: stop-file"]
-    # A failed reading is named and the next wake tries again; the executor's own week limit stays below.
+    # Every wake says what the week read, failed or not; the next tries again, and the executor's limit stays below.
     reading, failure = take_reading(directory, weekly_source)
-    if failure is not None:
-        out.append(usage_line(None, failure))
+    out.append(usage_line(reading, failure))
     if week_ends_night(reading):
         return out + ["end: week"]
     if any(entry.get("status") == "week" and not _week_passed(entry, current) for entry in entries.values()):
@@ -1080,9 +1089,10 @@ def _weekly_lines(usage):
             out.append(f"weekly at the {when}: {point['percent_left']:g}% left, resets {point.get('resets_at')}")
     # The owner's decision: with no reading the limit is ignored, and the report says it was not read.
     out = out or ["weekly: not read"]
-    for failure in usage.get("failures") or []:
-        if isinstance(failure, dict):
-            out.append(f"weekly: reading failed at {failure.get('at')}: {one_line(failure.get('why'), 200)}")
+    failed = usage.get("failed")
+    if isinstance(failed, dict) and _count(failed.get("count")) and failed["count"]:
+        out.append(f"weekly: reading failed {failed['count']} times, the last at {failed.get('at')}: "
+                   f"{one_line(failed.get('why'), 200)}")
     return out
 
 

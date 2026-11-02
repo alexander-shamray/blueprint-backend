@@ -212,6 +212,14 @@ class PathTests(unittest.TestCase):
         claim = db.group_claim(group_of(line(task="Run `/ship` on `OrderLine.Total`")), {1700: "no files"})
         self.assertTrue(claim.unknown)
 
+    def test_a_backticked_slash_token_is_a_path_only_with_a_dot_or_a_top_level_directory(self):
+        self.assertEqual(frozenset(), db.extract_paths("`and/or` `read/write` `yes/no`"))
+        found = db.extract_paths("`tools/quality-sets/` `.github/comment-gate` `v1.2/notes`")
+        self.assertEqual({"tools/quality-sets", ".github/comment-gate", "v1.2/notes"}, found)
+        with mock.patch.object(db, "_top_level", lambda: None):
+            # A checkout whose directories cannot be listed over-claims, the safe direction.
+            self.assertEqual({"and/or"}, db.extract_paths("`and/or`"))
+
     def test_paths_are_normalised_case_slashes_and_dot_prefix(self):
         found = db.extract_paths(r"`.\Src\Gateway\Program.cs` and `./Docs/A.MD`")
         self.assertEqual({"src/gateway/program.cs", "docs/a.md"}, found)
@@ -491,6 +499,25 @@ class WriteTests(unittest.TestCase):
             self.assertEqual(2, self.cli("move", "S1")[0])
         self.assertEqual(before, (self.run_dir / "state.json").read_text(encoding="utf-8"))
         self.assertEqual(FIXTURE, self.read())
+
+    def test_an_undo_that_fails_is_named_beside_the_refused_list_write(self):
+        self.start()
+        self.write(FIXTURE)
+        real_write, writes = dr._write, []
+
+        def refuse_the_list(path, text):
+            raise db.Refusal("could not write todo.md: held open")
+
+        def refuse_the_undo(path, text):
+            writes.append(path)
+            if len(writes) > 1:
+                raise db.Refusal("could not write state.json: locked")
+            real_write(path, text)
+        with mock.patch.object(db, "_write", refuse_the_list), mock.patch.object(dr, "_write", refuse_the_undo):
+            code, err = self.cli("move", "S1")
+        self.assertEqual(2, code)
+        self.assertIn("refused: could not write todo.md: held open; and the move's record in state.json was not "
+                      "undone: could not write state.json: locked", err)
 
     def test_a_move_records_the_rows_in_the_runs_state_and_back_reads_them_there(self):
         self.start()
