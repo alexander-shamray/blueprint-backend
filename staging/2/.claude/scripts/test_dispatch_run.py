@@ -757,7 +757,8 @@ class ResultCommandTests(InRoot):
         self.assertEqual(["back S1: crashed-before-launch"], run_cli(["resume", RUN]).splitlines())
 
     def test_a_refusal_line_after_an_executor_started_waits_for_it_or_hands_it_back(self):
-        # A pid file is this run's, so the executor started: it may have merged, and only a human can say.
+        # result reads a pid file as an executor that ran, whichever run left it: it may have merged, and only a
+        # human can say.
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
         pid = state_dir() / "S1.pid"
         line = "refused: could not write S1.session.json"
