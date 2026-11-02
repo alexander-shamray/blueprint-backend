@@ -300,6 +300,9 @@ def launch(root, run, gid, tasks_path, branch, worktree):
     listed = _worktree_branches(git(root, "worktree", "list", "--porcelain"))
     if listed.get(_same_path(os.path.join(root, worktree))) != f"refs/heads/{branch}":
         raise Refusal(f"{worktree} is not a worktree on {branch}")
+    # Only a fresh move leaves no status; a launch over a later one would remove its executor's pid and record.
+    if entry.get("status") is not None:
+        raise Refusal(f"{gid} is {entry['status']}, not moved and unlaunched")
     # A group sent back and launched again starts afresh, as its move did: its state no longer names the earlier
     # launch's session as read, so that launch's marker, result copy, record and pid go now, or this launch is
     # refused, rather than a later run meeting them beside its own and _refused holding the slot all night.
