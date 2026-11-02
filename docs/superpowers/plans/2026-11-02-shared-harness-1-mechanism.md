@@ -312,11 +312,13 @@ runbooks `validate-blueprint`, `new-adr`, `new-chapter`, `check-links`,
 - [ ] **Step 4:** Copy `harness_sync/render.py` to `payload/.harness/render.py`;
   `test_vendored_render_identical` asserts the two files' bytes match.
 - [ ] **Step 5:** Add CI job `payload-suites`: `git worktree add` a scratch
-  copy of the pull request head, `py -m harness_sync apply` the payload into
-  it with `targets/blueprint-backend.config.json` as its config, then run
-  `python -m unittest discover -s .claude/scripts` and each imported gate's
-  suite from inside it. Runs on `ubuntu-latest` and `windows-latest`, as
-  backend's matrix does for the guards.
+  copy of the pull request head, `python -m harness_sync apply` the payload
+  into it with `targets/blueprint-backend.config.json` as its config, then
+  run `python -m unittest discover -s .claude/scripts` and each imported
+  gate's suite from inside it, on `ubuntu-latest`. A second leg mirrors
+  backend's `edit-target-guard` job: `windows-latest` and `macos-latest`,
+  running only `test_edit_target_guard.py` and `test_refresh_index.py`,
+  since the whole directory needs `bash`, `grep`, `git` and `jq` on PATH.
 - [ ] **Step 6:** Run `payload-suites` locally the same way; every suite
   backend's CI ran green at the pin is green here (691 in `review-helpers`
   at the time of writing, less what `IMPORT.md` left local).
