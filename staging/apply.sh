@@ -134,7 +134,7 @@ put_back() {
 # left it, so no step forgot one. A listing that failed or found nothing would pass every file it did not name.
 all_landed() {
   local path listed missing=0 n last
-  listed=$(git -C "$1" ls-files -- 'staging/*/.claude' | tr -d '\r') ||
+  listed=$(git -C "$1" ls-files -- 'staging/*/.claude/*' | tr -d '\r') ||
     { echo "could not list staging/" >&2; return 1; }
   [ -n "$listed" ] || { echo "git lists nothing under $1/staging/*/.claude" >&2; return 1; }
   while IFS= read -r path; do
