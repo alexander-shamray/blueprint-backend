@@ -156,11 +156,14 @@ the executor its shape.
 
 A relaunch onto a PR that already merged returns `merged` with no rounds
 and no review end, because the review ran in the session before it; the
-dispatcher verifies it like any other merge. `result` believes that only of
-a relaunch, a group whose earlier session this launch has already read:
-from a first session a merge with no round is one nobody reviewed, so it
-still verifies and lands, but the report lists it under *Needs a human*,
-never *Merged*.
+dispatcher verifies it like any other merge. `result` believes that of a
+relaunch, a group whose earlier session this launch has already read, and
+of a session whose own transcript, the one its envelope names, shows a
+`branch-reviewer` spawned and not refused: a session that re-enters `/ship`
+after a compaction reports only the rounds it ran since. Otherwise a merge
+with no round is one nobody reviewed, so it still verifies and lands, but
+the report lists it under *Needs a human*, never *Merged*; one the
+transcript cleared is listed under *Merged* as reviewed by the transcript.
 
 ## Waking
 
