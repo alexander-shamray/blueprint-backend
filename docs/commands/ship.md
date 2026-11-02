@@ -1018,6 +1018,21 @@ omit how the review ended. A merged PR whose workspace still holds work is a
 hand-back naming that work, since step 0 keeps such a workspace rather than
 adopt it; a closed one is a stop, `closed unmerged`.
 
+**A step's status is not a reply, because a headless turn ends the
+session.** A `claude -p` session exits when its turn does, and nothing
+answers a message it sends between steps. The owner's standing rules that
+close each step with a status table and the apply line are written for a
+reply the owner reads before the next step, and every session in this
+repository loads them, so an executor that followed them ended on its first
+step report with no result written, and the dispatcher read that as a
+hand-back. So the runbook says the session keeps its turn until the result
+is written, a step's status carries neither, and the next step follows in
+the same turn; a memory file is the owner's and is not the runbook, so the
+rule cannot rest on one. The same absence shapes the shell: a command the
+grants do not match is refused, not asked about, so each read is one
+command its grants name, never a compound that joins an ungranted one to
+the rest.
+
 **A result on every end, because a missing result reads as a crash.** The
 dispatcher reads the file, never the reply: a reply is prose, in whatever
 language the session chose, and the file is checked as untrusted data
