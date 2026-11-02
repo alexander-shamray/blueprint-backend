@@ -876,9 +876,13 @@ jobs:
         # first attempt's results go, or the stage gate would count them twice.
         run: |
           set -o pipefail
+          # A silent testhost would otherwise run to the job's timeout and name
+          # nothing. Ten minutes without a test starting or ending, far above any
+          # passing test, has blame dump and kill it, and the log name the test.
           stage() {
             dotnet test Platform.slnx --no-build -c Release --filter "$FILTER" \
               --collect:"Code Coverage" --settings coverage.runsettings \
+              --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini \
               --logger trx --results-directory ./TestResults/integration
           }
           if stage 2>&1 | tee first-attempt.log; then exit 0; fi
@@ -894,6 +898,19 @@ jobs:
           name: stages-integration-${{ matrix.shard }}
           path: TestResults/integration
           if-no-files-found: error
+
+      # The step above runs on success only, so a red or cancelled shard keeps
+      # its results here instead: the TRX, blame's sequence file and dump after
+      # a hang, and the first attempt's log. Not the stage gate's to read.
+      - name: Keep a failed shard's results
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-integration-${{ matrix.shard }}
+          path: |
+            TestResults/integration
+            first-attempt.log
+          if-no-files-found: ignore
 
       # A test that passed on something rare writes it here (Sightings.cs). Kept
       # and posted on the issue that tracks it, so a recurrence is read without
