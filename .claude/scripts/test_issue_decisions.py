@@ -126,6 +126,17 @@ class Shapes(unittest.TestCase):
                     ID.entry(date(2026, 11, 1), question, answer)
         self.assertTrue(ID.ENTRY_RE.fullmatch(ID.entry(date(2026, 11, 1), "x" * 500, "y" * 500)))
 
+    def test_a_question_opening_with_the_answer_marker_is_refused(self):
+        with self.assertRaisesRegex(ID.Refusal, "the question holds 'A: '"):
+            ID.entry(date(2026, 11, 1), "A: is this the answer?", "no")
+        self.assertTrue(ID.entry(date(2026, 11, 1), "AB: a label?", "yes"))
+
+    def test_an_empty_body_gets_the_section_with_no_blank_lines_before_it(self):
+        line = "- 2026-11-01: Q: q A: a"
+        for body in ("", "\n", "  \r\n"):
+            with self.subTest(body=body):
+                self.assertEqual("## Owner decisions\n\n" + line + "\n", ID.append_decision(body, line))
+
     def test_the_section_is_appended_when_absent(self):
         line = "- 2026-11-01: Q: q A: a"
         self.assertEqual(
@@ -356,6 +367,42 @@ class Cli(StubGh):
         code, err = self.run_main(["unblock", "5", "question"])
         self.assertEqual(code, 3)
         self.assertIn("boom", err)
+
+    def test_a_gh_that_cannot_start_exits_3(self):
+        with mock.patch.object(ID.subprocess, "run", side_effect=OSError("exec format error")):
+            code, err = self.run_main(["unblock", "5", "question"])
+        self.assertEqual(code, 3)
+        self.assertIn("gh failed: gh repo view could not start: exec format error", err)
+
+    def test_a_usage_error_exits_2_with_the_refused_prefix(self):
+        for argv in ([], ["record", "5"], ["fly", "5"]):
+            with self.subTest(argv=argv):
+                code, err = self.run_main(argv)
+                self.assertEqual(code, 2)
+                self.assertIn("refused: the command line does not match the usage above", err)
+        self.assertEqual(self.calls(), [])
+
+
+class PathWhichParity(unittest.TestCase):
+    # issue_decisions keeps its own copy so it imports nothing of the dispatcher's; the two must answer alike.
+    def test_both_copies_find_the_same_executable_and_skip_the_same_planted_one(self):
+        import dispatch_board
+        name = "tool.cmd" if os.name == "nt" else "tool"
+        with tempfile.TemporaryDirectory() as cwd, tempfile.TemporaryDirectory() as other:
+            for folder in (cwd, other):
+                (Path(folder) / name).write_text("x", encoding="ascii")
+                (Path(folder) / name).chmod(0o755)
+            here = os.getcwd()
+            os.chdir(cwd)
+            # Back out before the directories go: Windows will not remove the working directory.
+            try:
+                for path in ("", os.pathsep.join(["", ".", cwd]), os.pathsep.join([cwd, other]), other):
+                    with self.subTest(path=path), mock.patch.dict(os.environ, {"PATH": path}):
+                        self.assertEqual(dispatch_board.path_which("tool"), ID.path_which("tool"))
+                with mock.patch.dict(os.environ, {"PATH": other}):
+                    self.assertIsNotNone(ID.path_which("tool"))
+            finally:
+                os.chdir(here)
 
 
 if __name__ == "__main__":
