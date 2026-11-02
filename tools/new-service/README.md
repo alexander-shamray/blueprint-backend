@@ -95,7 +95,8 @@ creates the schema and the `AddOutbox`, `AddInbox`,
 `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
 `IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
 `AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts`,
-`KeyOutboxOnRandomId` and `DropInboxHandledAtIndex` ones beside it, §9.4's
+`KeyOutboxOnRandomId`, `DropInboxHandledAtIndex` and
+`IncludeProcessedAtInClaimIndex` ones beside it, §9.4's
 outbox with its dispatcher and allow-list mapper, §9.5's inbox filter, §8.5's
 durable idempotency marker and the retention purge over all three of their
 tables, the §9 bus
@@ -206,7 +207,7 @@ holds its premise. Its broker account writes its own endpoints and the fault
 exchanges and no contract. **`Notifications` is refused without it.** The mode
 is four tables in `scaffold/`: `PURE_CONSUMER_OMITTED`, `PURE_CONSUMER_PATCHES`,
 `PURE_CONSUMER_SPANS` — the third a cut from one anchor through another, each
-bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the five outbox
+bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the six outbox
 migrations it skips, with the outbox entity cut from the designers and
 snapshot.
 

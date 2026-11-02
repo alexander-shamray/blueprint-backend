@@ -438,6 +438,10 @@ RANDOM_KEY_MIGRATION = re.compile(r"^\d{14}_KeyOutboxOnRandomId(\.Designer)?\.cs
 # inbox does: the copied configuration maps no such index, so a service
 # without it starts with a model its migrations do not match.
 INBOX_INDEX_DROP_MIGRATION = re.compile(r"^\d{14}_DropInboxHandledAtIndex(\.Designer)?\.cs$")
+# The claim index with ProcessedAt included (ADR-194). It travels because the
+# copied configuration includes the column, so a service without it starts
+# with a model its migrations do not match.
+CLAIM_INDEX_INCLUDE_MIGRATION = re.compile(r"^\d{14}_IncludeProcessedAtInClaimIndex(\.Designer)?\.cs$")
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
 
 # The template migrations that build §9.4's outbox, which a pure consumer does
@@ -448,6 +452,7 @@ PURE_CONSUMER_MIGRATIONS = (
     TRACE_CONTEXT_MIGRATION,
     SEQUENTIAL_KEY_MIGRATION,
     RANDOM_KEY_MIGRATION,
+    CLAIM_INDEX_INCLUDE_MIGRATION,
 )
 
 # The migrations a scaffolded service starts with, in the order they are
@@ -467,6 +472,7 @@ TEMPLATE_MIGRATIONS = (
     SEQUENTIAL_KEY_MIGRATION,
     RANDOM_KEY_MIGRATION,
     INBOX_INDEX_DROP_MIGRATION,
+    CLAIM_INDEX_INCLUDE_MIGRATION,
 )
 
 # The name each shape above is known by in a diagnostic, in the same order.
@@ -486,6 +492,7 @@ MIGRATION_LABELS = (
     "OptimizeOutboxKeyForSequentialInserts",
     "KeyOutboxOnRandomId",
     "DropInboxHandledAtIndex",
+    "IncludeProcessedAtInClaimIndex",
 )
 
 # A service key in a Compose file, at the model's own indent, and the marker
@@ -863,6 +870,7 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 "_OptimizeOutboxKeyForSequentialInserts.Designer.cs",
                 "_KeyOutboxOnRandomId.Designer.cs",
                 "_DropInboxHandledAtIndex.Designer.cs",
+                "_IncludeProcessedAtInClaimIndex.Designer.cs",
             )):
             text = without_slice_entity(text)
             if names.pure_consumer:
