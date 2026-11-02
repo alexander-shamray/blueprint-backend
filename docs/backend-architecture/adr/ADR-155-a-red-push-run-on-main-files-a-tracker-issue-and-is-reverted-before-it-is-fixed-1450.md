@@ -46,6 +46,12 @@ list, and its first live run is the first red `main` after it merges. The issue
 is closed by hand on a green push run. Whether dropping the up-to-date rule pays
 is measured over its first two weeks in #1450, not here.
 
+**Amended by
+[ADR-194](ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)**:
+the ruleset requires six status checks, so auto-merge is not kept off
+for want of one; it stays off on ADR-194's own argument. This record is
+otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

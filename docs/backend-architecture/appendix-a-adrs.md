@@ -200,6 +200,7 @@ decision looks wrong.
 | **ADR-191** | [A consumer takes a delivery only through its type's exchange or its endpoint's own (#1684), amending ADR-036](adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md) |
 | **ADR-192** | [Fault reads stop at consumed types (#1702), amending ADR-190](adr/ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md) |
 | **ADR-193** | [The fulfilment saga's stop is this machine's CPU (#1714)](adr/ADR-193-the-fulfilment-sagas-stop-is-this-machines-cpu-1714.md) |
+| **ADR-194** | [Auto-merge stays off on its own argument (#1716), amending ADR-155](adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md) |
 
 ---
 
