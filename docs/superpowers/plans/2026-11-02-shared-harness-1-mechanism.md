@@ -282,8 +282,13 @@ The import takes, from backend `main` at a commit recorded in `IMPORT.md`:
 `docs/harness-boundaries.md`, and the gates `.github/commit-gate/`,
 `.github/closure-gate/`, `.github/comment-gate/`, `.github/issue-form-gate/`,
 `.github/plan-size-gate/`, `.github/output-gate/`, `.github/workflow-lint/`,
-`.github/ISSUE_TEMPLATE/`, with each gate's workflow under
-`.github/workflows/`. Not imported, backend-local by spec §3 and §8:
+`.github/ISSUE_TEMPLATE/`. The gates with a workflow of their own today
+(`commit-gate.yml`, `closure-gate.yml`, `comment-gate.yml`) bring it into
+the payload. The other four — issue-form, plan-size, output and
+workflow-lint — run as steps or a job of backend's `ci.yml`, which stays
+local: their code is payload and their invocation stays in each target's own
+`ci.yml`, where backend's already is, and the plan of each later target
+wires it there. Not imported, backend-local by spec §3 and §8:
 `dotnet-test.sh`, `mutation-run.sh`, `mutation_survivors.py`,
 `test_mutation_survivors.py`, `stryker-config.json`, the commands and
 runbooks `validate-blueprint`, `new-adr`, `new-chapter`, `check-links`,
