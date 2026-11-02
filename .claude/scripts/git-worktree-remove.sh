@@ -83,4 +83,7 @@ PY
     exit 5
   fi
 fi
-git worktree remove "$path"
+# Windows refuses a path past 260 characters unless git asks for long paths,
+# and git unregisters the worktree before it deletes the files, so a deep file
+# would leave the directory behind, no longer a worktree.
+git -c core.longpaths=true worktree remove "$path"
