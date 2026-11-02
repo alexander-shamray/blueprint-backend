@@ -716,6 +716,68 @@ class ResultCommandTests(InRoot):
         self.assertIn("refused: S1 has no session record; its executor has not exited",
                       run_cli(["result", RUN, "S1"]))
 
+    def test_a_run_whose_marker_was_not_written_goes_back_on_its_refusal_line(self):
+        # The run directory refused the marker as well as the launch, so run's exit line is all `result` can read.
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        (state_dir() / "STOP").write_text("", encoding="utf-8")
+        write = dr._write
+
+        def refuse_marker(path, text):
+            if Path(path).name == "S1.refused.json":
+                raise db.Refusal(f"could not write {path}: [Errno 13] Permission denied")
+            write(path, text)
+        err = io.StringIO()
+        with mock.patch.object(dr, "_write", refuse_marker), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+        line = err.getvalue().strip()
+        self.assertTrue(line.startswith("refused: stop file") and "S1.refused.json" in line, line)
+        self.assertFalse((state_dir() / "S1.refused.json").exists())
+        self.assertIn("refused: S1 has no session record; its executor has not exited",
+                      run_cli(["result", RUN, "S1"]))
+        self.assertEqual("running", group_state(RUN, "S1")["status"])
+        lines = run_cli(["result", RUN, "S1", "--refused", line]).splitlines()
+        self.assertTrue(lines[0].startswith("S1: crashed-before-launch - run refused before launch, its marker "
+                                            "unwritten: refused: stop file"), lines)
+        self.assertEqual("crashed-before-launch", group_state(RUN, "S1")["status"])
+        self.assertEqual(["back S1: crashed-before-launch"], run_cli(["resume", RUN]).splitlines())
+
+    def test_a_refusal_line_after_an_executor_started_waits_for_it_or_hands_it_back(self):
+        # result reads a pid file as an executor that ran, whichever run left it: it may have merged, and only a
+        # human can say.
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        pid = state_dir() / "S1.pid"
+        line = "refused: could not write S1.session.json"
+        pid.write_text(f"{os.getpid()}\n", encoding="utf-8")
+        self.assertIn("refused: S1 has no session record and its executor is still running",
+                      run_cli(["result", RUN, "S1", "--refused", line]))
+        self.assertEqual("running", group_state(RUN, "S1")["status"])
+        pid.write_text(f"{finished_pid()}\n", encoding="utf-8")
+        self.assertEqual(f"S1: crash-hand-back - its executor ran and left no session record: {line}",
+                         run_cli(["result", RUN, "S1", "--refused", line]).splitlines()[0])
+        self.assertEqual("crash-hand-back", group_state(RUN, "S1")["status"])
+
+    def test_a_refusal_line_beside_a_marker_or_a_session_record_is_not_read(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        (state_dir() / "S1.refused.json").write_text(
+            json.dumps({"refused": "stop file", "at": NOW.isoformat()}), encoding="utf-8")
+        self.assertIn("S1: crashed-before-launch - run refused before launch: stop file",
+                      run_cli(["result", RUN, "S1", "--refused", "refused: something else"]))
+        self.assertEqual("S1: merged-claimed pr #1690",
+                         self.absorb_refused(MERGED_S1, "refused: something else")[0])
+
+    def absorb_refused(self, data, line):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        (state_dir() / "S1.refused.json").unlink(missing_ok=True)
+        target = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(data), encoding="utf-8")
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 0, "started": NOW.isoformat(), "ended": NOW.isoformat(), "stdout": json.dumps(SUCCESS),
+             "stderr": ""}), encoding="utf-8")
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            return run_cli(["result", RUN, "S1", "--refused", line]).splitlines()
+
     def test_a_merge_with_no_round_is_clean_only_on_a_relaunch_this_launch_read_a_session_of(self):
         # Ruling R15's shape is a relaunch onto a PR an earlier session merged; from a first session nobody
         # reviewed it, so it still verifies and lands but is flagged for the report's Needs a human.
@@ -1066,6 +1128,16 @@ class WakeTests(InRoot):
                         lines)
         self.assertEqual("crashed-before-launch", group_state(RUN, "S1")["status"])
         self.assertEqual(["back S1: crashed-before-launch"], run_cli(["resume", RUN]).splitlines())
+
+    def test_a_relaunch_removes_the_earlier_sessions_pid_before_anything_can_refuse(self):
+        # `result --refused` reads a pid file as an executor this run started, so an earlier one must not survive.
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE, crashes=1,
+               absorbed=(NOW - timedelta(hours=1)).isoformat())
+        (state_dir() / "S1.pid").write_text(f"{finished_pid()}\n", encoding="utf-8")
+        (state_dir() / "STOP").write_text("", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+        self.assertFalse((state_dir() / "S1.pid").exists())
 
     def test_a_run_that_launches_nothing_frees_its_slot_and_its_group_goes_back(self):
         with open("todo.md", "w", encoding="utf-8", newline="") as handle:

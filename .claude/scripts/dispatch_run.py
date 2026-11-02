@@ -345,8 +345,9 @@ def run_session(root, run, gid, description):
 def _launch(root, directory, run, gid, entry, description):
     """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
     # A relaunch's earlier session was read, so it goes before any check can refuse: a refusal left beside its
-    # record would make `result` refuse the pair, and the group would hold its slot all night.
-    _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json")
+    # record would make `result` refuse the pair, and the group would hold its slot all night. Its pid goes too:
+    # `result --refused` reads a pid file as an executor started, and one this removal missed as the cautious side.
+    _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json", directory / f"{gid}.pid")
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
         raise Refusal("stop file: the owner ended the night, so nothing more launches")
@@ -766,8 +767,33 @@ def _unreviewed(entry, result, crashes):
     return not (earlier and (crashes >= 1 or entry.get("status") in RELAUNCHED))
 
 
-def absorb(root, run, gid):
-    """Copy, validate and classify one executor's result and session, record them, and say what happened."""
+def _unrecorded(directory, state, gid, entry, line):
+    """A `run` that exited refused and left neither a marker nor a session record from this launch.
+
+    With no pid file it launched nothing and could not write its marker; with one, an executor ran and its record
+    was not written. _launch removes an earlier pid file first, and one a refusal left is read as the latter.
+    """
+    why = one_line(line, 200) if isinstance(line, str) and line.strip() else "no reason given"
+    path = Path(directory) / f"{gid}.pid"
+    pid = _pid(directory, gid)
+    if pid is not None and alive(pid):
+        raise Refusal(f"{gid} has no session record and its executor is still running")
+    if path.exists():
+        # It ran and may have merged, but nothing records how it ended, so a human reads its worktree.
+        status, reason = "crash-hand-back", f"its executor ran and left no session record: {why}"
+    else:
+        status, reason = PRE_LAUNCH, f"run refused before launch, its marker unwritten: {why}"
+    entry.update(status=status, reason=reason)
+    save_state(directory, state)
+    return [f"{gid}: {status} - {reason}", "transcript: not found"]
+
+
+def absorb(root, run, gid, run_refused=None):
+    """Copy, validate and classify one executor's result and session, record them, and say what happened.
+
+    `run_refused` is `run`'s refusal line, given after its exit 2; it is read only when there is no session record
+    and no marker from this launch.
+    """
     directory = run_dir(root, run)
     state = load_state(directory)
     entry = _entry(state, gid)
@@ -784,7 +810,9 @@ def absorb(root, run, gid):
     try:
         raw = json.loads(_read(record))
     except FileNotFoundError:
-        raise Refusal(f"{gid} has no session record; its executor has not exited") from None
+        if run_refused is None:
+            raise Refusal(f"{gid} has no session record; its executor has not exited") from None
+        return _unrecorded(directory, state, gid, entry, run_refused)
     except ValueError:
         raise Refusal(f"{record} is not JSON") from None
     if not isinstance(raw, dict):
@@ -1223,6 +1251,8 @@ def add_commands(sub):
                 s.add_argument(f"--{option}", required=True)
         if name == "run":
             s.add_argument("--description", required=True)
+        if name == "result":
+            s.add_argument("--refused")
     w = sub.add_parser("wake")
     w.add_argument("run")
     w.add_argument("--tasks", required=True)
@@ -1252,7 +1282,7 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
     elif args.command == "run":
         run_session(root, args.run, args.group, args.description)
     elif args.command == "result":
-        print("\n".join(absorb(root, args.run, args.group)))
+        print("\n".join(absorb(root, args.run, args.group, args.refused)))
     elif args.command == "verify":
         code, line = verify(root, args.run, args.group)
         print(line)
