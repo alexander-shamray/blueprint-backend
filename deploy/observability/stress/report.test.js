@@ -774,4 +774,7 @@ test('a step splits each work queue into what it held, what it handled and what 
     assert.equal(queuesLine(5, { queues: [queues[0]] }), '- Step 5: no work queue held or handled a message');
     assert.equal(queuesLine(6, { queues: [], serviceReadsFailed: ['queues'] }), '- Step 6: not read',
         'a failed depth read is no reading, not an idle broker');
+    assert.equal(queuesLine(7, { queues: [{ ...queues[0], handledPerSecond: null }] }),
+        '- Step 7: no work queue held a message; what they handled was not read',
+        'an empty handled read says nothing of the handling');
 });
