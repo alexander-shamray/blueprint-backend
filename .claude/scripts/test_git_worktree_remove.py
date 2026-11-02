@@ -98,8 +98,8 @@ class RemoveShape(unittest.TestCase):
         self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
         return root, Path(native)
 
-    def remove(self, where, path=".claude/worktrees/probe", script=REMOVE):
-        return run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=where, REMOVE=str(script), P=path)
+    def remove(self, where, path=".claude/worktrees/probe", script=REMOVE, **env):
+        return run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=where, REMOVE=str(script), P=path, **env)
 
     def timed(self, native, bound, grace):
         """A copy of the helper with a shorter bound and grace, so a test waits
@@ -149,14 +149,18 @@ class RemoveShape(unittest.TestCase):
         self.assertFalse(self.registered(root))
 
     def test_a_worktree_holding_a_path_past_260_characters_is_removed(self):
-        # Windows' limit: without long paths git unregistered the worktree, then failed on the deep file and left
-        # the directory. The fixture's own git commands ask for long paths, so only the helper's removal is tested.
+        # Windows' limit: without long paths git refuses a worktree it cannot read, or fails to delete the deep file
+        # and leaves the directory unregistered. The fixture's git commands ask for long paths, so only the helper's
+        # removal is tested, with long paths set off above every config file, which only the helper's -c outranks. Only
+        # a Windows run can fail on the removal itself, so the helper's spelling is held on every platform too.
+        self.assertIn("git -c core.longpaths=true worktree remove", REMOVE.read_text(encoding="utf-8"))
         root, _ = self.fixture()
         deep = "/".join(["d" * 60] * 5) + "/deep.txt"
         made = run_bash(DEEP, C=f"{root}/checkout", O=f"{root}/origin", F=deep)
         self.assertEqual(0, made.returncode, made.stderr)
         self.assertGreater(len(f"{root}/checkout/.claude/worktrees/deep/{deep}"), 260)
-        result = self.remove(f"{root}/checkout", ".claude/worktrees/deep")
+        result = self.remove(f"{root}/checkout", ".claude/worktrees/deep", GIT_CONFIG_COUNT="1",
+                             GIT_CONFIG_KEY_0="core.longpaths", GIT_CONFIG_VALUE_0="false")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(run_bash('[ -e "$W" ]', W=f"{root}/checkout/.claude/worktrees/deep").returncode == 0)
         self.assertNotIn("feat/deep", run_bash('git -C "$C" worktree list --porcelain', C=f"{root}/checkout").stdout)
