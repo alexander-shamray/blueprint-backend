@@ -92,10 +92,10 @@ Every issue waiting on a human is asked about before the night, because
 nobody answers at night and an executor that would have asked hands back
 instead (spec §5, §7). The list of who is asked is the spec's §5;
 `OWNER` in *Depends on* is how step 0 records it once, so the helper's
-ready test never reads free text. The test also takes `OWNER` in the
-*Task* cell, where a row filed as an owner's question often says it; a
-stray one there can only hold back a row that could have run, the safe
-side, so both cells are read.
+ready test never has to judge a wait written in prose. The test looks for
+the bare word `OWNER` in the *Task* cell too, where a row filed as an
+owner's question often says it; a stray one there can only hold back a
+row that could have run, the safe side, so both cells are read.
 
 One question per message, each answerable in a line, so an answer is never
 spread across several decisions. Each is recorded the moment it is given,
