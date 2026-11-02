@@ -940,7 +940,8 @@ dispatch design's §6.2
 carries that list and three consequences the design left unspelt: step 6's
 lines 3 to 6 go with the worktree's removal, step 0 skips its teardown of a
 finished branch, which a relaunch meets, and the session keeps its turn
-until its result is written, for the reasons given below.
+until its result is written and runs each shell read as one command its
+grants name, for the reasons given below.
 **An interactive `/ship` reads exactly as
 it did**: every rule the token adds opens "Under `--dispatched`".
 
