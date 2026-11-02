@@ -562,7 +562,7 @@ shown:
 ```json
 {"group": "G1", "issues": [826, 827],
  "outcome": "merged | handed-back | stopped",
- "pr": 1700, "merge_oid": "<the whole 40-hex oid>",
+ "pr": 1700, "title": "<the PR's title>", "merge_oid": "<the whole 40-hex oid>",
  "rounds": [{"kind": "full | recheck", "raised": 2, "fixed": 1, "refused": 1}],
  "review_end": "clean | comments-rule | plan | ceiling",
  "filed": [1701], "reason": "<what a human must do>",
@@ -573,7 +573,8 @@ shown:
 `issues` are the tag's numbers; `filed` is every issue filed or commented
 on, by number; `rounds` has one entry per round this run ran, `[]` for
 none; `pr` and `merge_oid`, the whole oid, are required on `merged` and
-otherwise `null` until they exist. Each ending sets the rest:
+otherwise `null` until they exist; `title` is the PR's as `/pr` opened it,
+`null` where this session opened none. Each ending sets the rest:
 
 | Ending | `outcome` | `review_end` | `reason` |
 |---|---|---|---|
