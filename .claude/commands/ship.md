@@ -497,8 +497,8 @@ branch is.
      never equality: the oid `main` landed on, and that the merge is in
      its history.
    - Once the merge is verified, delete this change's row from *In
-     progress* in the task list, `.todo/blueprint-backend.md` in the main
-     checkout's parent directory, by that path (why:
+     progress* in the task list named by `.harness/config.json`
+     `task_list`, in the main checkout's parent directory, by that path (why:
      docs/commands/ship.md, *Step 6: the teardown*).
    - Under `--dispatched`, skip this write, and only lines 1 and 8 run: no
      `ExitWorktree`, no `git-worktree-remove.sh`, no switch, pull or
