@@ -638,10 +638,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     /// <summary>One <c>rabbitmqctl</c> listing, split into its tab-separated columns.</summary>
     protected async Task<IReadOnlyList<string[]>> BrokerRowsAsync(string[] listing)
     {
-        ExecResult result = default;
-
-        await DaemonRetry.RetryBoundedAsync(
-            async ct => result = await _rabbit!.ExecAsync(
+        ExecResult result = await DaemonRetry.RetryBoundedAsync(
+            ct => _rabbit!.ExecAsync(
                 ["rabbitmqctl", listing[0], "--quiet", "--no-table-headers", .. listing[1..]],
                 ct),
             BrokerCallBudget,

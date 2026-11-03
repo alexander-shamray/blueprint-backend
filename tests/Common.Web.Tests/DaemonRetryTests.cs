@@ -106,6 +106,20 @@ public class DaemonRetryTests
     }
 
     [Fact(Timeout = 10_000)]
+    public async Task A_value_comes_from_the_attempt_that_finished()
+    {
+        int calls = 0;
+
+        string value = await DaemonRetry.RetryBoundedAsync(
+            _ => ++calls == 1 ? new TaskCompletionSource<string>().Task : Task.FromResult($"attempt {calls}"),
+            TimeSpan.FromMilliseconds(50),
+            TimeSpan.Zero,
+            Ct);
+
+        value.ShouldBe("attempt 2");
+    }
+
+    [Fact(Timeout = 10_000)]
     public async Task An_attempt_past_its_budget_cancels_the_token_the_call_was_given()
     {
         List<CancellationToken> given = [];
