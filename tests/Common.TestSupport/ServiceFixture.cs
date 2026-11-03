@@ -144,8 +144,11 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         if (write is null)
             return;
 
-        ExecResult result = await _rabbit!.ExecAsync(
-            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
+        // set_permissions is idempotent, so an attempt abandoned at the budget is safe to make again.
+        ExecResult result = await DaemonRetry.RetryBoundedAsync(
+            ct => _rabbit!.ExecAsync(["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read], ct),
+            BrokerCallBudget,
+            DaemonRetry.Backoff,
             TestContext.Current.CancellationToken);
 
         if (result.ExitCode != 0)
