@@ -126,6 +126,12 @@ TODO.md                      optional and gitignored: a link to the user's
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup
+.harness/                    the shared harness in this repository:
+                             config.json is its own — the slug, the task
+                             list, the settings it adds and its local paths
+                             — and the manifest, base settings and vendored
+                             renderer a sync writes are blueprint-harness's
+                             (harness-boundaries.md, Managed files)
 Directory.Build.props        shared MSBuild settings, ADR-019's analyser
                              policy, and §4.1's artifacts/ output location,
                              which has to be set here — the file's own Output
