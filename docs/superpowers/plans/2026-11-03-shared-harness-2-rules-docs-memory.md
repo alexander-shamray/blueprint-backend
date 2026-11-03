@@ -35,7 +35,9 @@ built the sync this plan rides on.
 probe, the stack's allow entries now in `settings.base.json`), which move to
 config when a second stack arrives (plan 5); rulesets and force-push
 (plan 3); `/dispatch` taking sync pull requests (plan 4); frontend and admin
-syncs (plans 5, 6), which is also when their memories are removed. Until
+syncs (plans 5, 6), which is also when their memories are removed, all but
+the owner preferences, which hold outside any repository and move in Task 9
+Step 3 for all three. Until
 plan 4, a sync pull request lands by a session through `/ship`'s review loop
 limited to one round, as plan 1's did.
 
@@ -138,7 +140,11 @@ hold in any target:
   moments backend's `CLAUDE.md` lists; a managed file (one in
   `.harness/manifest.json`) is changed in `blueprint-harness`.
 - *Subagents, review rounds and plans*: backend's section of that name,
-  citing `docs/harness/token-rules.md` where it cites `docs/token-plan.md`.
+  each rule in a line or two, citing the `docs/harness/token-rules.md`
+  section that holds its reason where it cites `docs/token-plan.md`.
+
+This file owns the rules it states; Task 2's documents cite them and hold
+only their reasons and detail, never a second statement of the rule.
 - *Handing over to the owner*: the rows Table M sends here.
 - *Where the detail is*: one line per managed document and
   `docs/harness-local.md`, saying when to read it.
@@ -185,20 +191,25 @@ bullets led **Commit messages**, **Every commit carries `PR: #<n>`**,
 **A branch is updated for a conflict**, **A red `main` is reverted first**,
 **A Dependabot pull request is the one exception**, **The issue vocabulary**,
 **A reply is not a resolution**, **A round's touch set**,
-**A CodeQL alert**, **A fix to a script under `.claude/`**,
-**From the first sync, a managed file** and **Uncommitted work**; the
-**task list** bullet comes reworded to the config's `task_list`. **Read
-before you edit** stays in backend: it is about the blueprint's claims. Any
-moved bullet that names a class, the locality gate or another backend-only
-fact cites `docs/harness-local.md` *Documents* (the change contract) for it.
-*What counts as a finding* is backend's `.claude/commands/review-branch.md`
-section of that name, which `branch-reviewer` reads today. Then the rows of
-Table M sent here.
+**A CodeQL alert** and **A fix to a script under `.claude/`**. The
+**From the first sync, a managed file**, **Uncommitted work** and **task
+list** bullets are Task 1's *Working in a target*, and working-rules cites
+them there. **Read before you edit** stays in backend: it is the one-owner
+rule of backend's own contract applied to an edit. Any moved bullet that
+names a class, the locality gate or another backend-only fact cites
+`docs/harness-local.md` *Documents* (the change contract) for it.
+*What counts as a finding* takes the generic bar of backend's
+`.claude/commands/review-branch.md` section of that name — two statements
+that cannot both be true, or one untrue of the system, never style taste —
+and its items 5 and 6 reworded to the change contract; items 1–4 (blueprint,
+register and deploy drift) stay in `review-branch.md`, which is local, as
+the bar's backend examples. Then the rows of Table M sent here.
 
-token-rules states as rules, each with its one-line reason: spec §5.6's five
-measures, from `docs/token-plan.md` steps 2, 3, 4, 6, 7 and 7d, with step
-7d's table of tasks and models; and Table M's row. It cites "the target's
-own measurements" for every figure and copies none.
+token-rules holds, for each rule agent-rules *Subagents, review rounds and
+plans* states, its reason and the measured basis named by step — spec
+§5.6's five measures, from `docs/token-plan.md` steps 2, 3, 4, 6, 7 and
+7d — with step 7d's table of tasks and models, and Table M's row. It cites
+"the target's own measurements" for every figure and copies none.
 
 - [ ] **Step 1:** `test_unlisted_file_in_docs_harness_fails` and
   `test_docs_harness_file_in_manifest_passes` in `test_drift_gate.py`; run,
@@ -232,12 +243,21 @@ refusal by searching the payload for the text the memory quotes.
     *Exit codes make vacuous tests*).
   - `test_python_hygiene.py`: `test_no_text_true_without_encoding` and
     `test_no_bare_bash_argv` walk every `*.py` under `.claude/` and `.github/`
-    of the root they run in; `test_hygiene_catches_a_planted_file` proves
-    both on a synthetic file.
+    of the root they run in, skipping what that root's `.harness/config.json`
+    lists under `local` (a target's own files are not the payload's to fix);
+    `test_hygiene_catches_a_planted_file` proves both on a synthetic file,
+    and `test_local_path_skipped` that a planted file under a `local` glob
+    passes.
+  - For the two new `G` rows, refusals in `guard-git-argv.py`: a
+    `git push` chained after a pipe with no `set -o pipefail` before it, and
+    `git update-index --cacheinfo` with a literal mode; each with a refused
+    and an admitted case, asserting the remedy's words.
 - [ ] **Step 2:** Run, fail; change the messages and fix every site the
   hygiene test names; run, pass. Run `payload-suites` as CI does.
 - [ ] **Step 3:** Write `pitfalls.md` from the `P` rows, one short entry
-  each: the trap, the symptom, the safe form.
+  each: the trap, the symptom, the safe form. File one harness enhancement
+  for the `sed -i` guard Table M names (a new Bash hook: it reads the file,
+  not the command, so it is its own pull request and threat-model review).
 - [ ] **Step 4:** Commit, PR, `/ship` loop, merge on green.
 
 ### Task 4: Citations a target can resolve
@@ -273,8 +293,11 @@ The boundaries lines cut here land in backend's `docs/harness-local.md`
 
 - [ ] **Step 1: Tests.**
   - `test_payload_cites_only_what_a_target_has` — every repository path a
-    payload text file cites resolves under `payload/`, or is
-    `docs/harness-local.md`, or sits under `docs/superpowers/`.
+    payload text file cites resolves under `payload/`, or is one a target
+    holds by itself — `CLAUDE.md`, `docs/harness-local.md`,
+    `.harness/config.json`, `.harness/manifest.json`, `.todo/` — or sits
+    under `docs/superpowers/`, or is a site `IMPORT.md` *Stack mentions left
+    verbatim* lists (until plan 5), read from that section, not copied.
   - `test_cited_section_exists` — every `` `path` ``, *Heading* pair whose
     path is in the payload names a heading that file has (Review Focus 3).
   - `test_local_command_not_named` — no payload file names `/<name>` for a
@@ -295,7 +318,9 @@ The boundaries lines cut here land in backend's `docs/harness-local.md`
   `@.harness/agent-rules.md` on a line of its own
 
 - [ ] **Step 1:** Merge the self-sync pull request that Task 4's merge
-  opened (the earlier ones were superseded); its drift gate is green.
+  opened (the earlier ones were superseded); its drift gate is green. The
+  harness repository is a `sync.yml` target since harness #13 added it to
+  `targets.json`, so plan 1 Task 7's manual apply is not needed again.
 - [ ] **Step 2:** On a branch cut from that `main`, write `CLAUDE.md`;
   commit, PR, merge on green.
 - [ ] **Step 3:** Relaunch a harness session; `/context` lists
@@ -321,9 +346,10 @@ the PR body names the managed copy as the owner until then.
 ### Task 7: Backend's sync of the new rules
 
 - [ ] **Step 1:** The sync pull request Task 4's merge opened (or a later
-  one) is the one to land; earlier ones were superseded. Its diff: the four
-  new managed files, the drift gate, the rewritten citations, the trimmed
-  boundaries, the manifest. `CLAUDE.md` and `docs/harness-local.md` are not
+  one) is the one to land; earlier ones were superseded. Its diff: the five
+  new managed files (Tasks 1–3), the drift gate, Task 3's guard, helper and
+  hygiene-site changes, the rewritten citations, the trimmed boundaries,
+  the manifest. `CLAUDE.md` and `docs/harness-local.md` are not
   in it.
 - [ ] **Step 2:** Before merging, run backend's local suites the sync
   touches (`test_command_runbooks` ceilings among them, harness #5); a
@@ -346,16 +372,18 @@ the PR body names the managed copy as the owner until then.
 - [ ] **Step 1:** Measure before: LF bytes of `CLAUDE.md` plus its imports,
   and of backend's `MEMORY.md` index.
 - [ ] **Step 2:** Edit; grep that each cut rule's lead phrase now appears
-  once across `CLAUDE.md`, `docs/`, `.claude/` and `.harness/`.
+  once across `CLAUDE.md`, `docs/`, `.claude/` and `.harness/`, leaving out
+  `docs/superpowers/` and the closed records (`docs/pr-decision-log.md`,
+  `docs/lessons.md`), which quote rules and own none.
 - [ ] **Step 3:** `/ship`; merge on green.
 - [ ] **Step 4:** Relaunch; `/context` shows the import; no approval dialog.
 
 ### Task 9: Memory triage applied
 
 - [ ] **Step 1:** For every backend row of Table M whose class is `A`, `W`,
-  `T`, `P`, `G`, `C` or `S`, confirm its destination text is on backend's
-  `main` (Review Focus 5); a row whose text is missing stops the move of
-  that file only.
+  `T`, `P`, `G`, `H`, `C`, `S` or `S*` (backend has synced), confirm its
+  destination text is on backend's `main` (Review Focus 5); a row whose
+  text is missing stops the move of that file only.
 - [ ] **Step 2:** Move those memory files to
   `~/.claude/projects/C--dev-ashamray-blueprint-backend/memory-archive/2026-11/`
   and drop their lines from `MEMORY.md`. `R` rows stay. A split row
@@ -371,8 +399,9 @@ the PR body names the managed copy as the owner until then.
   the next `/ship`'s stop count against `docs/baseline-2026-11.md` in the
   harness repository's `docs/baseline-2026-11.md`, *After plan 2*. A rise in
   stops is a harness defect, filed there.
-- [ ] **Step 5:** Frontend's and admin's `A`–`S` memories wait for their
-  first sync (plans 5, 6), which re-checks each row against that payload.
+- [ ] **Step 5:** Frontend's and admin's memories other than `O` and `R`
+  wait for their first sync (plans 5, 6), which re-checks each row
+  against that payload.
 
 ---
 
@@ -392,9 +421,11 @@ repository fact, stays. `S*` is spent from that repository's first sync.
 | G | guard-git-argv refusal | worktree-guard-shell-shapes, issue-body-heredoc-shapes | guard-limits-found-on-b6 | — |
 | G | commit-gate message | commit-types-are-closed-set | — | — |
 | G | rebase helper refusal | never-merge-main-forward | local-denies-lift-blocks-rebase | — |
+| G | new guard-git-argv refusals (Task 3) | pipefail-before-chained-push, cacheinfo-mode-drops-exec-bit | — | — |
+| G | a new Bash hook, filed in Task 3; the memory stays until it lands | sed-i-drops-crlf | — | — |
 | H | `test_python_hygiene.py` | windows-subprocess-decoding, python-subprocess-bash-is-wsl | — | — |
-| P | *Shell and encoding* | sed-i-drops-crlf, bash-heredoc-backslashes, python-print-crlf-in-bash, cacheinfo-mode-drops-exec-bit | — | shell-and-edit-traps |
-| P | *Git and worktrees* | reset-soft-origin-main-moves, pipefail-before-chained-push, enterworktree-prompts-outside-claude-worktrees, worktree-session-leaves-empty-dir | subagents-cannot-ship-from-worktrees | — |
+| P | *Shell and encoding* | bash-heredoc-backslashes, python-print-crlf-in-bash | — | shell-and-edit-traps |
+| P | *Git and worktrees* | reset-soft-origin-main-moves, enterworktree-prompts-outside-claude-worktrees, worktree-session-leaves-empty-dir | subagents-cannot-ship-from-worktrees | — |
 | P | *Machine and network* | localhost-costs-two-seconds, github-push-blocked-api-works, taskstop-leaves-grandchildren | — | — |
 | P | *Auto mode and probes* | — | dependabot-pr-triage, adversarial-probes-need-a-dead-remote | boundary-probes-need-non-auto-mode |
 | W | *CI* | wait-for-ci-to-settle, merge-as-soon-as-ready | always-check-and-fix-ci | check-ci-while-idle |
@@ -416,7 +447,9 @@ repository fact, stays. `S*` is spent from that repository's first sync.
 
 Where a `C` or `W` row's rule is already in its destination, the row is
 `S` in effect: Task 9 Step 1 finds the text and archives the memory.
-Lessons that a new guard could enforce but no guard does (`sed -i` on a
-CRLF file, a chained push without `pipefail`) are written as `P` rules here
-and each filed as a harness enhancement *(builder's call: new guards are
-their own pull requests, with their own threat-model review)*.
+A lesson is a `G` row when a guard can see the trap (spec §5.7): from the
+command's text in `guard-git-argv.py`, or, for `sed -i` on a CRLF file, from
+the file a new hook reads. A `P` row's trap depends on state no guard sees
+from the command — the network, a remote that moves, a process tree, an
+interpreter's own decoding — or its shape is mostly intended (a backslash in
+a heredoc), so a guard would refuse right work.
