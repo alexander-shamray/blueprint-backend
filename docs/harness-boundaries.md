@@ -1523,6 +1523,11 @@ hooks included, still load there; `--strict-mcp-config` with no
 
 ## Managed files
 
+This section holds from a repository's first sync, which writes the
+manifest, the base settings and the renderer; before it,
+`.claude/settings.json` is the repository's own and `.harness/config.json`
+renders nothing.
+
 **A path `.harness/manifest.json` lists is owned by `blueprint-harness`, and
 is changed there.** A sync from that
 repository wrote the file, and the manifest records the harness commit and
