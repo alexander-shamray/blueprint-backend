@@ -1541,7 +1541,8 @@ config carries the re-rendered `.claude/settings.json` and
 **A path the config lists under `local` is the repository's own**, even
 inside a managed directory: a sync neither writes nor deletes it.
 
-**The drift gate holds it**: `.github/harness-drift/`, run on every pull
-request by `.github/workflows/harness-drift.yml`. Its README owns what the
+**The drift gate holds it**, delivered by the first sync with the manifest:
+`.github/harness-drift/`, run on every pull request by
+`.github/workflows/harness-drift.yml`. Its README owns what the
 gate refuses, how a config change re-renders the settings, and what to do
 when it is red.
