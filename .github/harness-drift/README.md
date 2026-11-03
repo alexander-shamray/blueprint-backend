@@ -15,7 +15,14 @@ caught where it is made and not at the next sync.
   `local` globs in `.harness/config.json` do not cover. The managed
   directories are `.claude/agents`, `.claude/commands`, `.claude/hooks`,
   `.claude/scripts`, `.claude/skills`, `docs/commands` and
-  `.github/harness-drift`; `__pycache__/` and `*.pyc` are skipped;
+  `.github/harness-drift`; `__pycache__/` and `*.pyc` are skipped. When
+  the root is the top of a git checkout and a git on `PATH`, outside the
+  working directory and the root, can list it, the candidates are what git
+  would commit there (`git ls-files --cached --others --exclude-standard`),
+  so a file the checkout ignores, such as an installer's `.skill_version`,
+  is never judged: it cannot reach a pull request. A nested repository or
+  submodule is judged by its files, or as itself when it holds none.
+  Otherwise the gate walks the file system, and an ignored file is judged;
 - a `.claude/settings.json` that is not what `.harness/render.py` renders
   from `.harness/settings.base.json` plus the `settings` in
   `.harness/config.json`. The renderer runs only if its bytes match the
@@ -37,8 +44,9 @@ caught where it is made and not at the next sync.
 - a manifest, config, base or renderer that cannot be read, a renderer that
   refuses the config, a manifest path that is not a canonical relative POSIX
   path, and any fixed path or managed directory that is a link. Each is a
-  line of output, never a traceback, and the gate never reads outside the
-  root.
+  line of output, never a traceback, and the gate never reads a tree file
+  outside the root; in a checkout, the git it runs also reads that
+  checkout's repository and git's own configuration.
 
 With `--payload`, it also refuses:
 
