@@ -1,5 +1,5 @@
 {
-  "harness_commit": "0b03e65cd0cc3ce9a91e9b5c5608e25017746e1d",
+  "harness_commit": "6fc38c9fd3566630e01515dbc1fcfac9e11e8088",
   "files": {
     ".claude/agents/branch-reviewer.md": "7838e0d30399b193d6c57c009cdd1f86e45464c58af6bd3accbfe7afaa7c0a2a",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -95,9 +95,9 @@
     ".github/commit-gate/README.md": "91a10f4dc251a945308727d3cb36297dbe4f0d3cab51ecffb584f6add0fcd5c6",
     ".github/commit-gate/commit_gate.py": "2624d7252cc50d49bec8fceb6f3189477fdc668a0d2b133c694d34b50f0f0d75",
     ".github/commit-gate/test_commit_gate.py": "19094d9993b905b1896bf11e26b4d2aa851782061d4d1b63699c1b2f66b4d7da",
-    ".github/harness-drift/README.md": "1a40c5d5d268a17bd5fd352ecf38dc1c60798810bcd45a7f3809b9f0802a76f7",
-    ".github/harness-drift/drift_gate.py": "e5153ae0e932a371e734887a13c4fcb0fc9ab8b2c0d04519d72b172d6d7854e8",
-    ".github/harness-drift/test_drift_gate.py": "b47ab88dff8c1ee2d6e4b518f2e38b0122ba978d5cf76c487c47c104a9dcd435",
+    ".github/harness-drift/README.md": "ce235edfd9596414c40ea816566116e241b766c4fe0f7285249dde80b3a695c4",
+    ".github/harness-drift/drift_gate.py": "f4ae0966ff82d5be03dbd837252c2502a0004118d51d2037f389f89e7773ada5",
+    ".github/harness-drift/test_drift_gate.py": "9c2dbc53abb962eb953c89e192ef2cfd3495d75c4095db37ea90de4287b3a2fc",
     ".github/issue-form-gate/README.md": "7cb5f05989226503aea3fb0424e418dbffe1f1ed52b99122d1c5b5fe25900c59",
     ".github/issue-form-gate/issue_form_gate.py": "84d86a6fa75d1f0c3f51d16d58d6a637fae5339428f67e96fcce50c84523d8f1",
     ".github/output-gate/README.md": "417233f5cb094ea227d494e5a70d2770d0702fc8565382234407cf717360e77e",

@@ -8,7 +8,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 import types
 import unittest
@@ -16,6 +18,7 @@ from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 
+import drift_gate
 from drift_gate import check, main
 
 HERE = Path(__file__).resolve().parent
@@ -133,6 +136,96 @@ class DriftGate(unittest.TestCase):
         tree.put(".claude/scripts/__pycache__/x.cpython-312.pyc", b"\0")
         tree.put(".claude/scripts/y.pyc", b"\0")
         self.assertEqual(check(tree.root), [])
+
+    def _git(self, root: Path, *args: str) -> None:
+        if shutil.which("git") is None:
+            self.skipTest("git is not on PATH")
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+    def test_an_ignored_file_under_a_managed_directory_passes_in_a_checkout(self) -> None:
+        tree = Tree(self.tmp)
+        self._git(tree.root, "init", "-q")
+        tree.put(".gitignore", b".claude/skills/a/.skill_version\n")
+        tree.put(".claude/skills/a/.skill_version", b"1\n")
+        self.assertEqual(check(tree.root), [])
+
+    def test_a_checkout_still_judges_untracked_and_force_added_files(self) -> None:
+        tree = Tree(self.tmp)
+        self._git(tree.root, "init", "-q")
+        tree.put(".gitignore", b"*.lock\n")
+        tree.put(".claude/hooks/extra.sh", b"x\n")
+        tree.put(".claude/hooks/forced.lock", b"x\n")
+        self._git(tree.root, "add", "-f", ".claude/hooks/forced.lock")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 2)
+        self.assertIn(".claude/hooks/extra.sh", problems[0])
+        self.assertIn(".claude/hooks/forced.lock", problems[1])
+
+    def test_a_nested_repository_in_a_checkout_is_judged_by_its_files(self) -> None:
+        tree = Tree(self.tmp, local=(".claude/skills/mine/**",))
+        self._git(tree.root, "init", "-q")
+        tree.put(".claude/skills/mine/SKILL.md", b"x\n")
+        self._git(tree.root / ".claude/skills/mine", "init", "-q")
+        tree.put(".claude/skills/theirs/SKILL.md", b"x\n")
+        self._git(tree.root / ".claude/skills/theirs", "init", "-q")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(".claude/skills/theirs/SKILL.md is under a managed directory", problems[0])
+
+    def test_an_empty_nested_repository_is_judged_as_itself(self) -> None:
+        tree = Tree(self.tmp)
+        self._git(tree.root, "init", "-q")
+        (tree.root / ".claude/skills/bare").mkdir(parents=True)
+        self._git(tree.root / ".claude/skills/bare", "init", "-q")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(".claude/skills/bare is under a managed directory", problems[0])
+
+    def test_a_submodule_checked_out_empty_is_still_judged(self) -> None:
+        tree = Tree(self.tmp)
+        self._git(tree.root, "init", "-q")
+        (tree.root / ".claude/skills/sub").mkdir(parents=True)
+        self._git(tree.root, "update-index", "--add", "--cacheinfo", f"160000,{'a' * 40},.claude/skills/sub")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(".claude/skills/sub is under a managed directory", problems[0])
+
+    def test_a_tracked_file_deleted_from_a_checkout_is_not_an_unlisted_file(self) -> None:
+        tree = Tree(self.tmp)
+        self._git(tree.root, "init", "-q")
+        tree.put(".claude/hooks/extra.sh", b"x\n")  # tracked, but no manifest line, so only the unlisted check sees it
+        self._git(tree.root, "add", "-A")
+        (tree.root / ".claude/hooks/extra.sh").unlink()
+        self.assertEqual(check(tree.root), [])
+
+    def test_a_git_in_the_tree_or_the_working_directory_is_never_run(self) -> None:
+        real = shutil.which("git")
+        if real is None:
+            self.skipTest("git is not on PATH")
+        name = "git.exe" if os.name == "nt" else "git"
+        tree = Tree(self.tmp)
+        cwd = Path(self.tmp).parent / f"{Path(self.tmp).name}-cwd"
+        cwd.mkdir()
+        self.addCleanup(shutil.rmtree, cwd)
+        for where in (tree.root / "bin", cwd):
+            where.mkdir(exist_ok=True)
+            (where / name).write_bytes(b"#!/bin/sh\nexit 0\n")
+            (where / name).chmod(0o755)
+        path = os.pathsep.join([".", str(cwd), str(tree.root / "bin"), str(Path(real).parent)])
+        with mock.patch.dict(os.environ, {"PATH": path}), contextlib.chdir(cwd):
+            chosen = drift_gate._git_executable(tree.root)
+        self.assertIsNotNone(chosen)
+        self.assertEqual(Path(chosen).parent.resolve(), Path(real).parent.resolve())
+
+    def test_a_root_below_the_top_of_a_checkout_is_walked(self) -> None:
+        (Path(self.tmp) / "sub").mkdir()
+        tree = Tree(str(Path(self.tmp) / "sub"))
+        self._git(Path(self.tmp), "init", "-q")
+        (Path(self.tmp) / ".gitignore").write_bytes(b".skill_version\n")
+        tree.put(".claude/skills/a/.skill_version", b"1\n")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(".skill_version", problems[0])
 
     def test_file_outside_managed_dirs_is_not_judged(self) -> None:
         tree = Tree(self.tmp)
