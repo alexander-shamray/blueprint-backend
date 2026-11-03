@@ -44,7 +44,7 @@ row_of() {
     bug:src/*) row=services ;;
     bug:tests/*) row=suites ;;
     security:src/*|security:tests/*) row=source ;;
-    *:tools/*|*:.github/*|*:.claude/*) row=tooling ;;
+    *:tools/*|*:.github/*|*:.claude/*|*:.harness/*) row=tooling ;;
     *:deploy/*|*:.config/*) row=deploy ;;
     *:docs/*) row=samples ;;
     */*) return 1 ;;
