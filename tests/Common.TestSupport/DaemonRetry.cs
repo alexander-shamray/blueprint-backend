@@ -58,9 +58,10 @@ public static class DaemonRetry
                     // Awaited through the token too, so a call that ignores it cannot hold the attempt open.
                     await call(attempt.Token).WaitAsync(attempt.Token);
                 }
-                catch (OperationCanceledException) when (!outer.IsCancellationRequested)
+                catch (OperationCanceledException e)
+                    when (attempt.IsCancellationRequested && !outer.IsCancellationRequested)
                 {
-                    throw new TimeoutException($"The call did not finish within {budget}.");
+                    throw new TimeoutException($"The call did not finish within {budget}.", e);
                 }
             },
             backoff,

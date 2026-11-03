@@ -76,7 +76,19 @@ public class DaemonRetryTests
                 Ct));
 
         thrown.Message.ShouldContain(budget.ToString());
+        thrown.InnerException.ShouldBeAssignableTo<OperationCanceledException>();
         calls.ShouldBe(DaemonRetry.Attempts);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_call_that_cancels_itself_inside_its_budget_is_not_reported_as_a_timeout()
+    {
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => DaemonRetry.RetryBoundedAsync(
+                _ => throw new OperationCanceledException("the client's own timeout"),
+                TimeSpan.FromMinutes(1),
+                TimeSpan.Zero,
+                Ct));
     }
 
     [Fact(Timeout = 10_000)]
