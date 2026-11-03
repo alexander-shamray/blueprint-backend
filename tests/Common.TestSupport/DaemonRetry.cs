@@ -36,4 +36,33 @@ public static class DaemonRetry
             }
         }
     }
+
+    /// <summary><see cref="RetryAsync"/>, each attempt cancelled and abandoned at <paramref name="budget"/>.</summary>
+    /// <remarks>
+    /// For a call that waits as long as its token allows, as a MassTransit start does under a caller's token; the
+    /// switch bounds its topology deploy the same way (ADR-145).
+    /// </remarks>
+    public static Task RetryBoundedAsync(
+        Func<CancellationToken, Task> call,
+        TimeSpan budget,
+        TimeSpan backoff,
+        CancellationToken ct) =>
+        RetryAsync(
+            async outer =>
+            {
+                using CancellationTokenSource attempt = CancellationTokenSource.CreateLinkedTokenSource(outer);
+                attempt.CancelAfter(budget);
+
+                try
+                {
+                    // Awaited through the token too, so a call that ignores it cannot hold the attempt open.
+                    await call(attempt.Token).WaitAsync(attempt.Token);
+                }
+                catch (OperationCanceledException) when (!outer.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"The call did not finish within {budget}.");
+                }
+            },
+            backoff,
+            ct);
 }

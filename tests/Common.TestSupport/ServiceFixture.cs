@@ -38,6 +38,9 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     /// <summary>Attempts, not retries.</summary>
     private const int ResetAttempts = 3;
 
+    /// <summary>One attempt at a broker call, which takes a second or two; the test's own token never fires.</summary>
+    private static readonly TimeSpan BrokerCallBudget = TimeSpan.FromSeconds(30);
+
     private readonly string _service;
     private readonly string _schema;
     private readonly bool _schedules;
@@ -635,8 +638,14 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     /// <summary>One <c>rabbitmqctl</c> listing, split into its tab-separated columns.</summary>
     protected async Task<IReadOnlyList<string[]>> BrokerRowsAsync(string[] listing)
     {
-        ExecResult result = await _rabbit!.ExecAsync(
-            ["rabbitmqctl", listing[0], "--quiet", "--no-table-headers", .. listing[1..]],
+        ExecResult result = default;
+
+        await DaemonRetry.RetryBoundedAsync(
+            async ct => result = await _rabbit!.ExecAsync(
+                ["rabbitmqctl", listing[0], "--quiet", "--no-table-headers", .. listing[1..]],
+                ct),
+            BrokerCallBudget,
+            DaemonRetry.Backoff,
             TestContext.Current.CancellationToken);
 
         if (result.ExitCode != 0)
@@ -663,14 +672,19 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         const string owner = "privacy";
         UriBuilder broker = new(BrokerConnectionString) { UserName = $"{owner}-svc", Password = $"local-dev-{owner}" };
 
-        IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg =>
-        {
-            cfg.Host(broker.Uri);
-            cfg.DeployTopologyOnly = true;
-            cfg.ReceiveEndpoint("privacy-completions", _ => { });
-        });
-
-        await bus.DeployAsync(TestContext.Current.CancellationToken);
+        // A bus per attempt, since a start cancelled at the budget stops the bus it was starting.
+        await DaemonRetry.RetryBoundedAsync(
+            ct => Bus.Factory
+                .CreateUsingRabbitMq(cfg =>
+                {
+                    cfg.Host(broker.Uri);
+                    cfg.DeployTopologyOnly = true;
+                    cfg.ReceiveEndpoint("privacy-completions", _ => { });
+                })
+                .DeployAsync(ct),
+            BrokerCallBudget,
+            DaemonRetry.Backoff,
+            TestContext.Current.CancellationToken);
     }
 
     public async ValueTask DisposeAsync()

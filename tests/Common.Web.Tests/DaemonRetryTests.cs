@@ -57,4 +57,80 @@ public class DaemonRetryTests
 
         calls.ShouldBe(1);
     }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_call_that_never_finishes_is_abandoned_at_its_budget_on_every_attempt()
+    {
+        int calls = 0;
+        TimeSpan budget = TimeSpan.FromMilliseconds(50);
+
+        TimeoutException thrown = await Should.ThrowAsync<TimeoutException>(
+            () => DaemonRetry.RetryBoundedAsync(
+                _ =>
+                {
+                    calls++;
+                    return new TaskCompletionSource().Task;
+                },
+                budget,
+                TimeSpan.Zero,
+                Ct));
+
+        thrown.Message.ShouldContain(budget.ToString());
+        calls.ShouldBe(DaemonRetry.Attempts);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_call_that_stalls_once_succeeds_on_the_next_attempt()
+    {
+        int calls = 0;
+
+        await DaemonRetry.RetryBoundedAsync(
+            _ => ++calls == 1 ? new TaskCompletionSource().Task : Task.CompletedTask,
+            TimeSpan.FromMilliseconds(50),
+            TimeSpan.Zero,
+            Ct);
+
+        calls.ShouldBe(2);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task An_attempt_past_its_budget_cancels_the_token_the_call_was_given()
+    {
+        List<CancellationToken> given = [];
+
+        await Should.ThrowAsync<TimeoutException>(
+            () => DaemonRetry.RetryBoundedAsync(
+                ct =>
+                {
+                    given.Add(ct);
+                    return Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                },
+                TimeSpan.FromMilliseconds(50),
+                TimeSpan.Zero,
+                Ct));
+
+        given.Count.ShouldBe(DaemonRetry.Attempts);
+        given.ShouldAllBe(ct => ct.IsCancellationRequested, "a cancelled MassTransit start stops its bus");
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_bounded_call_cancelled_by_its_caller_is_not_tried_again()
+    {
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+        int calls = 0;
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => DaemonRetry.RetryBoundedAsync(
+                ct =>
+                {
+                    calls++;
+                    return Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                },
+                TimeSpan.FromMinutes(1),
+                TimeSpan.Zero,
+                cancelled.Token));
+
+        calls.ShouldBe(1);
+    }
 }
