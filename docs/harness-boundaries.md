@@ -26,6 +26,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
 | Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, their slice lists and ref, and the one sweep that executes. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop; the quality sets' runs, which load only user settings. |
+| Managed files | Which paths blueprint-harness owns and where they are changed, the `local` paths a repository keeps, and the drift gate that holds them. |
 
 ## Purpose and provenance of this file
 
@@ -1519,3 +1520,24 @@ still supplies as text, which reaches the agent as prompt and is the sweeps'
 residual for the same tool set. The operator's own user settings, their
 hooks included, still load there; `--strict-mcp-config` with no
 `--mcp-config` starts no MCP server, the operator's own included.
+
+## Managed files
+
+**A path `.harness/manifest.json` lists is owned by `blueprint-harness`, and
+is changed there, never in a repository it syncs.** A sync from that
+repository wrote the file, and the manifest records the harness commit and
+the file's hash. A change is made in that repository's `payload/` and reaches
+each target as the sync pull request opened on the next merge to its `main`;
+an edit to a target's copy is red until the next sync reverts it.
+`.claude/settings.json` is among them: it is rendered from
+`.harness/settings.base.json` plus the `settings` in `.harness/config.json`,
+so a rule only one repository needs goes in that config, which is the
+repository's own file and never in the manifest.
+
+**A path the config lists under `local` is the repository's own**, even
+inside a managed directory: a sync neither writes nor deletes it.
+
+**The drift gate holds it**: `.github/harness-drift/`, run on every pull
+request by `.github/workflows/harness-drift.yml`. Its README owns what the
+gate refuses, how a config change re-renders the settings, and what to do
+when it is red.
