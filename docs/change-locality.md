@@ -341,8 +341,8 @@ Beside those, how a change is made here:
 - **A fix to a script under `.claude/` lands with the case in its suite
   that failed before it**, and a script with no suite gets one before its
   second fix: a fix no case pins is one the next PR makes again.
-- **A managed file is changed in `blueprint-harness`.** A path
-  `.harness/manifest.json` lists reaches this repository through that
+- **From the first sync, a managed file is changed in `blueprint-harness`.**
+  A path `.harness/manifest.json` lists reaches this repository through that
   repository's sync pull request. A rule only this repository needs goes in
   `.harness/config.json`, whose pull request carries the re-rendered
   `.claude/settings.json` and manifest, and nothing else here changes one
