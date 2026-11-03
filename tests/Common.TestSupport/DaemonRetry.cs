@@ -47,7 +47,26 @@ public static class DaemonRetry
         TimeSpan budget,
         TimeSpan backoff,
         CancellationToken ct) =>
-        RetryAsync(
+        RetryBoundedAsync(
+            async token =>
+            {
+                await call(token);
+                return true;
+            },
+            budget,
+            backoff,
+            ct);
+
+    /// <summary>The same, returning the value of the attempt that finished.</summary>
+    public static async Task<T> RetryBoundedAsync<T>(
+        Func<CancellationToken, Task<T>> call,
+        TimeSpan budget,
+        TimeSpan backoff,
+        CancellationToken ct)
+    {
+        T result = default!;
+
+        await RetryAsync(
             async outer =>
             {
                 using CancellationTokenSource attempt = CancellationTokenSource.CreateLinkedTokenSource(outer);
@@ -55,8 +74,9 @@ public static class DaemonRetry
 
                 try
                 {
-                    // Awaited through the token too, so a call that ignores it cannot hold the attempt open.
-                    await call(attempt.Token).WaitAsync(attempt.Token);
+                    // Awaited through the token too, so a call that ignores it cannot hold the attempt open, and one
+                    // abandoned that way never reaches the assignment.
+                    result = await call(attempt.Token).WaitAsync(attempt.Token);
                 }
                 catch (OperationCanceledException e)
                     when (attempt.IsCancellationRequested && !outer.IsCancellationRequested)
@@ -66,4 +86,7 @@ public static class DaemonRetry
             },
             backoff,
             ct);
+
+        return result;
+    }
 }
