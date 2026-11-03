@@ -15,7 +15,8 @@ its own worktree — only through `dispatch_board.py run`. It spawns no agent.
 
 Below, `<run>` is the run's name (`yyyymmdd-hhmmss`), which every helper
 takes, `--run` included; `<dir>` is `artifacts/dispatch/<run>`, `<list>` is
-`../.todo/blueprint-backend.md` and `<today>` is today's ISO date. Where a
+`../<task_list>` (`.harness/config.json`), and `<today>` is today's ISO
+date. Where a
 line below names only a helper's subcommand (`tasks done`, `verify`), run it
 in full, `py -3.12 .claude/scripts/<helper> …`, as the grants spell it. Exit
 2 from a helper is a refusal with nothing written: report its line, and

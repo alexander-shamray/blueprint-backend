@@ -123,8 +123,9 @@ sweeps' `mktemp -d` ones.
    bash .claude/scripts/git-worktree-fork.sh .claude/worktrees/<slug> <name>
    ```
 
-   Whichever row ran, add the change to *In progress* in the task list,
-   `.todo/blueprint-backend.md` in the main checkout's parent directory
+   Whichever row ran, add the change to *In progress* in the task list
+   named by `.harness/config.json` `task_list`, in the main checkout's
+   parent directory
    (the issue's group from *Remaining*, or `—` where none held it, `#n`,
    what, branch and worktree, `started`), by that path and never
    through a `TODO.md` link; a linked worktree writes it too (why:
