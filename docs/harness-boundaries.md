@@ -1524,7 +1524,7 @@ hooks included, still load there; `--strict-mcp-config` with no
 ## Managed files
 
 **A path `.harness/manifest.json` lists is owned by `blueprint-harness`, and
-is changed there, never in a repository it syncs.** A sync from that
+is changed there.** A sync from that
 repository wrote the file, and the manifest records the harness commit and
 the file's hash. A change is made in that repository's `payload/` and reaches
 each target as the sync pull request opened on the next merge to its `main`;
@@ -1532,7 +1532,11 @@ an edit to a target's copy is red until the next sync reverts it.
 `.claude/settings.json` is among them: it is rendered from
 `.harness/settings.base.json` plus the `settings` in `.harness/config.json`,
 so a rule only one repository needs goes in that config, which is the
-repository's own file and never in the manifest.
+repository's own file and never in the manifest. That is the one change a
+target makes to a managed path itself: a pull request that changes the
+config carries the re-rendered `.claude/settings.json` and
+`.harness/manifest.json`, rendered at the commit the manifest already names
+(the drift gate's README, *Changing this repository's config*).
 
 **A path the config lists under `local` is the repository's own**, even
 inside a managed directory: a sync neither writes nor deletes it.
