@@ -140,7 +140,7 @@ Each round is the review done once, end to end:
 
    | | |
    |---|---|
-   | `tooling` | CI, the harness, and the command and agent definitions |
+   | `tooling` | CI, the harness and its `.harness/`, and the command and agent definitions |
    | `source` | the services, the building blocks and the suites that stand up their hosts |
    | `deploy` | deployment and configuration, and **every tracked file at the repository root** |
    | `samples` | fenced code in `docs/` — a credential or an unsafe default an adopter copies; the closed records are owned and not read |

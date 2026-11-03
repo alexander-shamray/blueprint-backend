@@ -186,7 +186,7 @@ Each round is the review done once, end to end:
    | `building-blocks` | the dispatcher and its behaviours, the outbox, the Redis helpers, the web middleware |
    | `services` | the rest of `src/` — the services, and §4.1's gateway, BFF and AppHost as they land |
    | `suites` | where the cannot-fail class lives, and the only area whose defects are all of one kind |
-   | `tooling` | Python, shell, CI, and the command and agent definitions |
+   | `tooling` | Python, shell, CI, the command and agent definitions, and the harness's `.harness/` |
    | `deploy` | deployment and configuration, and **every tracked file at the repository root** — the build files, the dotfiles, `CLAUDE.md` and `README.md` alike |
    | `samples` | fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read |
 
