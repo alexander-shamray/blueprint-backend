@@ -915,6 +915,9 @@ jobs:
             TestResults/integration
             first-attempt.log
           if-no-files-found: ignore
+          # A full hang dump runs to gigabytes, and the default level's time
+          # comes out of the job's timeout; level 1 still shrinks a dump well.
+          compression-level: 1
 
       # A test that passed on something rare writes it here (Sightings.cs). Kept
       # and posted on the issue that tracks it, so a recurrence is read without
