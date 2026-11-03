@@ -341,10 +341,11 @@ Beside those, how a change is made here:
 - **A fix to a script under `.claude/` lands with the case in its suite
   that failed before it**, and a script with no suite gets one before its
   second fix: a fix no case pins is one the next PR makes again.
-- **A managed file is changed in `blueprint-harness`, never here.** A path
-  `.harness/manifest.json` lists, `.claude/settings.json` among them,
-  reaches this repository only through that repository's sync pull request,
-  and a rule only this repository needs goes in `.harness/config.json`
+- **A managed file is changed in `blueprint-harness`.** A path
+  `.harness/manifest.json` lists reaches this repository through that
+  repository's sync pull request. A rule only this repository needs goes in
+  `.harness/config.json`, whose pull request carries the re-rendered
+  `.claude/settings.json` and manifest, and nothing else here changes one
   ([`docs/harness-boundaries.md`](harness-boundaries.md), *Managed files*).
 - **Uncommitted work in the tree belongs in the PR being worked on**, in
   its own commit with a body that argues it. **Never revert it to clean the
