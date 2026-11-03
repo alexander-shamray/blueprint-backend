@@ -1,0 +1,39 @@
+{
+  "repo": "alexander-shamray/blueprint-backend",
+  "task_list": ".todo/blueprint-backend.md",
+  "settings": {
+    "env": {},
+    "allow": [],
+    "deny": [],
+    "hooks": {}
+  },
+  "local": [
+    ".claude/commands/check-links.md",
+    ".claude/commands/mutation-sweep.md",
+    ".claude/commands/new-adr.md",
+    ".claude/commands/new-chapter.md",
+    ".claude/commands/review-branch.md",
+    ".claude/commands/validate-blueprint.md",
+    ".claude/scripts/dotnet-test.sh",
+    ".claude/scripts/mutation-run.sh",
+    ".claude/scripts/mutation_survivors.py",
+    ".claude/scripts/stryker-config.json",
+    ".claude/scripts/test_command_grants.py",
+    ".claude/scripts/test_command_runbooks.py",
+    ".claude/scripts/test_dispatch_board.py",
+    ".claude/scripts/test_dispatch_run.py",
+    ".claude/scripts/test_gh_issue_suppresses.py",
+    ".claude/scripts/test_harness_denies.py",
+    ".claude/scripts/test_mutation_survivors.py",
+    ".claude/scripts/test_pr_helpers.py",
+    ".claude/scripts/test_sweep_slices.py",
+    "docs/commands/mutation-sweep.md",
+    "docs/commands/review-branch.md",
+    "docs/commands/validate-blueprint.md",
+    ".github/comment-gate/test_comment_gate.py",
+    ".github/issue-form-gate/test_issue_form_gate.py",
+    ".github/output-gate/test_output_gate.py",
+    ".github/plan-size-gate/test_plan_size_gate.py"
+  ],
+  "exclude": []
+}
