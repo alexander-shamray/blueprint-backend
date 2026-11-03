@@ -879,10 +879,12 @@ jobs:
           # A silent testhost would otherwise run to the job's timeout and name
           # nothing. Ten minutes without a test starting or ending, far above any
           # passing test, has blame dump and kill it, and the log name the test.
+          # The dump is full: a mini one holds no managed heap, and an awaited
+          # hang, the usual one here, shows on no thread's stack.
           stage() {
             dotnet test Platform.slnx --no-build -c Release --filter "$FILTER" \
               --collect:"Code Coverage" --settings coverage.runsettings \
-              --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini \
+              --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type full \
               --logger trx --results-directory ./TestResults/integration
           }
           if stage 2>&1 | tee first-attempt.log; then exit 0; fi
