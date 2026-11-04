@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-The README beside this file owns the argument; docs/testing.md, the invocation.
+The README beside this file owns the argument; the testing document docs/harness-local.md names, the invocation.
 """
 
 from __future__ import annotations

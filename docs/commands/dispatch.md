@@ -12,7 +12,8 @@ An executor has to take a PR to a merge: wait on CI, run the solution's
 tests and spawn its own `branch-reviewer`. A subagent can do none of that,
 for the three reasons the spec's §3 gives, so each executor is a headless
 session, `claude -p`, running `/ship` unchanged but for the one token
-`docs/commands/ship.md`'s *Dispatched* section argues.
+`docs/commands/ship.md`'s *Dispatched: the one token /dispatch passes*
+argues.
 
 The dispatcher itself is the session the owner started, because two of its
 jobs are judgement — the interview, and placing a filed issue in a wave and
@@ -172,11 +173,10 @@ transcript cleared is listed under *Merged* as reviewed by the transcript.
 ## Waking
 
 Each executor's `run` is one background task, and its exit is the only
-wake (CLAUDE.md, *A wait wakes once*): the dispatcher never polls, sleeps or
-reads a transcript, because each wake re-sends its whole context. A
+wake (`docs/harness/token-rules.md`, *Waits*): the dispatcher never polls,
+sleeps or reads a transcript, because each wake re-sends its whole context. A
 five-hour window is one background `wait` too, which ends early on the stop
-file, and then the same group is relaunched in the same worktree (spec
-§6.4).
+file, and then the same group is relaunched in the same worktree (spec §6.4).
 
 The dispatcher forks each worktree itself, from the main checkout, before
 `tasks move` and `launch`: `launch` trusts only a worktree git shows on the

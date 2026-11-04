@@ -300,13 +300,13 @@ the session stands.** The list once sat at the main checkout's root, where a
 session moved into `.claude/worktrees/` is refused it by Claude Code's
 isolation; left to "when a PR opens", the update fell to a session that
 could not make it, and a branch holding commits with no PR was missing from
-*In progress*. The contract's §6 now puts the file outside every checkout,
-where the isolation refuses no session, so the row goes in at step 5
-whichever row ran, a linked worktree found at step 0 included, and nothing
-is carried as owed. The row carries the issue's group from *Remaining*, or
-`—` where no group held it, so that a conflicts cell naming the group still
-sees the work while it runs, and under `/ship`'s `--dispatched` the write is
-skipped, because `/dispatch` is the list's one writer for the night and
+*In progress*. `.harness/agent-rules.md`, *Working in a target*, now puts the
+file outside every checkout, where the isolation refuses no session, so the row
+goes in at step 5 whichever row ran, a linked worktree found at step 0 included,
+and nothing is carried as owed. The row carries the issue's group from
+*Remaining*, or `—` where no group held it, so that a conflicts cell naming the
+group still sees the work while it runs, and under `/ship`'s `--dispatched` the
+write is skipped, because `/dispatch` is the list's one writer for the night and
 moved the row itself when it forked the worktree (`docs/commands/ship.md`,
 *Dispatched: the one token /dispatch passes*).
 

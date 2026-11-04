@@ -693,10 +693,11 @@ and then end the body with this line, exactly, as its last non-blank line,
 because the helper refuses a body without it
 (the command is in the runbook).
 
-**The third argument is the area, the label `docs/change-locality.md` §6
-gives the tree the record's file is in.** The file is the record's, so a
-crafted tree can steer which area an issue carries, but only among the
-helper's closed set, which is no more than a mislabelled triage queue.
+**The third argument is the area, the label `docs/harness/working-rules.md`,
+*Issues and the task list*, gives the tree the record's file is in.** The file
+is the record's, so a crafted tree can steer which area an issue carries, but
+only among the helper's closed set, which is no more than a mislabelled triage
+queue.
 
 **The fourth argument is the route, and `sweep` is the one this command
 passes.** The line above is the sentence that route requires; the helper

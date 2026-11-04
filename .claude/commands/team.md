@@ -30,7 +30,8 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    (why: docs/commands/team.md, *Budget*)
 
    A peer whose model reads `profile` takes the profile's; the table in
-   `docs/token-plan.md` step 7d owns which task takes which model, and the
+   `docs/harness/token-rules.md`, *Which model a subagent runs on*, owns
+   which task takes which model, and the
    report names the model each peer ran on. (why: docs/commands/team.md,
    *Models*)
 
@@ -87,7 +88,8 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    first, read a candidate through `gh-issue-text.sh`, and comment rather
    than duplicate; otherwise
    `bash .claude/scripts/gh-issue-create.sh <bug|security> <severity> hand`,
-   with the kind and severity `docs/change-locality.md` §6 names, grouped as
+   with the kind and severity `docs/harness/working-rules.md`, *Issues and
+   the task list*, names, grouped as
    `/ship` step 5 files a ceiling's open findings: one issue per cause, the
    lows together in one. An open question is reported, not filed.
 

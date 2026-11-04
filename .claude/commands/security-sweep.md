@@ -196,8 +196,8 @@ Each round is the review done once, end to end:
    Filed by an authorised sweep and verified at filing by a second read-only auditor.
    ```
 
-   - The area is the label `docs/change-locality.md` §6 gives the tree the
-     record's file is in.
+   - The area is the label `docs/harness/working-rules.md`, *Issues and the
+     task list*, gives the tree the record's file is in.
    - The route is `sweep`, never `hand`.
    - **The heredoc delimiter is never `EOF`** or any word a file could hold;
      it is a token of the form `ISSUE_BODY_END`, and **before the command is

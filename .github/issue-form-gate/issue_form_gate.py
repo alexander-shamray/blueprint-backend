@@ -22,7 +22,7 @@ DEFAULT_CONTRACT = REPO_ROOT / "docs" / "change-locality.md"
 # Every dropdown a form carries is one of these, and every form carries all three.
 GOVERNED = ("kind", "severity", "area")
 
-# The bullet of the contract's section 6 that owns the issue vocabulary.
+# The bullet of the change contract that holds the issue vocabulary.
 VOCABULARY_BULLET = "**The issue vocabulary is wider than the label helper**"
 
 FIELD = re.compile(r"^  - type: (\S+)\s*$")

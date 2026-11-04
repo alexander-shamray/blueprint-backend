@@ -29,6 +29,7 @@ MANAGED_DIRS = (
     ".claude/scripts",
     ".claude/skills",
     "docs/commands",
+    "docs/harness",
     ".github/harness-drift",
 )
 # What the gate needs delivered to judge a target; excluded or local, the target is never checked again (copy of

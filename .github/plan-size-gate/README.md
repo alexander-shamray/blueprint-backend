@@ -1,9 +1,11 @@
 # The plan-size gate
 
 **The claim: every plan file under `docs/superpowers/plans/` dated on or
-after the day [`CLAUDE.md`](../../CLAUDE.md)'s *Plans* rule landed is within
-that rule's size.** The rule owns the limit and the gate reads it as 50 KB of
-1024 bytes; the day the rule landed is `RULE_LANDED` in `plan_size_gate.py`.
+after the day the planning rule landed is within that rule's size.** The
+rule is the *Plans* bullet of
+[`.harness/agent-rules.md`](../../.harness/agent-rules.md)'s *Subagents,
+review rounds and plans*, and it owns the limit and the gate reads it as 50 KB
+of 1024 bytes; the day the rule landed is `RULE_LANDED` in `plan_size_gate.py`.
 
 ## What it reads
 
@@ -22,12 +24,12 @@ that rule's size.** The rule owns the limit and the gate reads it as 50 KB of
 - The date is the one in the file's name, not git's, so a plan can be
   back-dated past the gate by whoever names it.
 - It holds the size and nothing of the one-pass brief that
-  `CLAUDE.md`'s *Subagents, review rounds and plans* gives the plan-writing
-  agent.
+  `.harness/agent-rules.md`'s *Subagents, review rounds and plans* gives
+  the plan-writing agent.
 
 ## How it runs
 
-Its suite, then the gate, in the fast job of [`ci.yml`](../workflows/ci.yml).
+Its suite, then the gate, in the fast job of the target's CI workflow.
 Locally:
 
 ```bash

@@ -3,10 +3,11 @@ name: Comment gate
 # The style guide's comment and width rules over the lines a pull request adds;
 # what the gate reads and claims is .github/comment-gate/README.md's.
 
-# Its own workflow rather than a job in ci.yml because it is the one check that
-# reads a label, so `labeled` and `unlabeled` have to be triggers, and ci.yml
-# on them would rebuild and retest the solution for a change that alters
-# neither. No `edited`: a title change counts from the next push.
+# Its own workflow rather than a job in the CI workflow because it is the one
+# check that reads a label, so `labeled` and `unlabeled` have to be triggers,
+# and the CI workflow on them would rebuild and retest the solution for a
+# change that alters neither. No `edited`: a title change counts from the
+# next push.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]

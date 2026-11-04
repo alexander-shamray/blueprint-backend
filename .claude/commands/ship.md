@@ -253,25 +253,23 @@ branch is.
    either (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
    passes*).
 
-2. **Checks**, selected by the class the PR body will carry
-   (`docs/change-locality.md` §5): `/validate-blueprint` after Class C, or
-   after an edit to a file in that audit's scope — a chapter or appendix,
-   `docs/roadmap.md`, `docs/testing.md`; `/check-links` when the change
-   touched links, cross-references or nav footers under
-   `docs/backend-architecture/`. A Class A runbook edit runs neither, and its
-   PR body says so rather than claiming a run.
+2. **Checks**: what `docs/harness-local.md` *Ship checks* names for this
+   repository, selected by the class the PR body will carry where the
+   target has a change contract. A change none of them covers runs none,
+   and its PR body says so rather than claiming a run.
 
-   **Dispatch the audit, never invoke the command.** Its frontmatter denies
-   `Edit` on `src/` until the turn ends, so step 5 could not fix code after
-   it. Spawn the passes its *Dispatch* section names as `general-purpose`
-   agents told to edit nothing, hand each the scope and the *Method*
-   bullets, and treat the JSON as step 5 treats a finding. The PR body says
-   the audit was dispatched. (why: docs/commands/ship.md, *Step 2: checks*)
+   **Dispatch an audit, never invoke its command.** A command whose
+   frontmatter denies `Edit` holds the deny until the turn ends, so step 5
+   could not fix code after it. Spawn the passes *Ship checks* names as
+   `general-purpose` agents told to edit nothing, hand each the scope and
+   method *Ship checks* gives it, and treat the JSON as step 5 treats a
+   finding. The PR body says the audit was dispatched.
+   (why: docs/commands/ship.md, *Step 2: checks*)
 
    **One check holds whatever the class: a fix to a script under
-   `.claude/` carries its case** (`docs/change-locality.md` §6, *Working
-   rules*). Run it before every commit steps 3 and 5 make; a run resumed past
-   this step with its commits made, and step 6's own commit, read nothing
+   `.claude/` carries its case** (`docs/harness/working-rules.md`, *Tests
+   and gates*). Run it before every commit steps 3 and 5 make; a run resumed
+   past this step with its commits made, and step 6's own commit, read nothing
    here. Every read is granted already:
 
    ```bash
@@ -295,17 +293,17 @@ branch is.
    `/commit` is about to write that touches that script.
 
    **A refusal stops the chain.** Report the script, the suites looked for
-   and the rule as the contract's §6 words it; the commit body argues that
-   the new case failed before the fix.
+   and the rule as `docs/harness/working-rules.md` words it; the commit body
+   argues that the new case failed before the fix.
 
-   Run the checks **before `/commit`, not after**, fix what they find, and
-   run them again. Reconcile a blueprint contradiction to whichever side the
-   rest of the system depends on, as `/validate-blueprint` instructs, and
-   record the direction in the commit body. Where a finding has two
-   defensible answers, take the one the surrounding argument supports and put
-   both, and the one rejected, in the report. **Do not skip these to reach
-   the PR sooner**; one skipped for a reason has the reason in the PR body
-   and in the report. (why: docs/commands/ship.md, *Step 2: checks*)
+   Run the checks **before `/commit`, not after**, fix what they find, and run
+   them again. Reconcile a contradiction a check finds to whichever side the
+   rest of the system depends on, and record the direction in the commit body.
+   Where a finding has two defensible answers, take the one the surrounding
+   argument supports and put both, and the one rejected, in the report. **Do not
+   skip these to reach the PR sooner**; one skipped for a reason has the reason
+   in the PR body and in the report. (why: docs/commands/ship.md, *Step 2:
+   checks*)
 
 3. **`/commit`**. Skip if the tree is clean. Never collapse the split to save
    a step. (why: docs/commands/ship.md, *Step 3: /commit*)
@@ -385,7 +383,7 @@ branch is.
      ```
 
      File a prose finding as `bug`, and each under the area its file's tree
-     takes (`docs/change-locality.md` §6). The
+     takes (`docs/harness/working-rules.md`, *Issues and the task list*). The
      report says the review ended on its ceiling rather than clean, and
      names the issues.
 

@@ -74,7 +74,7 @@ British spelling in prose, identifiers left alone.>
   Read the number from `bash .claude/scripts/pr-for-branch.sh`, its `OPEN`
   row. Before the PR exists there is nothing to name, and `/pr` adds the
   trailer to those commits once there is. The commit gate refuses a pushed
-  commit without it (`docs/change-locality.md` §6).
+  commit without it (`docs/harness/working-rules.md`, *Commits*).
 
 ## Steps
 

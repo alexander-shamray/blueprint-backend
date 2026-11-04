@@ -85,6 +85,11 @@ class Subjects(unittest.TestCase):
     def test_an_unknown_type_fails(self) -> None:
         self.assertIsNotNone(subject_problem("update: a"))
 
+    def test_an_unknown_type_is_told_the_closed_set_and_the_ci_type(self) -> None:
+        problem = subject_problem("ci(observability): a") or ""
+        self.assertIn("docs, feat(<scope>), fix, chore, refactor or test", problem)
+        self.assertIn("chore(ci) or fix(ci), never ci(...)", problem)
+
     def test_a_subject_with_no_colon_space_fails(self) -> None:
         for subject in ("docs a", "docs:a", "docs: ", ""):
             with self.subTest(subject=subject):

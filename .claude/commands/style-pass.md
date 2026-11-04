@@ -1,5 +1,5 @@
 ---
-description: Apply one code-style form corpus-wide, then record it in docs/style-guide.md and .editorconfig
+description: Apply one code-style form corpus-wide, then record it in the style guide and .editorconfig
 argument-hint: "<the corrected form — paste the code as it should read>"
 allowed-tools: Read, Grep, Glob, Edit, Bash(git diff:*), Bash(wc:*), Bash(ls:*)
 ---
@@ -20,15 +20,16 @@ fluent chain puts every call on its own line at head + 4, the first call
 included*, which then decides what happens to a chain whose head is a wrapped
 initialiser line.
 
-If the rule as stated would contradict something `docs/style-guide.md` or
-`CLAUDE.md` already says, stop and say which. That is a decision about the
+If the rule as stated would contradict something the style guide
+`docs/harness-local.md` *Documents* names, or `CLAUDE.md`, already says,
+stop and say which. That is a decision about the
 whole corpus and it is the user's.
 
 ## 2. Sweep the corpus
 
 The named site is one of many. Find the rest across every fenced block in
-`docs/backend-architecture/` — and, once `src/` exists, the source too,
-because one dialect governs both.
+the product specification `docs/harness-local.md` *Documents* names — and
+the source too, because one dialect governs both.
 
 Grep gets you candidates; reading them gets you the shape. Anything structural
 — bracket depth, chain heads, continuation columns, raw-string boundaries —
@@ -70,21 +71,21 @@ head; `(await conn.QueryAsync<T>(` opens two brackets on one line legitimately;
 an expression-bodied member is not a lambda; commas inside a generic argument
 list are not list elements.
 
-## 3. Record it in `docs/style-guide.md`
+## 3. Record it in the style guide
 
-The rule goes in that file's C# style or SQL style section, in the
+The rule goes in the style guide's section for its language, in the
 established voice: the rule, an example, and **the reason it is not
 arbitrary**. State the exceptions with them — half that file's value is the
 carve-outs, and a rule recorded without its exceptions gets applied to the
 exceptions next time.
 
-**`CLAUDE.md` keeps a short list of these rules under *Style*, and the guide
-is the master copy.** If the form you corrected is one of the ones it names,
-the change has to reach both in this pass — a rule in two places that moves
-in one of them is the drift the split was accepted in order to buy.
+**Where the target's `CLAUDE.md` keeps a short list of these rules, the
+guide is the master copy.** If the form you corrected is one of the ones it
+names, the change has to reach both in this pass — a rule in two places that
+moves in one of them is the drift the split was accepted in order to buy.
 
-Update any count the change invalidates. `docs/style-guide.md` cites site
-counts as evidence and a stale one is a defect.
+Update any count the change invalidates. Where the style guide cites site
+counts as evidence, a stale one is a defect.
 
 ## 4. Reconcile `.editorconfig`
 
@@ -119,7 +120,7 @@ introduce:
 
 ## Report
 
-The rule as stated, sites changed per file, the `docs/style-guide.md`,
-`CLAUDE.md` and `.editorconfig` edits, and the invariant scan results as
+The rule as stated, sites changed per file, the style guide, `CLAUDE.md`
+and `.editorconfig` edits, and the invariant scan results as
 numbers. Flag every judgement call where two of the rules both applied and
 one had to win — do not bury it.

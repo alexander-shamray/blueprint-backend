@@ -69,7 +69,7 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
         }
         return subprocess.run(
             [BASH, str(self.HELPER), "some-branch"],
-            capture_output=True, text=True, env=env)
+            capture_output=True, text=True, encoding="utf-8", env=env)
 
     def test_only_this_checkouts_pull_requests_survive(self):
         result = self.run_helper()

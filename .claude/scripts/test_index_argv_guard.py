@@ -38,7 +38,7 @@ class GuardIndexArgv(unittest.TestCase):
         }
         result = subprocess.run(
             [sys.executable, str(HOOK)],
-            input=json.dumps(event), capture_output=True, text=True,
+            input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
         )
         self.assertEqual(0, result.returncode, result.stderr)
         if not result.stdout.strip():
@@ -183,7 +183,7 @@ class GuardIndexArgv(unittest.TestCase):
     def test_a_list_event_fails_open(self):
         result = subprocess.run(
             [sys.executable, str(HOOK)],
-            input="[]", capture_output=True, text=True)
+            input="[]", capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("", result.stdout.strip())
 
@@ -195,7 +195,7 @@ class GuardIndexArgv(unittest.TestCase):
         }
         result = subprocess.run(
             [sys.executable, str(HOOK)],
-            input=json.dumps(event), capture_output=True, text=True)
+            input=json.dumps(event), capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("", result.stdout.strip())
 

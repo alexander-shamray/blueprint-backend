@@ -14,24 +14,23 @@ peer is handed its id, its role and the run directory, and never the
 owner's conclusions or another peer's reply: the board is the only place
 their readings meet, and each claim on it carries its own evidence.
 
-**The owner is the session that ran the command.** It is the only one
-holding a workspace, a shell and a write, as `docs/change-locality.md` §4's
-*Partitions* already asks: one worktree and one branch per agent. The peers
-are `team-peer` agents whose tool list is `Read`, `Grep` and `Glob`, for
-the reason `docs/harness-boundaries.md` gives for `branch-reviewer`: the
-board holds other peers' text, so a claim written to steer a peer can only
-be refuted, and a peer cannot grant another anything it lacks. With two or
-more peers the last is a reviewer, so every claim meets one peer whose job
-is to break it; a lone peer investigates.
+**The owner is the session that ran the command.** It is the only one holding a
+workspace, a shell and a write: one worktree and one branch per agent that
+writes. The peers are `team-peer` agents whose tool list is `Read`, `Grep` and
+`Glob`, for the reason `docs/harness-boundaries.md` gives for `branch-reviewer`:
+the board holds other peers' text, so a claim written to steer a peer can only
+be refuted, and a peer cannot grant another anything it lacks. With two or more
+peers the last is a reviewer, so every claim meets one peer whose job is to
+break it; a lone peer investigates.
 
-**Why not a workflow.** A workflow script keeps each round's replies out of
-the owner's context, which is the cost `docs/token-plan.md` step 2
-measured. It was rejected for two reasons. Its script has no file system, so
-the board would live in the run's memory and journal rather than in files.
-And its merge and convergence rules would be JavaScript, which no suite in
-this repository runs. A reply is at most about 2k tokens, so four peers over
-seven rounds hold at most about 56k in the owner, the same order as `/ship`'s
-review loop, which keeps the same shape.
+**Why not a workflow.** A workflow script keeps each round's replies out of the
+owner's context, which is the cost backend's token plan measured when it moved
+the reviewers into subagents. It was rejected for two reasons. Its script has no
+file system, so the board would live in the run's memory and journal rather than
+in files. And its merge and convergence rules would be JavaScript, which no
+suite in this repository runs. A reply is at most about 2k tokens, so four peers
+over seven rounds hold at most about 56k in the owner, the same order as
+`/ship`'s review loop, which keeps the same shape.
 
 ## Shared state is files
 
@@ -84,11 +83,11 @@ confounded by host saturation and a plan flip mid-series.
 
 ## Models
 
-`--models` maps one model to each peer, in order. Without it a peer takes
-its profile's model, Opus, because a peer's error is a silent miss — the
-owner decides from what the peers found, and nothing checks what none of
-them looked at. `docs/token-plan.md` step 7d's table owns that assignment;
-a cheaper model is the user's choice per peer, named in the report.
+`--models` maps one model to each peer, in order. Without it a peer takes its
+profile's model, Opus, because a peer's error is a silent miss — the owner
+decides from what the peers found, and nothing checks what none of them looked
+at. `docs/harness/token-rules.md`, *Which model a subagent runs on*, owns that
+assignment; a cheaper model is the user's choice per peer, named in the report.
 
 ## Budget
 
@@ -102,10 +101,10 @@ with the most spawns it can make.
 
 ## Output
 
-The report names what was decided and by which evidence, the claims
-refused and why, and what is left open, filed with `docs/change-locality.md`
-§6's kind and severity and grouped as `/ship` step 5 files a ceiling's open
-findings. `/team` makes no change: where the goal is one, the report ends
-with the `/ship` invocation that carries it. The user runs that as a turn
-of its own, because `/team`'s frontmatter denies every other agent type
-until its turn ends, `branch-reviewer` among them.
+The report names what was decided and by which evidence, the claims refused and
+why, and what is left open, filed with `docs/harness/working-rules.md`'s kind
+and severity and grouped as `/ship` step 5 files a ceiling's open findings.
+`/team` makes no change: where the goal is one, the report ends with the `/ship`
+invocation that carries it. The user runs that as a turn of its own, because
+`/team`'s frontmatter denies every other agent type until its turn ends,
+`branch-reviewer` among them.

@@ -7,7 +7,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 
 | Section | What it covers |
 |---|---|
-| Purpose and provenance of this file | Why the section left CLAUDE.md, the four edits made in the move, and the scope-drift callouts. |
+| Purpose and provenance of this file | Why the section left backend's CLAUDE.md, the four edits made in the move, and the two passages since moved to backend's residuals. |
 | Edit denies and agent self-protection | Edit-only file rules, the denied .claude trees, and why the skill and index-wrapper grants need guarding. |
 | Index refresh and worktree seeding | The PostToolUse refresh hook, seeding worktree indexes, carrying MCP approval into forks, and the SessionStart refresh. |
 | Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
@@ -21,10 +21,10 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Pull request reads and the locality verdict | Fixed-field PR helpers, the gh allow-list gate, #150, and pr-locality.sh's contract. |
 | Sweep push denies and chained commands | Push denies in the sweeps, and why a command /ship runs before it pushes never denies push. |
 | Output deny and shell-expansion residuals | The --output entry closed by the hook, expansion readings, locale quotes, process substitution, crashes and pipes. |
-| Agent-type, push and dotnet entries | Agent-type deny enumeration, the inverted push check, and review-branch's dotnet grants and MSBuild imports. |
+| Agent-type, push and dotnet entries | Agent-type deny enumeration, the inverted push check, and a branch-review command's dotnet grants and MSBuild imports. |
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
-| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, their slice lists and ref, and the one sweep that executes. |
+| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, and their slice lists and ref. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop; the quality sets' runs, which load only user settings. |
 | Managed files | Which paths blueprint-harness owns and where they are changed, the `local` paths a repository keeps, and the drift gate that holds them. |
 
@@ -32,27 +32,30 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 
 **What the agent harness grants this repository's commands, what it refuses
 them, and every place a grant is wider than the operation it was added for.**
-This was `CLAUDE.md`'s *What cuts across them* section until it reached 582
-lines. It is load-bearing whenever you touch `.claude/` — a command's
-frontmatter, a helper script, `settings.json`, a hook, a subagent profile — and
-inert for every other kind of change, which is what earns it a file rather than
-a permanent seat in every session's context.
+This was the *What cuts across them* section of backend's `CLAUDE.md` until
+it reached 582 lines. It is load-bearing whenever you touch `.claude/` — a
+command's frontmatter, a helper script, `settings.json`, a hook, a subagent
+profile — and inert for every other kind of change, which is what earns it a
+file rather than a permanent seat in every session's context.
 
 **The content is verbatim in its arguments**, on
-[`pr-decision-log.md`](pr-decision-log.md)'s terms and for its reason: a summary
+backend's PR decision log's terms and for its reason: a summary
 of an argument is how a rule gets "corrected" back. Four edits were made on the
 way out, and naming them is cheaper than a claim that does not survive a grep.
 The `### What cuts across them` heading became this file's title. One paragraph
-arrived from `CLAUDE.md`'s *The commands* section — the one recording that
-#150's suppression clause moved three grants along before it stuck — because
-its subject is a grant and not a command; its opening was rebased from "That
-last clause", which pointed at a paragraph that did not travel with it. And
-**two self-references** were rebased the same way: the grant inventory's count
-of rotted totals said "in this file" of `CLAUDE.md` and named two siblings that
-now live in two other files, and the sandbox residual said the commands cite
-"this file" — true while it sat in `CLAUDE.md`, and a contradiction of the
+arrived from the *The commands* section of that `CLAUDE.md` — the one recording
+that #150's suppression clause moved three grants along before it stuck —
+because its subject is a grant and not a command; its opening was rebased from
+"That last clause", which pointed at a paragraph that did not travel with it.
+And **two self-references** were rebased the same way: the grant inventory's
+count of rotted totals said "in this file" of `CLAUDE.md` and named two siblings
+that now live in two other files, and the sandbox residual said the commands
+cite "this file" — true while it sat in `CLAUDE.md`, and a contradiction of the
 paragraph below the moment it moved. Not one argument was shortened, and no
-paragraph was dropped.
+paragraph was dropped. Two were later moved out when the file became the
+harness's, because only backend's own commands make them true: the callout
+on what backend's link and blueprint checks read, and the paragraph on its
+mutation sweep. They are backend's residuals now.
 
 **The second of those was found by review rather than by the move**, which is
 worth recording where the edits are listed: a self-reference that stays *true
@@ -74,25 +77,6 @@ pointer rather than a second copy.
 > whitelist* — `allowed-tools` is an auto-approval list, so omitting a tool from
 > a command's frontmatter withholds nothing. Refusing a capability takes a
 > **deny**.
-
-> **This file is outside the blueprint tree, so nothing structural catches its
-> drift.** `/check-links` checks `docs/backend-architecture/` and the root
-> README's entry point into it, so a file anywhere else is outside its scope
-> whatever links it, and `/validate-blueprint` does not name this one —
-> `testing.md` and `roadmap.md` are the only two of those siblings it does. The
-> one rule in `CLAUDE.md` covers this file, and that is all that does.
->
-> **The siblings are described rather than listed on purpose.** Three copies of
-> this callout named three different sets the moment two new files arrived,
-> which is what a list with no code to check it against does.
->
-> **A predicate is only better than a list if it is true.** These three
-> callouts first said this file is in no index “like every document under
-> `docs/` that is not the blueprint tree”, which is false twice over:
-> `docs/runbooks/README.md` is an index of the runbooks beside it, and the
-> root `README.md` links `docs/roadmap.md`. Scope is the durable fact and
-> being unindexed never was — a false predicate is a stale list with an
-> argument in front of it.
 
 ---
 
@@ -170,7 +154,7 @@ seven files, the wrappers' `-P` and `PYTHONSAFEPATH` among what went. The
 `env` block reaches every command a session runs **when the session applies
 it**, and a cloud session's shell on 2026-10-08 did not have it: one
 `codebase-index --help` there rewrote the same seven files and widened the
-skill's grants to `Bash(cbx *)` (`docs/token-usage.md`, 2026-10-08). So a
+skill's grants to `Bash(cbx *)` (backend's token-usage log, 2026-10-08). So a
 run outside the wrapper and the hooks sets the variable itself.
 
 ## Index refresh and worktree seeding
@@ -495,8 +479,8 @@ true.
 
 **The external reviewers are archived, not deleted.** Grok's container
 review and Copilot's loop, their commands, agents, helpers, hooks and
-suites, and the sandbox image left the tree with `docs/token-plan.md` step
-4; the tag `archive/external-reviewers` holds them, and
+suites, and the sandbox image left backend's tree with its token plan's
+step 4; the tag `archive/external-reviewers` holds them, and
 `git checkout archive/external-reviewers -- <paths>` restores them. The
 sections below keep the residuals those tools raised where the grant or the
 guard they shaped still stands.
@@ -729,6 +713,24 @@ no crude check reads git's options or sees a name that case, a glob or an
 expansion builds. The cost is a rephrased command where bash would have run
 one `shlex` cannot read.
 
+**Three refusals are traps, not attacks**: the command does what it says,
+and what it says loses work. They are the honest mistakes *The guards'
+threat model* above is scoped to, and its criterion 3 holds for them as for
+any check, so a false refusal by one is filed. A
+`git push` whose output is piped and whose pipeline is then chained by `&&`
+or `||` with no `set -o pipefail` first runs what follows on a failed push;
+`git update-index --cacheinfo` with a literal mode drops or adds an
+executable bit unseen on Windows, refused unless the command carries
+`--add`, which stages a path the index lacks and is admitted because the
+guard cannot see whether the index holds the path; and
+`git reset --soft` to a remote-tracking ref recommits over whatever another
+session's fetch moved in. Each is refused
+because the guard can see it from the command's text, and each message names
+the form that works, so the remedy arrives at the refusal rather than in a
+memory (`docs/harness/pitfalls.md` holds the traps no guard can see). The
+refusal of a heredoc handed to a shell names the same kind of remedy: a
+script's input goes through `< <path>`, written with `Write`.
+
 ## The ext transport and pinned grants
 
 **The `::` in a value collides with the `:*` suffix syntax, and the collision
@@ -805,8 +807,8 @@ and it went stale the moment a branch pinned that file's fetch grant.
 **The entries are numbered and the numbering is stable; the headline count that
 used to open this paragraph is gone on purpose.** It read "six" and was made
 false by #56 closing the fourth, which is the third time a restated total in
-this repository's guidance has rotted — `CLAUDE.md`'s callout totals and
-`docs/testing.md`'s test count went the same way,
+this repository's guidance has rotted — backend's `CLAUDE.md` callout totals
+and its testing document's test count went the same way,
 and the fix that held there was to drop the number and keep the named entries.
 Ordinals are kept even where an entry is closed, so a cross-reference to "the
 fourth" still lands, and each entry says its own state. Read the entries; do
@@ -898,8 +900,8 @@ injection vector. **No command grants `Bash(gh pr view:*)` or
 `Bash(gh pr list:*)` any more**: `ship.md` reads state through
 `pr-state.sh`, `pr.md` feeds the closure gate through
 `pr-closure-input.sh`, every command that needs a branch's PR resolves it
-through `pr-for-branch.sh`, and `review-branch.md` and `ship.md` judge a
-PR's changed paths through `pr-locality.sh`. Every one fixes its field set,
+through `pr-for-branch.sh`, and `ship.md` judges a PR's changed paths
+through `pr-locality.sh`. Every one fixes its field set,
 because a caller that chooses fields can choose `reviews`. **`gh pr list`
 was the door found last**: `--json reviews,comments` returns every pull
 request's review bodies at once, and three commands kept it for the
@@ -1161,17 +1163,17 @@ matches a destination that is not fully qualified against `refs/%s`, so
 longer prefix (#1154). It strips either now, once, so `refs/heads/heads/main`
 stays the branch it names.
 
-**The ninth is `/review-branch`'s pair of `dotnet` grants, and what makes it
-worth its own entry is that the enumeration guarding it could never have
-worked.** That command holds `Write` and held `Bash(dotnet build:*)` and
-`Bash(dotnet test:*)`; its `disallowed-tools` denies every tracked root file,
-read from `git ls-files` by a test so a new one is a red build. But MSBuild
-imports `Directory.Build.targets` into every build of every project beneath it,
-and that file **does not exist in this repository** — so it is on no list read
-from what exists, and no care about that test could have put it there. Write it,
-run the build the command already had, and an `Exec` in it runs. Measured, in a
-scratch tree: the target fires and `dotnet build` reports success. Raised in
-review.
+**The ninth is backend's branch-review command's pair of `dotnet` grants, and
+what makes it worth its own entry is that the enumeration guarding it could
+never have worked.** That command holds `Write` and held `Bash(dotnet build:*)`
+and `Bash(dotnet test:*)`; its `disallowed-tools` denies every tracked root
+file, read from `git ls-files` by a test so a new one is a red build. But
+MSBuild imports `Directory.Build.targets` into every build of every project
+beneath it, and that file **does not exist in this repository** — so it is on no
+list read from what exists, and no care about that test could have put it there.
+Write it, run the build the command already had, and an `Exec` in it runs.
+Measured, in a scratch tree: the target fires and `dotnet build` reports
+success. Raised in review.
 
 `dotnet build` was a grant the command never used — its body names
 `dotnet test` alone — and `dotnet test:*` bought two things beyond the run it
@@ -1181,8 +1183,8 @@ gone, replaced by `dotnet-test.sh`, whose only variable is one word out of two.
 **The helper closes the executor and not the import**, so the auto-imported
 names are denied as well — in **both** commands that state editing boundaries,
 because the artefact outlives the command that writes it and only one of the
-two had an executor. A `Directory.Build.targets` written by
-`/validate-blueprint` is executed by the next thing that builds.
+two had an executor. A `Directory.Build.targets` written by backend's
+blueprint audit is executed by the next thing that builds.
 
 **Which half is measured is recorded rather than rounded up.** The exact
 filenames are the spelling both files already used and the suite reads. The
@@ -1431,22 +1433,6 @@ read less only by pointing at a commit that really was swept clean; a
 poisoned tree cannot reach it, because the parent runs it once, on a clean
 end, with `$pinned`.
 
-**`/mutation-sweep` is the third sweep, and the one that executes.** It
-borrows the `secsweep-` worktree and both its helpers, and its reports go to
-the worktree's path plus `.mutation`, which `git-worktree-drop.sh` removes
-beside `.slices`. A mutant's fate is its suite's verdict, so execution is the
-confirmation there; what it measures is a test a suite lacks, which
-`/bug-sweep`'s auditor names as not its finding, not the defect that sweep
-names as its residual. The grant that buys it is `mutation-run.sh`, whose
-only argument is the worktree path in the checked shape; the runner
-configuration and the report reader are read beside the helper, never from
-the tree. The commit still decides what its own build and tests do, and
-through its own `.config/dotnet-tools.json` which Stryker build runs them, so
-the session holds no `Edit`, `Write` or agent there, and the raw `dotnet` is
-denied so that the helper is the one route to an execution;
-[`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
-rest.
-
 ## Headless dispatched sessions
 
 Up to `--pairs` headless `claude -p` sessions, a number the owner sets at
@@ -1551,3 +1537,24 @@ inside a managed directory: a sync neither writes nor deletes it.
 `.github/workflows/harness-drift.yml`. Its README owns what the
 gate refuses, how a config change re-renders the settings, and what to do
 when it is red.
+
+**`docs/harness-local.md` is the one document every target writes for the
+payload**, and the payload cites it rather than any target document by path:
+the commands run in repositories with different products, so where one
+names a target's document or check it names the row of this file that does.
+It is the repository's own file, never in the manifest, and holds four
+headings, fixed so a citation of one lands in every target:
+
+- *Documents*: one row per role, each a path in the repository or `none` —
+  the change contract (the classes, the touch set and their class map), the
+  style guide, the testing document, the product specification, the
+  roadmap, the closed records a reviewer greps rather than reads, and the
+  measurements `docs/harness/token-rules.md`'s reasons rest on.
+- *Ship checks*: the checks `/ship` step 2 runs here, each with the change
+  that selects it and the passes it dispatches, each pass's scope and
+  method as its brief, or `none`.
+- *Residuals*: what this file's arguments leave open only in this
+  repository, beside the residuals stated above.
+- *Review examples*: the kinds of finding this repository's surface
+  produces, read beside `docs/harness/working-rules.md`'s *What counts as a
+  finding*.
