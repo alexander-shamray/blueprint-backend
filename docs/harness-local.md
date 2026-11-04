@@ -47,26 +47,29 @@ claiming a run.
 Two passages leave `docs/harness-boundaries.md` in the sync to
 blueprint-harness 8a330bc, because only this repository's own commands make
 them true; until it merges they stand in both files.
-Their arguments are verbatim; two references were rebased so they still
-land here: the callout's "this file" now names the boundaries file, and the
-mutation sweep's "both its helpers" now names the two its earlier paragraph
-listed.
+Their arguments are verbatim; the references that pointed at the file they
+sat in were rebased so they still land here. In the callout, "This file"
+and "this file" in its first and third paragraphs now name the boundaries
+file, and "this one" and "this file" in its first paragraph's last two
+sentences read "it"; in the mutation sweep's paragraph, "both its helpers"
+now names the two its earlier paragraph listed.
 
 > **`docs/harness-boundaries.md` is outside the blueprint tree, so nothing
 > structural catches its drift.** `/check-links` checks
 > `docs/backend-architecture/` and the root README's entry point into it, so
 > a file anywhere else is outside its scope whatever links it, and
-> `/validate-blueprint` does not name this one — `testing.md` and
-> `roadmap.md` are the only two of those siblings it does. The one rule in
-> `CLAUDE.md` covers it, and that is all that does.
+> `/validate-blueprint` does not name it — `testing.md` and `roadmap.md`
+> are the only two of those siblings it does. The one rule in `CLAUDE.md`
+> covers it, and that is all that does.
 >
 > **The siblings are described rather than listed on purpose.** Three copies
 > of this callout named three different sets the moment two new files
 > arrived, which is what a list with no code to check it against does.
 >
 > **A predicate is only better than a list if it is true.** These three
-> callouts first said this file is in no index “like every document under
-> `docs/` that is not the blueprint tree”, which is false twice over:
+> callouts first said `docs/harness-boundaries.md` is in no index “like
+> every document under `docs/` that is not the blueprint tree”, which is
+> false twice over:
 > `docs/runbooks/README.md` is an index of the runbooks beside it, and the
 > root `README.md` links `docs/roadmap.md`. Scope is the durable fact and
 > being unindexed never was — a false predicate is a stale list with an
