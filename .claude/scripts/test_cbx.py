@@ -43,7 +43,7 @@ def _ps_invoke(script, *args, env=None, cwd=None):
     return subprocess.run(
         [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
          "-File", str(script), *args],
-        capture_output=True, text=True, env=env, cwd=cwd,
+        capture_output=True, text=True, encoding="utf-8", env=env, cwd=cwd,
     )
 
 
@@ -191,7 +191,7 @@ class CbxWrapper(unittest.TestCase):
             with self.subTest(sub=sub):
                 out = subprocess.run(
                     [_bash(), str(CBX), sub],
-                    capture_output=True, text=True)
+                    capture_output=True, text=True, encoding="utf-8")
                 self.assertEqual(2, out.returncode, out.stderr)
                 self.assertIn("refusing subcommand", out.stderr)
 
@@ -206,7 +206,7 @@ class CbxWrapper(unittest.TestCase):
             }
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
-                capture_output=True, text=True, env=env)
+                capture_output=True, text=True, encoding="utf-8", env=env)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("PATH_CLI search X", out.stdout)
 
@@ -233,7 +233,7 @@ class CbxWrapper(unittest.TestCase):
             env = {**os.environ, "PATH": fake}
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
-                capture_output=True, text=True, env=env)
+                capture_output=True, text=True, encoding="utf-8", env=env)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("MODULE search X", out.stdout)
 
@@ -251,7 +251,7 @@ class CbxWrapper(unittest.TestCase):
             env = {**os.environ, "PATH": fake}
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
-                capture_output=True, text=True, env=env)
+                capture_output=True, text=True, encoding="utf-8", env=env)
             self.assertEqual(127, out.returncode, out.stderr)
             self.assertIn("not on PATH", out.stderr)
             self.assertNotIn("MODULE", out.stdout)
@@ -378,7 +378,7 @@ class CbxWrapper(unittest.TestCase):
             }
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
-                capture_output=True, text=True, env=env, cwd=fake)
+                capture_output=True, text=True, encoding="utf-8", env=env, cwd=fake)
             self.assertFalse(
                 (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
             self.assertNotIn("CHECKOUT", out.stdout)

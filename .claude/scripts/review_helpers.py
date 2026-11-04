@@ -67,7 +67,7 @@ def run_bash(script, subject="", **env_extra):
         [BASH, "-c", script],
         input=subject,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8",
         env=env,
     )
 

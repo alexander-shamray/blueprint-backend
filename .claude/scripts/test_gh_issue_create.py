@@ -77,7 +77,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         env["PATH"] = self.dir + os.pathsep + env["PATH"]
         return subprocess.run(
             [BASH, str(self.HELPER), *args],
-            capture_output=True, text=True, input=body, env=env,
+            capture_output=True, text=True, encoding="utf-8", input=body, env=env,
         )
 
     def calls(self):
@@ -304,7 +304,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
             f"{body}"
             "ISSUE_BODY_END\n"
         )
-        result = subprocess.run([BASH, "-c", script], capture_output=True, text=True, env=env)
+        result = subprocess.run([BASH, "-c", script], capture_output=True, text=True, encoding="utf-8", env=env)
         self.assertNotEqual(97, result.returncode, "the stub gh was not first on PATH")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse((d / "pwned").exists())
@@ -335,7 +335,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
             f"{self.TRAILER}\n"
             "ISSUE_BODY_END\n"
         )
-        result = subprocess.run([BASH, "-c", script], capture_output=True, text=True, env=env)
+        result = subprocess.run([BASH, "-c", script], capture_output=True, text=True, encoding="utf-8", env=env)
         self.assertNotEqual(97, result.returncode, "the stub gh was not first on PATH")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse((d / "pwned").exists())
