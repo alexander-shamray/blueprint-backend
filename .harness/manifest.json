@@ -1,5 +1,5 @@
 {
-  "harness_commit": "6fc38c9fd3566630e01515dbc1fcfac9e11e8088",
+  "harness_commit": "c57b3012d55a4d403aae76b826775121f4deedc9",
   "files": {
     ".claude/agents/branch-reviewer.md": "7838e0d30399b193d6c57c009cdd1f86e45464c58af6bd3accbfe7afaa7c0a2a",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -110,6 +110,7 @@
     ".github/workflows/comment-gate.yml": "66ec2c812ae20a41d4e07bf85de96cd2f8709d78900afb5efb3d8ef741cb1550",
     ".github/workflows/commit-gate.yml": "12062b9627f5539236df9023c8d6073e9d3dae3995f6de3b032fcb76336f5d76",
     ".github/workflows/harness-drift.yml": "7f4c08c47283a15629b1f9374f9e0e9a7e46ea07f5c10843e4224db6fb0d3cce",
+    ".harness/agent-rules.md": "fe44464e7945a2f8b354e8c302eaac1dfa30a041aa317f00863360c862997796",
     ".harness/render.py": "f1f986b939d946627e8db682ab8be54ade13d936d8cc148eac150521b1a63c54",
     ".harness/settings.base.json": "403484bb33fef9ef6e168e17bb0c52fa6949c056488a3d425f8fa3dd8f55c73e",
     "docs/commands/branch.md": "2fda0a9abad6c1211bfcacde839edd0b320d53cf409ca6a3381081d0f74fcb01",
