@@ -1,8 +1,11 @@
 # Harness-local: blueprint-backend
 
 What the payload's commands name by role, filled in for this repository.
-The four headings are fixed by `docs/harness-boundaries.md`, *Managed
-files*; this file is the repository's own and no sync writes it.
+The four headings are fixed by the payload's `docs/harness-boundaries.md`,
+*Managed files*, which the sync to blueprint-harness 8a330bc (#1745)
+brings; this file is the repository's own and no sync writes it. Until that
+sync merges, the managed copies the rows below name still state what each
+row says and are its owners.
 
 ## Documents
 
@@ -41,8 +44,9 @@ claiming a run.
 
 ## Residuals
 
-Two passages left `docs/harness-boundaries.md` when it became the
-harness's, because only this repository's own commands make them true.
+Two passages leave `docs/harness-boundaries.md` in the sync to
+blueprint-harness 8a330bc, because only this repository's own commands make
+them true; until it merges they stand in both files.
 Their arguments are verbatim; two references were rebased so they still
 land here: the callout's "this file" now names the boundaries file, and the
 mutation sweep's "both its helpers" now names the two its earlier paragraph
@@ -88,7 +92,9 @@ rest.
 
 ## Review examples
 
-Read beside `docs/harness/working-rules.md`, *What counts as a finding*:
+Read beside `docs/harness/working-rules.md`, *What counts as a finding*,
+which the same sync adds; until then
+`.claude/commands/review-branch.md` states these four itself:
 
 1. **Blueprint ↔ code drift**: samples, pins, type names, registration
    order, endpoints, credentials.
