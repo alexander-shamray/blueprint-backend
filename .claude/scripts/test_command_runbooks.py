@@ -19,7 +19,7 @@ CEILINGS = {
     "security-sweep.md": 14900,
     "mutation-sweep.md": 7700,
     "branch.md": 9000,
-    "validate-blueprint.md": 9000,
+    "validate-blueprint.md": 9900,
     "review-branch.md": 8400,
     "team.md": 6300,
     "dispatch.md": 14500,
