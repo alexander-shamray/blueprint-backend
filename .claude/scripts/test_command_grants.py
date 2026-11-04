@@ -230,11 +230,13 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
 
     def test_none_of_them_denies_push_or_the_shell(self):
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
+        # ship.md names its chain; the checks it runs are docs/harness-local.md's Ship checks.
+        ship += (COMMANDS.parent.parent / "docs" / "harness-local.md").read_text(encoding="utf-8")
         for name in self.CHAINED_BEFORE_A_PUSH:
             text = (COMMANDS / name).read_text(encoding="utf-8")
             denied = ", ".join(frontmatter_list(text, "disallowed-tools"))
             with self.subTest(command=name):
-                # An exemption nobody needs quietly widens, so the command has to be one ship.md names.
+                # An exemption nobody needs quietly widens, so the command has to be one the chain names.
                 self.assertIn(f"`/{name.removesuffix('.md')}`", ship)
                 self.assertNotIn("Bash(git push", denied)
                 self.assertIsNone(
