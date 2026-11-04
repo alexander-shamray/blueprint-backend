@@ -51,6 +51,10 @@ docs/harness-boundaries.md   what the harness grants these commands and what
                              operation it buys. Read it before touching
                              anything under .claude/, and state a new residual
                              there rather than in `CLAUDE.md`
+docs/harness-local.md        what the harness's commands name by role,
+                             filled in for this repository: its documents,
+                             /ship's checks, its residuals and its review
+                             examples; its own file, never synced
 docs/change-locality.md      the operating contract — the trust order, the
                              one rule, the change classes; the paths each
                              class may reach live in classes.yml, cited
