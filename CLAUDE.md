@@ -132,9 +132,10 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
 ## The harness
 
 `docs/harness-boundaries.md` is what the harness grants these commands and
-refuses them; read it before touching anything under `.claude/`, and state
-a new residual there. Two rules reach every session: **file permission
-rules take `Edit(...)`, never `Write(...)`** — a `Write(path)` rule matches
-nothing and stops Claude Code from starting; and **`.claude/settings.json`
-self-locks, not instantaneously** — a change to it lands complete and goes
-last, and a restore is verified by reading the file.
+refuses them; read it before touching anything under `.claude/`. It is
+managed, so a new residual only this repository has goes in
+`docs/harness-local.md` *Residuals*. Two rules reach every session: **file
+permission rules take `Edit(...)`, never `Write(...)`** — a `Write(path)`
+rule matches nothing and stops Claude Code from starting; and
+**`.claude/settings.json` self-locks, not instantaneously** — a change to it
+lands complete and goes last, and a restore is verified by reading the file.

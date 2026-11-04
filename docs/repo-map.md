@@ -49,8 +49,9 @@ docs/harness-boundaries.md   what the harness grants these commands and what
                              it refuses them — the deny list and its
                              residuals, and every grant wider than the
                              operation it buys. Read it before touching
-                             anything under .claude/, and state a new residual
-                             there rather than in `CLAUDE.md`
+                             anything under .claude/. It is managed, so a
+                             new residual only this repository has goes in
+                             docs/harness-local.md, never in `CLAUDE.md`
 docs/harness-local.md        what the harness's commands name by role,
                              filled in for this repository: its documents,
                              /ship's checks, its residuals and its review
