@@ -230,8 +230,11 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
 
     def test_none_of_them_denies_push_or_the_shell(self):
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
-        # ship.md names its chain; the checks it runs are docs/harness-local.md's Ship checks.
-        ship += (COMMANDS.parent.parent / "docs" / "harness-local.md").read_text(encoding="utf-8")
+        # ship.md step 2 names its checks, or cites docs/harness-local.md's Ship checks once a sync moves them.
+        local = (COMMANDS.parent.parent / "docs" / "harness-local.md").read_text(encoding="utf-8")
+        checks = local.partition("\n## Ship checks\n")[2].partition("\n## ")[0]
+        self.assertTrue(checks.strip(), "docs/harness-local.md has no Ship checks section")
+        ship += checks
         for name in self.CHAINED_BEFORE_A_PUSH:
             text = (COMMANDS / name).read_text(encoding="utf-8")
             denied = ", ".join(frontmatter_list(text, "disallowed-tools"))
