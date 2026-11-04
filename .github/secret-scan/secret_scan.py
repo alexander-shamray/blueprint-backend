@@ -79,6 +79,13 @@ SKIP_ROOT_PATHS = frozenset({
     Path(".claude", "worktrees"),
 })
 
+# The sync's manifest maps each managed path to its sha256, so a path naming a
+# token beside its digest reads as a credential, and no allow entry can pin a
+# digest that moves with the file. That file alone drops a finding whose value
+# is exactly a sha256; anything else in it is reported as anywhere else.
+DIGEST_MAPS = frozenset({".harness/manifest.json"})
+SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
 # A file is binary when its first block holds a NUL. That is a heuristic and it
 # is the right one here: every pattern below is ASCII, so a format that would
 # hide a secret from a byte scan (a zip, a DLL, a PNG) is a format this gate
@@ -661,7 +668,10 @@ def scan_tree(root: Path, rules: list[Rule]) -> tuple[list[Finding], int]:
         text = blob.decode("utf-8", errors="replace")
         scanned += 1
         relative = file_path.relative_to(root).as_posix()
-        findings.extend(scan_text(relative, text, rules))
+        found = scan_text(relative, text, rules)
+        if relative in DIGEST_MAPS:
+            found = [f for f in found if not SHA256_HEX.fullmatch(f.secret)]
+        findings.extend(found)
 
     return findings, scanned
 

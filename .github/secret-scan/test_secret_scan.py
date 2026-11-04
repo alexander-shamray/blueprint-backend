@@ -793,6 +793,23 @@ class Walking(unittest.TestCase):
                 code, _, _ = run(root)
                 self.assertEqual(code, expected)
 
+    def test_the_harness_manifest_spares_a_digest_and_nothing_else(self):
+        # The first line is the real one from the sync that took token-rules.md; the others say
+        # the exemption is that root path and a value that is exactly a sha256, not the file.
+        digest = '{"docs/harness/token-rules.md": "' + "cd83a078de693e468130242357b1eb6994df7e5beb0fad5c5dff510c6e4c7300"
+        for relative, line, expected in ((".harness/manifest.json", digest + '"}\n', 0),
+                                         ("src/.harness/manifest.json", digest + '"}\n', 1),
+                                         (".harness/manifest.json", digest + 'ff"}\n', 1),
+                                         (".harness/manifest.json", f'{{"aws": "{AWS_ID}"}}\n', 1)):
+            with self.subTest(relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                planted = root / relative
+                planted.parent.mkdir(parents=True)
+                planted.write_text(line, encoding="utf-8")
+                (root / "kept.txt").write_text("nothing here\n", encoding="utf-8")
+                code, _, err = run(root)
+                self.assertEqual(code, expected, err)
+
     def test_a_source_directory_called_artifacts_is_still_scanned(self):
         """The subject is the depth the exclusion reaches, not the name it uses.
 
