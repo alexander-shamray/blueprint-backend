@@ -4,8 +4,9 @@ What the payload's commands name by role, filled in for this repository.
 The four headings are fixed by the payload's `docs/harness-boundaries.md`,
 *Managed files*, which the sync to blueprint-harness 8a330bc (#1745)
 brings; this file is the repository's own and no sync writes it. Until that
-sync merges, the managed copies the rows below name still state what each
-row says and are its owners.
+sync merges, *Ship checks* is stated and owned by the managed
+`.claude/commands/ship.md` step 2, and *Residuals* by the managed
+`docs/harness-boundaries.md`; *Review examples* names its own.
 
 ## Documents
 
