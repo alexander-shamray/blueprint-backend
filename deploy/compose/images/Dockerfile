@@ -10,4 +10,4 @@ FROM otel/opentelemetry-collector-contrib:0.164.0 AS collector
 FROM grafana/otel-lgtm:0.38.1 AS lgtm
 FROM grafana/k6:2.3.0 AS k6
 FROM sheyenrath/wiremock.net:2.20.0 AS wiremock
-FROM axllent/mailpit:v1.32.0 AS mailpit
+FROM axllent/mailpit:v1.33.0 AS mailpit
