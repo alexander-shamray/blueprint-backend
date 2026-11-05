@@ -374,7 +374,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      # `Yankee` is the probe CLAUDE.md documents and the scaffold's own suite
+      # `Yankee` is the probe docs/repo-map.md documents and the scaffold's own suite
       # already uses — never a real service's name, because the create refuses
       # a name or a port a real service already holds.
       - name: Render a service
