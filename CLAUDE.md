@@ -8,13 +8,18 @@ touch, before you touch it.**
 
 | | |
 |---|---|
-| `.todo/blueprint-backend.md` in the main checkout's parent directory (local) | Open PRs and issues, for the user; the contract's §6 says where it lives and when it changes |
-| [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes, and §6's working rules |
+| `.todo/blueprint-backend.md` in the main checkout's parent directory (local) | Open PRs and issues, for the user; `.harness/agent-rules.md` says when it changes, the contract's §6 why it lives there |
+| [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes, and §6's working rules only this repository has |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
 | [`docs/churn-plan.md`](docs/churn-plan.md), [`docs/churn-plan-2.md`](docs/churn-plan-2.md) | Where the corpus churns, measured on a named commit, and the sequences that reduce it |
 | [`docs/token-plan.md`](docs/token-plan.md) | Where a session's tokens go and the steps that cut them; [`docs/token-usage.md`](docs/token-usage.md) holds the measurements |
 | [`docs/pr-decision-log.md`](docs/pr-decision-log.md), [`docs/lessons.md`](docs/lessons.md) | Closed records — grep them, never read them whole |
-| [`docs/harness-boundaries.md`](docs/harness-boundaries.md) | What the harness grants these commands, and refuses; its index names each section |
+| [`.harness/agent-rules.md`](.harness/agent-rules.md) | The working rules every repository on the harness shares, imported below; managed |
+| [`docs/harness/working-rules.md`](docs/harness/working-rules.md) | Their detail for commits, pull requests, review, CI, tests and issues, and the review bar; managed |
+| [`docs/harness/token-rules.md`](docs/harness/token-rules.md) | The reasons behind the subagent, review-round and plan rules; managed |
+| [`docs/harness/pitfalls.md`](docs/harness/pitfalls.md) | Shell, git, machine and auto-mode traps; managed |
+| [`docs/harness-boundaries.md`](docs/harness-boundaries.md) | What the harness grants these commands, and refuses; managed, its index names each section |
+| [`docs/harness-local.md`](docs/harness-local.md) | What the managed commands name by role, filled in for this repository |
 | [`docs/repo-map.md`](docs/repo-map.md) | What each entry in the tree is, and why it is shaped that way |
 | [`docs/style-guide.md`](docs/style-guide.md) | The prose, C# and SQL dialect; its summary comes first |
 | [`docs/testing.md`](docs/testing.md) | What a checkout needs that the solution and the workflows cannot say |
@@ -55,18 +60,13 @@ dotnet ef migrations add <Name> --project src/Services/Catalog/Catalog.Infrastru
     --startup-project src/Services/Catalog/Catalog.Migrator --output-dir Persistence/Migrations
 ```
 
-- **`py -3.12`, not `python`**: CI pins 3.12 and the local default is
-  newer. **Container tests are never skipped when Docker is absent**,
-  because a skip fails open. **A gate with a suite is tested and then
-  run**, and none outside `dotnet test` is in `Platform.slnx`, so a green
-  solution says nothing about them.
+- **Container tests are never skipped when Docker is absent**, because a
+  skip fails open. No gate outside `dotnet test` is in `Platform.slnx`, so
+  a green solution says nothing about them.
 - **Exact pins** in `Directory.Packages.props`, never `Version=` on a
   reference. ADR-019's analyser policy makes a warning a failed build, and
   `#pragma` is not the way out. §4.2's architecture rules are a build
   failure, not a review comment.
-- **A gate that silently stops covering the newest surface is this
-  repository's most-repeated failure**; the only defence is a test whose
-  subject is what the gate is looking at, not what it found.
 
 ## Style
 
@@ -78,64 +78,14 @@ their real spelling**; **a comment says why and cites its owner, inside
 the guide's budget**; and **no real credentials**, in a sample or in
 source, §14.1's local-development defaults the one stated exception.
 
-## Working in this repo
-
-`docs/change-locality.md` §6's *Working rules* own how work here is done:
-commits, issues, review threads and the round touch set. Two of them fire
-without an edit to prompt a look: **uncommitted work in the tree belongs
-in the PR being worked on — never revert it to clean the tree**; and
-**the task list is updated the moment a session starts a branch, opens,
-merges or closes a PR, or files, closes or reopens an issue**, from a
-worktree as well, since it lives outside every checkout.
-
-## Subagents, review rounds and plans
-
-Every turn re-sends the whole context, so an agent costs what it reads
-times the turns it takes, and a tool result stays in the parent for the
-rest of the session; `docs/token-plan.md` step 2 measured where that went.
-
-- **Delegate with a brief.** A subagent is handed the files, diff or
-  question it needs and returns a short structured answer — findings as
-  `file:line`, not prose. `Explore` before `general-purpose` for a search;
-  nothing is delegated that one `Grep` answers; a step's reads go in one
-  message.
-- **Choose the model by who catches its error.** A subagent runs on a
-  cheaper model where the parent, a gate, a build or a test catches its
-  error, and on the parent's, or the stronger model its profile pins,
-  where an error is a silent miss; `docs/token-plan.md` step 7d owns the
-  argument and the table of tasks.
-- **The review loop** is `/ship` step 5's, and a PR reviewed outside
-  `/ship` runs it too: rounds of one `branch-reviewer` each, read-only by
-  its tool list, handed the diff under `artifacts/review/` and not the
-  author's conclusions — never `general-purpose`, and never the session
-  reviewing its own diff.
-- **Plans.** A change that fits one PR takes plan mode, not a plan file. A
-  plan file cites code by path and symbol rather than pasting it and stays
-  under 50 KB, which `.github/plan-size-gate/` holds for every plan added
-  since the rule landed; research for it goes to `Explore` with a brief,
-  and the plan-writing agent is handed the spec and the symbols the plan
-  cites and writes it in one pass, without reading back what it has
-  written. Small tasks
-  run with `executing-plans`; under `subagent-driven-development`, each
-  reviewer is handed its task's diff, not the tree.
-- **A wait wakes once.** A session about to wait on CI, a
-  background agent or a scheduled check-in runs it as one background task
-  whose exit is the only wake; a wake re-sends the whole context, and after
-  the cache has expired writes all of it again (`docs/token-plan.md` step
-  7). No tool compacts, so the auto-compact window empties a long context,
-  not this rule (step 2). Never hand a wait to a subagent: its Bash
-  is cut at 180 seconds and its own background task wakes nobody.
-- **A comment sweep** hands each agent what `.github/comment-gate/` finds in
-  its files with `--tree`, not whole suites to read.
-- **One task per session**: `/clear` between tasks.
-
 ## The harness
 
-`docs/harness-boundaries.md` is what the harness grants these commands and
-refuses them; read it before touching anything under `.claude/`. It is
-managed, so a new residual only this repository has goes in
-`docs/harness-local.md` *Residuals*. Two rules reach every session: **file
-permission rules take `Edit(...)`, never `Write(...)`** — a `Write(path)`
-rule matches nothing and stops Claude Code from starting; and
-**`.claude/settings.json` self-locks, not instantaneously** — a change to it
-lands complete and goes last, and a restore is verified by reading the file.
+Every path `.harness/manifest.json` lists is managed: `blueprint-harness`
+owns it and a sync pull request brings it here. `docs/harness-boundaries.md`
+is what the harness grants these commands and refuses; read it before
+touching anything under `.claude/`. A residual only this repository has
+goes in `docs/harness-local.md` *Residuals*, and a working rule only this
+repository has in `docs/change-locality.md` §6. The rules every repository
+on the harness shares are these:
+
+@.harness/agent-rules.md
