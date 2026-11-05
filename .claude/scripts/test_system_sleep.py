@@ -25,7 +25,7 @@ def run(*args, probe=True):
             stand_in.write_text(f"#!/usr/bin/env bash\necho \"$*\" > '{marker.as_posix()}'\n", newline="\n")
             stand_in.chmod(0o755)
         path = f"{shim}{os.pathsep}{os.environ['PATH']}" if probe else "/usr/bin"
-        done = subprocess.run([BASH, str(SLEEP), *args], capture_output=True, text=True,
+        done = subprocess.run([BASH, str(SLEEP), *args], capture_output=True, text=True, encoding="utf-8",
                               env=dict(os.environ, PATH=path))
         called = marker.read_text().strip() if marker.exists() else None
     return done, called

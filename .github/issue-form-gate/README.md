@@ -3,11 +3,14 @@
 **The claim: every issue form under `.github/ISSUE_TEMPLATE/` offers exactly
 the vocabularies its owners hold, every choice it offers is a label in this
 repository, and a blank issue is switched off for a filer below write
-access.** Its owners are
-[`docs/change-locality.md`](../../docs/change-locality.md) §6's *issue
-vocabulary* bullet for the kind and the area, and
+access.** The kind and the area are owned by
+`docs/harness/working-rules.md`'s *Issues and the task list*, and the
+severity by
 [`gh-issue-create.sh`](../../.claude/scripts/gh-issue-create.sh)'s closed
-`case` for the severity.
+`case`. The gate reads the kind and the area from the copy in the file
+`--contract` names, by default backend's change contract, whose bullet
+opens `VOCABULARY_BULLET`; it does not yet read working-rules' own, so in
+a target that holds no such contract it fails rather than judges.
 
 ## What it reads
 
@@ -20,14 +23,14 @@ vocabulary* bullet for the kind and the area, and
   dropdown option is a label name. An empty directory fails, and so
   does a form with a top-level `labels:` key, which would attach its labels
   to every issue the form opens whatever the answers said.
-- The form's kind against the kinds §6's bullet lists after `kind is`, its
+- The form's kind against the kinds that bullet lists after `kind is`, its
   area against the labels the bullet's `Area is` sentence names, and its
   severity against the helper's `case "$severity"` arm; as sets, with a
   repeated option refused. The sentence's trees are paths, which are not
   read as labels.
-- The helper's `case "$kind"` arm, every word of which must be one of §6's
-  kinds, and the words of its `case "$area"` arm, which must be §6's areas
-  exactly, `code,test` being two words because the helper files it as two
+- The helper's `case "$kind"` arm, every word of which must be one of the
+  bullet's kinds, and the words of its `case "$area"` arm, which must be its
+  areas exactly, `code,test` being two words because the helper files it as two
   labels: the helper filing under a word the form does not offer is the
   drift this gate exists for, seen from the other side.
 - Every dropdown option against the names `gh label list --json name`
@@ -57,7 +60,7 @@ dropdown with no id or no options, or the same dropdown twice.
 
 ## How it runs
 
-Its suite, then the gate, in the fast job of [`ci.yml`](../workflows/ci.yml),
+Its suite, then the gate, in the fast job of the target's CI workflow,
 which reads the labels with the job's token. Locally:
 
 ```bash

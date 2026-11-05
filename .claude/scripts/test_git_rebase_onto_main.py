@@ -367,6 +367,10 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         result = self.helper("feat/x")
         self.assertEqual(11, result.returncode, result.stderr)
         self.assertIn("the rebase did not start", result.stderr)
+        # A clean `git status` with git refusing to overwrite local changes is a
+        # skip-worktree file; the refusal says how to see one.
+        self.assertIn("git ls-files -v", result.stderr)
+        self.assertIn("skip-worktree", result.stderr)
 
 
 class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
@@ -646,6 +650,9 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
         self.assertEqual(10, result.returncode, result.stderr)
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
         self.assertEqual("only-here\n", self.at("cat resolved-by-hand.txt").stdout)
+        # The refusal teaches the route that works, not only that this one failed.
+        self.assertIn("never merge main forward", result.stderr)
+        self.assertIn("resolve it in the replayed commit", result.stderr)
 
     def test_a_merge_that_kept_one_side_against_a_clean_change_stops_the_run(self):
         # Every file matches one parent, so `--cc` shows nothing, and the

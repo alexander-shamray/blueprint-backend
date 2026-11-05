@@ -7,9 +7,8 @@ section, ADR or `cref`; no pull request but a docs one or a sweep adds
 more lines of C# comment than of C# code; no line it adds to a C# file
 runs past `WIDTH_LIMIT` columns; and no prose line it adds to a Markdown
 file runs past `PROSE_LIMIT`.**
-[`docs/style-guide.md`](../../docs/style-guide.md)'s
-*Comments* section is the rule, its *Wrapping* section owns the width of
-code, and its *Prose conventions* section the width of prose; this gate is
+The style guide `docs/harness-local.md` *Documents* names owns the rule:
+its section on comments, and the widths of code and of prose; this gate is
 their mechanical half.
 
 ## What it reads
@@ -101,10 +100,9 @@ reads the same added lines. The suite does not hold the tracked files to it:
 about 212 old lines are over, and rewrapping them is a separate mechanical
 commit that this gate does not wait for.
 
-**Added lines only.** The corpus is brought under the rule by the sweeps in
-[`docs/churn-plan.md`](../../docs/churn-plan.md) and
-[`docs/churn-plan-2.md`](../../docs/churn-plan-2.md), not by this gate
-refusing every pull request until they land. Editing a line inside an old
+**Added lines only.** The corpus is brought under the rule by a target's
+own comment sweeps, not by this gate refusing every pull request until
+they land. Editing a line inside an old
 block that already breaks the rule fails, which is the point: the change
 that touches it is the one that cuts it.
 
@@ -153,11 +151,11 @@ that a tree is under the rule; CI does not run it.
 
 The `comment-gate` job in
 [`comment-gate.yml`](../workflows/comment-gate.yml), a workflow of its own
-because a label has to start a run of this gate, and in `ci.yml` it would
-start a build and every suite as well. The suite runs the head copy on
-every run; on a pull request, **the gate that judges is read out
-of the base commit**, on the closure gate's design, so a pull request cannot
-loosen the rule it is judged by. A base with no gate directory is judged by
-the head copy under a warning, as the locality gate's bootstrap is, because
-the pull request that lands the gate has no base copy. `docs/testing.md` has
-the local invocation.
+because a label has to start a run of this gate, and in the CI workflow it would
+start a build and every suite as well. The suite runs the head copy on every
+run; on a pull request, **the gate that judges is read out of the base commit**,
+on the closure gate's design, so a pull request cannot loosen the rule it is
+judged by. A base with no gate directory is judged by the head copy under a
+warning, as the locality gate's bootstrap is, because the pull request that
+lands the gate has no base copy. The testing document `docs/harness-local.md`
+*Documents* names has the local invocation.

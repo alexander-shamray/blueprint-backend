@@ -1,22 +1,7 @@
-"""The harness the review loop's helper suites share.
+"""The review loop's helper suites' harness; `docs/harness-boundaries.md` argues Claude Code's grants and refusals.
 
-The scripts in this directory carry the judgements the /ship loop and both
-sweeps rest on, and the harness's grants and refusals are argued in
-`docs/harness-boundaries.md`. Each `test_*.py` module is named for its
-subject — one helper, a family of helpers, or the harness's deny list — and
-each test class there names the property it checks.
-
-Negatives are paired with positive controls, because a negative that passes
-while a pattern matches nothing is indistinguishable from one that works.
-
-The engine under test is the engine that ships: every assertion about what a
-declared pattern matches shells out to the same `grep -E` or `jq` the scripts
-call, because re-implementing it in Python's `re` would be a second
-specification. And a declared pattern needs a test whose subject is where it
-is applied, so the pattern cases are paired with structural cases over the
-call sites, which read the scripts' text and may use `re` to do it.
-
-What the suite needs to run is `docs/testing.md`'s.
+Negatives pair with positive controls; pattern cases run the scripts' own `grep -E` or `jq`, as `re` would be a second
+specification, and call-site cases may read the scripts with `re`. To run it, see `docs/harness-local.md`'s Testing row.
 """
 
 import os
@@ -67,7 +52,7 @@ def run_bash(script, subject="", **env_extra):
         [BASH, "-c", script],
         input=subject,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8",
         env=env,
     )
 

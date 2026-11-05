@@ -56,7 +56,8 @@ One JSON document on stdin — the pull request's number, URL, body, commits,
 closing references and head, each one of `REQUIRED_FIELDS`, and its `author`,
 which is optional and read only for the exemption above; the repository
 is read from the URL — fetched by the workflow, so the deciding is
-testable without a network. `docs/testing.md` has the live invocation.
+testable without a network. The testing document `docs/harness-local.md`
+*Documents* names has the live invocation.
 
 ## How it runs
 

@@ -423,28 +423,29 @@ wrong one is visible before anything is committed to it.
 
 ## Step 2: checks
 
-**The checks follow the class the PR body will carry** (the selection is the
-runbook's step 2). `/check-links` reads only `docs/backend-architecture/`, and a
-runbook is neither Class C nor inside `/validate-blueprint`'s audit scope (the
-runbook's step 2 lists it), so a Class A runbook edit, links and all, runs
-neither check: the link check would report on a tree it did not touch. Its PR
-body says so rather than claiming a run that did not happen — a body that names
-the class has named the reason.
+**The checks are the target's, and follow the class the PR body will
+carry** (the selection is the runbook's step 2). Which checks a repository
+has, and which change each covers, is `docs/harness-local.md` *Ship checks*:
+the harness ships the runbook to repositories with different products, so it
+names none itself. A check reads only its own scope, so a change outside every
+scope runs none: a link check would report on a tree the change did not touch.
+Its PR body says so rather than claiming a run that did not happen — a body
+that names the class has named the reason.
 
-**The audit is dispatched, never invoked as the command.** The command's
-frontmatter denies `Edit` on `src/` and the other trees, and a frontmatter deny
+**An audit is dispatched, never invoked as its command.** An audit command's
+frontmatter can deny `Edit` on the trees it reads, and a frontmatter deny
 holds to the end of the turn (`docs/harness-boundaries.md`). `/ship` runs the
 whole chain in one turn, so a run that invoked it could make no code fix in a
 later review round, and would have to stop or route round the deny. The step
-spawns the passes the command's *Dispatch* section names, as `general-purpose`
-agents told to edit nothing, and reads their JSON as step 5 reads a finding.
-That is the brief's guarantee and not the tool list's, the same one
-`docs/commands/validate-blueprint.md` states for its own agent; the denies stay
-on the command for a person who invokes it alone.
+spawns the passes *Ship checks* names, as `general-purpose` agents told to
+edit nothing and handed the scope and method it gives each, and reads their
+JSON as step 5 reads a finding. That is the
+brief's guarantee and not the tool list's; the denies stay on the command for
+a person who invokes it alone.
 
 **One check holds whatever the class: a fix to a script under
-`.claude/` carries its case.** `docs/change-locality.md` §6's
-*Working rules* own the rule, and this step reads it because it runs before
+`.claude/` carries its case.** `docs/harness/working-rules.md`'s
+*Tests and gates* owns the rule, and this step reads it because it runs before
 every commit steps 3 and 5 make — step 5 reruns these checks before
 each fix it commits — while step 0 runs once, before the run
 writes a subject, and never again. A run that never reaches this step
@@ -454,19 +455,18 @@ and step 6's own commit. Every read is granted already.
 **A refusal stops the chain**, because the missing case is a file under
 `.claude/scripts/`, which this session is denied editing, so the run has
 no fix to make. Report the script, the suites looked for and the rule as
-the contract's §6 words it. The read sees that a suite changed, not that its
-new case failed before the fix; the commit body argues that half.
+`docs/harness/working-rules.md` words it. The read sees that a suite changed,
+not that its new case failed before the fix; the commit body argues that half.
 
 **Before `/commit`, not after.** A defect found after the commit costs a
 second commit or a rewrite; found here it is an edit. This is also the step a
 chained workflow silently drops, which is why it is a step rather than a
 footnote.
 
-**Fix what they find, then run them again.** A blueprint contradiction has
-one correct resolution far more often than it has two — reconcile to
-whichever side the rest of the system depends on, exactly as
-`/validate-blueprint` already instructs, and record the direction in the
-commit body.
+**Fix what they find, then run them again.** A contradiction a check finds
+has one correct resolution far more often than it has two — reconcile to
+whichever side the rest of the system depends on, and record the direction
+in the commit body.
 
 Where a finding genuinely has two defensible answers, take the one the
 surrounding argument supports, say which you rejected, and put both in the
@@ -543,7 +543,8 @@ misses what the fix broke.
 
 - **The seventh round is the ceiling**, and what holds and stays open is
   filed rather than reviewed again. A prose finding is filed as `bug`,
-  since the helper's vocabulary stops there (`docs/change-locality.md` §6).
+  since the helper's vocabulary stops there (`docs/harness/working-rules.md`,
+  *Issues and the task list*).
   The report says the review ended on its ceiling rather than clean, and
   names the issues.
 
@@ -717,7 +718,7 @@ rather than reading whichever finished last.
 
 **The CI wait is the one place this chain sleeps, and a session that
 sleeps pays for its context at every wake.** A `/ship` main session's call
-sends about 274k tokens (`docs/token-usage.md`, 2026-10-10), so what
+sent about 274k tokens in backend's measurement of 2026-10-10, so what
 matters is how many times the wait wakes it.
 
 **The wait runs in this session as one background task.**
@@ -726,8 +727,8 @@ runs, and the harness re-invokes the session once, when it exits. That one
 wake is owed by any route, since the merge is this session's to make: an
 agent's reply wakes it the same way. Reading the task's output before the
 exit is a poll and costs a wake each time, so nothing reads it until then.
-This is `docs/token-plan.md` step 7's rule in `CLAUDE.md`, applied where the
-runbook waits.
+This is `docs/harness/token-rules.md`'s *Waits*, applied where the runbook
+waits.
 
 **No agent holds it, because none can.** The wait first went to a fresh
 `general-purpose` agent holding only the PR number, so that its wakes would
@@ -857,10 +858,11 @@ Running line 7 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
 **The task-list row `/branch` added is deleted once the merge is verified**,
-after the pull, by the file's own path, which the contract's §6 puts outside
-every checkout so that the isolation refuses it to no workspace. Nothing
-else removes it: a row left behind reads as work still in progress after the
-PR has landed, which is what *In progress* exists not to say.
+after the pull, by the file's own path, which `.harness/agent-rules.md`,
+*Working in a target*, puts outside every checkout so that the isolation refuses
+it to no workspace. Nothing else removes it: a row left behind reads as work
+still in progress after the PR has landed, which is what *In progress* exists
+not to say.
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state

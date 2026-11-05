@@ -29,7 +29,8 @@ pull request.
 
 `check` takes parsed commits and is pure; `collect` is the only part that
 runs git. The suite tests the judgement from dictionaries and the reading
-against a throwaway repository. `docs/testing.md` has the live invocation.
+against a throwaway repository. The testing document `docs/harness-local.md`
+*Documents* names has the live invocation.
 
 ## How it runs
 
@@ -44,5 +45,6 @@ as in [`closure-gate`](../closure-gate/README.md), and closing that needs the
 required status check the pull request that added this gate lists as an
 owner-only setting.
 
-[`ci.yml`](../workflows/ci.yml)'s `commits` job is the other half: it builds
-every commit before the head, which `build` already covers.
+The other half, where a target's own CI workflow has it, is a job that
+builds every commit before the head, which the build of the head already
+covers.

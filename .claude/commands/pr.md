@@ -83,7 +83,8 @@ Wrapped at 80 columns, British spelling, no emoji. Structure:
 
 The metadata table opens with two rows. The class and the touch set are
 decided before the first edit — in the issue, or in the first commit's body
-when there is none, per `docs/change-locality.md` §5 — and copied here when
+when there is none, per the change contract `docs/harness-local.md`
+*Documents* names — and copied here when
 the PR opens, with any file added mid-work and the reason it was:
 
 ```markdown
@@ -95,11 +96,11 @@ the PR opens, with any file added mid-work and the reason it was:
 
 `Class` is one letter from that file's table — A local, B shared mechanism,
 C a rule moved, D docs or harness, E the dependency graph — or two joined
-with `+`, as `C+E`, for a change the contract's §3 says needs both, or the
-one three §3 admits, `A+D+E`, with the touch set as the union. `Touch set` is
+with `+`, as `C+E`, for a change the contract says needs both, or the one
+three it admits, `A+D+E`, with the touch set as the union. `Touch set` is
 the paths that class allows and this branch actually edited, as globs or files
-on one line. A file in the diff outside the set is a finding for
-`/review-branch`, and the answer is a narrower diff, a row widened with its
+on one line. A file in the diff outside the set is a finding for the
+review, and the answer is a narrower diff, a row widened with its
 reason beside it, or a different class — never a row widened silently.
 
 ### What the branch closes
@@ -154,8 +155,8 @@ came out.
 
 - `bash .claude/scripts/pr-for-branch.sh` — an OPEN row means you are
   updating, not creating. Say so and stop.
-- Confirm `/validate-blueprint` and `/check-links` have run over the change, or
-  say plainly that they have not.
+- Confirm the checks `docs/harness-local.md` *Ship checks* names have run
+  over the change, or say plainly that they have not.
 
 ## Steps
 

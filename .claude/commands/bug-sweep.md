@@ -19,8 +19,8 @@ is not this command's finding.
 | | |
 |---|---|
 | `/security-sweep` | Exploitable weaknesses — injection, secrets, auth, exposure. A defect that is merely *also* noticeable by an attacker stays here; one whose whole significance is that someone hostile can reach it goes there |
-| `/validate-blueprint` | Code disagreeing with a chapter, and the blueprint disagreeing with itself. Drift, not defect |
-| `/review-branch` | One branch against `main`. Bounded by a diff, where this is bounded by a commit |
+| The drift audits `docs/harness-local.md` *Ship checks* names | Code disagreeing with the specification, and the specification disagreeing with itself. Drift, not defect |
+| `/ship`'s review | One branch against `main`. Bounded by a diff, where this is bounded by a commit |
 
 The boundary decides where a *new* finding is filed; overlap is the de-duplicate
 gate's. (why: docs/commands/bug-sweep.md, *What this command hunts, and what it
@@ -246,14 +246,14 @@ Each round is the review done once, end to end:
    Filed by an authorised sweep and verified at filing by a second read-only auditor.
    ```
 
-   Pass as `<area>` the label `docs/change-locality.md` §6 gives the tree the
-   record's file is in, and `sweep` as the route. **The heredoc delimiter is
-   never `EOF`** or any word a file could plausibly hold; it is a token of the
-   form `ISSUE_BODY_END`, and **before the command is composed, every line of
-   the payload — title, body, quoted lines — is checked against it**, and a
-   payload that contains it gets a different one. **A title must never begin
-   with `/` or `#`**; write a command or directive in backticks —
-   `` `/bug-sweep` ``. (why: docs/commands/bug-sweep.md, *The round: file*)
+   Pass as `<area>` the label `docs/harness/working-rules.md`, *Issues and the
+   task list*, gives the tree the record's file is in, and `sweep` as the route.
+   **The heredoc delimiter is never `EOF`** or any word a file could plausibly
+   hold; it is a token of the form `ISSUE_BODY_END`, and **before the command is
+   composed, every line of the payload — title, body, quoted lines — is checked
+   against it**, and a payload that contains it gets a different one. **A title
+   must never begin with `/` or `#`**; write a command or directive in backticks
+   — `` `/bug-sweep` ``. (why: docs/commands/bug-sweep.md, *The round: file*)
 
 5. **Summarise the round.** The helper's `mode` line and the pinned commit,
    new issues filed (with numbers), candidates dropped at each gate and why,

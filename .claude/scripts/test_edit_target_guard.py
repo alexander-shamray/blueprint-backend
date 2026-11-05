@@ -170,7 +170,7 @@ class GuardCase(unittest.TestCase):
         }
         result = subprocess.run(
             [sys.executable, str(HOOK)],
-            input=json.dumps(event), capture_output=True, text=True,
+            input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
             cwd=process_cwd,
             env={**os.environ,
                  "CLAUDE_PROJECT_DIR": self.root if project is None else project},
@@ -351,7 +351,7 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
         os.makedirs(docs, exist_ok=True)
         made = subprocess.run(
             ["fsutil", "file", "setCaseSensitiveInfo", docs, "enable"],
-            capture_output=True, text=True)
+            capture_output=True, text=True, encoding="utf-8")
         probe_lower = os.path.join(docs, "probe")
         probe_upper = os.path.join(docs, "PROBE")
         os.makedirs(probe_lower, exist_ok=True)
@@ -687,7 +687,7 @@ class WhatThisGuardIsNotTheSubjectOf(GuardCase):
                 }
                 result = subprocess.run(
                     [sys.executable, str(HOOK)],
-                    input=json.dumps(event), capture_output=True, text=True,
+                    input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
                 )
                 self.assertEqual(0, result.returncode)
                 verdict = json.loads(result.stdout)["hookSpecificOutput"]
@@ -703,7 +703,7 @@ class WhatThisGuardIsNotTheSubjectOf(GuardCase):
             with self.subTest(payload=payload):
                 result = subprocess.run(
                     [sys.executable, str(HOOK)],
-                    input=payload, capture_output=True, text=True,
+                    input=payload, capture_output=True, text=True, encoding="utf-8",
                 )
                 self.assertEqual(0, result.returncode)
                 self.assertEqual("", result.stdout.strip())

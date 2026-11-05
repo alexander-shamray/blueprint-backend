@@ -74,7 +74,7 @@ class SweepWorktreeShape(unittest.TestCase):
         # needs a `Bash(mktemp:*)` grant, which takes an arbitrary template and
         # is a filesystem-write primitive.
         result = subprocess.run(
-            [BASH, str(DETACH)], capture_output=True, text=True, cwd=str(SCRIPTS)
+            [BASH, str(DETACH)], capture_output=True, text=True, encoding="utf-8", cwd=str(SCRIPTS)
         )
         self.assertEqual(2, result.returncode)
         self.assertIn("usage: git-worktree-detach.sh <commit-sha>", result.stderr)
@@ -82,7 +82,7 @@ class SweepWorktreeShape(unittest.TestCase):
         two_args = subprocess.run(
             [BASH, str(DETACH), "/tmp/anywhere", "0" * 40],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=str(SCRIPTS),
         )
         self.assertEqual(2, two_args.returncode)
