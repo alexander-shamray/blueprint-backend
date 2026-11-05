@@ -930,7 +930,7 @@ jobs:
           path: TestResults/sightings
 
       # A sighting is a flake that did not fail, so it goes where flakes are counted,
-      # the flaky tests tracker (docs/change-locality.md §6), named by its file. A
+      # the flaky tests tracker (docs/harness/working-rules.md, CI), named by its file. A
       # fork's token cannot comment, and a missed comment must not fail a shard that
       # passed. The artifact above is the record.
       - name: "Post the sightings on #1406"
