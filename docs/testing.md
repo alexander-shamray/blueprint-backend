@@ -87,7 +87,8 @@ way on its own branch, #1574's; so were the five `/dispatch` modules, on
 the sync to blueprint-harness fd87ad6 and was timed alone on its branch, as
 `discover -s .claude/scripts -p test_python_hygiene.py` over three runs.
 
-**`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
+**Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
+owns the rule). Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local
 suite goes green on code the runner cannot execute. The scaffold *script* is a
 different matter: running it is not a test of the floor, so plain `python` is
@@ -194,8 +195,9 @@ runs in the fast half and fails there. What it cannot do is report a pass.
 
 ## Running a gate on its own
 
-A gate with a suite is tested and then run, so a green suite says the gate
-works and not that this checkout passes it; a gate without one is only run.
+A gate's suite runs before the gate (`.harness/agent-rules.md`, *Hard
+rules*), so a green suite says the gate works and not that this checkout
+passes it; a gate without one is only run.
 Most gate runs are the workflow step verbatim. The entries below are the ones
 a step does not show whole, and the gates whose invocation
 [`docs/change-locality.md`](change-locality.md) §3's Class D places here,
