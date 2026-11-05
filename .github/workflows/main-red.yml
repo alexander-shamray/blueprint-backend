@@ -74,8 +74,8 @@ jobs:
 
           ## What to do
 
-          Revert first, fix forward second (\`docs/change-locality.md\` section 6,
-          *Working rules*). Find the pull request that turned main red, revert it
+          Revert first, fix forward second (\`docs/harness/working-rules.md\`,
+          *CI*). Find the pull request that turned main red, revert it
           with \`.claude/scripts/git-revert-pr.sh <n>\`, and land the revert before
           anything else; then fix forward on a branch of its own.
 
