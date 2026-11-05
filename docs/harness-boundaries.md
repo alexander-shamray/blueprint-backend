@@ -171,11 +171,16 @@ an index that cannot refresh is not a reason to fail the call that provoked
 it. The exit status is the one thing it does keep, and a request whose update
 failed goes back rather than counting as served: contention is what fails
 here, the streams that would have said so are gone, and the loser may be the
-run carrying the newest edit. The worker runs from the checkout's parent and
-only the CLI inside it, because Windows will not delete a live process's
-working directory and `/ship` removes a worktree moments after its last call.
-The lock and the CLI's own run still hold files there while they last, which
-is why `/ship`'s `git-worktree-remove.sh` takes the lock before it removes.
+run carrying the newest edit. The worker runs from the system temp directory,
+outside every checkout, and only the CLI inside the checkout: Windows will not
+delete a live process's working directory and `/ship` removes a worktree
+moments after its last call, and Windows looks in the starting process's own
+directory for a program named bare, so a checkout's parent, or for a worktree
+a directory of the main checkout, would let a merged file stand in for the
+CLI, which is started by the full path a PATH-only lookup found instead. The
+lock and the CLI's own run still hold files in the checkout while they last,
+which is why `/ship`'s `git-worktree-remove.sh` takes the lock before it
+removes.
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a
@@ -1552,7 +1557,8 @@ headings, fixed so a citation of one lands in every target:
   measurements `docs/harness/token-rules.md`'s reasons rest on.
 - *Ship checks*: the checks `/ship` step 2 runs here, each with the change
   that selects it and the passes it dispatches, each pass's scope and
-  method as its brief, or `none`.
+  method as its brief, or `none`; and the required checks, the CI check
+  names `/ship` step 6's wait requires on the pushed head, never `none`.
 - *Residuals*: what this file's arguments leave open only in this
   repository, beside the residuals stated above.
 - *Review examples*: the kinds of finding this repository's surface

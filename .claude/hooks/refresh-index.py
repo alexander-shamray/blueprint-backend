@@ -10,6 +10,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 from pathlib import Path
@@ -236,19 +237,77 @@ def busy(root: Path) -> bool:
         return not grab(handle)
 
 
+def inside(path: Path, tree: Path) -> bool:
+    return path == tree or tree in path.parents
+
+
+def console_script(root: Path) -> str | None:
+    """`codebase-index` found on PATH alone, as a full path, or None.
+
+    Windows hands a bare program name to a search that tries the starting
+    process's own directory before PATH — not the `cwd=` the child is given
+    — so a worker started in a checkout's parent, or for a worktree in a
+    directory of the main checkout, would run whatever a merge put there;
+    `main` starts it in the temp directory for that reason. A PATH entry
+    naming a checkout is the same hole by another route.
+    The search is done here instead: absolute PATH entries only, none of them
+    the working directory, and no candidate inside this checkout or the main
+    checkout it was forked from, a link's target included. The answer is a
+    full path, so the operating system searches nothing.
+
+    On Windows only an `.exe` or a `.com` counts, never PATHEXT's `.bat` or
+    `.cmd`: those run through `cmd.exe` in the checkout, which looks there
+    first for every command the script names, so a shim found safely would
+    reopen the search this closes. pip writes the console script as an `.exe`.
+    """
+    fenced = [tree.resolve() for tree in (root, main_checkout(root)) if tree is not None]
+    try:
+        here = Path.cwd().resolve()
+    except OSError:
+        here = None
+    if sys.platform == "win32":
+        names = ["codebase-index.exe", "codebase-index.com"]
+    else:
+        names = ["codebase-index"]
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        directory = Path(entry.strip('"'))
+        if not entry.strip('"') or not directory.is_absolute():
+            continue
+        try:
+            listed = directory.resolve()
+        except OSError:
+            continue
+        if listed == here or any(inside(listed, tree) for tree in fenced):
+            continue
+        for name in names:
+            candidate = directory / name
+            try:
+                if not (candidate.is_file() and os.access(candidate, os.X_OK)):
+                    continue
+                real = candidate.resolve()
+            except OSError:
+                continue
+            if real.parent != here and not any(inside(real, tree) for tree in fenced):
+                return str(candidate)
+    return None
+
+
 def refresh(root: Path) -> bool:
     """One update, waited on and answered, because the streams are gone.
 
-    The console script first, then the module through this interpreter:
-    `py -3.12 -m pip` is a supported install and leaves the script in a
-    directory that need not be on PATH, so both `cbx` wrappers fall back the
-    same way. CBX_NO_SKILL_AUTO_UPDATE keeps an unpinned package from
-    rewriting the tracked skill, and `-P` keeps a checkout's own
-    codebase_index.py off the import path.
+    The console script first, by the full path `console_script` found, then
+    the module through this interpreter: `py -3.12 -m pip` is a supported
+    install and leaves the script in a directory that need not be on PATH,
+    so both `cbx` wrappers fall back the same way, and a pipx install has no
+    module this interpreter can import, so the script is not dropped for it.
+    CBX_NO_SKILL_AUTO_UPDATE keeps an unpinned package from rewriting the
+    tracked skill, and `-P` keeps a checkout's own codebase_index.py off the
+    import path.
     """
     environment = dict(os.environ, CBX_NO_SKILL_AUTO_UPDATE="1", PYTHONSAFEPATH="1")
+    script = console_script(root)
     for command in (
-        ["codebase-index", "update"],
+        *([[script, "update"]] if script else []),
         [sys.executable, "-P", "-m", "codebase_index", "update"],
     ):
         try:
@@ -343,14 +402,18 @@ def main() -> int:
     if busy(root):
         return 0
 
-    # The worker stands outside the checkout, because Windows will not delete
-    # a directory that is a live process's working directory, and `/ship`
-    # removes a worktree moments after its last call; the CLI still runs in it.
+    # The worker stands in the system temp directory, outside every checkout:
+    # Windows will not delete a directory that is a live process's working
+    # directory, and `/ship` removes a worktree moments after its last call;
+    # and a worker's directory is where Windows looks first for a program
+    # named bare. `root.parent` was neither safe: it is a checkout's parent,
+    # or for a worktree a directory of the main checkout. The CLI still runs
+    # in the checkout.
     root = root.absolute()
     try:
         subprocess.Popen(
             [sys.executable, "-P", str(Path(__file__).resolve()), "--worker", str(root)],
-            cwd=str(root.parent),
+            cwd=tempfile.gettempdir(),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
