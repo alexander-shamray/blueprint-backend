@@ -259,120 +259,52 @@ the same PR. It waives nothing else. In particular:
 
 ### Working rules
 
-Beside those, how a change is made here:
+The working rules every repository on the harness shares are
+`.harness/agent-rules.md`'s, imported by `CLAUDE.md`, and their detail is
+[`docs/harness/working-rules.md`](harness/working-rules.md)'s: commits and
+their trailer, branch updates, a red `main`, the Dependabot exception, the
+issue vocabulary, review threads, a round's touch set, CodeQL alerts, a
+`.claude/` fix's case, managed files, uncommitted work and the task list.
+Beside them, what only this repository has:
 
 - **Read before you edit**: the claim you are about to change is usually
   stated more than once.
-- **Commit messages** are semantic and present-tense — `docs:`,
-  `feat(<scope>):`, `fix:`, `chore:` — and the body argues the change. The
-  subject names what changed in words a reviewer would search for — a file,
-  a symbol, a behaviour — and leaves the aphorism to the body. A
-  `Closes #n` in a commit body fires on merge whatever the description says,
-  so the description is reconciled to the commits and never the reverse.
-- **Every commit carries `PR: #<n>`, and every intermediate commit
-  builds.** A pull request lands by rebase, so the trailer is the only
-  record of which pull request a commit on `main` came from; `/pr` adds it
-  once the number exists, `/commit` writes it after, and the commit gate
-  refuses a range without it. The `commits` job builds each commit but the
-  head, which `build` covers, so `git bisect` meets only commits that
-  compile. Reverting a pull request is `git-revert-pr.sh <n>`.
-- **A branch is updated for a conflict, never because another pull request
-  merged.** `main` lands by rebase alone and a branch need not be up to date
-  with it to merge
+- **The `commits` job builds each commit but the head**, which `build`
+  covers, so `git bisect` meets only commits that compile.
+- **`main` lands by rebase alone**
   ([ADR-155](backend-architecture/adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md)),
-  so rebase an open pull request only when GitHub reports it conflicting or
-  refuses its rebase landing, and only a branch this session owns.
-  `git-rebase-onto-main.sh <branch> start` is the update: it fetches
-  `origin/main`, replays the branch onto it and publishes under a lease, which
-  is this repository's spelling of a rebase and `git push --force-with-lease`.
-  Set `git config rerere.enabled true` once per clone, so a conflict resolved
-  once is replayed rather than resolved again. Auto-merge is not used,
-  although the ruleset requires status checks
-  ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)):
-  `/ship` step 6 merges after its own wait on the checks.
-- **A red `main` is reverted first and fixed forward second.**
-  `main-red.yml` files `main is red: <workflow>` for a red push run, or
-  comments on the open one. The next pull request to land reverts the one that
-  turned `main` red, by `git-revert-pr.sh <n>`; the fix forward is a pull
-  request of its own after it. A red run that a rerun turns green is a flake:
-  it is a comment on the flaky tests tracker, and the issue closes on that
-  green run.
-- **A Dependabot pull request is the one exception to the trailer and to
-  the class row.** It declares no class and no touch set and carries no
-  `PR:` trailer ([`.github/dependabot.yml`](../.github/dependabot.yml)), so
-  the locality and commit gates skip it, as their READMEs say, and a skipped
-  job passes a required check. Every other job runs on it as on any pull
-  request, and the owner merges it. The exemption is by pull request author,
-  so a human who pushes to a Dependabot branch rides on it; review such a
-  push as you would a gate bypass. With no trailer, `git-revert-pr.sh`
-  cannot find its commit, so one is reverted with `git revert` on a branch
-  of its own, whose pull request `/pr` stamps like any other.
-- **The issue vocabulary is wider than the label helper**: kind is
-  `security`, `bug`, `test-gap`, `enhancement` or `documentation`.
-  `gh-issue-create.sh` files no `documentation`, and an `enhancement`, a
-  requested change rather than a finding, under its `request` route alone;
+  and auto-merge stays off although the ruleset requires status checks
+  ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)).
+- **`main-red.yml` files `main is red: <workflow>`** for a red push run,
+  or comments on the open one.
+- **Dependabot's exemption is configured in
+  [`.github/dependabot.yml`](../.github/dependabot.yml)**, and the locality
+  and commit gates' READMEs say they skip its pull requests.
+- **The issue form under `.github/ISSUE_TEMPLATE/` offers the issue
+  vocabulary, and `.github/issue-form-gate/` holds it there.** The form's
+  severity is a dropdown whose answer the triager copies onto the label,
+  because an answer cannot attach one. `gh-issue-create.sh` files no
+  `documentation`, and an `enhancement` under its `request` route alone;
   `gh-label-ensure.sh` creates no `enhancement`, since it holds the sweeps'
-  labels alone. Area is the tree a finding is in, one tree to a finding:
-  `harness` for anything under `.claude/`, its prose included,
-  `documentation` for prose and samples anywhere else, and `code` for the
-  rest, `src/`, `tests/`, `tools/`, `deploy/`, `.github/` and the root's
-  build files among it, with `test` beside `harness` or `code` for a test
-  suite. `gh-issue-create.sh` takes it as its third argument and
-  `gh-label-ensure.sh` holds each one. The issue form under
-  `.github/ISSUE_TEMPLATE/` offers this vocabulary, and
-  `.github/issue-form-gate/` holds it there. A severity in
-  the body and the label both have to say it: the `## Severity` section of
-  a body `gh-issue-create.sh` files, or the form's dropdown, whose answer
-  the triager copies onto the label because an answer cannot attach one.
-  `documentation` is also one of the form's area choices: an issue
-  labelled `bug` and `documentation` is a defect in the documentation, and
-  `documentation` is its kind only on an issue that carries no other.
-- **A reply is not a resolution.** Resolve a review thread in the same act
-  as the reply, and leave an `Ask` open on purpose.
-- **A round's touch set is the finding's own sites.** A `fix` commit
-  closing a review finding names the finding in its subject and carries
-  that finding's fix — the owner site and the sites the triage accepted
-  with it — and nothing else; any other edit is a second commit, with its
-  own finding.
-- **A CodeQL alert is a defect in the pull request that raised it, and it
-  is fixed there**: break the reported path at its source rather than
-  policing the sink, or argue in the commit body why the path cannot be
-  taken.
-- **A fix to a script under `.claude/` lands with the case in its suite
-  that failed before it**, and a script with no suite gets one before its
-  second fix: a fix no case pins is one the next PR makes again.
-- **From the first sync, a managed file is changed in `blueprint-harness`.**
-  A path `.harness/manifest.json` lists reaches this repository through that
-  repository's sync pull request. A rule only this repository needs goes in
-  `.harness/config.json`, whose pull request carries the re-rendered
-  `.claude/settings.json` and manifest, and nothing else here changes one
-  ([`docs/harness-boundaries.md`](harness-boundaries.md), *Managed files*).
-- **Uncommitted work in the tree belongs in the PR being worked on**, in
-  its own commit with a body that argues it. **Never revert it to clean the
-  tree**; if it does not belong here, say so and ask rather than decide by
-  deleting.
+  labels alone.
 - **The task list is `.todo/blueprint-backend.md` in the main checkout's
-  parent directory: outside every checkout, local, never committed.** It is
-  for the user, and it lists open PRs (with the issues each closes) and
-  open issues with no PR. Update it the moment a session starts a branch,
-  opens, merges or closes a PR, or files, closes or reopens an issue;
-  `/branch` adds the *In progress* row and `/ship` step 6 deletes it. One
-  exception: a session running under `--dispatched` writes nothing, and its
-  dispatcher writes for it from the run's start to its report
-  (`.claude/commands/dispatch.md`). It lives outside the checkout because
-  Claude Code's isolation refuses a session moved into
+  parent directory**, local and never committed, listing open PRs, with
+  the issues each closes, and open issues with no PR; `/branch` adds the
+  *In progress* row and `/ship` step 6 deletes it, and a session under
+  `--dispatched` writes nothing, its dispatcher writing for it
+  (`.claude/commands/dispatch.md`). It lives outside every checkout
+  because Claude Code's isolation refuses a session moved into
   `.claude/worktrees/` with `EnterWorktree` every path in the main
   checkout outside that worktree, and admits one that no checkout
-  contains, so every session writes it from wherever it stands.
-  The permission check still sees a path outside the project: under
-  `acceptEdits` the write prompts, as `docs/harness-boundaries.md`,
-  *Settings self-lock and permission root*, measured, unless the user's own
-  settings list the directory under `additionalDirectories`; auto mode
-  wrote it unprompted when this rule was measured. The main checkout's root
-  may hold `TODO.md`, gitignored, as a link to it for the user's editor; a
-  session writes the file by its own path, never through the link, which the
-  edit-target guard refuses (`docs/harness-boundaries.md`, *The edit-target
-  guard*). When in doubt, rebuild it from
+  contains. The permission check still sees a path outside the project:
+  under `acceptEdits` the write prompts, as `docs/harness-boundaries.md`,
+  *Settings self-lock and permission root*, measured, unless the user's
+  own settings list the directory under `additionalDirectories`; auto mode
+  wrote it unprompted when this rule was measured. The main checkout's
+  root may hold `TODO.md`, gitignored, as a link to it for the user's
+  editor; a session writes the file by its own path, never through the
+  link, which the edit-target guard refuses (`docs/harness-boundaries.md`,
+  *The edit-target guard*). When in doubt, rebuild it from
   `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
   default of 30 truncates silently.
 
