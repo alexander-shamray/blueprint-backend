@@ -92,7 +92,8 @@ both repositories.
 4. **A sync superseded while its executor runs.** Its pull request closes
    under the executor. `/ship`'s closed-unmerged stop ends it as
    `stopped`, the dispatcher does not relaunch it, and the reads after
-   that exit list the new one (Task 4, `test_a_superseded_sync_is_not_relaunched`).
+   that exit list the new one (Task 4,
+   `test_a_superseded_sync_is_not_relaunched`).
 5. **A sync behind a moved `main`.** Step 6's rebase rewrites the sync's
    commit. The verify is run again on the rebased head before the merge,
    so a rebase cannot carry a changed managed file in (Task 2,
@@ -404,9 +405,15 @@ that has not landed, which is exactly the case where keeping it is right
   - `dispatch_board.py sync-close <run> sync-<pr>`, run after `verify`
     and the teardown on a merge, or after the result is read on any other
     outcome. It sets the group's status to `closed` and keeps its outcome,
-    so `report` never lists a merged sync as "not confirmed in main";
+    so `report` does not list a merged and confirmed sync as "not
+    confirmed in main";
   - `report`, whose *Syncs* section lists each closed sync group with its
-    outcome, pull request and merge oid.
+    outcome, pull request and merge oid. A sync left `verified`, because
+    the pull or containment read failed and the night ended
+    (`dispatch.md`, *On an executor's exit*), gets a sync case of the
+    verified line. It names the merged pull request and that `main` was
+    not confirmed to contain it, and it claims no *In progress* rows,
+    since a sync has none.
 
 The rules *(builder's calls)*:
 - **First and alone.** A sync changes `.claude/` for every group after it.
@@ -431,6 +438,7 @@ The rules *(builder's calls)*:
   - `test_a_sync_group_takes_no_description`;
   - `test_the_report_lists_syncs`;
   - `test_a_closed_sync_is_not_reported_unconfirmed`;
+  - `test_an_unconfirmed_sync_claims_no_rows`;
   - `test_a_stopped_sync_runs_no_tasks_back`;
   - `test_the_sync_result_validates_with_no_issues`, against
     `RESULT_KEYS` and `_result_problem`.
