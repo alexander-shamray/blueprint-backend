@@ -86,8 +86,10 @@ in a `blueprint-backend` session.
    required. That is a drift too, and the read-back reports it (Task 1,
    `test_compare_reports_raised_approvals`).
 4. **`main` spelt otherwise.** `MAIN`, `refs/heads/main`, `origin/main` or
-   `heads/main` handed to a new helper is refused (Task 5,
-   `test_main_is_refused_however_it_is_spelled` in each helper's suite).
+   `heads/main` is refused when handed to `git-branch-drop.sh`, and so is a
+   current branch of that name under `git-push-force.sh`, which takes no
+   argument (Task 5, `test_main_is_refused_however_it_is_spelled` in each
+   helper's suite).
 5. **A deny with no row in the destructive table, or a row whose example
    is not refused.** The table must stay the surface it claims to be
    (Task 4, `test_every_base_deny_has_a_row`,
@@ -114,6 +116,7 @@ nothing else:
 
 ```json
 {"name": "main",
+ "names": ["main", "main non-writable directly", "protect-main"],
  "floor": {"enforcement": "active", "target": "branch",
            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
            "bypass_actors": [],
@@ -157,10 +160,13 @@ The comparison's rules *(builder's call)*:
 - an approval count above 0, or any bypass actor, is a difference.
 
 - [ ] **Step 1: Tests.**
-  - `test_floor_names_every_rule_the_spec_requires`: the five rule types,
-    a bypass list that is empty, and the condition `~DEFAULT_BRANCH`.
-  - `test_every_repository_has_a_checks_entry`: the four repositories of
-    `targets.json` plus frontend and admin, and no others.
+  - `test_floor_names_every_rule_the_spec_requires`: the floor's four
+    rules, an empty bypass list, and the condition `~DEFAULT_BRANCH`. Each
+    repository's `desired(…)` carries the fifth rule,
+    `required_status_checks`, built from its `checks` entry.
+  - `test_every_repository_has_a_checks_entry`: the two repositories of
+    `targets.json`, backend and the harness, plus frontend and admin, and
+    no others.
   - `test_harness_checks_are_its_job_ids`: each harness check is a job id,
     or a job id with its matrix leg, in `.github/workflows/*.yml`. This
     keeps the data and the job id from drifting apart.
@@ -169,7 +175,8 @@ The comparison's rules *(builder's call)*:
     `test_compare_admits_an_extra_rule_type`.
   - `test_normal_form_reads_the_api_shape`: over a fixture recorded from
     `gh api repos/alexander-shamray/blueprint-backend/rulesets/20678668`,
-    it equals `desired(…, backend)`.
+    `compare(normal_form(desired(…, backend)), normal_form(fixture))` is
+    empty. The name is not compared, because `normal_form` drops it.
   - `test_floor_breaches_names_each_breach`.
 - [ ] **Step 2:** Run them and see them fail. Write the module and the
   data, then run them again and see them pass. Then run
@@ -194,23 +201,31 @@ The comparison's rules *(builder's call)*:
   - `py -3.12 -m harness_sync ruleset-check [--effective] [<repo>…]`. It
     exits 0 when every named repository, or all of them by default,
     matches, and 1 with one line per difference. Without `--effective` it
-    reads `GET /repos/{repo}/rulesets`, finds the one named `main`, and
-    reads it whole, `bypass_actors` included, which needs admin. With
+    reads `GET /repos/{repo}/rulesets`, finds the ruleset by the lookup
+    below, and reads it whole, `bypass_actors` included, which needs
+    admin. With
     `--effective` it reads `GET /repos/{repo}/rules/branches/main`, which
     any token can read for a public repository and which carries no bypass
     list. It then compares the rules and checks only.
   - `py -3.12 -m harness_sync ruleset-apply <repo>`. It refuses data that
-    has a floor breach. It sends `PUT` when a ruleset named `main` exists
-    and `POST` when none does, then runs `ruleset-check <repo>` and exits
-    with its code.
+    has a floor breach. It `PUT`s to the ruleset the lookup finds, and
+    `POST`s only when the lookup finds none. Then it runs
+    `ruleset-check <repo>` and exits with its code.
   - The repository it acts on comes from the data's keys, never from free
     text. Every `gh` call goes through one argv builder, so the tests can
     swap in a fake.
 
-The current rulesets keep their names, *non-writable directly* and
-*protect-main*. The data's `name` is the name the apply writes, so the
-first `PUT` renames each one to `main`. Each ruleset is found by its id,
-taken from a listing that matches either name *(builder's call)*.
+**The lookup** *(builder's call)*: the one branch ruleset whose name is in
+`rulesets/main.json` `"names"`. That field holds `main` and the live names
+in full: `main non-writable directly` for backend and the harness, and
+`protect-main` for frontend and admin. The ruleset is then read by its id.
+More than one match is refused. Because the data's `name` is `main`, the
+first `PUT` renames each ruleset.
+
+For frontend and admin the first `PUT` also retargets `ref_name` from
+`refs/heads/main` to the floor's `~DEFAULT_BRANCH`. That is the same branch
+while `main` is the default. Until it runs, a `ruleset-check` without
+`--effective` reports the condition as a difference.
 
 - [ ] **Step 1: Choose frontend's checks from data.** Take the check-run
   names that reported `success` on the head of every one of frontend's
@@ -220,11 +235,12 @@ taken from a listing that matches either name *(builder's call)*.
   `commits`, `e2e`, `harness (macos-latest)`, `harness (ubuntu-latest)`,
   `harness (windows-latest)`, `ios-build`, `ios-config` and `web`.
   `issue-form` was absent from three, so it stays out.
-- [ ] **Step 2: Tests**, over a fake `gh` on `PATH`, as
-  `test_pr.py` does:
+- [ ] **Step 2: Tests**, over an injected fake `gh`, as `test_pr.py`'s
+  `FakeGh` does:
   - `test_apply_refuses_data_below_the_floor`: no `gh` call is made.
-  - `test_apply_puts_when_the_ruleset_exists`;
-    `test_apply_posts_when_none_exists`.
+  - `test_apply_puts_to_a_ruleset_found_by_a_live_name`;
+    `test_apply_posts_when_no_name_matches`;
+    `test_apply_refuses_two_matching_rulesets`.
   - `test_check_reads_bypass_actors`;
     `test_check_effective_ignores_bypass`.
   - `test_check_exits_1_with_one_line_per_difference`.
@@ -233,8 +249,10 @@ taken from a listing that matches either name *(builder's call)*.
   them and see them pass.
 - [ ] **Step 4:** Commit, open the PR, run the `/ship` loop, and merge.
 - [ ] **Step 5:** From the harness checkout, on that `main`, run
-  `ruleset-apply` for each of the four repositories. For three of them
-  this is a rename, and for frontend it adds the checks. Then run
+  `ruleset-apply` for each of the four repositories. For backend and the
+  harness this is a rename. Admin's is also retargeted to
+  `~DEFAULT_BRANCH`. Frontend's is retargeted and also gains its checks.
+  Then run
   `ruleset-check` with no arguments and see exit 0. Paste the output into
   the H-row of the task list. If a call is refused, hand it over as a
   checked scratchpad script and a `!` line.
@@ -261,8 +279,10 @@ with `GITHUB_TOKEN` (`contents: read`), and adds no secret.
   floor refusal is what stops an unmerged branch from weakening `main`
   *(builder's call)*. The README's *Changes* states this order.
 - **On the schedule** it catches a ruleset changed by hand. A red
-  scheduled run is filed as a `harness`, `high` issue by the owner's next
-  session, which reads the run, as `main-red` runs are read.
+  scheduled run files a `harness`, `high` issue itself, or comments on
+  the open one, through a step limited to `issues: write`, with the
+  differences as its body. Backend's `main-red.yml` files the same way
+  *(builder's call)*.
 
 - [ ] **Step 1:** Write the workflow and leave the data unchanged.
   Commit, open the PR, and wait for the new job to report green on it,
@@ -310,8 +330,9 @@ A `ruleset` row is the server-side backstop: its test is
     example, and a deny with no row fails, naming it.
   - `test_every_row_is_refused`:
     - a `deny` row's example matches a base deny;
-    - a `guard-git-argv` row's example, fed to the hook as its JSON stdin,
-      exits 2 with the row's remedy in the message;
+    - a `guard-git-argv` row's example is fed to the hook as its JSON
+      stdin. The hook exits 0, and its stdout JSON carries
+      `permissionDecision` `deny`, which is how both hooks refuse;
     - a `guard-edit-target` row is checked the same way.
   - `test_the_table_is_read`: it parses at least 15 rows, so a renamed
     heading cannot leave the test vacuous.
@@ -338,9 +359,7 @@ A `ruleset` row is the server-side backstop: its test is
     of `main`;
   - `payload/.claude/commands/pr.md`: *Push the branch first*, where a
     branch wanting a force push to itself uses `git-push-force.sh` and a
-    push reaching `main` still stops;
-  - `payload/docs/harness/working-rules.md` or `pitfalls.md`, wherever
-    either says force is never possible.
+    push reaching `main` still stops.
 
 The spec routes force through "the existing push helpers". Those two cover
 only a rebase onto `main` and a trailer rewrite. A branch amended or
@@ -354,6 +373,12 @@ third helper of the same shape *(builder's call)*.
   - It refuses: `main` in any spelling, compared case-folded as
     `git-rebase-onto-main.sh` does; a detached `HEAD`; a branch `origin`
     lacks; and a lease that no longer holds, since git refuses that itself.
+  - It also refuses a remote that carries commits this checkout never
+    held. A lease is not consent: once another session's commits have been
+    fetched, the lease passes. So, after a fresh fetch, `origin`'s tip must
+    appear in the local branch's reflog, `git reflog refs/heads/<b>`.
+    That is `git-rebase-onto-main.sh`'s `require_remote_carries_nothing_new`
+    applied to a rewrite with no fork point.
   - Its exit codes are those `git-rebase-onto-main.sh` uses.
 - `git-branch-drop.sh <branch>` deletes the local branch only when all of
   these hold:
@@ -376,6 +401,9 @@ sync reaches. Re-run it and quote it in the PR body.
   - `test_there_is_exactly_one_push_and_it_leases` (push-force);
   - `test_a_moved_remote_tip_refuses_the_push` (push-force);
   - `test_a_branch_origin_lacks_is_refused` (push-force);
+  - `test_remote_commits_this_checkout_never_held_are_refused`
+    (push-force: a second clone pushes a commit, this clone fetches it and
+    amends its own tip, and the push is refused);
   - `test_an_unmerged_branch_is_kept`, `test_a_tip_after_the_merge_is_kept`,
     `test_a_branch_checked_out_elsewhere_is_kept` and
     `test_a_landed_branch_is_dropped` (branch-drop, over a fake
@@ -398,10 +426,9 @@ sync reaches. Re-run it and quote it in the PR body.
   - fix any failure in the payload, never here;
   - run one `branch-reviewer` round on the target-specific part;
   - merge on green.
-- [ ] **Step 2:** Backend's `docs/harness-local.md` *Residuals*: wherever
-  it says this repository denies every force, it now cites
-  `docs/harness-boundaries.md` *Destructive classes*. Make that change in
-  its own Class D PR, after the sync.
-- [ ] **Step 3:** After the next two backend `/ship` sessions, add their
+  Backend's local text needs no change. `docs/harness-local.md` never
+  states the force policy. `ship.md`'s "`git branch -d` is denied" stays
+  true, because the raw deny stays, and plan 4 wires the helper there.
+- [ ] **Step 2:** After the next two backend `/ship` sessions, add their
   stop count to the harness's `docs/baseline-2026-11.md` as *After plan 3*,
   measured as *After plan 2* was. A rise is a harness defect, filed there.
