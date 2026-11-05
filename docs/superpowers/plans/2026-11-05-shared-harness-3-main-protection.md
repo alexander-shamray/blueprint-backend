@@ -280,9 +280,9 @@ with `GITHUB_TOKEN` (`contents: read`), and adds no secret.
   *(builder's call)*. The README's *Changes* states this order.
 - **On the schedule** it catches a ruleset changed by hand. A red
   scheduled run files a `harness`, `high` issue itself, or comments on
-  the open one, through a step limited to `issues: write`, with the
-  differences as its body. Backend's `main-red.yml` files the same way
-  *(builder's call)*.
+  the open one, with the differences as its body. It does so from a job of
+  its own limited to `issues: write`, as backend's `main-red.yml` files.
+  The read-back job keeps `contents: read` *(builder's call)*.
 
 - [ ] **Step 1:** Write the workflow and leave the data unchanged.
   Commit, open the PR, and wait for the new job to report green on it,
