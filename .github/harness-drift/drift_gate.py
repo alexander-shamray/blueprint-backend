@@ -161,16 +161,25 @@ def _git_executable(root: Path) -> str | None:
     Windows runs a bare `git` from the current directory before PATH, and the gate is run from a target's root, so
     a branch that commits a `git.exe` would otherwise run it."""
     name = "git.exe" if os.name == "nt" else "git"
-    here, tree = Path.cwd().resolve(), root.resolve()
+    # Python 3.12's non-strict resolve() raises RuntimeError, not OSError, on a symlink loop.
+    try:
+        here, tree = Path.cwd().resolve(), root.resolve()
+    except (OSError, RuntimeError):
+        return None
     for entry in os.environ.get("PATH", "").split(os.pathsep):
         if not entry or not os.path.isabs(entry):
             continue
-        directory = Path(entry).resolve()
-        if directory == here or directory.is_relative_to(tree):
+        # One unreadable entry (a symlink loop, a permission error) is not a reason to stop looking, and an
+        # exception here would reach the caller outside its try and end the gate in a traceback.
+        try:
+            directory = Path(entry).resolve()
+            if directory == here or directory.is_relative_to(tree):
+                continue
+            candidate = directory / name
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        except (OSError, RuntimeError):
             continue
-        candidate = directory / name
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
     return None
 
 

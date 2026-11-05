@@ -113,7 +113,8 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
                 self.assertLess(text.index(write), text.index(SKIP_WRITE))
 
     def test_the_task_list_is_written_nowhere_under_the_token(self):
-        # CLAUDE.md and the owner's memory tell a session that files an issue to update the list; this overrides both.
+        # `.harness/agent-rules.md`, *Working in a target*, and the owner's memory tell a session that files an issue
+        # to update the list; this overrides both.
         rule = between(flat(between(ship(), "## It runs to the end", "## Resume, don't restart")),
                        "Under the standalone token --dispatched <run-dir>", "(why:")
         self.assertIn("writes the task list nowhere, even when it files or closes an issue", rule)
