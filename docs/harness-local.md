@@ -91,9 +91,8 @@ rest.
 
 ## Review examples
 
-Read beside `docs/harness/working-rules.md`, *What counts as a finding*;
-for now `.claude/commands/review-branch.md` states these four itself as
-well:
+Read beside `docs/harness/working-rules.md`, *What counts as a finding*,
+which `.claude/commands/review-branch.md` cites with this section:
 
 1. **Blueprint ↔ code drift**: samples, pins, type names, registration
    order, endpoints, credentials.

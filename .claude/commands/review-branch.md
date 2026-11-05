@@ -24,35 +24,17 @@ Check whether `suggestions.md` exists first; its presence beats an empty
 
 ## What counts as a finding
 
-**Two statements that cannot both be true**, or one untrue of the system;
-never style taste. Prefer:
-
-1. **Blueprint ↔ code drift**: samples, pins, type names, registration order,
-   endpoints, credentials.
-2. **Cross-chapter / CLAUDE.md contradictions**, or a planned tree stated as
-   present; a stale restatement is one only if this branch **introduces or
-   edits** it (`docs/change-locality.md` §2).
-3. **Register drift**: `Directory.Packages.props` vs Appendix B vs
-   `allowed-licences.txt`, a chapter pin as an `Include`/`Version` pair, or
-   the licence gate failing.
-4. **Deploy drift**: Compose / Helm / CI vs §14 / §15 (ports, secrets,
-   service names, healthchecks).
-5. **Incomplete reconciliation**: a rule or fix this change states that the
-   corpus still violates in the same change set.
-6. **A file outside the declared touch set**: each `outside <path>` or
-   `outside-class <path>` line of
-   `bash .claude/scripts/pr-locality.sh <n>` (`<n>` from
-   `bash .claude/scripts/pr-for-branch.sh`), resolved per
-   `docs/change-locality.md` §3 — an `outside-class` one by a narrower diff
-   or a different class — never by a row widened silently; if it
-   prints nothing or cannot run, say so and skip, never infer a class; an
-   `inside` line grants nothing (why: docs/commands/review-branch.md, *What
-   counts as a finding*).
-
-Never raise `docs/style-guide.md`'s tabulated house styles, a stale
-restatement this branch left untouched where the owner site is already
-correct, or a request that a true comment keeping its *Comments* rules be
-reworded, completed or expanded. A diff
+The bar and its never-raise list are `docs/harness/working-rules.md`,
+*What counts as a finding*, and this repository's examples are
+`docs/harness-local.md` *Review examples*. A file outside the declared
+touch set is each `outside <path>` or `outside-class <path>` line of
+`bash .claude/scripts/pr-locality.sh <n>` (`<n>` from
+`bash .claude/scripts/pr-for-branch.sh`), resolved per
+`docs/change-locality.md` §3 — an `outside-class` one by a narrower diff
+or a different class — never by a row widened silently; if it
+prints nothing or cannot run, say so and skip, never infer a class; an
+`inside` line grants nothing (why: docs/commands/review-branch.md, *What
+counts as a finding*). A diff
 wholly under `docs/superpowers/` gets only what `.claude/commands/ship.md`'s
 *A plan is reviewed once, for contradiction* admits.
 
