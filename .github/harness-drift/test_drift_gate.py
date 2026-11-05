@@ -231,6 +231,46 @@ class DriftGate(unittest.TestCase):
         self.assertIsNotNone(chosen)
         self.assertEqual(Path(chosen).parent.resolve(), Path(real).parent.resolve())
 
+    def test_a_path_entry_whose_resolve_raises_is_skipped(self) -> None:
+        """PermissionError for an unreadable entry; RuntimeError is 3.12's symlink-loop error."""
+        real = shutil.which("git")
+        if real is None:
+            self.skipTest("git is not on PATH")
+        tree = Tree(self.tmp)
+        bad = str(Path(self.tmp).parent / f"{Path(self.tmp).name}-unreadable")
+        path = os.pathsep.join([bad, str(Path(real).parent)])
+        original = Path.resolve
+        for error in (PermissionError("unreadable PATH entry"), RuntimeError("Symlink loop")):
+            with self.subTest(error=type(error).__name__):
+
+                def resolve(self_: Path, *args: object, **kwargs: object) -> Path:
+                    if str(self_) == bad:
+                        raise error
+                    return original(self_, *args, **kwargs)
+
+                with mock.patch.dict(os.environ, {"PATH": path}), mock.patch.object(Path, "resolve", resolve):
+                    chosen = drift_gate._git_executable(tree.root)
+                self.assertIsNotNone(chosen)
+                self.assertEqual(Path(chosen).parent.resolve(), Path(real).parent.resolve())
+
+    def test_a_path_entry_that_is_a_symlink_loop_is_skipped(self) -> None:
+        """Python 3.12's non-strict resolve() raises RuntimeError, not OSError, on a loop."""
+        real = shutil.which("git")
+        if real is None:
+            self.skipTest("git is not on PATH")
+        tree = Tree(self.tmp)
+        loop = Path(self.tmp).parent / f"{Path(self.tmp).name}-loop"
+        try:
+            os.symlink(loop, loop, target_is_directory=True)
+        except OSError:
+            self.skipTest("symlinks cannot be created here")
+        self.addCleanup(os.unlink, loop)
+        path = os.pathsep.join([str(loop), str(Path(real).parent)])
+        with mock.patch.dict(os.environ, {"PATH": path}):
+            chosen = drift_gate._git_executable(tree.root)
+        self.assertIsNotNone(chosen)
+        self.assertEqual(Path(chosen).parent.resolve(), Path(real).parent.resolve())
+
     def test_a_root_below_the_top_of_a_checkout_is_walked(self) -> None:
         (Path(self.tmp) / "sub").mkdir()
         tree = Tree(str(Path(self.tmp) / "sub"))

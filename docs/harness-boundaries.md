@@ -15,6 +15,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
 | Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards and the quoting bypass. |
 | The guards' threat model | What the guard hooks are written against, which guard findings are filed, and which are recorded as out of scope. |
+| Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
 | The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
 | Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers and the force-push rebase helper. |
@@ -25,6 +26,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
 | Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, and their slice lists and ref. |
+| The sed line-ending guard | guard-sed-crlf.py refusing `sed -i` on a tracked CRLF file: what it reads, what a crafted path makes it run, where it fails open, and its residuals. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop; the quality sets' runs, which load only user settings. |
 | Managed files | Which paths blueprint-harness owns and where they are changed, the `local` paths a repository keeps, and the drift gate that holds them. |
 
@@ -171,11 +173,16 @@ an index that cannot refresh is not a reason to fail the call that provoked
 it. The exit status is the one thing it does keep, and a request whose update
 failed goes back rather than counting as served: contention is what fails
 here, the streams that would have said so are gone, and the loser may be the
-run carrying the newest edit. The worker runs from the checkout's parent and
-only the CLI inside it, because Windows will not delete a live process's
-working directory and `/ship` removes a worktree moments after its last call.
-The lock and the CLI's own run still hold files there while they last, which
-is why `/ship`'s `git-worktree-remove.sh` takes the lock before it removes.
+run carrying the newest edit. The worker runs from the system temp directory,
+outside every checkout, and only the CLI inside the checkout: Windows will not
+delete a live process's working directory and `/ship` removes a worktree
+moments after its last call, and Windows looks in the starting process's own
+directory for a program named bare, so a checkout's parent, or for a worktree
+a directory of the main checkout, would let a merged file stand in for the
+CLI, which is started by the full path a PATH-only lookup found instead. The
+lock and the CLI's own run still hold files in the checkout while they last,
+which is why `/ship`'s `git-worktree-remove.sh` takes the lock before it
+removes.
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a
@@ -569,12 +576,16 @@ defeatable rather than theoretically so.
 
 **The guard hooks catch an agent's honest mistakes; they are not a sandbox
 against a session that sets out to defeat them.** `guard-git-argv.py`,
-`guard-edit-target.py` and `guard-index-argv.py` are written against a
-session that types a dangerous command by accident or by a plausible
-shortcut — a forced push, a write into a denied tree, a removal of a parent
-of the checkout — in any spelling a shell user writes in ordinary work:
-quoting, `-C` and `--work-tree`, environment prefixes, `cd` chains, the
-launchers and wrappers, heredocs, pipes into a shell.
+`guard-edit-target.py`, `guard-index-argv.py` and `guard-sed-crlf.py` are
+written against a session that types a dangerous command by accident or by
+a plausible shortcut — a forced push, a write into a denied tree, a removal
+of a parent of the checkout, a `sed -i` over a CRLF file — in any spelling
+a shell user writes in ordinary work: quoting, `-C` and `--work-tree`,
+environment prefixes, `cd` chains, the launchers and wrappers, heredocs,
+pipes into a shell. A guard that judges a file the command names, as
+`guard-sed-crlf.py` does, is held to that list where the command's text
+holds the name; a file list another program computes is its stated
+residual (*The sed line-ending guard*).
 
 They are not written against a session that builds a command so the hook
 cannot read it. A reader that runs before expansion can always be
@@ -606,6 +617,110 @@ summary as outside the guards' threat model and moves on; an issue already
 open for one is closed as not planned, with a link to this section. This
 section is the owner for all three repositories; blueprint-admin and
 blueprint-frontend cite it rather than restate it.
+
+## Destructive classes
+
+**One table of what the harness refuses, the layer that refuses it, and a
+test that holds the table to both.** Every class of operation here is
+destructive on the repositories or on the machine, and each is stopped by
+a layer that can be named: a permission deny in `.harness/settings.base.json`,
+`guard-git-argv.py` or `guard-edit-target.py`, or the `main` ruleset on the
+server. A reader asking whether `git push origin +HEAD:main` is stopped, and by
+what, finds the row; a base deny added without one is a failing test, not a
+paragraph that went stale. `.claude/scripts/test_destructive_classes.py` reads
+the table and checks it four ways: every `permissions.deny` entry of the
+rendered root's `settings.base.json` is matched by some `deny` row's example,
+every row's example is refused by the layer it names, every non-`ruleset` row's
+*Test* names a suite file that exists, and the table parses to at least fifteen
+rows.
+
+**The columns.** *Class* is the operation, *Example* one spelling of it,
+*Refused by* the layer the example exercises, and *Test* the suite file that
+holds the row, which the suite checks exists (a `ruleset` row names
+`ruleset-check`, as below).
+*Refused by* takes four values, and the test accepts no other:
+
+- `deny` — the example matches an entry of the base deny list. A `Bash`
+  entry follows Claude Code's prefix reading: `Bash(x:*)` matches `x` and
+  `x …`, and a `*` inside a rule matches any run. An `Edit` entry is
+  matched by an example spelled `Edit(<path>)`, with the `./` stripped from
+  both sides, so one row holds a rule and its `./`-prefixed twin.
+- `guard-git-argv` — the example is a command, fed to
+  `.claude/hooks/guard-git-argv.py` as the JSON a PreToolUse call carries.
+  The hook exits 0 and its stdout holds `permissionDecision` `deny`.
+- `guard-edit-target` — the example is spelled `Edit(<path>)`, and the test
+  feeds the hook an `Edit` of that path in a scratch checkout in which
+  `linked/<name>` is a link to each denied tree (`scripts`, `commands`,
+  `agents`, `hooks`, `skills`, `remember`, and `claude` for the
+  directory holding `settings.json`). The hook refuses a path whose spelling
+  is inside an allowed tree and whose resolution is not, so the example
+  spells its way in through a link.
+- `ruleset` — the server-side backstop on `main`, and its test is
+  `ruleset-check`, which the table names and the suite does not run. It is
+  blueprint-harness's `py -3.12 -m harness_sync ruleset-check`, which asks
+  GitHub and is run by that repository's `rulesets` workflow against every
+  target's `main` ruleset, so it is not in the target this file renders into.
+
+Where a class is refused by more than one layer, the row names the layer its
+example exercises, and the server-side backstop has rows of its own. A guard
+row is therefore a spelling the deny list does not match.
+
+| Class | Example | Refused by | Test |
+|---|---|---|---|
+| Push to `main`, bare | `git push origin main` | `deny` | `test_destructive_classes.py` |
+| Push to `main` with upstream | `git push -u origin main` | `deny` | `test_destructive_classes.py` |
+| Push to `main`, `HEAD` refspec | `git push origin HEAD:main` | `deny` | `test_destructive_classes.py` |
+| Push to `main`, `HEAD` refspec with upstream | `git push -u origin HEAD:main` | `deny` | `test_destructive_classes.py` |
+| Push to `main`, full ref name | `git push origin HEAD:refs/heads/main` | `guard-git-argv` | `test_destructive_classes.py` |
+| Push to `main`, from another branch | `git push origin feature:main` | `guard-git-argv` | `test_destructive_classes.py` |
+| Push to `main`, long upstream option | `git push --set-upstream origin HEAD:main` | `guard-git-argv` | `test_destructive_classes.py` |
+| Push to `main`, forced refspec | `git push origin +HEAD:main` | `guard-git-argv` | `test_destructive_classes.py` |
+| Force push, long option | `git push --force origin feature` | `deny` | `test_destructive_classes.py` |
+| Force push, lease | `git push --force-with-lease origin feature` | `deny` | `test_destructive_classes.py` |
+| Force push, short option | `git push -f origin feature` | `deny` | `test_destructive_classes.py` |
+| Force push, combined short options | `git push -fu origin feature` | `guard-git-argv` | `test_destructive_classes.py` |
+| Force push, lease with a value | `git push --force-with-lease=feature origin feature` | `guard-git-argv` | `test_destructive_classes.py` |
+| Force push, `+` refspec | `git push origin +feature` | `guard-git-argv` | `test_destructive_classes.py` |
+| Remote branch deletion, option first | `git push --delete origin feature` | `deny` | `test_destructive_classes.py` |
+| Remote branch deletion, option last | `git push origin --delete feature` | `guard-git-argv` | `test_destructive_classes.py` |
+| Remote branch deletion, `:branch` refspec | `git push origin :feature` | `guard-git-argv` | `test_destructive_classes.py` |
+| Soft reset to a remote-tracking ref | `git reset --soft origin/main` | `guard-git-argv` | `test_destructive_classes.py` |
+| Direct push to `main` | `git push origin HEAD:refs/heads/main` | `ruleset` | `ruleset-check` |
+| Direct commit to `main`, landing through a push | `git push origin main` | `ruleset` | `ruleset-check` |
+| Force push to `main` | `git push --force origin main` | `ruleset` | `ruleset-check` |
+| Deletion of `main` | `git push origin :main` | `ruleset` | `ruleset-check` |
+| Merge commit onto `main` | `git push origin HEAD:main` | `ruleset` | `ruleset-check` |
+| Discard the working tree and index | `git reset --hard origin/main` | `deny` | `test_destructive_classes.py` |
+| Delete untracked files | `git clean -fdx` | `deny` | `test_destructive_classes.py` |
+| Delete a branch | `git branch -d feature` | `deny` | `test_destructive_classes.py` |
+| Delete a branch, forced | `git branch -D feature` | `deny` | `test_destructive_classes.py` |
+| Delete a branch, long option | `git branch --delete feature` | `deny` | `test_destructive_classes.py` |
+| Rename a branch | `git branch -m feature other` | `deny` | `test_destructive_classes.py` |
+| Rename a branch, forced | `git branch -M feature other` | `deny` | `test_destructive_classes.py` |
+| Rename a branch, long option | `git branch --move feature other` | `deny` | `test_destructive_classes.py` |
+| Move a branch over another | `git branch --force feature HEAD~1` | `deny` | `test_destructive_classes.py` |
+| Write a file through a read-only command | `git log --output=out.txt` | `deny` | `test_destructive_classes.py` |
+| Run a program through `--upload-pack` | `git fetch --upload-pack=prog origin` | `deny` | `test_destructive_classes.py` |
+| Run a program through `--receive-pack` | `git push --receive-pack=prog origin feature` | `deny` | `test_destructive_classes.py` |
+| Run a program through `--exec` | `git fetch --exec=prog origin` | `deny` | `test_destructive_classes.py` |
+| Edit the agent notes | `Edit(.remember/notes.md)` | `deny` | `test_destructive_classes.py` |
+| Edit the helper scripts | `Edit(.claude/scripts/helper.sh)` | `deny` | `test_destructive_classes.py` |
+| Edit the commands | `Edit(.claude/commands/ship.md)` | `deny` | `test_destructive_classes.py` |
+| Edit the subagent profiles | `Edit(.claude/agents/branch-reviewer.md)` | `deny` | `test_destructive_classes.py` |
+| Edit the hooks | `Edit(.claude/hooks/guard-git-argv.py)` | `deny` | `test_destructive_classes.py` |
+| Edit the skills | `Edit(.claude/skills/codebase-index/SKILL.md)` | `deny` | `test_destructive_classes.py` |
+| Edit the settings | `Edit(.claude/settings.json)` | `deny` | `test_destructive_classes.py` |
+| Edit the local settings | `Edit(.claude/settings.local.json)` | `deny` | `test_destructive_classes.py` |
+| Edit a hook through a link | `Edit(linked/hooks/guard-git-argv.py)` | `guard-edit-target` | `test_destructive_classes.py` |
+| Edit the settings through a link | `Edit(linked/claude/settings.json)` | `guard-edit-target` | `test_destructive_classes.py` |
+| Edit the agent notes through a link | `Edit(linked/remember/notes.md)` | `guard-edit-target` | `test_destructive_classes.py` |
+
+**Adding a row.** A deny entry added to `settings.base.json` needs a `deny`
+row in the same pull request, or the suite names it. A new *Refused by* value
+is one more entry in the suite's `REFUSERS` table and one more bullet above.
+A row whose example the layer admits fails the suite, which is the point: a
+refusal that quietly stopped covering its class is the harness's most
+repeated failure.
 
 ## Git argv guard hook
 
@@ -1433,6 +1548,72 @@ read less only by pointing at a commit that really was swept clean; a
 poisoned tree cannot reach it, because the parent runs it once, on a clean
 end, with `$pinned`.
 
+## The sed line-ending guard
+
+**Under Git Bash, `sed -i` drops the CR from every line it writes**, so a
+file the checkout holds with CRLF endings comes back LF: a C# file that
+`.gitattributes` forces to `eol=crlf` then fails a whitespace analyser at
+lines nobody edited, and a file whose index holds CRLF changes every line
+of its diff; under `core.autocrlf`, whose index holds LF, the diff shows
+only the edited lines, and the cost is a working copy left LF for an
+analyser or an editorconfig check to find. Measured with GNU sed 4.9
+under Git Bash: `one\r\ntwo\r\n` through `sed -i 's/one/uno/'` comes back
+`uno\ntwo\n`, and through `sed --binary -i` keeps both CRs. `grep -c` cannot confirm it,
+since MSYS grep strips the CR before matching (#37).
+
+`.claude/hooks/guard-sed-crlf.py` is a `PreToolUse` hook on `Bash` that
+reads the file a `sed -i` names, because nothing in the command's text says
+what line endings that file holds. It reads the command's lines as bash
+does, continuations joined and comments and heredoc bodies dropped, splits
+them into simple commands with `shlex`, follows a plain `cd <dir>` within
+its subshell, finds `sed` behind the prefix words and the `env`, `nice`,
+`timeout` and `stdbuf` wrappers, judges what a shell runs — its `-c` line,
+or a heredoc, a here-string, or an `echo` or a `cat` piped into one reading
+its input —
+as a command of its own, and reads sed's options as `getopt_long` does:
+clusters, `-i<suffix>`, `--in-place=`, unique prefixes of long names, and
+the first operand as the script when no `-e` or `-f` names one. It refuses
+when an operand, globbed as bash would, is a regular file whose first 4 MiB
+hold a CRLF and which `git ls-files --error-unmatch` finds in its
+checkout's index. The refusal names the forms that keep the endings: the
+Edit tool, a Python script that opens the file with `newline=""`, or
+`sed --binary -i`, which is admitted. **It judges on Windows alone**: GNU
+sed on Linux and macOS keeps the CR as an ordinary character, so a refusal
+there would block a harmless edit, the false refusal *The guards' threat
+model* files.
+
+**What it reads, and what a crafted path makes it run.** Only a regular
+file is opened, read-only, and nothing read leaves the hook but a path: the
+one the command spelled, or the file in its directory that a glob of it
+matched. So a device, a FIFO or a directory is never opened,
+and a path outside the checkout costs a read the session could `cat`
+anyway. The one thing a path can make it run is git in that path's
+directory, whose checkout may be foreign: the call switches
+`core.fsmonitor` off, since `ls-files` would otherwise run the command a
+hostile config names, and sets `GIT_OPTIONAL_LOCKS=0` so the read writes no
+index. Each git call is bounded at 5 seconds, and a command at 200 files.
+
+**Where it fails open, by design rather than by crash.** An operand holding
+an expansion (`"$FILE"`, `$(git ls-files)`), a `cd` it cannot follow, a file
+that does not exist or cannot be read, a command `shlex` cannot tokenise, no
+git on `PATH`, or a git that cannot answer: each is admitted, because a
+guard that refuses what it cannot resolve blocks ordinary work for want of
+a resolution. An unreadable event is admitted, as in the other guards.
+
+**Its residuals, stated rather than left to be found, and pinned in its
+suite as what the hook returns.** The launchers and wrappers *The guards'
+threat model* names reach this guard only where the command's text holds
+the file list: a `sed` behind `xargs` or `find -exec` takes its files from
+another program's output, which no hook is given, so neither is judged,
+however routine the idiom; nor is a `sed` through the PowerShell tool, or
+an untracked CRLF file, whose endings are not yet the checkout's. A
+`printf` piped into a shell is read as its words rather than its format's
+expansion, so it is refused where the format holds the `sed` and its
+arguments carry the file, and admitted where an argument carries the whole
+line. A quoted
+glob is expanded although bash would pass it literally, which can only
+refuse more.
+
 ## Headless dispatched sessions
 
 Up to `--pairs` headless `claude -p` sessions, a number the owner sets at
@@ -1552,7 +1733,8 @@ headings, fixed so a citation of one lands in every target:
   measurements `docs/harness/token-rules.md`'s reasons rest on.
 - *Ship checks*: the checks `/ship` step 2 runs here, each with the change
   that selects it and the passes it dispatches, each pass's scope and
-  method as its brief, or `none`.
+  method as its brief, or `none`; and the required checks, the CI check
+  names `/ship` step 6's wait requires on the pushed head, never `none`.
 - *Residuals*: what this file's arguments leave open only in this
   repository, beside the residuals stated above.
 - *Review examples*: the kinds of finding this repository's surface
