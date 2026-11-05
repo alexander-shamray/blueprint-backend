@@ -260,12 +260,13 @@ the same PR. It waives nothing else. In particular:
 ### Working rules
 
 The working rules every repository on the harness shares are
-`.harness/agent-rules.md`'s, imported by `CLAUDE.md`, and their detail is
+`.harness/agent-rules.md`'s, imported by `CLAUDE.md`, uncommitted work and
+the task list's moments among them, and their detail is
 [`docs/harness/working-rules.md`](harness/working-rules.md)'s: commits and
-their trailer, branch updates, a red `main`, the Dependabot exception, the
-issue vocabulary, review threads, a round's touch set, CodeQL alerts, a
-`.claude/` fix's case, managed files, uncommitted work and the task list.
-Beside them, what only this repository has:
+their trailer, branch updates, a red `main`, the Dependabot exception,
+review threads, a round's touch set, CodeQL alerts, a `.claude/` fix's case
+and managed files. Beside them, what only this repository has, and the issue
+vocabulary, which `.github/issue-form-gate/` reads from this section:
 
 - **Read before you edit**: the claim you are about to change is usually
   stated more than once.
@@ -277,16 +278,33 @@ Beside them, what only this repository has:
   ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)).
 - **`main-red.yml` files `main is red: <workflow>`** for a red push run,
   or comments on the open one.
-- **Dependabot's exemption is configured in
-  [`.github/dependabot.yml`](../.github/dependabot.yml)**, and the locality
-  and commit gates' READMEs say they skip its pull requests.
-- **The issue form under `.github/ISSUE_TEMPLATE/` offers the issue
-  vocabulary, and `.github/issue-form-gate/` holds it there.** The form's
-  severity is a dropdown whose answer the triager copies onto the label,
-  because an answer cannot attach one. `gh-issue-create.sh` files no
-  `documentation`, and an `enhancement` under its `request` route alone;
+- **The commit and locality gates skip a Dependabot pull request by its
+  author**, as their READMEs say;
+  [`.github/dependabot.yml`](../.github/dependabot.yml) configures its
+  updates.
+- **The issue vocabulary is wider than the label helper**: kind is
+  `security`, `bug`, `test-gap`, `enhancement` or `documentation`.
+  `gh-issue-create.sh` files no `documentation`, and an `enhancement`, a
+  requested change rather than a finding, under its `request` route alone;
   `gh-label-ensure.sh` creates no `enhancement`, since it holds the sweeps'
-  labels alone.
+  labels alone. Area is the tree a finding is in, one tree to a finding:
+  `harness` for anything under `.claude/`, its prose included,
+  `documentation` for prose and samples anywhere else, and `code` for the
+  rest, `src/`, `tests/`, `tools/`, `deploy/`, `.github/` and the root's
+  build files among it, with `test` beside `harness` or `code` for a test
+  suite. `gh-issue-create.sh` takes it as its third argument and
+  `gh-label-ensure.sh` holds each one. The issue form under
+  `.github/ISSUE_TEMPLATE/` offers this vocabulary, and
+  `.github/issue-form-gate/` holds it there. A severity in
+  the body and the label both have to say it: the `## Severity` section of
+  a body `gh-issue-create.sh` files, or the form's dropdown, whose answer
+  the triager copies onto the label because an answer cannot attach one.
+  `documentation` is also one of the form's area choices: an issue
+  labelled `bug` and `documentation` is a defect in the documentation, and
+  `documentation` is its kind only on an issue that carries no other.
+- **Uncommitted work goes in its own commit**, with a body that argues it;
+  if it does not belong in the PR being worked on, say so and ask rather
+  than decide by deleting.
 - **The task list is `.todo/blueprint-backend.md` in the main checkout's
   parent directory**, local and never committed, listing open PRs, with
   the issues each closes, and open issues with no PR; `/branch` adds the
