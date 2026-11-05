@@ -79,10 +79,13 @@ each ceiling to its row, so a module added there is measured here too.
 | `test_issue_decisions.py` | 4.2 | `test_hook_timeouts.py` | 0.2 |
 | `test_dispatch_run.py` | 4.1 | `test_watch_session.py` | 0.3 |
 | `test_dispatch_board.py` | 1.5 | `test_ship_dispatched.py` | 0.1 |
+| `test_python_hygiene.py` | 0.9 | | |
 
 `test_team_board.py` arrived after that measurement and was timed the same
 way on its own branch, #1574's; so were the five `/dispatch` modules, on
-#1691's, each run alone by this script.
+#1691's, each run alone by this script. `test_python_hygiene.py` arrived with
+the sync to blueprint-harness fd87ad6 and was timed alone on its branch, as
+`discover -s .claude/scripts -p` over three runs.
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local
