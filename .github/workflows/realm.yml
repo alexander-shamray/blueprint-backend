@@ -94,7 +94,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The suite runs before the gate -- CLAUDE.md's "tested and then run".
+      # The suite runs before the gate -- .harness/agent-rules.md's "tested and then run".
       # Every negative is a mutation that must go red, each paired with a
       # positive control, because a negative that passes when the pattern
       # matches nothing is indistinguishable from one that works. This gate

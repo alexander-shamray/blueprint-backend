@@ -44,13 +44,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The floor every Python job here pins, for the reason CLAUDE.md gives:
+      # The floor every Python job here pins, for the reason .harness/agent-rules.md gives:
       # an unpinned run goes green on code the runner cannot execute.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
-      # The suite runs before the gate — CLAUDE.md's "tested and then run".
+      # The suite runs before the gate — .harness/agent-rules.md's "tested and then run".
       # Its negatives are mutations that must go red, each with a positive
       # control beside it: a gate observed only green is one nobody has
       # established is looking at anything, and this one guards an
