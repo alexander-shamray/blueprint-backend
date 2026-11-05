@@ -435,8 +435,10 @@ mechanical edit. Where the error is a silent miss, the parent's model is
 not enough either, since a session started on Sonnet would make its
 reviewer and auditors Sonnet; those profiles name Opus.
 `.harness/agent-rules.md`'s *Subagents, review rounds and plans* owns the
-rule and `docs/harness/token-rules.md`, *Which model a subagent runs on*,
-its reason; this table owns which task takes which model.
+rule, and `docs/harness/token-rules.md`, *Which model a subagent runs on*,
+its reason and which task takes which model; this table is the step's
+record of that choice as this repository made it, with the #845 gates its
+own measurements hold.
 
 | Task | Model | When |
 |---|---|---|
