@@ -73,9 +73,13 @@ both repositories.
 
 1. **A forged sync.** A branch named `chore/harness-sync-<sha>`, with the
    workflow's footer, whose `settings.base.json` drops a deny and whose
-   manifest is rehashed to match. The drift gate passes it, because the
-   manifest is on the same branch. `sync_pr.py verify` refuses it, since a
-   blob differs from the payload, and nothing takes it as a sync (Task 1,
+   manifest is rehashed to match. CI's drift gate already refuses it,
+   because `harness-drift.yml` fetches the payload at the manifest's
+   commit and `drift_gate.py` compares against it. That check is still
+   pending, or still red, when `/dispatch` lists the branch. So
+   `sync_pr.py verify` makes the same refusal before any review or launch,
+   since a blob differs from the payload, and nothing takes the branch as
+   a sync (Task 1,
    `test_a_managed_file_differing_from_the_payload_is_refused`).
 2. **Two open syncs.** This happens when a listing races the workflow's
    supersede. Only the one with the highest number is taken, and the rest
@@ -87,8 +91,8 @@ both repositories.
    `test_review_diff_names_a_local_file_citing_a_deleted_path`).
 4. **A sync superseded while its executor runs.** Its pull request closes
    under the executor. `/ship`'s closed-unmerged stop ends it as
-   `stopped`, the dispatcher does not relaunch it, and the next wake lists
-   the new one (Task 4, `test_a_superseded_sync_is_not_relaunched`).
+   `stopped`, the dispatcher does not relaunch it, and the reads after
+   that exit list the new one (Task 4, `test_a_superseded_sync_is_not_relaunched`).
 5. **A sync behind a moved `main`.** Step 6's rebase rewrites the sync's
    commit. The verify is run again on the rebased head before the merge,
    so a rebase cannot carry a changed managed file in (Task 2,
@@ -108,7 +112,7 @@ both repositories.
 | `payload/.claude/commands/ship.md`, `payload/docs/commands/ship.md` | harness | The sync row; the branch drop in the teardown |
 | `payload/.claude/scripts/test_ship_sync.py` | harness | Pins the sync row's text and the teardown order |
 | `payload/.claude/commands/dispatch.md`, `payload/docs/commands/dispatch.md` | harness | Sync groups: found, launched first and alone, reported |
-| `payload/.claude/scripts/dispatch_run.py` | harness | `sync-launch`, `sync_prompt`, the report's *Syncs* section |
+| `payload/.claude/scripts/dispatch_run.py` | harness | `sync-launch`, `sync-close`, `sync_prompt`, the report's *Syncs* section |
 | `payload/.claude/scripts/test_dispatch_sync.py` | harness | Its new cases, in a payload module of their own |
 
 The new dispatch cases go in a module of their own because
@@ -140,8 +144,10 @@ The new dispatch cases go in a module of their own because
   - `py -3.12 .claude/scripts/sync_pr.py list`. It prints JSON,
     `{"take": <row or null>, "rest": [<row>…]}`, where a row is
     `{"number", "head", "oid"}`. A row is an open, same-repository pull
-    request into `main` whose head matches `SYNC_HEAD` and whose body ends
-    with `FOOTER`. `take` is the highest number. Exit 0.
+    request into `main` whose head matches `SYNC_HEAD`. Its body's last
+    line must be `FOOTER` followed by `.`, or by `, in run <url>.`, which
+    are the two shapes `pr_body` writes. `take` is the highest number.
+    Exit 0.
   - `sync_pr.py verify <n>`. It exits 0 with `verified <n> <harness sha>`,
     or 1 with one line per failure. Exit 2 is a refusal with nothing read,
     for example a bad argument.
@@ -170,6 +176,10 @@ The new dispatch cases go in a module of their own because
 `.claude/settings.json` is left to the drift gate, which renders it again
 from the verified base and the unchanged config *(builder's call)*.
 
+Checks 2 and 3 are what CI's drift gate does from its fetched payload. The
+verify repeats them on the owner's machine, so that a sync is proven
+before its review and its launch, not only before its merge.
+
 **What `review-diff` writes**, under `artifacts/review/<slug>-r1.diff`, the
 path convention `/ship` step 5 already uses:
 - the diff of `.claude/settings.json`;
@@ -197,7 +207,9 @@ No managed file's content is in it.
   - `test_local_suites_reads_the_config`.
 
   In `test_sync_pr_constants.py`, which runs in the harness only:
-  `test_the_payload_reads_the_sync_shape_pr_py_writes`.
+  `test_the_payload_reads_the_sync_shape_pr_py_writes`. It checks the
+  branch pattern, and that the footer line accepted is one of the two
+  `pr_body` writes, with and without a run URL.
 - [ ] **Step 2:** Run the tests and see them fail. Write the script, the
   grant and the prose, then run them and see them pass. Run
   `payload-suites` as CI does, on the rendered root.
@@ -237,6 +249,10 @@ No managed file's content is in it.
   - The `/ship` argument `sync #<n>`. From the main checkout on `main`,
     step 1 runs `git-worktree-sync.sh .claude/worktrees/sync-<sha7>
     <head>` in place of `/branch`, and enters it.
+  - Under `--dispatched`, a `sync #<n>` run names its group `sync-<n>`. It
+    writes `<run-dir>/sync-<n>.json` with `"group": "sync-<n>"` and
+    `"issues": []`. The argument carries no `#<group>-<n>` tag, so the
+    Report's rule for reading the group gains this case.
 
 **The sync row** (the section states it; `docs/commands/ship.md` argues
 it):
@@ -247,28 +263,38 @@ it):
     reason;
   - otherwise the run reports them and ends unmerged. This is not one of
     the seven stops, because nothing ran that could have failed.
-- **Step 2** runs `py -3.12 -m unittest` over `sync_pr.py local-suites`.
+- **Step 2** runs each path `sync_pr.py local-suites` prints as
+  `py -3.12 -m unittest discover -s <dir> -p <file>`. That is how CI runs
+  them, since they import siblings from their own directory, and a dotted
+  module name cannot be formed from `.claude/` or `.github/comment-gate/`.
   These are the target-local tests a payload change can trip, which the
   harness never runs (`docs/harness/working-rules.md`). Nothing else under
   *Ship checks* runs, since the managed files were checked in the harness.
 - **Steps 3 and 4** do nothing: the tree stays clean and nothing is
-  committed or pushed. A dirty tree on a sync branch is the
-  merged-with-edits case of step 0: report it and end.
+  committed or pushed. A dirty tree on a sync branch is the sync row's own
+  case, not the open-PR row's: report what the tree holds and end
+  unmerged, committing nothing.
 - **Step 5** is one round, handed `review-diff`'s file and not the branch
   diff.
-  - A finding at `bug` or `medium` is filed in `blueprint-harness`, citing
-    the sync pull request. The sync is then handed back under
-    `--dispatched`, or ends unmerged otherwise, and the fix's own sync
-    supersedes it.
+  - A finding at `bug` or `medium` is filed in the repository whose code it
+    is about, citing the sync pull request. The sync is then handed back
+    under `--dispatched`, or ends unmerged otherwise.
+    - When it is about the payload, the fix's own sync supersedes this
+      one.
+    - When it is about a target-local file, for example Review Focus 3's
+      local line citing a deleted path, it is filed in the target. This
+      same sync is taken again once that fix has merged.
   - A `low` finding goes into one harness issue, `Low findings left by
     <repo>#<n>: <title>`, and the merge goes on.
   - A `nit` is not filed.
   - So a round is clean when no `bug` or `medium` finding is open
     *(builder's call: the user-level filing rule already sends lows to an
     issue, and a hand-back for a low is a stop that §4 counts)*.
-- **Step 6** is unchanged, except after a rebase: when its rebase helper
+- **Step 6** is unchanged, except after a rebase. When its rebase helper
   ran, `sync_pr.py verify <n>` runs again on the new head before
-  `gh-pr-merge.sh`. A failure is handed back.
+  `gh-pr-merge.sh`, and that verify replaces the step 5 recheck which
+  step 6 otherwise re-enters. A sync therefore keeps its one round. A
+  failed verify is handed back.
 
 - [ ] **Step 1: Tests.**
   - `test_git_worktree_sync.py`:
@@ -285,8 +311,10 @@ it):
     - `test_a_sync_branch_is_never_committed_to`, so steps 3 and 4 name no
       commit;
     - `test_the_sync_round_reads_review_diff`;
-    - `test_step_6_verifies_again_after_a_rebase`;
-    - `test_a_failed_verify_reviews_nothing`.
+    - `test_step_6_verifies_again_after_a_rebase`, which also checks that
+      no recheck round follows;
+    - `test_a_failed_verify_reviews_nothing`;
+    - `test_a_dispatched_sync_names_its_group`.
 - [ ] **Step 2:** Run the tests and see them fail. Write the helper and the
   text, then run them and see them pass. Run `payload-suites` on the
   rendered root, and `test_ship_dispatched.py` and
@@ -347,10 +375,15 @@ that has not landed, which is exactly the case where keeping it is right
     - step 0.4's board names the sync group;
     - step 1 asks nothing about it;
     - step 2 launches it first and alone;
-    - *On an executor's exit* skips `tasks done` for it;
+    - step 2's reads after an executor's exit gain `sync_pr.py list`,
+      and `verify` on its `take`, beside `gh-issue-list.sh`;
+    - *On an executor's exit* skips both `tasks done` and `tasks back` for
+      a sync group, and runs `sync-close` instead;
     - step 3's report gains *Syncs*;
-    - the frontmatter `allowed-tools` gains the `sync_pr.py`,
-      `git-worktree-sync.sh` and `dispatch_run.py sync-launch` grants;
+    - the frontmatter `allowed-tools` gains the `sync_pr.py` and
+      `git-worktree-sync.sh` grants. The new subcommands need none, since
+      `dispatch_run.py`'s commands are reached through
+      `dispatch_board.py`'s main, under the grant that already exists;
   - `payload/docs/commands/dispatch.md`: the argument;
   - `payload/.claude/scripts/dispatch_run.py`.
 - Create: `payload/.claude/scripts/test_dispatch_sync.py`
@@ -361,13 +394,18 @@ that has not landed, which is exactly the case where keeping it is right
 - Produces in `dispatch_run.py`:
   - `sync_prompt(pr: int, run: str) -> str`, which returns
     `/ship sync #<pr> --dispatched artifacts/dispatch/<run>`;
-  - the subcommand `sync-launch <run> <pr> --branch <head> --worktree
-    <path>`. It records the group `sync-<pr>` in `state.json` with
-    `kind: "sync"`, `issues: []` and model `sonnet`, and it reads and
-    writes no task list. Its worktree check is `launch`'s;
-  - `run <run> sync-<pr>`, which takes no `--description` for a sync group
-    and builds `sync_prompt`;
-  - `report`, whose *Syncs* section lists each sync group with its
+  - the subcommand `dispatch_board.py sync-launch <run> <pr> --branch
+    <head> --worktree <path>`. It records the group `sync-<pr>` in
+    `state.json` with `kind: "sync"`, `issues: []` and model `Sonnet`,
+    the `MODELS` key `launch` stores. It reads and writes no task list,
+    and its worktree check is `launch`'s;
+  - `dispatch_board.py run <run> sync-<pr>`, which takes no
+    `--description` for a sync group and builds `sync_prompt`;
+  - `dispatch_board.py sync-close <run> sync-<pr>`, run after `verify`
+    and the teardown on a merge, or after the result is read on any other
+    outcome. It sets the group's status to `closed` and keeps its outcome,
+    so `report` never lists a merged sync as "not confirmed in main";
+  - `report`, whose *Syncs* section lists each closed sync group with its
     outcome, pull request and merge oid.
 
 The rules *(builder's calls)*:
@@ -381,9 +419,9 @@ The rules *(builder's calls)*:
   (`docs/harness/token-rules.md`, *Which model a subagent runs on*).
 - **No task-list row.** No row ever held a sync, and the next sync
   supersedes it. The report carries it.
-- **Each wake lists again.** A sync whose executor ended `stopped` because
-  its pull request closed is not relaunched. A new `take` at a later wake
-  is a new group.
+- **Each executor's exit lists again**, through step 2's reads. A sync
+  whose executor ended `stopped` because its pull request closed is not
+  relaunched. A new `take` after it is a new group.
 
 - [ ] **Step 1: Tests**, in `test_dispatch_sync.py`:
   - `test_sync_prompt_reads_back_as_ships_sync_argument`;
@@ -392,6 +430,8 @@ The rules *(builder's calls)*:
   - `test_a_superseded_sync_is_not_relaunched`;
   - `test_a_sync_group_takes_no_description`;
   - `test_the_report_lists_syncs`;
+  - `test_a_closed_sync_is_not_reported_unconfirmed`;
+  - `test_a_stopped_sync_runs_no_tasks_back`;
   - `test_the_sync_result_validates_with_no_issues`, against
     `RESULT_KEYS` and `_result_problem`.
 - [ ] **Step 2:** Run the tests and see them fail. Implement, then run them
@@ -401,8 +441,10 @@ The rules *(builder's calls)*:
   `dispatch_run.py` from a backend worktree that has the payload copy laid
   over its own. If one fails because it pins the old behaviour, change that
   local test in a backend pull request that merges before this task's sync
-  opens. The sync cannot carry a local edit. Name that pull request in this
-  one's body.
+  opens. The sync cannot carry a local edit. Backend's CI runs that test
+  against the old managed `dispatch_run.py`, so the changed test must pass
+  against both copies, and it is run on both before that pull request
+  opens. Name that pull request in this one's body.
 - [ ] **Step 4:** Commit, open the PR, run the `/ship` loop, and merge.
 
 ### Task 5: Take it live, then let `/dispatch` take a sync
