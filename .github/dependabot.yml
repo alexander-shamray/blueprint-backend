@@ -1,8 +1,8 @@
 # Weekly version updates for NuGet, the Dockerfiles and Actions; global.json's
 # SDK moves by hand (§4.4). Security updates are a repository setting, and every
 # group below applies to version updates only, so a security update opens on
-# its own. docs/change-locality.md section 6 says why the commit and locality
-# gates skip a Dependabot pull request.
+# its own. docs/harness/working-rules.md, Pull requests, says why the commit and
+# locality gates skip a Dependabot pull request.
 version: 2
 # Each entry's commit-message gives its commits a chore(deps) subject, so a revert
 # of one keeps the commit gate's form inside its quotes.

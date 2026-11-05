@@ -125,9 +125,10 @@ TODO.md                      optional and gitignored: a link to the user's
                              list is main's view of itself and needs a pull
                              request and a review to move, which is slower
                              than the thing it describes. The contract's §6
-                             says where it lives and carries the one rule
-                             that keeps it current, and no command, helper
-                             or gate reads it
+                             says where it lives and why,
+                             .harness/agent-rules.md carries the rule that
+                             keeps it current, and no command, helper or
+                             gate reads it
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup
@@ -262,7 +263,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .github/dependabot.yml       weekly version updates for NuGet, the Dockerfiles'
                              images and Actions; the two gates it
                              cannot satisfy skip its pull requests, and
-                             change-locality.md section 6 says why
+                             harness/working-rules.md, Pull requests,
+                             says why
 .github/ISSUE_TEMPLATE/      the finding form the web UI's New issue page
                              offers, and config.yml switching blank issues
                              off; issue-form-gate holds its choices
