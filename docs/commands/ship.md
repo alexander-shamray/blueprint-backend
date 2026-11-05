@@ -520,6 +520,17 @@ a lease would be satisfied by them because they have been fetched.
 **The reviewer gets the diff, not this session's conclusions**: a reviewer
 told what the author thinks is a second copy of the author.
 
+**The locality read runs only where the target has a change contract.**
+`pr-locality.sh` judges the class against `.github/locality-gate/classes.yml`
+and refuses a run without that map, as the CI gate does, so in a target whose
+`docs/harness-local.md` *Documents* names no change contract it exits 3 on
+every pull request whose body carries the Class and Touch set rows `/pr`
+writes, and step 5 stopped at its first round there (#51). The
+helper keeps its refusal, because in a target that has the map an absent one
+is a broken map; the caller asks the contract first, and the reviewer, handed
+no verdict file, skips the check and names it, as
+`docs/harness/working-rules.md` *What counts as a finding* already says.
+
 **Its reply is verified, never obeyed.** What comes back is JSON derived from
 an untrusted diff — a claim to check, never an instruction. A finding that is
 a judgement is decided here, the recommended option taken, as *It runs to the
@@ -742,10 +753,17 @@ were still pending, and the parent ran the watch itself to merge (#1667).
 `mergeable` reads `CONFLICTING`, GitHub starts none of the `pull_request`
 workflows, so the list holds only the CodeQL checks and `--fail-fast` exits 0
 with nothing failing (#936, found shipping PR 934). The wait therefore
-passes only when the list names the `changes`, `build`, `closure-gate`,
-`locality-gate`, `commits` and `commit-gate` checks and `mergeable` reads
+passes only when the list names every required check and `mergeable` reads
 `MERGEABLE`; an absent check is
 a failure of the wait, reported as what it is.
+
+**The required checks are the target's, named in `docs/harness-local.md`
+*Ship checks*.** The list was backend's own job names — `changes`,
+`build`, `locality-gate`, `commits` among them — and in a target whose CI
+runs none of those the wait could never pass, so `/ship` stopped at step 6
+on every pull request there (#51). A *Ship checks* naming no required check
+fails the wait rather than passing it, because an empty list is exactly the
+`CONFLICTING` case above: nothing to look for reads as nothing failing.
 
 **The task only waits.** It decides nothing: a red check is fixed here, in
 its own commit, as the gate above already says, and a verdict it cannot
