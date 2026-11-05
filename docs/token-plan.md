@@ -11,7 +11,11 @@ per step, an exit test per step.
 
 The rules this plan moves are not restated here. The contract's §2 owns the
 rule for documents, [`harness-boundaries.md`](harness-boundaries.md) owns
-what the harness grants, and each command owns its own procedure.
+what the harness grants, and each command owns its own procedure. The
+session rules it landed are `.harness/agent-rules.md`'s *Subagents, review
+rounds and plans*, and their reasons
+[`docs/harness/token-rules.md`](harness/token-rules.md)'s; the steps below
+keep the measurements.
 
 ## 1. What was measured
 
@@ -194,9 +198,11 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
 0.5M a context and a main session's mean context under 150k a call.
 
 **Landed:** the report's `--tools` view of what fills a main session, and
-`CLAUDE.md`'s *Subagents, review rounds and plans*, which owns the
-delegation brief and the planning rule; the review loop it held moved to
-`/ship` step 5 with step 4. **Owed:** the
+`CLAUDE.md`'s *Subagents, review rounds and plans*, holding the
+delegation brief and the planning rule, which `.harness/agent-rules.md`'s
+section of that name owns since the shared harness's second plan, with
+their reasons in `docs/harness/token-rules.md`, *Briefing a subagent*; the
+review loop it held moved to `/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
 the repository; the plugin's own settings, where it has them; and a main
 session's mean context, #1664, whose cut is the window below. The
@@ -427,9 +433,10 @@ needed where someone else catches the error: the parent opens the
 `file:line` a search returned, and a gate, a build or a test checks a
 mechanical edit. Where the error is a silent miss, the parent's model is
 not enough either, since a session started on Sonnet would make its
-reviewer and auditors Sonnet; those profiles name Opus. `CLAUDE.md`'s
-*Subagents, review rounds and plans* owns the rule; this table owns which
-task takes which model.
+reviewer and auditors Sonnet; those profiles name Opus.
+`.harness/agent-rules.md`'s *Subagents, review rounds and plans* owns the
+rule and `docs/harness/token-rules.md`, *Which model a subagent runs on*,
+its reason; this table owns which task takes which model.
 
 | Task | Model | When |
 |---|---|---|
