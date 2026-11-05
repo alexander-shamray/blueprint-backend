@@ -167,7 +167,11 @@ class ChoosingTheCheckout(Base):
 
         self.assertEqual([root], self.worker_roots())
         working = Path(self.spawned[0][1]["cwd"]).resolve()
-        self.assertEqual(root.resolve().parent, working)
+        # Not `root.parent` either: a worker's directory is where Windows looks
+        # first for a program named bare, and that is a checkout's parent, or
+        # for a worktree a directory of the main checkout (#6).
+        self.assertEqual(Path(tempfile.gettempdir()).resolve(), working)
+        self.assertNotEqual(root.resolve().parent, working)
 
     def test_the_edited_file_decides_over_the_session_directory(self):
         """`guard-edit-target` admits an edit against the session's tree or
@@ -674,11 +678,13 @@ class Refreshing(Base):
         # this pass with the hook's own setting gone.
         self.patch(mock.patch.dict(self.mod.os.environ))
         self.mod.os.environ.pop("CBX_NO_SKILL_AUTO_UPDATE", None)
+        script = str(self.tmp / "bin" / "codebase-index")
+        self.patch(mock.patch.object(self.mod, "console_script", lambda _root: script))
 
         self.mod.refresh(root)
 
         arguments, keywords = self.ran[0]
-        self.assertEqual(["codebase-index", "update"], arguments[0])
+        self.assertEqual([script, "update"], arguments[0])
         self.assertEqual("1", keywords["env"]["CBX_NO_SKILL_AUTO_UPDATE"])
         self.assertEqual(1, len(self.ran), "the fallback ran as well")
 
@@ -709,10 +715,12 @@ class Refreshing(Base):
         console script on PATH, which is why both `cbx` wrappers fall back
         the same way."""
         attempts = []
+        script = str(self.tmp / "bin" / "codebase-index")
+        self.patch(mock.patch.object(self.mod, "console_script", lambda _root: script))
 
         def absent_script(command, **keywords):
             attempts.append(command)
-            if command[0] == "codebase-index":
+            if command[0] == script:
                 raise OSError("no such executable")
             self.ran.append(((command,), keywords))
             return _Completed(0)
@@ -734,6 +742,128 @@ class Refreshing(Base):
 
         self.assertFalse(self.mod.refresh(self.checkout("main")))
         self.assertEqual([], self.ran)
+
+    def test_no_console_script_on_path_goes_straight_to_the_module(self):
+        """A name the lookup did not find is never started bare, which is
+        the start Windows would satisfy from the working directory."""
+        self.patch(mock.patch.object(self.mod, "console_script", lambda _root: None))
+
+        self.mod.refresh(self.checkout("main"))
+
+        self.assertEqual(
+            [[self.mod.sys.executable, "-P", "-m", "codebase_index", "update"]],
+            [arguments[0] for arguments, _ in self.ran])
+
+
+def plant(directory: Path) -> Path:
+    """A `codebase-index` the platform would start, in `directory`."""
+    directory.mkdir(parents=True, exist_ok=True)
+    stub = directory / ("codebase-index.exe" if sys.platform == "win32" else "codebase-index")
+    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    return stub
+
+
+class FindingTheCli(Base):
+    """`codebase-index` is looked for on PATH alone, and never in a checkout.
+
+    On Windows a bare name is searched for in the starting process's own
+    directory before PATH, so a worker started in a checkout's parent, or for
+    a worktree in a directory of the main checkout, would run a stub a pull
+    request committed there on the next hook fire (#6). The full path the
+    lookup answers with is what makes no directory searched at all.
+    """
+
+    def search(self, *entries, cwd=None, root=None):
+        root = root or self.checkout("main")
+        self.patch(mock.patch.dict(self.mod.os.environ, {
+            "PATH": os.pathsep.join(str(entry) for entry in entries),
+            "PATHEXT": ".COM;.EXE;.BAT;.CMD"}))
+        self.patch(mock.patch.object(self.mod.Path, "cwd", lambda: Path(cwd or root)))
+        return self.mod.console_script(root)
+
+    def test_a_stub_at_the_checkout_root_is_not_run(self):
+        root = self.checkout("main")
+        stub = plant(root)
+
+        found = self.search(root, ".", "", cwd=root, root=root)
+        self.mod.refresh(root)
+
+        self.assertIsNone(found)
+        started = [arguments[0][0] for arguments, _ in self.ran]
+        self.assertNotIn(str(stub), started)
+        self.assertTrue(all(Path(program).is_absolute() for program in started), started)
+
+    def test_the_cli_on_path_is_started_by_its_full_path(self):
+        installed = plant(self.tmp / "bin")
+        root = self.checkout("main")
+        plant(root)
+
+        found = self.search(root, installed.parent, root=root)
+
+        # As a Path, which compares as the platform's file names do.
+        self.assertEqual(installed, Path(found))
+        self.mod.refresh(root)
+        self.assertEqual([found, "update"], self.ran[0][0][0])
+
+    def test_a_directory_inside_the_checkout_is_skipped(self):
+        root = self.checkout("main")
+        plant(root / "tools")
+        installed = plant(self.tmp / "bin")
+
+        self.assertEqual(installed, Path(self.search(root / "tools", installed.parent, root=root)))
+
+    def test_the_main_checkout_of_a_worktree_is_skipped(self):
+        """A worktree outside its main checkout's tree still runs what that
+        checkout's last merge put there, if the lookup let it."""
+        main = self.checkout("main", indexed=False)
+        git_dir = main / ".git" / "worktrees" / "probe"
+        git_dir.mkdir(parents=True)
+        (git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+        worktree = self.tmp / "probe"
+        worktree.mkdir()
+        (worktree / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+        plant(main)
+
+        self.assertIsNone(self.search(main, cwd=self.tmp, root=worktree))
+
+    def test_the_working_directory_and_relative_entries_are_skipped(self):
+        root = self.checkout("main")
+        elsewhere = self.tmp / "elsewhere"
+        plant(elsewhere)
+        plant(self.tmp / "rel")
+        # Really there, so a relative entry the lookup kept would find "rel".
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.tmp)
+
+        self.assertIsNone(self.search(elsewhere, "rel", ".", cwd=elsewhere, root=root))
+
+    def test_a_link_into_the_checkout_is_skipped(self):
+        root = self.checkout("main")
+        stub = plant(root)
+        outside = self.tmp / "bin"
+        outside.mkdir()
+        try:
+            (outside / stub.name).symlink_to(stub)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f"no symlinks here: {error}")
+
+        # Run from outside the checkout, so that only the fence on the link's
+        # target can refuse it: from the root, the working-directory check
+        # would refuse it alone.
+        self.assertIsNone(self.search(outside, cwd=self.tmp, root=root))
+
+    @unittest.skipUnless(sys.platform == "win32", "PATHEXT is Windows' alone")
+    def test_a_batch_shim_on_path_is_not_taken(self):
+        """A `.bat` or `.cmd` runs through `cmd.exe` in the checkout, which
+        looks there first for every command the script names."""
+        root = self.checkout("main")
+        shims = self.tmp / "bin"
+        shims.mkdir()
+        for name in ("codebase-index.bat", "codebase-index.cmd"):
+            (shims / name).write_text("@exit /b 0\r\n", encoding="utf-8")
+
+        self.assertIsNone(self.search(shims, root=root))
 
 
 class Registration(Base):
