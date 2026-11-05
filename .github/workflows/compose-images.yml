@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The floor every Python job here pins, for the reason CLAUDE.md gives.
+      # The floor every Python job here pins, for the reason .harness/agent-rules.md gives.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
