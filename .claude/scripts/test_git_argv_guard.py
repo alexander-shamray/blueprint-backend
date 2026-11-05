@@ -78,7 +78,7 @@ class TheGitArgvGuard(unittest.TestCase):
         try:
             result = subprocess.run(
                 [sys.executable, str(HOOK)],
-                input=json.dumps(event), capture_output=True, text=True,
+                input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
                 timeout=HOOK_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
@@ -2765,7 +2765,7 @@ class TheGitArgvGuard(unittest.TestCase):
         # would turn a defect here into a dead session. It says so on stderr.
         result = subprocess.run(
             [sys.executable, str(HOOK)],
-            input="not json at all", capture_output=True, text=True,
+            input="not json at all", capture_output=True, text=True, encoding="utf-8",
         )
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout.strip())
@@ -2801,6 +2801,72 @@ class TheGitArgvGuard(unittest.TestCase):
         reason = self.judge_raw(self.raw_event("git status X").replace(b"X", b"\xff"))
         self.assertIsNotNone(reason)
         self.assertIn("UTF-8", reason)
+
+    # ---- refusals that teach: a trap the command's text shows ----------------
+
+    def test_a_piped_push_chained_without_pipefail_is_refused(self):
+        for command in (
+            "git push origin feat/x 2>&1 | tail -1 && gh pr comment 1 -b done",
+            "git push origin feat/x | tee push.log | tail -1 || echo failed",
+        ):
+            with self.subTest(command=command):
+                reason = self.assertRefused(command)
+                self.assertIn("set -o pipefail", reason)
+                self.assertIn("git ls-remote origin", reason)
+
+    def test_a_push_pipeline_with_pipefail_or_no_chain_is_admitted(self):
+        for command in (
+            "set -o pipefail; git push origin feat/x 2>&1 | tail -1 && gh pr comment 1 -b done",
+            "set -euo pipefail\ngit push origin feat/x 2>&1 | tail -1 && echo pushed",
+            "git push origin feat/x 2>&1 | tail -1",
+            "git push origin feat/x && gh pr comment 1 -b done",
+            "git log --oneline | head -1 && echo ok",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_literal_cacheinfo_mode_is_refused(self):
+        for command in (
+            "git update-index --cacheinfo 100644,0123abc,path",
+            "git update-index --cacheinfo 100755 0123abc path",
+            "git update-index --cacheinfo=100644,0123abc,path",
+        ):
+            with self.subTest(command=command):
+                reason = self.assertRefused(command)
+                self.assertIn("git ls-files -s", reason)
+                self.assertIn("mode change", reason)
+
+    def test_a_cacheinfo_mode_taken_from_the_index_is_admitted(self):
+        self.assertAdmitted('git update-index --cacheinfo "$mode,$sha,$path"')
+
+    def test_a_literal_mode_for_a_path_the_index_lacks_is_admitted(self):
+        # `git ls-files -s` prints nothing for a new path, so the remedy has no
+        # mode to read; `--add` is what stages one.
+        self.assertAdmitted("git update-index --add --cacheinfo 100644,0123abc,new/path")
+
+    def test_a_soft_reset_to_a_remote_tracking_ref_is_refused(self):
+        for command in (
+            "git reset --soft origin/main",
+            "git -C . reset --soft refs/remotes/origin/main",
+        ):
+            with self.subTest(command=command):
+                reason = self.assertRefused(command)
+                self.assertIn("git merge-base HEAD origin/main", reason)
+                self.assertIn("by its SHA", reason)
+
+    def test_a_soft_reset_to_a_sha_is_admitted(self):
+        for command in ("git reset --soft 0123abc", "git reset --soft HEAD~2", "git log origin/main"):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_heredoc_fed_to_a_script_names_the_file_route(self):
+        reason = self.assertRefused(
+            "bash .claude/scripts/gh-issue-create.sh bug low harness hand <<'EOF'\nsee `x` here\nEOF")
+        self.assertIn("with `Write`", reason)
+        self.assertIn("< <path>", reason)
+
+    def test_a_script_fed_from_a_file_is_admitted(self):
+        self.assertAdmitted("bash .claude/scripts/gh-issue-create.sh bug low harness hand < body.md")
 
     # ---- the wiring, without which none of the above runs -------------------
 

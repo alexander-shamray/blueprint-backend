@@ -271,7 +271,8 @@ require_no_merge_invented_anything() {
       echo "and a replay would drop it:" >&2
       git log --merges --oneline "refs/remotes/origin/main..HEAD" >&2
       [ -z "$kept" ] || { echo "where it differs from a clean merge:" >&2; printf '%s' "$kept" >&2; }
-      echo "land or re-commit that content before rebasing" >&2
+      echo "land or re-commit that content before rebasing; and next time never merge main forward:" >&2
+      echo "run start on the branch instead, and on a conflict resolve it in the replayed commit" >&2
       exit 10; }
 }
 
@@ -293,6 +294,8 @@ stopped() {
         echo "the replay of $branch ended without finishing, so there is nothing to continue;" >&2
       else
         echo "the rebase did not start, so there is nothing to continue;" >&2
+        echo "if git says local changes would be overwritten while git status is clean, a file" >&2
+        echo "carries skip-worktree, which git ls-files -v marks S; that flag is the owner's to clear" >&2
       fi
       echo "git's own message is above" >&2
       exit 11; }

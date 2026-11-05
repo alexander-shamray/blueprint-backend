@@ -116,10 +116,24 @@ class DriftGate(unittest.TestCase):
     def test_unlisted_file_in_every_managed_dir_fails(self) -> None:
         tree = Tree(self.tmp)
         dirs = (".claude/agents", ".claude/commands", ".claude/hooks", ".claude/scripts", ".claude/skills",
-                "docs/commands", ".github/harness-drift")
+                "docs/commands", "docs/harness", ".github/harness-drift")
         for d in dirs:
             tree.put(f"{d}/new/stray.txt", b"x\n")
         self.assertEqual(len(check(tree.root)), len(dirs))
+
+    def test_unlisted_file_in_docs_harness_fails(self) -> None:
+        tree = Tree(self.tmp)
+        tree.put("docs/harness/stray.md", b"x\n")
+        problems = check(tree.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("docs/harness/stray.md", problems[0])
+        self.assertIn("neither in the manifest nor local", problems[0])
+
+    def test_docs_harness_file_in_manifest_passes(self) -> None:
+        tree = Tree(self.tmp)
+        tree.add("docs/harness/working-rules.md", b"# Working rules\n")
+        tree.save_manifest()
+        self.assertEqual(check(tree.root), [])
 
     def test_local_file_in_managed_dir_passes(self) -> None:
         tree = Tree(self.tmp, local=(".claude/commands/*.md",))

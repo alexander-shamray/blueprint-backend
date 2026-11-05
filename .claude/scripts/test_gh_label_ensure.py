@@ -75,7 +75,7 @@ class LabelStub:
         env["PATH"] = self.dir + os.pathsep + env["PATH"]
         return subprocess.run(
             [BASH, str(SCRIPTS / "gh-label-ensure.sh"), *args],
-            capture_output=True, text=True, env=env,
+            capture_output=True, text=True, encoding="utf-8", env=env,
         )
 
     def calls(self):
@@ -193,7 +193,7 @@ class LabelHelperHasNoFreeParameter(unittest.TestCase):
 
     def run_helper(self, *args):
         return subprocess.run(
-            [BASH, str(self.HELPER), *args], capture_output=True, text=True
+            [BASH, str(self.HELPER), *args], capture_output=True, text=True, encoding="utf-8"
         )
 
     def test_a_name_outside_the_vocabulary_never_reaches_gh(self):

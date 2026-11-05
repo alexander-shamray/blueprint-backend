@@ -9,7 +9,8 @@ allowed-tools: Bash(bash .claude/skills/codebase-index/scripts/cbx search:*), Ba
 Use the local index before reading repository files.
 
 The wrappers need the `codebase-index` package on the interpreter
-`docs/testing.md` pins (`py -3.12 -m pip install codebase-index`).
+`.harness/agent-rules.md`, *Hard rules*, pins
+(`py -3.12 -m pip install codebase-index`).
 If they exit 127, the index is unavailable this session; use Grep/Glob.
 
 The operating principle is **Find → Trace → Verify → Predict**:
@@ -50,7 +51,8 @@ no more often than the first three do.
 
 Which chapter owns a rule is not a question for this index: half those
 answers are absent from ten results and the rest rank below the fifth, so
-grep `docs/backend-architecture/` instead of widening.
+grep the product specification `docs/harness-local.md` *Documents* names
+instead of widening.
 
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
 error messages, and the default `hybrid` mode for mixed questions. Use pure

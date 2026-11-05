@@ -14,8 +14,8 @@ caught where it is made and not at the next sync.
 - a file under a managed directory that the manifest does not list and the
   `local` globs in `.harness/config.json` do not cover. The managed
   directories are `.claude/agents`, `.claude/commands`, `.claude/hooks`,
-  `.claude/scripts`, `.claude/skills`, `docs/commands` and
-  `.github/harness-drift`; `__pycache__/` and `*.pyc` are skipped. When
+  `.claude/scripts`, `.claude/skills`, `docs/commands`, `docs/harness`
+  and `.github/harness-drift`; `__pycache__/` and `*.pyc` are skipped. When
   the root is the top of a git checkout and a git on `PATH`, outside the
   working directory and the root, can list it, the candidates are what git
   would commit there (`git ls-files --cached --others --exclude-standard`),

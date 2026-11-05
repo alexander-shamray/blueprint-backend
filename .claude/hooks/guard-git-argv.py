@@ -2100,6 +2100,109 @@ def push_offence(segment):
     return None
 
 
+# The checks below refuse a trap rather than an attack: the command does what it
+# says, and what it says loses work. Each message names the form that works, so
+# the remedy arrives at the refusal (`docs/harness-boundaries.md`, *Git argv
+# guard hook*).
+UNCHECKED_PUSH = (
+    "`git push` here pipes its output into another command and the pipeline "
+    "is chained with `&&` or `||`, so the chain reads the last command's exit "
+    "status, not the push's: a push that failed runs what follows as though it "
+    "landed. Put `set -o pipefail;` before the pipeline, or push unpiped and "
+    "compare `git ls-remote origin refs/heads/<branch>` with `git rev-parse "
+    "HEAD` before acting on it."
+)
+LITERAL_CACHEINFO = (
+    "`git update-index --cacheinfo` with a literal mode stages that mode "
+    "whatever the file had, so a hard-coded one drops or adds an executable "
+    "bit, and a Windows checkout never shows it in `git status`. Read the mode with "
+    "`git ls-files -s <path>` and pass it through, then expect no `mode change` "
+    "line in `git diff --summary origin/main...HEAD`."
+)
+REMOTE_RESET = (
+    "`git reset --soft` to a remote-tracking ref names a ref every worktree "
+    "shares and any fetch moves: a fetch between the fork and the reset puts "
+    "the branch on the new base with the old tree, and the recommit reverts "
+    "whatever landed meanwhile. Reset to the fork point by its SHA — "
+    "`git merge-base HEAD origin/main`, read before any fetch — and check "
+    "`git diff --stat origin/main...HEAD` before pushing."
+)
+STDIN_DATA_ROUTE = (
+    " If the shell runs a script file and this text is that script's input, "
+    "as an issue body for `gh-issue-create.sh` is, write the text to a file "
+    "with `Write` and pass it as `< <path>`: this guard reads a shell's stdin "
+    "as a script, quoted delimiter or not, since it cannot see what the "
+    "script does with it."
+)
+CACHEINFO_MODE = re.compile(r"^[0-7]{6}(?:,|$)")
+REMOTE_TRACKING = re.compile(r"^(?:refs/remotes/)?origin/")
+
+
+def _is_push(segment):
+    """Whether `segment` is a `git push`, located as `push_offence` locates it."""
+    for index, element in enumerate(segment):
+        if element.startswith("-"):
+            continue
+        if element == "push":
+            return True
+        if index == 0 or not segment[index - 1].startswith("-"):
+            return False
+    return False
+
+
+def _sets_pipefail(words):
+    """Whether a `set` run's arguments turn `pipefail` on: `-o pipefail`, or a cluster such as `-euo pipefail`."""
+    return any(word.startswith("-") and "o" in word[1:] and following == "pipefail"
+               for word, following in zip(words, words[1:]))
+
+
+def unchecked_push_pipeline(tokens):
+    """Whether a `git push` is piped and its pipeline chained by `&&` or `||` with no `set -o pipefail` first."""
+    runs, current = [], []
+    for token in list(tokens) + [";"]:
+        if is_boundary(token):
+            runs.append((current, token))
+            current = []
+        else:
+            current.append(token)
+    pipefail = piped_push = False
+    for run, separator in runs:
+        if run and program_name(run[0]) == "set":
+            pipefail = pipefail or _sets_pipefail(run[1:])
+        elif run and program_name(run[0]) not in DATA_ONLY_COMMANDS and any(
+                program_name(token) == "git" and _is_push(run[index + 1:])
+                for index, token in enumerate(run)):
+            piped_push = not pipefail and separator == "|"
+            continue
+        if piped_push and separator in ("&&", "||"):
+            return True
+        if separator != "|":
+            piped_push = False
+    return False
+
+
+def trap_offence(segment):
+    """The refusal for a git command whose text shows it losing work, or None."""
+    stripped = after_global_options(segment)
+    if not stripped:
+        return None
+    subcommand, arguments = stripped[0], stripped[1:]
+    # `--add` stages a path the index lacks, which has no mode to read back.
+    if subcommand == "update-index" and "--add" not in arguments:
+        for index, element in enumerate(arguments):
+            value = None
+            if element == "--cacheinfo" and index + 1 < len(arguments):
+                value = arguments[index + 1]
+            elif element.startswith("--cacheinfo="):
+                value = element.split("=", 1)[1]
+            if value is not None and CACHEINFO_MODE.match(value):
+                return LITERAL_CACHEINFO
+    if subcommand == "reset" and "--soft" in arguments and any(
+            REMOTE_TRACKING.match(element) for element in arguments if not element.startswith("-")):
+        return REMOTE_RESET
+    return None
+
+
 # Substitutions and evaluators both recurse, and a crafted nest of either would
 # otherwise reach Python's own limit — where the hook dies with a traceback
 # rather than a verdict, which is the one direction a guard must not fail in.
@@ -2185,11 +2288,11 @@ def _offence(command, depth, judged):
                 "a script handed to a shell on stdin builds part of itself "
                 "with a command substitution, so what that shell runs cannot "
                 "be read; refusing rather than judging the source instead of "
-                "the result."
+                "the result." + STDIN_DATA_ROUTE
             )
         refusal = offence(script, depth + 1, judged)
         if refusal is not None:
-            return f"in a script handed to a shell on stdin: {refusal}"
+            return f"in a script handed to a shell on stdin: {refusal}" + STDIN_DATA_ROUTE
 
     for text, quotes in expandable_regions(command):
         # The continuation join happens before anything looks for a
@@ -2277,8 +2380,11 @@ def _offence(command, depth, judged):
         if refusal is not None:
             return f"inside a shell evaluator: {refusal}"
 
+    if unchecked_push_pipeline(tokens):
+        return UNCHECKED_PUSH
+
     for segment in git_segments(tokens):
-        refusal = push_offence(segment)
+        refusal = push_offence(segment) or trap_offence(segment)
         if refusal is not None:
             return refusal
 

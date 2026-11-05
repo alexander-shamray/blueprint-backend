@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail the build on a plan written after CLAUDE.md's planning rule that is over its size.
+"""Fail the build on a plan written after .harness/agent-rules.md's planning rule that is over its size.
 
 The subject is the directory, not a list; the README owns the claim.
 """
@@ -17,11 +17,11 @@ REPO_ROOT = GATE_DIR.parents[1]
 
 DEFAULT_PLANS = REPO_ROOT / "docs" / "superpowers" / "plans"
 
-# The day CLAUDE.md's planning rule landed (commit ec2d8d33). Plans dated
-# before it were written without the rule and are not judged.
+# The day the planning rule landed, in backend's CLAUDE.md (commit ec2d8d33).
+# Plans dated before it were written without the rule and are not judged.
 RULE_LANDED = date(2026, 10, 7)
 
-# CLAUDE.md says KB; this reads it as 1024 bytes.
+# The rule says KB; this reads it as 1024 bytes.
 LIMIT_BYTES = 50 * 1024
 
 DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-")

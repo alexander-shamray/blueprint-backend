@@ -31,7 +31,7 @@ in flight.
 
 ## How it runs
 
-Its suite runs in the fast job of [`ci.yml`](../workflows/ci.yml) and the
+Its suite runs in the fast job of backend's CI workflow and the
 gate runs behind the solution build — not behind `scaffold-build`'s, which
 compiles a rendered service and takes no gate. The split is one the gate
 cannot avoid, because it reads what a build left. Run on its own it needs a
