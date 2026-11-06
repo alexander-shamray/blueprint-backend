@@ -55,10 +55,11 @@ so a hang reads as a hang. It is a measurement a session runs, not a gate: its
 ceilings are Windows figures, which a shared Linux runner would judge
 against nothing, so `ci.yml` runs its suite alone. Run it after a change
 that adds a module there or slows one. The ceilings are `CEILINGS` and
-`DEFAULT_CEILING` in that script, set from this measurement, each module run
-alone on Windows 11 under Python 3.12 at `e037e499`: 704 tests, 482 seconds
-in all. Its suite holds the table to the directory, a row per module, and
-each ceiling to its row, so a module added there is measured here too.
+`DEFAULT_CEILING` in that script, and each named ceiling follows its row in
+this table. The table's base measurement ran each module alone on Windows 11
+under Python 3.12 at `e037e499`: 704 tests, 482 seconds in all. The script's
+suite holds the table to the directory, a row per module, and each ceiling to
+its row, so a module added there is measured here too.
 
 | Module | Seconds | Module | Seconds |
 |---|---:|---|---:|
@@ -66,8 +67,8 @@ each ceiling to its row, so a module added there is measured here too.
 | `test_git_argv_guard.py` | 57.3 | `test_gh_label_ensure.py` | 4.1 |
 | `test_git_pr_trailer_helpers.py` | 37.3 | `test_index_argv_guard.py` | 3.3 |
 | `test_git_worktree_remove.py` | 33.6 | `test_hint_bound.py` | 3.1 |
-| `test_pr_helpers.py` | 25.5 | `test_edit_target_guard.py` | 2.9 |
-| `test_sweep_slices.py` | 24.8 | `test_gh_issue_suppresses.py` | 2.1 |
+| `test_pr_helpers.py` | 47.1 | `test_edit_target_guard.py` | 2.9 |
+| `test_sweep_slices.py` | 16.3 | `test_gh_issue_suppresses.py` | 2.1 |
 | `test_index_search_hint.py` | 16.9 | `test_pr_for_branch.py` | 1.3 |
 | `test_git_worktree_fork.py` | 13.3 | `test_team_board.py` | 0.9 |
 | `test_mutation_survivors.py` | 13.0 | `test_refresh_index.py` | 0.8 |
@@ -79,13 +80,21 @@ each ceiling to its row, so a module added there is measured here too.
 | `test_issue_decisions.py` | 4.2 | `test_hook_timeouts.py` | 0.2 |
 | `test_dispatch_run.py` | 4.1 | `test_watch_session.py` | 0.3 |
 | `test_dispatch_board.py` | 1.5 | `test_ship_dispatched.py` | 0.1 |
-| `test_python_hygiene.py` | 0.9 | | |
+| `test_python_hygiene.py` | 0.9 | `test_git_branch_drop.py` | 36.6 |
+| `test_pr_helpers_backend.py` | 47.3 | `test_git_push_force.py` | 20.9 |
+| `test_sweep_slices_backend.py` | 12.1 | `test_sed_crlf_guard.py` | 3.7 |
+| `test_destructive_classes.py` | 1.3 | `test_harness_denies_backend.py` | 0.5 |
+| `test_command_grants_backend.py` | 0.3 | `test_command_runbooks_backend.py` | 0.1 |
+| `test_dispatch_run_backend.py` | 0.1 | `test_gh_issue_suppresses_backend.py` | 0.1 |
 
 `test_team_board.py` arrived after that measurement and was timed the same
-way on its own branch, #1574's; so were the five `/dispatch` modules, on
+way on its own branch, #1578's; so were the five `/dispatch` modules, on
 #1691's, each run alone by this script. `test_python_hygiene.py` arrived with
 the sync to blueprint-harness fd87ad6 and was timed alone on its branch, as
-`discover -s .claude/scripts -p test_python_hygiene.py` over three runs.
+`discover -s .claude/scripts -p test_python_hygiene.py` over three runs. The
+eleven modules the sync to blueprint-harness f5e2536 added, and
+`test_pr_helpers.py` and `test_sweep_slices.py`, which it cut, were timed by
+this script on that sync's branch.
 
 **Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
 owns the rule). Every CI job that runs Python pins 3.12, and a
