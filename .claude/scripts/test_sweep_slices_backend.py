@@ -1,8 +1,7 @@
 """sweep-slices.sh's partition over this repository's own tree, within the budget.
 
-`test_sweep_slices.py` is the payload's and partitions small repositories built per case; this class, split out of
-it by blueprint-harness#5, is local because the rows partition this repository's tree, so a new top-level
-directory no row owns fails here before a sweep passes over it.
+`test_sweep_slices.py` partitions small repositories built per case; this class is local because the rows partition
+this repository's tree, so a new top-level directory no row owns fails here before a sweep passes over it.
 """
 
 import unittest

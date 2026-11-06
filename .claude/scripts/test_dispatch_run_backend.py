@@ -1,7 +1,7 @@
 """This repository's own case for dispatch_run.py: its token keys are `tools/quality-sets`' own.
 
-`test_dispatch_run.py` is the payload's and holds every case a target without that tool runs; this is the one
-blueprint-harness#5 split out of it, local because only this repository has the file it reads.
+`test_dispatch_run.py` is the payload's and holds every case a target without that tool runs; this one is local
+because only this repository has the file it reads.
 """
 
 import ast

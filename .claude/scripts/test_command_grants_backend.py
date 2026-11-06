@@ -1,10 +1,7 @@
-"""This repository's own commands held to the payload's grant cases: `/mutation-sweep`, and the two checks
-`docs/harness-local.md`'s Ship checks has `/ship` run before it pushes.
+"""This repository's own commands held to the payload's grant cases: `/mutation-sweep` and `/ship`'s two local checks.
 
-`test_command_grants.py` is the payload's and holds the payload's commands; these cases, split out of it by
-blueprint-harness#5, hold the local ones to the same rules, since only this repository has them. A payload class
-is reached through its module and never bound to a name here: unittest runs every TestCase in this module's
-namespace, so an alias would run the payload's class a second time.
+`test_command_grants.py` holds the payload's commands. Its classes are reached through the module and never bound to a
+name here: unittest runs every TestCase in this namespace, so an alias would run the payload's class a second time.
 """
 
 import unittest
