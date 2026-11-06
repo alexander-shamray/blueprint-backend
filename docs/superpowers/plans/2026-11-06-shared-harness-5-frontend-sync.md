@@ -381,7 +381,8 @@ frozen.
 - Delete: every frontend path the *Decisions* drop, in the same script as the
   apply, since frontend's old settings call `index-refresh.py` until then
 - Modify: `.gitignore`, `docs/testing.md:83`, `docs/change-locality.md` §3 and
-  §1's trust list if it names a moved owner
+  §1's trust list if it names a moved owner, `.github/workflows/ci.yml` (the
+  `harness` job's `timeout-minutes`, Task 5 Step 5)
 - Written by the apply: every managed path, `.harness/manifest.json`, the
   rendered `.claude/settings.json`
 
@@ -416,8 +417,8 @@ frozen.
   add `.claude/skills/codebase-index/.skill_version` to `.gitignore`.
 - [ ] **Step 6:** Write one owner-run script, under agent-rules *Handing over
   to the owner*, with every `.claude/` and `.github/` change: copies, deletions
-  by `git rm`, then the apply from a harness export at a named sha, settings
-  last. Its dry run names each file.
+  by `git rm`, the `ci.yml` timeout, then the apply from a harness export at a
+  named sha, settings last. Its dry run names each file.
 - [ ] **Step 7:** Verify by reading: the manifest's commit; the drift gate
   clean; no path under `MANAGED_DIRS` in neither list; the rendered settings
   hold the 29 and every base deny; the local suites and `npm-checks.sh` pass.
