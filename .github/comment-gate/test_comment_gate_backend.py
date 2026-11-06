@@ -1,7 +1,7 @@
 """The comment gate over this repository's own C# sources.
 
-`test_comment_gate.py` is the payload's and holds every case a target without C# runs; this one, split out of it by
-blueprint-harness#5, is local because only this repository tracks the thousand-odd `.cs` files it reads.
+`test_comment_gate.py` is the payload's and holds every case a target without C# runs; this one is local because only
+this repository tracks the thousand-odd `.cs` files it reads.
 """
 
 import subprocess

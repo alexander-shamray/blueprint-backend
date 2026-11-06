@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """The issue-form gate's readers against this repository's change contract and its label helper.
 
-`test_issue_form_gate.py` is the payload's and reads the shipped form; these cases, split out of it by
-blueprint-harness#5, are local because the gate's default contract, `docs/change-locality.md`, is only this
-repository's.
-
-    py -3.12 -m unittest discover -s .github/issue-form-gate
+`test_issue_form_gate.py` is the payload's; these cases read `docs/change-locality.md`, which only this repository has.
 """
 from __future__ import annotations
 
