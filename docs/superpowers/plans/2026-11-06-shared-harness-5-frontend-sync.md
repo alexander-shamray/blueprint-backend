@@ -81,7 +81,7 @@ above.
 | Frontend mechanism | Decision | Why, and what moves |
 |---|---|---|
 | `hooks/index-refresh.py`, `test_index_refresh.py` | Drop the files; port five behaviours to `refresh-index.py` | The payload's hook is better fenced. It lacks compaction (`:1112`), the `secsweep-` refusal (`:314`), the forged-worktree check (`:227`), `index_openable` (`:460`), and seeding only where git ignores the index (`:528`) |
-| `hooks/run-guard.sh`, `run-guard.py` | Payload | `render_settings` only adds hooks, so local cannot work. Without it a missing interpreter means exit 127, which does not block, so the guard does not run. The base's hook commands go through it and its closed set grows to the payload's hooks |
+| `hooks/run-guard.sh`, `run-guard.py` | Payload, for the four guards alone | `render_settings` only adds hooks, so local cannot work. Without it a missing interpreter means exit 127, which does not block, so the guard does not run. The hints keep `hint-bound.sh` and the index hooks keep `runpy`, as the boundaries argue. A machine with no Git Bash has no `sh` and is the residual |
 | `git-fetch-origin.sh`, `git-pull-ff-only.sh`, `test_git_transport_helpers.py` | Drop; the npm-deny class at `:222` stays local | Spec: "payload if backend lacks an equivalent". The payload has one: the grants and `guard-git-argv.py`. The helper also refuses the `main:main` fetch `ship.md` runs. Cluster A judges any tail flag the guard misses |
 | `run-harness.py`, `in_process_hook.py`, `test_harness_helpers.py` | Drop; the npm cases (`:2961-3000`) stay local | Speed only, and `run-harness.py`'s `ALONE` list goes stale once the payload lands. Cluster A and B judge the cases case by case |
 | `skills/codebase-index/scripts/gate-index.py`, `gate.sh`, `test_index_gate.py` | Payload, called from `cbx` | A branch-tracked journal is replayed on open (frontend #138), and `cbx` has no gate |
@@ -115,8 +115,9 @@ Two builder's calls on the settings:
    and Task 7's check list every such path first.
 3. A frontend session open when the first sync merges still holds the old
    settings, which call `run-guard.sh index-refresh.py`, a hook the new closed
-   set refuses: every edit in it fails. Task 3 pins what the wrapper does with
-   an unknown hook, and Task 7 relaunches.
+   set refuses. That is `PostToolUse` and `SessionStart`, so an error is
+   reported after every call and nothing is blocked; the hints end `|| :`.
+   Task 7 relaunches.
 4. Backend or the harness has no sweep rows on the day a sync brings the new
    `sweep-slices.sh`: each sweep there refuses. Task 4 lands the row files
    first.
@@ -212,13 +213,16 @@ base change reaches every target's rendered file.
   `payload/.claude/scripts/gh-pr-create.sh`, `test_gh_pr_create.py`
 - Modify (harness): `payload/.claude/hooks/refresh-index.py`,
   `test_refresh_index.py`; `skills/codebase-index/scripts/cbx`;
-  `payload/.harness/settings.base.json`, `hint-bound.sh`;
-  `payload/.claude/commands/pr.md`, `ship.md`; `docs/commands/ship.md`;
-  `payload/docs/harness-boundaries.md`; `test_harness_denies.py`
+  `payload/.harness/settings.base.json`; `payload/.claude/commands/pr.md`,
+  `ship.md`; `docs/commands/ship.md`; `payload/docs/harness-boundaries.md`;
+  `test_harness_denies.py`, `test_hook_timeouts.py`
 
 **Interfaces:**
-- Produces: `sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh" <hook>`, the
-  one form every base hook command takes.
+- Produces: `sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh" <guard>`,
+  the form the base's four guard commands take: `guard-git-argv.py`,
+  `guard-index-argv.py`, `guard-sed-crlf.py` and `guard-edit-target.py`. The
+  two hints stay on `hint-bound.sh` and `refresh-index` and `index-mcp-root` on
+  `runpy`.
 - Produces: `index_openable(...)` in `refresh-index.py`, as `gate-index.py`
   needs it.
 - Produces: `bash .claude/scripts/gh-pr-create.sh <title-file> <body-file>`,
@@ -232,16 +236,15 @@ base change reaches every target's rendered file.
   path arguments, so that no target needs a new `.gitignore` line. `pr.md` and
   `ship.md` use it, granted as `gh-pr-merge.sh` is, and the raw `gh pr create`
   grant goes. Under `--dispatched` the grant holds too.
-- [ ] **Step 3 (settings):** Take `run-guard.sh` and `run-guard.py`, extend the
-  closed set to every hook the base names, and rewrite the base's commands to
-  the one form. Add `Bash(gh pr merge:*)` and `Bash(git worktree remove:*)` to
-  the base's denies. Cases:
-  - `test_a_base_hook_runs_through_the_wrapper`;
-  - `test_a_missing_interpreter_blocks_a_guard`, exit 2 for a guard, and a hint
-    stays non-blocking as `|| :` makes it in frontend's settings;
-  - `test_an_unknown_hook_exits_without_blocking_the_edit`, the old session of
-    Review Focus 3: a name outside the set writes one stderr line and blocks
-    nothing, because the wrapper's purpose is to guard the hooks it knows;
+- [ ] **Step 3 (settings):** Take `run-guard.sh` and `run-guard.py`, make the
+  closed set the four guards, and rewrite those commands. Add `Bash(gh pr
+  merge:*)` and `Bash(git worktree remove:*)` to the base's denies. Update
+  `test_hook_timeouts.py`'s count of `py` and `hint-bound` commands, and record
+  the no-Git-Bash residual in the boundaries. Cases:
+  - `test_each_guard_runs_through_the_wrapper`;
+  - `test_a_missing_interpreter_blocks_a_guard`, exit 2;
+  - `test_an_unknown_hook_exits_2`: a guard name missing from the set must not
+    pass a call unguarded, so frontend's refusal stands;
   - `test_each_raw_form_is_denied_and_the_helper_is_not`, using the
     `bash_deny_matches` the suite has.
 - [ ] **Step 4:** Run the backend replay of Task 2 against the settings'
