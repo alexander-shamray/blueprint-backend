@@ -269,13 +269,17 @@ The rows are a tree fact, so they leave the managed script.
 - Modify (backend): `.harness/config.json`
 
 **Interfaces:**
-- Produces: `.harness/sweep-rows.tsv`, tab-separated: `kind`, `glob`, `row`,
-  `holds`. `kind` is `bug`, `security` or `*`. `glob` is a bash `case` pattern
-  and the first match wins, as the row table's arms do. `holds` is the sentence
-  the sweep commands read about a row. A comment line starts `#`.
+- Produces: `.harness/sweep-rows.tsv`, tab-separated: `kind`, `pattern`, `row`,
+  `holds`. `kind` is `bug`, `security` or `*`. `pattern` is a POSIX extended
+  regular expression over the whole path, anchored by its writer, and the first
+  match wins, as the row table's arms do. Row `-` means no row owns the path,
+  which is how `*/*) return 1` is written and what keeps the refusal. `holds`
+  is the sentence the sweep commands read about a row. A comment line starts
+  `#`.
 
 - [ ] **Step 1:** Backend adds its file, the same rows and order as today's
-  `row_of`, with `holds` from the commands' tables, and lists it under `local`.
+  `row_of`, its root arm as `^[^/]+$` and its `*/*` arm as `^.*/.*$` with row
+  `-`, with `holds` from the commands' tables, and lists it under `local`.
   Merged first: today's helper ignores it, and Review Focus 4 needs it present
   when the sync lands. The harness root does the same, with `harness_sync/*`,
   `measure/*`, `rulesets/*` and `targets/*` as rows of its own.
@@ -287,8 +291,9 @@ The rows are a tree fact, so they leave the managed script.
   - `test_the_checkout_partitions_with_no_unowned_path`, for both kinds, over
     the checkout's own tree, so that it runs in every target. `TheRealTree` in
     backend's sibling stays until a later sync drops it.
-- [ ] **Step 3:** `row_of` reads the file once into arrays and loops, and stays
-  a `case` per file without a fork. The commands' row tables become: *the rows
+- [ ] **Step 3:** `sweep-slices.sh` takes frontend's one awk pass, with
+  `row_of` a loop over the file's patterns: no `mapfile`, no associative array,
+  and no fork per file. The commands' row tables become: *the rows
   `.harness/sweep-rows.tsv` names, with what each holds*. The `IMPORT.md` line
   for #73 goes.
 - [ ] **Step 4:** `pr-locality.sh` loses its `declare -A` by the same rule,
@@ -389,9 +394,11 @@ frozen.
   - *Residuals*: cluster F's `residual` rows.
   - *Review examples*: from `.claude/commands/review-branch.md` *What counts
     as a finding*.
-- [ ] **Step 3:** Write `.harness/sweep-rows.tsv` from frontend's own
-  `row_of` in `sweep-slices.sh`: `core`, `screens`, `suites`, `tooling`,
-  `native`, `samples`; security `source`, `tooling`, `native`, `samples`.
+- [ ] **Step 3:** Write `.harness/sweep-rows.tsv` from frontend's own awk
+  `row_of` in `sweep-slices.sh`, its tests in order: `core`, `screens`,
+  `suites`, `tooling`, `native`, `samples`; security `source`, `tooling`,
+  `native`, `samples`. `tooling` gains `.harness/`, which the function does not
+  know.
 - [ ] **Step 4:** Write `.github/locality-gate/classes.yml` in backend's
   grammar from §3's table. §3 then cites the file as the owner of the tree
   sets, and its gap paragraph keeps saying there is no gate in CI, which stays
