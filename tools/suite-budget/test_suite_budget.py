@@ -6,7 +6,6 @@
 import contextlib
 import io
 import math
-import re
 import subprocess
 import tempfile
 import textwrap
@@ -130,6 +129,16 @@ class Runs(unittest.TestCase):
         self.assertIn("--- test_failing.py (failed)", text)
         self.assertIn("AssertionError: red", text)
 
+    def test_the_report_marks_a_module_with_no_row_unmeasured(self):
+        written = io.StringIO()
+        with contextlib.redirect_stdout(written), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(suite_budget.main(["--dir", str(self.directory), "test_passing.py"]), 0)
+        line = rf"test_passing\.py +\d+\.\d +{suite_budget.DEFAULT_CEILING}  ok  unmeasured"
+        self.assertRegex(written.getvalue(), line)
+        self.assertIn("unmeasured: no row in docs/testing.md", written.getvalue())
+        measured = suite_budget.report([suite_budget.Result("test_passing.py", 1.0, 30, "ok")])
+        self.assertNotIn("unmeasured", measured)
+
     def test_a_failure_s_non_ascii_output_survives_to_a_cp1252_report(self):
         (self.directory / "test_arrow.py").write_text(textwrap.dedent(FAILING_ARROW), encoding="utf-8")
         self.assertIn("red → green", suite_budget.run(self.directory, "test_arrow.py", 30).output)
@@ -152,29 +161,25 @@ class TheRealSuite(unittest.TestCase):
 
     directory = suite_budget.ROOT / suite_budget.SUITE
 
-    @staticmethod
-    def rows():
-        text = (suite_budget.ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
-        return re.findall(r"`(test\w*\.py)` \| (\d+\.\d) \|", text)
-
     def test_every_module_ci_runs_from_the_suite_directory_is_timed(self):
         loaded = discovered(self.directory)
         self.assertTrue(loaded)
         self.assertEqual(suite_budget.modules(self.directory), loaded)
 
     def test_every_ceiling_names_a_module_or_its_row(self):
-        recorded = {module for module, _ in self.rows()}
+        recorded = {module for module, _ in suite_budget.rows()}
         self.assertLessEqual(set(suite_budget.CEILINGS), set(suite_budget.modules(self.directory)) | recorded)
 
     def test_every_ceiling_is_positive(self):
         self.assertTrue(all(c > 0 for c in suite_budget.CEILINGS.values()), suite_budget.CEILINGS)
 
     def test_each_ceiling_is_twice_its_recorded_figure_rounded_up_to_ten(self):
-        rows = self.rows()
-        figures = {m: float(s) for m, s in rows}
+        rows = suite_budget.rows()
+        figures = dict(rows)
         self.assertEqual(len(rows), len(figures), "a module has two rows")
-        # A subset: a row may land before its module (docs/testing.md, *Each of its modules has a time budget*).
-        self.assertLessEqual(set(suite_budget.modules(self.directory)), set(figures))
+        # A named ceiling follows a row, so a module with none has only the default to be judged by.
+        unrowed = set(suite_budget.modules(self.directory)) - set(figures)
+        self.assertFalse(unrowed & set(suite_budget.CEILINGS), "a named ceiling has no row")
         for module, seconds in figures.items():
             with self.subTest(module):
                 due = math.ceil(seconds * 2 / 10) * 10
@@ -182,6 +187,14 @@ class TheRealSuite(unittest.TestCase):
                     self.assertEqual(suite_budget.CEILINGS.get(module), due)
                 else:
                     self.assertNotIn(module, suite_budget.CEILINGS)
+
+    def test_a_module_with_no_row_is_held_to_the_default_ceiling(self):
+        # A sync's module arrives before its row (docs/testing.md, *Each of its modules has a time budget*).
+        arrived = "test_arrived_with_a_sync.py"
+        with mock.patch.object(suite_budget, "modules", return_value=[*suite_budget.modules(self.directory), arrived]):
+            self.test_each_ceiling_is_twice_its_recorded_figure_rounded_up_to_ten()
+            with mock.patch.dict(suite_budget.CEILINGS, {arrived: 100}), self.assertRaises(AssertionError):
+                self.test_each_ceiling_is_twice_its_recorded_figure_rounded_up_to_ten()
 
 
 if __name__ == "__main__":

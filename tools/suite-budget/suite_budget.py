@@ -10,6 +10,7 @@ import argparse
 import inspect
 import io
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -41,6 +42,7 @@ CEILINGS = {
 }
 # A module this table does not name, a new one included, is still held to a budget rather than waved through.
 DEFAULT_CEILING = 30
+ROW = re.compile(r"`(test\w*\.py)` \| (\d+\.\d) \|")
 # A module still running at this multiple of its ceiling is stopped, so a hang is reported as one.
 KILL_FACTOR = 3
 
@@ -56,6 +58,12 @@ class Result:
 
 def modules(directory: Path) -> list[str]:
     return sorted(path.name for path in directory.glob(PATTERN))
+
+
+def rows() -> list[tuple[str, float]]:
+    """Each module's recorded seconds, as the table in docs/testing.md has them."""
+    text = (ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+    return [(module, float(seconds)) for module, seconds in ROW.findall(text)]
 
 
 def verdict(seconds: float, returncode: int | None, ceiling: float) -> str:
@@ -102,10 +110,14 @@ def run(directory: Path, module: str, ceiling: float, kill_factor: float = KILL_
     return Result(module, seconds, ceiling, verdict(seconds, returncode, ceiling), text)
 
 
-def report(results: list[Result]) -> str:
+def report(results: list[Result], unmeasured: frozenset[str] = frozenset()) -> str:
     lines = [f"{'module':<40} {'seconds':>8} {'ceiling':>8}  verdict"]
-    lines += [f"{r.module:<40} {r.seconds:>8.1f} {r.ceiling:>8.0f}  {r.verdict}" for r in results]
+    for r in results:
+        mark = "  unmeasured" if r.module in unmeasured else ""
+        lines.append(f"{r.module:<40} {r.seconds:>8.1f} {r.ceiling:>8.0f}  {r.verdict}{mark}")
     lines.append(f"{'total':<40} {sum(r.seconds for r in results):>8.1f}")
+    if unmeasured:
+        lines.append("unmeasured: no row in docs/testing.md, so the default ceiling judged it")
     for r in results:
         if r.verdict in ("failed", "hung"):
             lines += ["", f"--- {r.module} ({r.verdict})", r.output.rstrip()[-4000:]]
@@ -127,7 +139,8 @@ def main(argv: list[str] | None = None) -> int:
     # A session's pipe is cp1252 on Windows, and a character it cannot hold must not cost the report.
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(errors="backslashreplace")
-    print(report(results))
+    # A module a sync brought has no row yet (docs/testing.md), so it is named here rather than refused.
+    print(report(results, frozenset(chosen) - {module for module, _ in rows()}))
     return 0 if all(r.verdict == "ok" for r in results) else 1
 
 

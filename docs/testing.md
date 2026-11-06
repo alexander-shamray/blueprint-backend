@@ -58,13 +58,17 @@ that adds a module there or slows one. The ceilings are `CEILINGS` and
 `DEFAULT_CEILING` in that script, and each named ceiling follows its row in
 this table. The table's base measurement ran each module alone on Windows 11
 under Python 3.12 at `e037e499`: 704 tests, 482 seconds in all. The script's
-suite holds each module in the directory to a row, and each ceiling to its
-row, so a module added there is measured here too. A row, and the named
-ceiling it is due, may land before its module, because a
-`chore/harness-sync-*` branch is never committed to
-(`docs/superpowers/plans/2026-11-05-shared-harness-4-dispatch-syncs.md`,
-*Global Constraints*); the cost is that a row outlives a module a sync
-deletes, and nothing flags it.
+suite holds each named ceiling to its row, and a module with no row to
+`DEFAULT_CEILING` alone: a `chore/harness-sync-*` branch is never committed
+to (`docs/superpowers/plans/2026-11-05-shared-harness-4-dispatch-syncs.md`,
+*Global Constraints*), so a module a sync adds arrives before its row, and a
+suite that refused it would turn every such sync red until a person landed
+one. The script's report marks that module `unmeasured`, and a slow one
+still fails there on the default ceiling. A row, and the named ceiling it is
+due, may land before its module too. The cost is that a module stays
+unmeasured until a session runs the script and lands its row, which only
+that report flags, and that a row outlives a module a sync deletes, which
+nothing flags.
 
 | Module | Seconds | Module | Seconds |
 |---|---:|---|---:|
