@@ -1,4 +1,4 @@
-"""The commands split into a runbook and its argument (docs/token-plan.md, step 6).
+"""The commands split into a runbook and its argument (`docs/harness/token-rules.md`, *What every session loads*).
 
 A runbook is resident in every turn its command runs and its argument is read only when a rule is disputed;
 these cases hold the two halves to each other, and the rest of what a run keeps resident under a ceiling.
@@ -13,14 +13,12 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 
 # Bytes with CRLF counted as LF, so a Windows checkout reads what Linux CI does;
 # each landed size and about a tenth: a runbook past it has regrown its argument.
+# The payload's split commands; a target's own carry their ceilings in a suite of its own.
 CEILINGS = {
     "ship.md": 37300,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
-    "mutation-sweep.md": 7700,
     "branch.md": 9000,
-    "validate-blueprint.md": 9900,
-    "review-branch.md": 8400,
     "team.md": 6300,
     "dispatch.md": 14500,
 }
@@ -28,10 +26,10 @@ CEILINGS = {
 ROOT = COMMANDS.parent.parent
 
 # The rest of what a /ship run holds resident, measured the same way: step 6's
-# exit counts these beside ship.md and branch.md, and none was split.
+# exit counts these beside ship.md and branch.md, and none was split. A target's
+# own `CLAUDE.md` is resident too, and its ceiling is that target's.
 RESIDENT = {
     ".claude/commands/pr.md": 9100,
-    "CLAUDE.md": 9000,
     ".claude/commands/commit.md": 5200,
 }
 

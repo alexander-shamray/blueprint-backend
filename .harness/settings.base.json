@@ -18,6 +18,8 @@
       "Bash(git branch --show-current)",
       "Bash(git push -u origin:*)",
       "Bash(git push origin:*)",
+      "Bash(bash .claude/scripts/git-push-force.sh:*)",
+      "Bash(bash .claude/scripts/git-branch-drop.sh:*)",
       "Bash(git remote -v)",
       "Bash(ls:*)",
       "Bash(wc:*)",
@@ -80,6 +82,11 @@
             "type": "command",
             "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-index-argv.py\"",
             "statusMessage": "checking index argv"
+          },
+          {
+            "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-sed-crlf.py\"",
+            "statusMessage": "checking sed line endings"
           }
         ]
       },

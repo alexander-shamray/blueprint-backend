@@ -668,8 +668,9 @@ the cited-path one. A capability boundary that refuses arbitrary `Bash` is what
 one.
 
 **`git push` is a different case, and so is a `Write` grant.** The global
-allow for an ordinary push, and why naming `git push origin`, its `-u` form
-and the raw `gh issue create` in `disallowed-tools` is what refuses them, is
+allow for an ordinary push, and why naming `git push origin`, its `-u` form,
+`git-push-force.sh`, `git-branch-drop.sh` and the raw `gh issue create` in
+`disallowed-tools` is what refuses them, is
 `docs/harness-boundaries.md`, *Sweep push denies and chained commands*. A
 `Write` grant for issue bodies is refused because it would re-open source
 editing — a read-only claim resting on prose while the grant permits writing

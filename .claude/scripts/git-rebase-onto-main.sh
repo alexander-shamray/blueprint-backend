@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebase the current branch onto origin/main and publish it, the only force
+# Rebase the current branch onto origin/main and publish it, a leased force
 # push here. Guards: the branch is in hand and not main, the tree clean, origin
 # has nothing unseen, a two-parent merge differs from git's only in conflicts,
 # a replay keeps its todo, skips no stop, and a retry forces it at the lease.

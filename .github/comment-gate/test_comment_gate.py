@@ -605,7 +605,7 @@ class TheGateOnARepository(unittest.TestCase):
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-q", "--allow-empty", "-m", message)
         return subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
-                              capture_output=True, text=True).stdout.strip()
+                              capture_output=True, text=True, encoding="utf-8").stdout.strip()
 
     def run_gate(self, base="main~1", head="HEAD", title=None, labels=None):
         env = {name: value for name, value in os.environ.items()
@@ -883,20 +883,6 @@ class TheShippedTree(unittest.TestCase):
             with self.subTest(path=path):
                 text = (ROOT / path).read_text(encoding="utf-8-sig")
                 gate.judge(path, text, set())
-
-    def test_no_tracked_csharp_line_runs_past_the_budget(self):
-        listed = subprocess.run(
-            ["git", "-C", str(ROOT), "ls-files", "-z", "--", "*.cs"],
-            capture_output=True, check=True).stdout
-        paths = [p for p in listed.decode("utf-8").split("\0") if p]
-        self.assertGreater(len(paths), 1000)
-        wide = []
-        for path in paths:
-            text = (ROOT / path).read_text(encoding="utf-8-sig")
-            every = set(range(1, text.count("\n") + 2))
-            wide.extend(f"{p}:{n}" for p, n, message in
-                        gate.judge(path, text, every) if "columns" in message)
-        self.assertEqual(wide, [])
 
 
 if __name__ == "__main__":

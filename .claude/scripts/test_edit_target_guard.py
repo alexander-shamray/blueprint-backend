@@ -2,7 +2,7 @@
 
 Every case judges the hook directly, which says nothing about whether the
 harness calls it, so the last class has the registration itself as its subject
-— the gate-coverage lesson in `CLAUDE.md`.
+— the gate-coverage lesson in `.harness/agent-rules.md`, *Hard rules*.
 
 The link cases run against a real link, and against every primitive the
 platform grants: a symbolic link where the session may make one, and a

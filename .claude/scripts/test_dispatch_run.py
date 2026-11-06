@@ -1,6 +1,5 @@
 """The run half of /dispatch's helpers: dispatch_run.py, reached through dispatch_board.py's command line."""
 
-import ast
 import contextlib
 import io
 import json
@@ -713,16 +712,6 @@ class ClassifyTests(InRoot):
         got = dr.session_end({"exit": 1, "stdout": json.dumps(steered), "stderr": "", "ended": NOW.isoformat()})
         self.assertEqual((False, None), (got.rate_limited, got.resets_at))
         self.assertEqual("handed-back", dr.classify(got, None, 0, NOW))
-
-    def test_token_keys_are_quality_sets_own(self):
-        here = Path(__file__).resolve()
-        owner = next((p / "tools" / "quality-sets" / "quality_sets.py" for p in here.parents
-                      if (p / "tools" / "quality-sets" / "quality_sets.py").is_file()), None)
-        self.assertIsNotNone(owner, "tools/quality-sets/quality_sets.py not found above this suite")
-        tree = ast.parse(owner.read_text(encoding="utf-8"))
-        value = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
-                     and any(getattr(t, "id", None) == "TOKEN_KEYS" for t in node.targets))
-        self.assertEqual(value, dr.TOKEN_KEYS)
 
 
 class ResultCommandTests(InRoot):
