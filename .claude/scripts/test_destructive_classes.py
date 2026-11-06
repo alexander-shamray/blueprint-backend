@@ -10,7 +10,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -157,8 +156,9 @@ def _link(target, linkpath):
 @contextlib.contextmanager
 def scratch_checkout():
     """A scratch checkout whose `linked/<name>` links reach `EDIT_LINKS`."""
-    root = tempfile.mkdtemp(prefix="destructive-root-")
-    try:
+    # Its cleanup does not follow a link, so the link goes and the tree it
+    # points into stays inside the scratch root.
+    with tempfile.TemporaryDirectory(prefix="destructive-root-") as root:
         os.makedirs(os.path.join(root, ".git"))
         os.makedirs(os.path.join(root, "linked"))
         for name, target in EDIT_LINKS.items():
@@ -166,10 +166,6 @@ def scratch_checkout():
             os.makedirs(real, exist_ok=True)
             _link(real, os.path.join(root, "linked", name))
         yield root
-    finally:
-        # `ignore_errors`, and `rmtree` does not follow a link, so the link
-        # goes and the tree it points into stays inside the scratch root.
-        shutil.rmtree(root, ignore_errors=True)
 
 
 def _refused_by_edit_target(row):
@@ -314,6 +310,7 @@ class DestructiveClasses(unittest.TestCase):
         examples = {row.example for row in table() if row.refused_by == "helper"}
         self.assertLessEqual(
             {"bash .claude/scripts/git-push-force.sh",
+             "bash .claude/scripts/git-trailer-pr.sh 7",
              "bash .claude/scripts/git-branch-drop.sh main"}, examples)
 
     def test_a_helper_row_must_name_a_test_its_suite_defines(self):

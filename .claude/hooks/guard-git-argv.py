@@ -417,7 +417,27 @@ def _quoting(command, quotes=True, data=()):
         index += 1
 
 
-def heredoc_spans(command, unclosed=None):
+def _arithmetic_spans(line):
+    """Every outermost `((…))` in `line`, `$((…))` included, in order."""
+    # A sum closes on `))`: `((a) | b)` is two subshells. One pass over a stack,
+    # because `_closing_paren` per sum is quadratic and a timeout fails open.
+    found, stack, previous = [], [], None
+    for index, state, escaped in _quoting(line):
+        if state or escaped:
+            continue
+        if line[index] == "(":
+            stack.append(index)
+        elif line[index] == ")" and stack:
+            start = stack.pop()
+            if previous == (start + 1, index - 1):
+                while found and found[-1][0] > start:
+                    found.pop()
+                found.append((start, index))
+            previous = (start, index)
+    return found
+
+
+def heredoc_spans(command, unclosed=None, openers=None):
     """Every heredoc body in `command`, as `(start, end, expands)`.
 
     `start` is just past the introducer and `end` just past the closing
@@ -445,10 +465,35 @@ def heredoc_spans(command, unclosed=None):
     # appends spans that start ahead of it, so the list is sorted by
     # construction and the walk stays monotonic.
     data, spans, pending = [], [], 0
+    # Sums are read a line at a time, because an earlier body's apostrophe would
+    # quote every later one, and no body shares a line with an opener. A sum
+    # spanning lines, or hard against the `#` after a string that crossed one,
+    # is missed, and its shift reads as an opener.
+    sums, line_end, unquoted, crossed = [], 0, 0, False
     for index, in_quotes, in_comment in shell_positions(command, data):
+        # `pending` tells a string's newline from a body's.
+        if in_quotes and index >= pending and command[index] == "\n":
+            crossed = True
         if in_quotes or in_comment:
             continue
+        if crossed and command[index] in "'\"":
+            # From its line's start, this closing quote would read as opening.
+            unquoted, crossed = index + 1, False
+            continue
         if not command.startswith("<<", index):
+            continue
+        if index >= line_end:
+            line_start = max(command.rfind("\n", 0, index) + 1, unquoted)
+            line_end = command.find("\n", index)
+            line_end = len(command) if line_end == -1 else line_end
+            # Reversed, so the walk pops the nearest as it passes them.
+            sums = [(line_start + start, line_start + end) for start, end
+                    in _arithmetic_spans(command[line_start:line_end])][::-1]
+        # A shift, not an opener. A heredoc in a `$(…)` nested in the sum lands
+        # here too, and its body is then judged as commands, which over-refuses.
+        while sums and sums[-1][1] <= index:
+            sums.pop()
+        if sums and sums[-1][0] <= index:
             continue
         # `<<<` is a here-string: `cat <<<EOF` passes the word `EOF` on stdin
         # and the next line is an ordinary command, so matching `<<EOF` at its
@@ -507,6 +552,10 @@ def heredoc_spans(command, unclosed=None):
         pending = start + closing.end()
         spans.append((start, pending, expands))
         data.append((start, pending))
+        # One for one with `spans`: a reader pairing bodies with openers takes
+        # them here, since re-deriving the list disagrees with this scan's skips.
+        if openers is not None:
+            openers.append(index)
     return spans
 
 
@@ -1731,7 +1780,8 @@ def stdin_scripts(command):
     """
     # The bodies first, for `undecodable_heredoc`'s reason: an apostrophe in
     # one would leave this scan in quote state for everything after it.
-    spans = heredoc_spans(command)
+    openers = []
+    spans = heredoc_spans(command, openers=openers)
     ordinary = [False] * len(command)
     literal = [False] * len(command)
     escaped = None
@@ -1756,26 +1806,9 @@ def stdin_scripts(command):
 
     # Bodies belong to introducers in order: in `bash <<A; cat <<B` the first
     # body is `bash`'s, though the last introducer before it is `<<B`.
-    # `heredoc_spans` yields its spans in opener order and skips an opener
-    # inside an earlier body, so the pairing walks both lists together.
-    openers = [
-        match.start() for match in HEREDOC.finditer(command)
-        if ordinary[match.start()]
-        and not (match.start() > 0 and command[match.start() - 1] == "<")
-        and not command.startswith("<<<", match.start())
-    ]
-    # Two monotonic cursors rather than a containment test, which is quadratic
-    # in heredocs and can reach the hook timeout, whose empty stdout is
-    # non-blocking. An opener inside a body is not in this list at all: the
-    # scan above is told where the bodies are, so it reports one as quoted.
-    cursor = 0
-    for start, end, _expands in spans:
-        while cursor < len(openers) and openers[cursor] >= start:
-            cursor += 1
-        if cursor >= len(openers):
-            break
-        opener = openers[cursor]
-        cursor += 1
+    # `heredoc_spans` names each span's own opener, so a `<<` it did not read as
+    # one, a shift or an undecodable delimiter, holds no place here.
+    for (start, end, _expands), opener in zip(spans, openers):
         if _consumes_as_script(command, opener, ordinary):
             yield command[start:end]
 

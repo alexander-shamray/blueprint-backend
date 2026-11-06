@@ -14,6 +14,7 @@ from pathlib import Path
 from review_helpers import (
     SCRIPTS,
     setUpModule,
+    temp_root,
     run_bash,
 )
 
@@ -22,11 +23,9 @@ REMOVE = SCRIPTS / "git-worktree-remove.sh"
 SHIP = SCRIPTS.parent / "commands" / "ship.md"
 
 # A checkout with origin/main and one /branch worktree at .claude/worktrees/probe
-# holding a tracked file. It prints the root twice: as bash sees it, then as
-# Python opens it, since under MSYS the two spellings differ.
+# holding a tracked file.
 FIXTURE = """
 set -e
-root=$(mktemp -d)
 git init -q -b main "$root/origin"
 printf '.claude/worktrees/\\n.claude/cache/\\n' > "$root/origin/.gitignore"
 printf 'kept\\n' > "$root/origin/tracked.txt"
@@ -34,8 +33,6 @@ git -C "$root/origin" add .gitignore tracked.txt
 git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m base
 git clone -q "$root/origin" "$root/checkout"
 git -C "$root/checkout" worktree add -q --no-track -b feat/probe .claude/worktrees/probe origin/main
-printf '%s\\n' "$root"
-(cd "$root" && pwd -W 2>/dev/null || pwd)
 """
 
 # A file at $F, past Windows' 260 characters once checked out, committed in the origin by its index alone, so
@@ -92,11 +89,10 @@ if put_back:
 
 class RemoveShape(unittest.TestCase):
     def fixture(self):
-        made = run_bash(FIXTURE)
+        root = temp_root(self)
+        made = run_bash(FIXTURE, root=root)
         self.assertEqual(0, made.returncode, made.stderr)
-        root, native = made.stdout.splitlines()
-        self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
-        return root, Path(native)
+        return root, Path(root)
 
     def remove(self, where, path=".claude/worktrees/probe", script=REMOVE, **env):
         return run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=where, REMOVE=str(script), P=path, **env)

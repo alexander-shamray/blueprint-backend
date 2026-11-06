@@ -42,8 +42,9 @@ class ACheckout(unittest.TestCase):
     """A checkout holding tracked CRLF and LF files, an untracked CRLF file, and a tracked CRLF file one level down."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.root = holder.name
         self.git("init", "-q")
         self.put("crlf.txt", b"one\r\ntwo\r\n")
         self.put("lf.txt", b"one\ntwo\n")

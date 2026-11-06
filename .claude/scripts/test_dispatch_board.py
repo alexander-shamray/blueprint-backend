@@ -193,6 +193,102 @@ class ReadyTests(unittest.TestCase):
         self.assertEqual((False, "depends on open #1440"), self.ready(line(depends="waits on 1440"), {1440}))
 
 
+class BerserkTests(unittest.TestCase):
+    """--berserk lifts the human wait and the .claude/ reach: each case names a row it must or must not release."""
+
+    def ready(self, row, open_issues=frozenset(), today=TODAY, bodies=None, berserk=True):
+        return db.ready(group_of(row), set(open_issues), today, bodies, berserk)
+
+    def test_berserk_releases_a_question_row(self):
+        self.assertEqual((False, "waits on a human"), self.ready(line(labels="question"), berserk=False))
+        self.assertEqual((True, ""), self.ready(line(labels="question, code")))
+
+    def test_berserk_releases_an_owner_row(self):
+        for row in (line(depends="OWNER"), line(depends="OWNER;"), line(task="OWNER decides `x/y.cs`")):
+            with self.subTest(row=row):
+                self.assertEqual((False, "waits on a human"), self.ready(row, berserk=False))
+                self.assertEqual((True, ""), self.ready(row))
+
+    def test_berserk_releases_a_row_that_edits_claude(self):
+        reaches = {1700: "touches `.claude/settings.json`"}
+        for row, bodies in ((line(task="Fix `.claude/hooks/x.py`"), None), (line(conflicts="`.claude/`"), None),
+                            (line(), reaches)):
+            with self.subTest(row=row):
+                self.assertEqual((False, "edits .claude/"), self.ready(row, bodies=bodies, berserk=False))
+                self.assertEqual((True, ""), self.ready(row, bodies=bodies))
+
+    def test_berserk_leaves_paused_tracking_and_owed_rows_held(self):
+        for label in ("paused", "tracking"):
+            with self.subTest(label=label):
+                self.assertEqual((False, f"labelled {label}"), self.ready(line(labels=f"code, {label}")))
+                self.assertEqual((False, f"labelled {label}"), self.ready(line(labels=f"question, {label}")))
+                self.assertEqual((False, f"labelled {label}"), self.ready(line(labels=label, depends="OWNER")))
+        owed = line().replace("| 1700 |", "| owed (not filed) |")
+        self.assertEqual((False, "owed, not filed"), self.ready(owed))
+
+    def test_berserk_leaves_a_date_and_an_open_issue_in_depends_held(self):
+        self.assertEqual((False, "waits until 2026-11-09"), self.ready(line(depends="OWNER; 2026-11-09")))
+        self.assertEqual((False, "waits until 2026-11-09"), self.ready(line(depends="2026-11-09, OWNER")))
+        self.assertEqual((False, "depends on open #1440"), self.ready(line(depends="OWNER; #1440"), {1440}))
+        self.assertEqual((True, ""), self.ready(line(depends="OWNER; #1440")), "a closed issue holds nothing")
+        self.assertEqual((True, ""), self.ready(line(depends="OWNER; 2026-10-01")), "a past date holds nothing")
+
+    def test_berserk_leaves_the_rest_of_the_cell_read_as_today(self):
+        why = "depends on text the helper cannot judge"
+        self.assertEqual((False, why), self.ready(line(depends="OWNER; first a PR in backend")))
+        self.assertEqual((False, why), self.ready(line(depends="taken by H7, OWNER")))
+        self.assertEqual((False, why), self.ready(line(depends="")), "an empty cell never held OWNER to drop")
+        self.assertEqual((False, "depends on an impossible date 2026-13-01"),
+                         self.ready(line(depends="OWNER; 2026-13-01")))
+
+    def test_without_the_flag_every_blocker_stands(self):
+        for row, opened, why in ((line(labels="question"), (), "waits on a human"),
+                                 (line(depends="OWNER"), (), "waits on a human"),
+                                 (line(task="Fix `.claude/x.py`"), (), "edits .claude/"),
+                                 (line(labels="paused"), (), "labelled paused"),
+                                 (line(labels="tracking"), (), "labelled tracking"),
+                                 (line(depends="2026-11-09"), (), "waits until 2026-11-09"),
+                                 (line(depends="#1440"), (1440,), "depends on open #1440"),
+                                 (line(depends="free text"), (), "depends on text the helper cannot judge")):
+            with self.subTest(row=row):
+                self.assertEqual((False, why), db.ready(group_of(row), set(opened), TODAY))
+
+    def test_a_row_the_flag_does_not_lift_reads_as_it_would_without_it(self):
+        row = line(depends="OWNER")
+        self.assertEqual((False, "waits on a human"), db.ready(group_of(row), set(), TODAY, None, True, {"#1700"}))
+        self.assertEqual((True, ""), db.ready(group_of(row), set(), TODAY, None, True, {"#1"}))
+
+    def test_back_on_a_flagged_run_keeps_the_rest_of_the_cell_beside_its_mark(self):
+        for depends, marked in (("none", f"OWNER; {db.SENT_BACK}"), ("OWNER", f"OWNER; {db.SENT_BACK}"),
+                                ("OWNER; 2026-10-01", f"OWNER; {db.SENT_BACK}; 2026-10-01"),
+                                (f"OWNER; {db.SENT_BACK}", f"OWNER; {db.SENT_BACK}")):
+            with self.subTest(depends=depends):
+                group = group_of(line(depends=depends))
+                text = tasks_of(line(depends=depends), line(number=1701, gid="Z2"))
+                moved = db.move_to_in_progress(text, group, "fix/x", ".claude/x", TODAY)
+                back = db.return_to_remaining(moved, [r.line for r in group.rows], {"#1700"}, True)
+                row = next(g for g in db.groups(db.parse_tasks(back)) if g.id == "Z1")
+                self.assertEqual(marked, row.rows[0].cells[db.DEPENDS])
+                self.assertEqual((False, db.SENT_BACK), db.ready(row, set(), TODAY, None, True))
+                self.assertEqual((False, "waits on a human"), db.ready(row, set(), TODAY))
+
+    def test_released_names_what_only_the_flag_made_ready_and_why(self):
+        found = db.groups(db.parse_tasks(tasks_of(line(number=1, gid="A1"), line(number=2, gid="A2", depends="OWNER"),
+                                                  line(number=3, gid="A3", labels="paused"))))
+        ready_map = {g.id: db.ready(g, set(), TODAY, None, True) for g in found}
+        self.assertEqual({"A2": "waits on a human"}, db.released(found, ready_map, set(), TODAY, {}))
+
+    def test_a_ready_group_launches_before_a_released_one(self):
+        found = db.groups(db.parse_tasks(tasks_of(line(number=1, gid="A1"), line(number=2, gid="A2"),
+                                                  line(number=3, gid="B1", wave=2))))
+        claims = {g.id: db.Claim(frozenset({g.id.lower() + ".cs"}), frozenset(), frozenset(), False) for g in found}
+        ok = {g.id: (True, "") for g in found}
+        self.assertEqual(["A2", "A1", "B1"], db.pick(found, ok, claims, [], [], 3, {"A1": "waits on a human"}))
+        self.assertEqual(["A2"], db.pick(found, ok, claims, [], [], 1, {"A1": "waits on a human"}))
+        self.assertEqual(["A1", "A2", "B1"], db.pick(found, ok, claims, [], [], 3, {"B1": "waits on a human"}),
+                         "the order is within a wave: a released group still goes before a later wave")
+
+
 class PathTests(unittest.TestCase):
     def claim(self, paths, gid="Z1", groups=(), issues=(), unknown=False):
         return db.Claim(frozenset(paths), frozenset(groups), frozenset(issues), unknown)
@@ -451,6 +547,16 @@ class WriteTests(unittest.TestCase):
             [r.line for r in db.parse_tasks(FIXTURE).remaining[-1:]], {"#1440"})
         back_row = next(r for r in db.parse_tasks(late).remaining if r.number == 1440)
         self.assertEqual("OWNER; 2026-11-09", back_row.cells[db.DEPENDS])
+
+    def test_back_and_place_rebuild_a_remaining_the_last_row_emptied(self):
+        text = tasks_of(line())
+        group = group_of(line())
+        moved = db.move_to_in_progress(text, group, "fix/x", ".claude/x", TODAY)
+        self.assertEqual([], db.parse_tasks(moved).remaining)
+        back = db.return_to_remaining(moved, [r.line for r in group.rows], {"#1700"})
+        self.assertEqual([1700], [r.number for r in db.parse_tasks(back).remaining])
+        placed = db.place(db.delete_in_progress(moved, {"#1700"}), 1, "Z1", 1701)
+        self.assertEqual([1701], [r.number for r in db.parse_tasks(placed).remaining])
 
     def test_a_row_not_where_it_should_be_is_refused(self):
         group = self.s1()
@@ -856,6 +962,32 @@ class BoardTests(unittest.TestCase):
         self.assertEqual(5, len(lines))
         self.assertTrue(lines[0].startswith("S1 | wave 1 | ready | free | "), lines[0])
         self.assertIn("J1 | wave 2 | not ready: waits until 2026-11-09", lines[4])
+
+    def test_a_dry_run_prints_what_the_flag_releases(self):
+        with open(self.path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE.replace("`src/Gateway/Program.cs` | security, code | none |",
+                                         "`src/Gateway/Program.cs` | security, code | OWNER |"))
+        before = self.path.read_bytes()
+        _, plain = self.run_board([])
+        self.assertTrue(next(ln for ln in plain if ln.startswith("S3")).startswith(
+            "S3 | wave 1 | not ready: waits on a human | "))
+        code, lines = self.run_board([], ["--berserk"])
+        self.assertEqual(0, code)
+        self.assertTrue(next(ln for ln in lines if ln.startswith("S3")).startswith(
+            "S3 | wave 1 | released: waits on a human | free | "), lines)
+        self.assertTrue(lines[0].startswith("S1 | wave 1 | ready | "), lines[0])
+        self.assertIn("J1 | wave 2 | not ready: waits until 2026-11-09", lines[-1])
+        self.assertEqual(before, self.path.read_bytes(), "a dry run writes nothing")
+
+    def test_a_board_on_a_run_takes_the_flag_from_its_state_and_no_other(self):
+        run = Path(self.tmp.name) / "artifacts" / "dispatch" / RUN
+        dr.save_state(run, {"run": RUN, "pairs": 2, "lang": "en", "berserk": False, "groups": {}})
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code, lines = self.run_board([], ["--berserk", "--run", RUN, "--root", self.tmp.name])
+        self.assertEqual(2, code)
+        self.assertIn("refused: --berserk", err.getvalue())
+        self.assertEqual([], lines)
 
     def test_board_caches_bodies_under_the_run(self):
         calls = []

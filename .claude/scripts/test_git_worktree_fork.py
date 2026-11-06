@@ -10,6 +10,7 @@ import unittest
 from review_helpers import (
     SCRIPTS,
     setUpModule,
+    temp_root,
     run_bash,
 )
 
@@ -21,7 +22,6 @@ FORK = SCRIPTS / "git-worktree-fork.sh"
 # worktree directory, which is the check the ignored/unignored cases turn on.
 FIXTURE = """
 set -e
-root=$(mktemp -d)
 git init -q -b main "$root/origin"
 git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
 if [ "$HOOK" = yes ]; then
@@ -42,7 +42,6 @@ if [ "$LINK" = yes ]; then
 fi
 if [ "$IGNORE" = yes ]; then printf '.claude/worktrees/\\n' > "$root/checkout/.gitignore"; fi
 mkdir -p "$root/checkout/src"
-printf '%s\\n' "$root"
 """
 
 
@@ -50,10 +49,9 @@ class ForkShape(unittest.TestCase):
     """The helper forks `.claude/worktrees/<name>` from the main checkout only."""
 
     def fixture(self, ignore="yes", hook="no", link="no"):
-        made = run_bash(FIXTURE, IGNORE=ignore, HOOK=hook, LINK=link)
+        root = temp_root(self)
+        made = run_bash(FIXTURE, root=root, IGNORE=ignore, HOOK=hook, LINK=link)
         self.assertEqual(0, made.returncode, made.stderr)
-        root = made.stdout.strip()
-        self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
         return root
 
     def fork(self, where, path, branch="feat/probe"):
@@ -237,10 +235,7 @@ class ForkShape(unittest.TestCase):
         self.assertIn("branch already exists", result.stderr)
 
     def test_outside_a_repository_says_so(self):
-        made = run_bash('mktemp -d')
-        outside = made.stdout.strip()
-        self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=outside))
-        result = self.fork(outside, ".claude/worktrees/probe")
+        result = self.fork(temp_root(self), ".claude/worktrees/probe")
         self.assertEqual(2, result.returncode)
         self.assertIn("not in a git repository", result.stderr)
 

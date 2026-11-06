@@ -523,6 +523,133 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn("substitution", self.assertRefused(command))
 
+    def test_arithmetic_expansion_runs_no_program(self):
+        # `substitutions` hands a `$((…))` body on as a command, because it
+        # shares its opening with `$(…)`. A sum names no program there, so a
+        # poll loop's counter is admitted, and the same reading judges what
+        # is nested in it.
+        for command in (
+            "n=$((n+1))",
+            "n=0; n=$((n+1)); echo $n",
+            "echo $((1+2))",
+            "git log -n $((1+2))",
+            "n=0; until gh pr view 1 | grep -q x; do n=$((n+1)); done",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+        # The bound on that: a real substitution nested in a sum still runs.
+        for command in (
+            "x=$(( $(git push origin +HEAD:main) + 1 ))",
+            "x=$(( `git push origin +HEAD:main` + 1 ))",
+            "git log -n $(( $(git log -1 --output=/tmp/x) + 1 ))",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("substitution", self.assertRefused(command))
+
+    def test_a_shift_in_arithmetic_opens_no_heredoc(self):
+        # `<<` in a sum is a shift. Read as an opener it has no terminator,
+        # the scan stops there, and the real heredoc after it goes unstripped.
+        for sum_line in (
+            "n=$((1<<4))",
+            "(( n = 1<<4 ))",
+            "n=$((n<<=1))",
+            "(( n = 1<<4 + (( 1 )) ))",
+            f'echo "a{NEWLINE}b" && n=$((1<<4))',
+            'n=$(( "$a"<<4 ))',
+            'echo "a"#$((1<<4))',
+            f"git commit -F - <<'A'{NEWLINE}plain{NEWLINE}A{NEWLINE}"
+            'n=$(( "$a"<<4 ))',
+        ):
+            command = (
+                f"{sum_line}{NEWLINE}"
+                f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+            )
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+        # The other direction: a line reading as the shift's delimiter does
+        # not make the lines above it a body, nor does a string closing on the
+        # sum's line, which a scan from the line's start reads as opening.
+        for sum_line in (
+            "(( n = 1<<4 ))",
+            f'echo "a{NEWLINE}b" && (( n = 1<<4 ))',
+            '(( n = "$a"<<4 ))',
+        ):
+            command = f"{sum_line}{NEWLINE}git push origin +HEAD:main{NEWLINE}4"
+            with self.subTest(command=command):
+                self.assertIn("force push", self.assertRefused(command))
+
+        # A heredoc in a substitution nested in a sum is skipped with the shifts,
+        # so its body is judged as commands: the push is refused, not hidden.
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"n=$(( $(bash <<'EOF') + 1 )){NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}EOF"
+            ),
+        )
+
+        # What is not a sum keeps its heredoc: these parens close on `) |`, not
+        # on `))`, so bash reads subshells, and a quoted body in them is data.
+        # A quoted `))` closes nothing either.
+        for opener in ("<<'EOF'", "<<'EOF' '))'"):
+            with self.subTest(opener=opener):
+                self.assertAdmitted(
+                    f"((git commit -F - {opener}) | cat){NEWLINE}"
+                    f"git push origin +HEAD:main{NEWLINE}EOF"
+                )
+
+    def test_a_sum_does_not_take_a_shell_its_heredoc(self):
+        # A body is a script when its own opener feeds a shell. A shift that
+        # opens nothing must not take a place in that pairing, or the shell's
+        # body is paired with the shift, stripped as data, and its push admitted.
+        for sum_line in ("n=$((1<<4))", "(( n = 1<<4 ))"):
+            for fed in ("bash <<'EOF'", "cat <<'EOF' | bash", "sh <<EOF"):
+                command = (
+                    f"{sum_line}{NEWLINE}{fed}{NEWLINE}"
+                    f"git push origin +HEAD:main{NEWLINE}EOF"
+                )
+                with self.subTest(command=command):
+                    self.assertIn("force push", self.assertRefused(command))
+
+        # An undecodable opener takes no place either, since it opens no body.
+        # Read from `stdin_scripts`: `offence` refuses this before reaching it.
+        self.assertEqual(
+            [f"git push origin +HEAD:main{NEWLINE}EOF"],
+            list(self.guard_module().stdin_scripts(
+                f"cat <<$'E\\x4fF'{NEWLINE}"
+                f"bash <<'EOF'{NEWLINE}git push origin +HEAD:main{NEWLINE}EOF"
+            )),
+        )
+
+    def test_a_body_before_a_sum_does_not_hide_the_sum(self):
+        # An apostrophe in a body is no quote, so it must not put the sum on a
+        # later line in quotes and leave its shift reading as an opener.
+        body = f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"{body}{NEWLINE}(( n = 1<<4 )){NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}4"
+            ),
+        )
+        self.assertAdmitted(
+            f"{body}{NEWLINE}(( n = 1<<4 )){NEWLINE}"
+            f"git commit -F - <<'B'{NEWLINE}it's{NEWLINE}B"
+        )
+
+    def test_finding_sums_is_linear_in_the_command(self):
+        # `judge` fails on a verdict that misses the timeout, and a verdict
+        # that never arrives is an admission. Balancing parens once per sum
+        # costs this command's length squared.
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                "((a)) " * 15000 + "<<4 ; git push origin +HEAD:main"
+            ),
+        )
+
     def test_the_fallback_scan_also_treats_a_heredoc_body_as_data(self):
         # The two paths have to agree: a fallback that scans the raw command
         # refuses a heredoc body naming a forbidden flag the moment anything
@@ -2308,8 +2435,8 @@ class TheGitArgvGuard(unittest.TestCase):
             for count in (100, 200, 400):
                 tally = [0]
                 guard.heredoc_spans = (
-                    lambda command, _o=original, _t=tally:
-                    _TallyingList(_o(command), _t))
+                    lambda command, *args, _o=original, _t=tally, **kwargs:
+                    _TallyingList(_o(command, *args, **kwargs), _t))
                 # A distinct trailing comment per size, because `offence`
                 # memoises its verdict per string.
                 guard.offence(body * count + "# " + str(count))

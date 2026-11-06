@@ -12,6 +12,7 @@ from review_helpers import (
     SCRIPTS,
     BASH,
     setUpModule,
+    temp_root,
     run_bash,
 )
 
@@ -148,14 +149,13 @@ class StaleSweepWorktrees(unittest.TestCase):
     """
 
     def setUp(self):
+        top = temp_root(self)
         made = run_bash(
-            'top=$(mktemp -d) && mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q .'
-            ' && git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m t'
-            ' && echo "$top"'
+            'mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q .'
+            ' && git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m t',
+            top=top,
         )
         self.assertEqual(0, made.returncode, made.stderr)
-        top = made.stdout.strip()
-        self.addCleanup(lambda: run_bash('rm -rf "$TOP"', TOP=top))
         self.repo, self.root = f"{top}/repo", f"{top}/root"
 
     def detach(self):

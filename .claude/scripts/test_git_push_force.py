@@ -11,6 +11,7 @@ from review_helpers import (
     code_lines,
     git_commands,
     setUpModule,  # noqa: F401
+    temp_root,
     run_bash as _run_bash,
 )
 
@@ -31,7 +32,6 @@ def run_bash(script, **env):
 
 # A remote, a checkout of it, and a branch with one commit, published.
 BUILD = '''
-root=$(mktemp -d)
 git init -q --bare --initial-branch=main "$root/remote.git"
 git init -q --initial-branch=main "$root/work"
 cd "$root/work"
@@ -43,7 +43,6 @@ git push -q -u origin main
 git checkout -qb feat/x
 echo work > b.txt && git add -A && git commit -qm "the branch work"
 git push -q -u origin feat/x
-printf %s "$root"
 '''
 
 # Another session: a clone of the same origin with a commit on the branch.
@@ -96,11 +95,9 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
 class Fixture(unittest.TestCase):
 
     def setUp(self):
-        built = run_bash(BUILD)
+        self.root = temp_root(self)
+        built = run_bash(BUILD, root=self.root)
         self.assertEqual(0, built.returncode, built.stderr)
-        self.root = built.stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
 
     def at(self, script, where=None):

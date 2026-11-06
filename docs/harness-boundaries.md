@@ -650,7 +650,7 @@ went stale.
 five ways: every `permissions.deny` entry of the rendered root's
 `settings.base.json` is matched by some `deny` row's example, every row's
 example is refused by the layer it names, every non-`ruleset` row's *Test*
-names a suite file that exists, the push and drop helpers each have a
+names a suite file that exists, the push, trailer and drop helpers each have a
 `helper` row, and the table parses to at least fifteen rows, so a renamed
 heading cannot leave the other four vacuous. Its root is the directory two
 above it: the rendered root in a target, `payload/` in the harness repository,
@@ -728,6 +728,7 @@ row is therefore a spelling the deny list does not match.
 | Merge commit onto `main` | `git push origin HEAD:main` | `ruleset` | `ruleset-check` |
 | Rebase and force-push `main` through the rebase helper | `bash .claude/scripts/git-rebase-onto-main.sh main start` | `helper` | `test_git_rebase_onto_main.py::test_main_is_refused_however_it_is_spelled` |
 | Force-push `main` through the push helper, `main` checked out | `bash .claude/scripts/git-push-force.sh` | `helper` | `test_git_push_force.py::test_main_is_refused_however_it_is_spelled` |
+| Rewrite and force-push `main` through the trailer helper, `main` checked out | `bash .claude/scripts/git-trailer-pr.sh 7` | `helper` | `test_git_trailer_pr.py::test_main_is_refused_however_it_is_spelled` |
 | Delete local `main` through the drop helper | `bash .claude/scripts/git-branch-drop.sh main` | `helper` | `test_git_branch_drop.py::test_main_is_refused_however_it_is_spelled` |
 | Discard the working tree and index | `git reset --hard origin/main` | `deny` | `test_destructive_classes.py` |
 | Delete untracked files | `git clean -fdx` | `deny` | `test_destructive_classes.py` |
@@ -1020,7 +1021,8 @@ the state rather than of the words, the grant has to be a helper.
 `git-trailer-pr.sh` adds `PR: #<n>` to the commits of the branch checked out,
 which changes their SHAs, so it leases its push as the rebase helper does.
 It takes one number and spells the `git rebase -x` command itself, so no
-`-x` grant stands beside it. It refuses a pull request that is not an open,
+`-x` grant stands beside it. It refuses `main` checked out in any spelling,
+folded as the rebase helper folds it, a pull request that is not an open,
 same-repository one into `main` for this branch, a dirty tree, a remote that
 differs from the checkout in either direction, a merge commit, and a commit
 that already names another pull request. Its residual is a push that fails
@@ -1073,8 +1075,12 @@ branch holds when it runs: the read of the pull requests takes seconds, and a
 commit landing in that window would go with the branch. The worktree check
 runs last, because `update-ref` does not make it, and the branch's
 configuration section, which `update-ref` leaves, is removed after the delete.
-Its residual is a worktree that checks the branch out between that check and
-the delete.
+The check and the delete are two steps, so the check runs again after it: a
+worktree that took the branch between them, or a second read that fails, puts
+the branch back at the tip and exits 4 or 12 as the first read would have. Its
+residual is a commit made in that worktree in the instant the branch is gone,
+which recreates the ref, so the putting back fails: the helper then exits 4 and
+names the tip, and the `git branch` line that restores it if it is still absent.
 
 Its exit codes, in the rebase helper's meanings where one fits: 0 dropped; 2
 usage, or a name it will not take, a symbolic ref among them; 3 the branch is
@@ -1799,6 +1805,8 @@ passes no skip flag and the command denies `claude` as a shell word, so
 executor as in any session. Beyond the stops `/ship` names, `--dispatched`
 hands a change back unmerged in three cases: an edit under `.claude/`, a
 resource only the owner has, and a decision the issue leaves to the owner.
+`/dispatch --berserk` lifts the third for one run and releases rows that wait
+on the owner or reach `.claude/`; it lifts no deny, guard or stop.
 It also changes the executor: it never tears down its workspace, step 6 runs
 only lines 1 and 8, step 0's finished teardown is skipped, and it never
 writes the task list, not even for an issue it files or closes, which goes

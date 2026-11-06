@@ -5,28 +5,25 @@ that succeeds on the same fixture, so a refusal is not a helper failing for anot
 
 import os
 import re
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, code_lines, git_commands, run_bash, setUpModule  # noqa: F401
+from review_helpers import SCRIPTS, code_lines, git_commands, run_bash, setUpModule, temp_root  # noqa: F401
 
 TRAILER = SCRIPTS / "git-trailer-pr.sh"
 REVERT = SCRIPTS / "git-revert-pr.sh"
 
 BUILD = """
 set -eu
-root=$(mktemp -d)
-git init -q --bare --initial-branch=main "$root/remote.git"
-git init -q --initial-branch=main "$root/work"
-cd "$root/work"
+git init -q --bare --initial-branch=main "$ROOT/remote.git"
+git init -q --initial-branch=main "$ROOT/work"
+cd "$ROOT/work"
 git config user.email test@example.invalid
 git config user.name Test
-git remote add origin "$root/remote.git"
+git remote add origin "$ROOT/remote.git"
 echo base > a.txt && git add -A && git commit -qm "chore: the base"
 git push -q -u origin main
-printf %s "$root"
 """
 
 # A commit with a body and the trailers /commit keeps, so the new trailer has to land beside them.
@@ -46,13 +43,14 @@ def sh(script, **env):
 
 class Fixture(unittest.TestCase):
     def setUp(self):
-        built = run_bash(BUILD, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null", GIT_CONFIG_NOSYSTEM="1")
+        self.root = temp_root(self)
+        built = run_bash(
+            BUILD, ROOT=self.root, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null", GIT_CONFIG_NOSYSTEM="1")
         self.assertEqual(0, built.returncode, built.stderr)
-        self.root = built.stdout.strip()
-        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         self.work = f"{self.root}/work"
-        shim = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, shim, ignore_errors=True)
+        stub = tempfile.TemporaryDirectory()
+        self.addCleanup(stub.cleanup)
+        shim = stub.name
         Path(shim, "gh").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$GH_ROW"\n', encoding="utf-8")
         os.chmod(Path(shim, "gh"), 0o755)
         self.shim = shim
@@ -70,8 +68,7 @@ class Fixture(unittest.TestCase):
             self.git("push", "-q", "-u", "origin", "HEAD")
 
     def stray(self):
-        # Written by the shell: the checkout's path is an MSYS one that Python on Windows cannot open.
-        self.assertEqual(0, sh('cd "$WORK"\necho x > stray.txt', WORK=self.work).returncode)
+        Path(self.work, "stray.txt").write_text("x\n", encoding="utf-8")
 
     def branch(self, name="feat/x"):
         self.git("checkout", "-q", "-b", name)

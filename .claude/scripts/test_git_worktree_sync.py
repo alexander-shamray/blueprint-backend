@@ -9,6 +9,7 @@ import unittest
 from review_helpers import (
     SCRIPTS,
     setUpModule,
+    temp_root,
     run_bash,
 )
 
@@ -21,7 +22,6 @@ PATH = ".claude/worktrees/sync-abcdef0"
 # checkout cloned before that branch existed, so only a fetch makes it known.
 FIXTURE = """
 set -e
-root=$(mktemp -d)
 git init -q -b main "$root/seed"
 git -C "$root/seed" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
 git clone -q --bare "$root/seed" "$root/origin.git"
@@ -34,7 +34,6 @@ git -C "$root/seed" -c user.name=t -c user.email=t@t commit -q -m sync
 git -C "$root/seed" push -q origin "$SYNC_BRANCH"
 printf '.claude/worktrees/\\n' > "$root/checkout/.gitignore"
 mkdir -p "$root/checkout/src"
-printf '%s\\n' "$root"
 """
 
 
@@ -42,10 +41,9 @@ class SyncShape(unittest.TestCase):
     """The helper opens `.claude/worktrees/<name>` on origin's sync branch, from the main checkout only."""
 
     def fixture(self):
-        made = run_bash(FIXTURE, SYNC_BRANCH=BRANCH)
+        root = temp_root(self)
+        made = run_bash(FIXTURE, root=root, SYNC_BRANCH=BRANCH)
         self.assertEqual(0, made.returncode, made.stderr)
-        root = made.stdout.strip()
-        self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
         return root
 
     def sync(self, where, path=PATH, branch=BRANCH):

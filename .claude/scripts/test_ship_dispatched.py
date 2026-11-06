@@ -253,5 +253,47 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
                          "the row's description follows the table's column order")
 
 
+class Berserk(unittest.TestCase):
+    """--berserk lifts one of the three hand-backs and no stop; it reads only beside --dispatched."""
+
+    def rule(self):
+        return between(flat(ship()), "--berserk counts only beside --dispatched", "(why:")
+
+    def test_ship_without_dispatched_ignores_berserk(self):
+        rule = self.rule()
+        for reader in ("An interactive /ship", "a description", "an issue's text"):
+            with self.subTest(reader=reader):
+                self.assertIn(reader, rule)
+        self.assertIn("sets nothing", rule)
+
+    def test_it_lifts_the_third_hand_back_and_keeps_the_other_two(self):
+        rule = self.rule()
+        self.assertIn("lifts the third hand-back", rule)
+        self.assertIn("the recommended option taken", rule)
+        self.assertIn("owner's decision: <taken>, rejected <rejected>", rule)
+        self.assertIn("the PR body carries a line saying the decision was the run's, with the option rejected", rule)
+        self.assertIn("The other two still hand back, after every part that needs neither is done", rule)
+        self.assertIn("A deny is never routed round", rule)
+
+    def test_an_executor_does_only_what_a_pull_request_can_do(self):
+        rule = self.rule()
+        for kept in ("setting", "secret", "environment", "ruleset", "release", "visibility", "billing"):
+            with self.subTest(kept=kept):
+                self.assertIn(kept, rule)
+        self.assertIn("a hand-back with its recommended answer", rule)
+
+    def test_a_hand_backs_reason_says_what_was_tried(self):
+        row = next(ln for ln in ship_report().splitlines() if ln.startswith("| A hand-back |"))
+        self.assertIn("under --berserk, what was tried and what stopped it too", flat(row))
+
+    def test_the_seven_stops_are_not_touched(self):
+        self.assertIn("Seven things still stop the chain", flat(ship()))
+        stops = between(ship(), "**Seven things still stop", "- **Under the standalone token")
+        self.assertNotIn("berserk", stops)
+
+    def test_the_hint_names_the_token_after_dispatched(self):
+        self.assertIn("[--dispatched <run-dir>] [--berserk]", ship().split("---")[1])
+
+
 if __name__ == "__main__":
     unittest.main()

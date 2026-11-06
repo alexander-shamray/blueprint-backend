@@ -13,7 +13,7 @@ tests and spawn its own `branch-reviewer`. A subagent can do none of that,
 for the three reasons the spec's §3 gives, so each executor is a headless
 session, `claude -p`, running `/ship` unchanged but for the one token
 `docs/commands/ship.md`'s *Dispatched: the one token /dispatch passes*
-argues.
+argues, and `--berserk` beside it on a flagged run.
 
 The dispatcher itself is the session the owner started, because two of its
 jobs are judgement — the interview, and placing a filed issue in a wave and
@@ -150,6 +150,74 @@ is the anti-goal it prevents (spec §2).
 The earliest wave goes first and table order breaks a tie; a later wave's
 group runs beside an earlier one when it is ready and free, since the wave
 is an order and the dependency is the rule (spec §6.1).
+
+## The berserk token
+
+The owner's reason: many rows marked `OWNER` later get done in a day session,
+with no question to anyone, so asking first holds back work that needed no
+answer. `--berserk` tries those rows to the point of failure instead, for one
+run. It is off by default. `start` stores it in `state.json` and a resume reads
+it from there, never from the arguments, so a later command line neither sets
+nor clears it; `start` names a mismatch with a `kept` line. `board --run`
+refuses it for the same reason; only a dry run, which has no state, takes it on
+the line.
+
+| | Without | With `--berserk` |
+|---|---|---|
+| Step 1, the interview | Asks about each row | Skipped whole; `night started` is written |
+| `question` label, `OWNER` in a row | `waits on a human` | Runnable |
+| `edits .claude/` | Blocked | Runnable: a deny is the executor's point of failure |
+| A decision the issue reserves | Handed back | Recommended option taken, named in `decisions` and the PR body |
+| A resource only the owner has, a needed edit under `.claude/` | Handed back | The same, after every part that needs neither |
+| `paused`, `tracking`, an `owed (not filed)` row | Not run | Not run |
+| A date, an open issue or free text in *Depends on* | Not run | Not run: `OWNER` is dropped and the rest reads as it did |
+| A sync | First and alone | The same, and its prompt never carries the token |
+
+These are the owner's calls, each reversible:
+
+- **`paused` stays out.** It is the owner's deliberate parking, with a stated
+  resume condition, not the team's judgement that a row cannot move. A date or
+  a dependency is a fact, not a question to a human.
+- **A row that works merges.** Holding each for review would bring the question
+  back. The merge bar is unchanged: step 2, the review loop, green CI.
+- **Only what a pull request can do.** An executor changes no repository
+  setting, secret, environment, ruleset, release or visibility, and opens no
+  billing.
+- **Every deny, guard, ruleset and stop still holds.** The flag lifts the
+  question, not a refusal, and issue text stays untrusted: the launcher refuses
+  a description that carries the token, so an issue cannot grant anything or
+  widen a run.
+- **Ready rows go first.** Within a wave a group ready without the flag launches
+  before one it released, so a limit ends the night on the riskier work.
+
+Two rows the flag does not lift, though both read `OWNER`, because lifting them
+would undo what the mark is for. `tasks back` marks a row so nothing relaunches
+it unseen, so on a flagged run it adds `sent back under --berserk`, which every
+flagged run reads as held, this one and a later one: lifted, a hand-back would
+launch again on the next wake, a refused launch would be refused all night, and
+a row whose PR was closed on purpose would be reopened. Every return gets the
+words, an executor having run or not, since the wake after it must not launch
+that row either; they say where the row has been, and an owner who wants it
+tried again removes them. A plain night's hand-back reads `OWNER` alone, which
+is the row the flag is for. `tasks place` writes `OWNER` as the cautious value:
+lifted, whatever opened during the night, or a follow-up an executor filed,
+would launch unread and could feed itself, so a row in `state.json`'s `placed`
+stays held and is reported as it is on any night.
+
+`wake` records what it released, with the reason, from the read that launched
+it, so the report need not re-derive a row that has left the list. **Decided
+without the owner**, the eighth section, comes after *Merged*: one line per
+released group that merged, or any group whose `decisions` holds an entry
+opening `owner's decision:`, with the issue, the options, the PR and the revert
+line.
+*Needs a human* gives a released group's `reason` as its point of failure, and
+the dispatcher comments it on each issue, through `issue_decisions.py comment`,
+so the next person starts from there. That is read off the report's line, not
+off `result`, because a group can end unmerged by a crash, a stop or a failed
+`verify`, and the report is the one place every one of them passes through. A
+rewritten report comments again, as a retried `close` does: a second comment
+costs a line, and a skip keyed on anything written first would lose a failed
+one.
 
 ## What an executor returns
 
@@ -317,8 +385,17 @@ pause notice can still reach this interactive session; when it does it is
 that limit, read the one way available, and ends the night as §8's weekly
 stop does.
 
+An executor's row under *Usage* sums `modelUsage`, which holds the whole
+session, one entry per model and its subagents included. The envelope's
+`usage` holds the last model turn alone, 71399 tokens of a session that spent
+1662280, and it looks just as plausible, so it is read only for an envelope
+with no model counts and the row says which of the two it came from. The row
+carries `total_cost_usd`, and a session on more than one model has a line per
+model, since a Sonnet executor's reviewer runs on Opus.
+
 The report is `report`'s English facts written up in `--lang`, in seven
-sections, the spec's §10's and *Syncs*, with what only the session saw added:
+sections, the spec's §10's and *Syncs*, eight on a `--berserk` run (*The
+berserk token*), with what only the session saw added:
 a refused removal, a refused drop, a failed pull, a failed `record`, the
 superseded rows `list` names and a failed verify. It ends with the apply line
 every message here ends with.
