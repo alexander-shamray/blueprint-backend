@@ -287,8 +287,8 @@ The rows are a tree fact, so they leave the managed script.
   `row_of`, its root arm as `^[^/]+$` and its `*/*` arm as `^.*/.*$` with row
   `-`, with `holds` from the commands' tables, and lists it under `local`.
   Merged first: today's helper ignores it, and Review Focus 4 needs it present
-  when the sync lands. The harness root does the same, with `harness_sync/*`,
-  `measure/*`, `rulesets/*` and `targets/*` as rows of its own.
+  when the sync lands. The harness root does the same, with `^harness_sync/`,
+  `^measure/`, `^payload/`, `^rulesets/` and `^targets/` as rows of its own.
 - [ ] **Step 2:** Write failing cases in `test_sweep_slices.py`:
   - `test_a_row_comes_from_the_file`;
   - `test_a_missing_row_file_exits_3`;
