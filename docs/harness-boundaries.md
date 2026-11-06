@@ -641,10 +641,11 @@ blueprint-frontend cite it rather than restate it.
 test that holds the table to both.** Every class of operation here is
 destructive on the repositories or on the machine, and each is stopped by
 a layer that can be named: a permission deny in `.harness/settings.base.json`,
-`guard-git-argv.py` or `guard-edit-target.py`, the `main` ruleset on the
-server, or a granted helper's own refusal of `main`. A reader asking whether
-`git push origin +HEAD:main` is stopped, and by what, finds the row; a base
-deny added without one is a failing test, not a paragraph that went stale.
+`guard-git-argv.py`, `guard-edit-target.py` or `guard-sed-crlf.py`, the `main`
+ruleset on the server, or a granted helper's own refusal of `main`. A reader
+asking whether `git push origin +HEAD:main` is stopped, and by what, finds the
+row; a base deny added without one is a failing test, not a paragraph that
+went stale.
 `.claude/scripts/test_destructive_classes.py` reads the table and checks it
 five ways: every `permissions.deny` entry of the rendered root's
 `settings.base.json` is matched by some `deny` row's example, every row's
@@ -659,7 +660,7 @@ which has the same layout.
 *Refused by* the layer the example exercises, and *Test* the suite file that
 holds the row, which the suite checks exists (a `ruleset` row names
 `ruleset-check`, and a `helper` row a suite and a test, as below).
-*Refused by* takes five values, and the test accepts no other:
+*Refused by* takes six values, and the test accepts no other:
 
 - `deny` — the example matches an entry of the base deny list. A `Bash`
   entry follows Claude Code's prefix reading: `Bash(x:*)` matches `x` and
@@ -676,6 +677,12 @@ holds the row, which the suite checks exists (a `ruleset` row names
   directory holding `settings.json`). The hook refuses a path whose spelling
   is inside an allowed tree and whose resolution is not, so the example
   spells its way in through a link.
+- `guard-sed-crlf` — the example is a command, read by
+  `.claude/hooks/guard-sed-crlf.py` from a scratch git checkout tracking
+  `crlf.txt`, which holds CRLF endings. The test calls the hook's `offence`
+  with `strips_cr=True` rather than running it, since the hook judges on
+  Windows alone (*The sed line-ending guard*) and CI runs this suite on
+  Linux.
 - `ruleset` — the server-side backstop on `main`, and its test is
   `ruleset-check`, which the table names and the suite does not run. It is
   blueprint-harness's `py -3.12 -m harness_sync ruleset-check`, which asks
@@ -746,6 +753,7 @@ row is therefore a spelling the deny list does not match.
 | Edit a hook through a link | `Edit(linked/hooks/guard-git-argv.py)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the settings through a link | `Edit(linked/claude/settings.json)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the agent notes through a link | `Edit(linked/remember/notes.md)` | `guard-edit-target` | `test_destructive_classes.py` |
+| Rewrite a tracked CRLF file with LF endings | `sed -i s/one/uno/ crlf.txt` | `guard-sed-crlf` | `test_destructive_classes.py` |
 
 **Adding a row.** A deny entry added to `settings.base.json` needs a `deny`
 row in the same pull request, or the suite names it. A new *Refused by* value
