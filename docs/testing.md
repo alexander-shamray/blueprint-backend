@@ -59,10 +59,10 @@ that adds a module there or slows one. The ceilings are `CEILINGS` and
 this table. The table's base measurement ran each module alone on Windows 11
 under Python 3.12 at `e037e499`: 704 tests, 482 seconds in all. The script's
 suite holds each module in the directory to a row, and each ceiling to its
-row, so a module added there is measured here too. A row due no named ceiling
-may land before its module, because a `chore/harness-sync-*` branch is never
-committed to; the cost is that such a row outlives a module a sync deletes, and
-nothing flags it.
+row, so a module added there is measured here too. A row, and the named
+ceiling it is due, may land before its module, because a
+`chore/harness-sync-*` branch is never committed to; the cost is that a row
+outlives a module a sync deletes, and nothing flags it.
 
 | Module | Seconds | Module | Seconds |
 |---|---:|---|---:|
