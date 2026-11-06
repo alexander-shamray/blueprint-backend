@@ -260,6 +260,7 @@ The rows are a tree fact, so they leave the managed script.
 - Modify (harness): `payload/.claude/scripts/sweep-slices.sh`,
   `test_sweep_slices.py`; `payload/.claude/commands/bug-sweep.md`,
   `security-sweep.md`; `docs/commands/bug-sweep.md`, `security-sweep.md`;
+  `payload/.claude/scripts/pr-locality.sh`, `test_pr_helpers.py`;
   `targets/blueprint-backend.config.json`, `.harness/config.json`;
   `IMPORT.md` *Stack mentions left verbatim*
 - Modify (backend): `.harness/config.json`
@@ -287,7 +288,12 @@ The rows are a tree fact, so they leave the managed script.
   a `case` per file without a fork. The commands' row tables become: *the rows
   `.harness/sweep-rows.tsv` names, with what each holds*. The `IMPORT.md` line
   for #73 goes.
-- [ ] **Step 4:** `/ship`, closing #73.
+- [ ] **Step 4:** `pr-locality.sh` loses its `declare -A` by the same rule,
+  which frontend's required `harness (macos-latest)` leg needs: `/bin/bash` on
+  macOS is 3.2 (frontend `docs/testing.md`). Add
+  `test_no_helper_uses_a_bash_4_construct`, over `mapfile`, `declare -A` and
+  `${x,,}` in the payload's shell.
+- [ ] **Step 5:** `/ship`, closing #73.
 
 ### Task 5: Frontend's config, and a rehearsal
 
@@ -322,9 +328,11 @@ Harness session.
 - [ ] **Step 4:** A failure in a payload suite is fixed in the payload, in a
   harness pull request. One from a tree assumption in a payload case is a split
   as #5 made. Rerun until clean, and put the run's counts in that pull request.
-- [ ] **Step 5:** Compare the suite's time on each runner with frontend's
-  `harness` job's `timeout-minutes: 30`, from harness `payload-suites` runs.
-  Near the bound, Task 7's script raises it.
+- [ ] **Step 5:** The harness runs the whole suite on ubuntu alone, so its
+  time on windows and macos is unknown until the first sync's own run. Task 7's
+  script therefore raises frontend's `harness` `timeout-minutes` from 30 to 60,
+  and Step 3 records the ubuntu time. A failure on either runner in Task 7 is
+  fixed in the payload and re-applied.
 - [ ] **Step 6:** `/ship` the config. The harness side is now done, and
   `targets.json` does not list frontend yet.
 
