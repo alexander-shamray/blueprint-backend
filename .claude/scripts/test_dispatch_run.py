@@ -41,11 +41,20 @@ HANDED_S1 = {**MERGED_S1, "outcome": "handed-back", "pr": None, "title": None, "
              "reason": "needs a provider key only the owner has"}
 USAGE = {"input_tokens": 20, "cache_creation_input_tokens": 5265, "cache_read_input_tokens": 754597,
          "output_tokens": 2814, "output_tokens_details": {"thinking_tokens": 199}}
+# Counts of run 20261104-230438's sync-1781, whose `usage` held its last turn alone: 71399 of these 1662280 tokens.
+SONNET = {"inputTokens": 44, "outputTokens": 4906, "cacheReadInputTokens": 1332430, "cacheCreationInputTokens": 58215,
+          "webSearchRequests": 0, "costUSD": 0.415, "contextWindow": 1000000}
+OPUS = {"inputTokens": 14, "outputTokens": 3868, "cacheReadInputTokens": 212506, "cacheCreationInputTokens": 50297,
+        "webSearchRequests": 0, "costUSD": 0.371, "contextWindow": 1000000}
+MODEL_USAGE = {"claude-sonnet-5-5": SONNET, "claude-opus-5-5": OPUS}
+SESSION_USAGE = {"input_tokens": 58, "cache_creation_input_tokens": 108512, "cache_read_input_tokens": 1544936,
+                 "output_tokens": 8774}
 # The spike's envelope keys (docs/superpowers/plans/2026-11-01-dispatch-spike.md); its values trimmed.
 SUCCESS = {"type": "result", "subtype": "success", "is_error": False, "api_error_status": None,
            "stop_reason": "end_turn", "terminal_reason": "completed", "num_turns": 9,
            "session_id": "43b7cd26-0682-471a-a3e5-98c841a5c448", "total_cost_usd": 1.886, "usage": USAGE,
-           "permission_denials": [], "result": "PR #1690 is merged; the rate limit docs were not touched."}
+           "modelUsage": MODEL_USAGE, "permission_denials": [],
+           "result": "PR #1690 is merged; the rate limit docs were not touched."}
 # No limit was observed in the spike, so these are built from the envelope's structured fields and the SDK's
 # rate_limit error kind (ruling R9); they await the first real limit. The result names a later reset, read only
 # where no field names one.
@@ -124,6 +133,9 @@ def finished_pid():
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait()
     return child.pid
+
+
+ABSENT = object()
 
 
 def end(**fields):
@@ -646,10 +658,57 @@ class ClassifyTests(InRoot):
         self.assertEqual("relaunch", dr.classify(end, None, 0, NOW))
         self.assertEqual("crash-hand-back", dr.classify(end, None, 1, NOW))
 
+    def spent(self, **fields):
+        envelope = {key: value for key, value in {**SUCCESS, **fields}.items() if value is not ABSENT}
+        return dr.session_end({"exit": 0, "stdout": json.dumps(envelope), "stderr": ""})
+
+    def test_a_sessions_tokens_are_modelUsage_summed_over_its_models_not_its_last_turn(self):
+        ok = self.spent()
+        self.assertEqual(1662280, sum(ok.usage.values()))
+        self.assertEqual("modelUsage", ok.usage_source)
+        self.assertEqual(1.886, ok.cost_usd)
+        self.assertEqual({"input_tokens": 14, "cache_creation_input_tokens": 50297,
+                          "cache_read_input_tokens": 212506, "output_tokens": 3868},
+                         ok.usage_models["claude-opus-5-5"])
+        self.assertEqual(1395595, sum(ok.usage_models["claude-sonnet-5-5"].values()))
+
+    def test_usage_is_read_only_for_an_envelope_with_no_model_counts(self):
+        for name, listed in (("absent", ABSENT), ("not a dict", [1]), ("empty", {}), ("no entry a dict", {"m": 3}),
+                             ("no count in an entry", {"m": {"costUSD": 1.5, "inputTokens": "9"}})):
+            with self.subTest(name):
+                ok = self.spent(modelUsage=listed)
+                self.assertEqual({k: USAGE[k] for k in dr.TOKEN_KEYS}, ok.usage)
+                self.assertEqual("usage", ok.usage_source)
+                self.assertEqual({}, ok.usage_models)
+        bare = self.spent(modelUsage=ABSENT, usage=ABSENT)
+        self.assertEqual(({}, None), (bare.usage, bare.usage_source))
+
+    def test_a_usage_of_zeros_is_no_source(self):
+        zero = {key: 0 for key in dr.TOKEN_KEYS}
+        ok = self.spent(modelUsage={}, usage=zero)
+        self.assertEqual((zero, None), (ok.usage, ok.usage_source))
+
+    def test_a_model_keeps_the_counts_it_has_and_a_malformed_one_is_not_summed(self):
+        ok = self.spent(modelUsage={"a": {"inputTokens": 5, "outputTokens": True, "cacheReadInputTokens": -1},
+                                    "b": {"inputTokens": 7, "outputTokens": 2}, "c": "not counts"})
+        self.assertEqual({"input_tokens": 12, "output_tokens": 2}, ok.usage)
+        self.assertEqual({"a": {"input_tokens": 5}, "b": {"input_tokens": 7, "output_tokens": 2}}, ok.usage_models)
+
+    def test_only_a_plain_finite_dollar_figure_is_a_cost(self):
+        for value in (ABSENT, None, "1.5", True, -0.5, 10 ** 400):
+            with self.subTest(value=value):
+                self.assertIsNone(self.spent(total_cost_usd=value).cost_usd)
+        for text in ("NaN", "Infinity"):
+            with self.subTest(text=text):
+                raw = json.dumps(SUCCESS).replace('"total_cost_usd": 1.886', f'"total_cost_usd": {text}')
+                self.assertIn(text, raw)
+                self.assertIsNone(dr.session_end({"exit": 0, "stdout": raw, "stderr": ""}).cost_usd)
+        self.assertEqual(0.0, self.spent(total_cost_usd=0).cost_usd)
+
     def test_the_envelope_is_read_by_its_structured_fields_first(self):
         ok = dr.session_end({"exit": 0, "stdout": json.dumps(SUCCESS), "stderr": ""})
         self.assertEqual((False, False, None), (ok.is_error, ok.rate_limited, ok.resets_at))
-        self.assertEqual({k: USAGE[k] for k in dr.TOKEN_KEYS}, ok.usage)
+        self.assertEqual(SESSION_USAGE, ok.usage)
         self.assertEqual(SUCCESS["session_id"], ok.session_id)
         kind = dr.session_end({"exit": 1, "stdout": json.dumps(LIMIT_KIND), "stderr": ""})
         self.assertTrue(kind.rate_limited)
@@ -739,7 +798,36 @@ class ResultCommandTests(InRoot):
         earlier = {"input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 50}
         self.absorb(MERGED_S1, status="relaunch", absorbed="2026-11-01T20:00:00+00:00", usage=earlier)
         spent = group_state(RUN, "S1")["usage"]
-        self.assertEqual({key: earlier.get(key, 0) + USAGE[key] for key in dr.TOKEN_KEYS}, spent)
+        self.assertEqual({key: earlier.get(key, 0) + SESSION_USAGE[key] for key in dr.TOKEN_KEYS}, spent)
+
+    def test_a_relaunched_groups_models_and_cost_sum_and_its_sources_are_both_named(self):
+        earlier = {"input_tokens": 100}
+        models = {"claude-opus-5-5": {"input_tokens": 1000, "output_tokens": 2}, "claude-gone": {"output_tokens": 9}}
+        self.absorb(MERGED_S1, status="relaunch", absorbed="2026-11-01T20:00:00+00:00", usage=earlier,
+                    usage_sources=["usage"], usage_models=models, cost_usd=0.25)
+        entry = group_state(RUN, "S1")
+        self.assertEqual(["usage", "modelUsage"], entry["usage_sources"])
+        self.assertEqual(1014, entry["usage_models"]["claude-opus-5-5"]["input_tokens"])
+        self.assertEqual(3870, entry["usage_models"]["claude-opus-5-5"]["output_tokens"])
+        self.assertEqual({"output_tokens": 9}, entry["usage_models"]["claude-gone"])
+        self.assertAlmostEqual(2.136, entry["cost_usd"])
+
+    def test_counts_recorded_before_the_sources_were_are_the_last_turn_reader(self):
+        self.absorb(MERGED_S1, status="relaunch", absorbed="2026-11-01T20:00:00+00:00", usage={"input_tokens": 100})
+        self.assertEqual(["usage", "modelUsage"], group_state(RUN, "S1")["usage_sources"])
+
+    def test_a_session_that_spent_nothing_leaves_no_source_on_the_next_sessions_row(self):
+        self.absorb(MERGED_S1, status="relaunch", absorbed="2026-11-01T20:00:00+00:00", usage={"input_tokens": 0},
+                    usage_sources=[])
+        self.assertEqual(["modelUsage"], group_state(RUN, "S1")["usage_sources"])
+
+    def test_a_session_with_no_envelope_changes_no_usage_or_source(self):
+        self.absorb(MERGED_S1, envelope="not an envelope", status="relaunch",
+                    absorbed="2026-11-01T20:00:00+00:00", usage={"input_tokens": 100}, usage_sources=["modelUsage"],
+                    usage_models={"m": {"input_tokens": 100}}, cost_usd=0.5)
+        entry = group_state(RUN, "S1")
+        self.assertEqual(({"input_tokens": 100}, ["modelUsage"]), (entry["usage"], entry["usage_sources"]))
+        self.assertEqual(({"m": {"input_tokens": 100}}, 0.5), (entry["usage_models"], entry["cost_usd"]))
 
     def test_result_copies_validates_classifies_records_and_names_the_transcript(self):
         self.assertEqual("transcript: not found", self.absorb(MERGED_S1)[1])
@@ -1444,7 +1532,9 @@ class ReportTests(InRoot):
 
     def test_the_report_has_the_seven_sections_in_order(self):
         record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=MERGED_S1["rounds"],
-               review_end="clean", filed=[1701], usage={key: USAGE[key] for key in dr.TOKEN_KEYS})
+               review_end="clean", filed=[1701], usage=SESSION_USAGE, usage_sources=["modelUsage"], cost_usd=0.787,
+               usage_models={"claude-sonnet-5-5": {"input_tokens": 44, "output_tokens": 4906},
+                             "claude-opus-5-5": {"input_tokens": 14, "output_tokens": 3868}})
         record(RUN, "M2", status="running")
         lines = self.report()
         self.assertEqual(self.SECTIONS, [text for text in lines if text.startswith("## ")])
@@ -1458,8 +1548,28 @@ class ReportTests(InRoot):
         self.assertEqual(["M2 running"], self.section(lines, "## Interrupted"))
         self.assertEqual(["#1701"], self.section(lines, "## Filed overnight"))
         self.assertIn("J1 wave 2: waits until 2026-11-09", self.section(lines, "## Left in the backlog"))
-        self.assertIn("S1: 762696 tokens (input 20, cache write 5265, cache read 754597, output 2814)",
-                      self.section(lines, "## Usage"))
+        usage = self.section(lines, "## Usage")
+        self.assertIn("S1: 1662280 tokens (input 58, cache write 108512, cache read 1544936, output 8774), $0.79, "
+                      "from modelUsage", usage)
+        self.assertIn("S1 claude-sonnet-5-5: 4950 tokens (input 44, cache write 0, cache read 0, output 4906)", usage)
+        self.assertIn("S1 claude-opus-5-5: 3882 tokens (input 14, cache write 0, cache read 0, output 3868)", usage)
+
+    def test_each_usage_row_says_which_field_it_came_from(self):
+        full = "from modelUsage"
+        last = "from usage, the last turn alone"
+        for sources, text in ((["modelUsage"], full), (["usage"], last), (None, last), ("garbled", last),
+                              ([[], {}], last), ([["modelUsage"], "modelUsage"], full),
+                              (["usage", "modelUsage"], f"{full}, and {last}")):
+            with self.subTest(sources=sources):
+                record(RUN, "S1", status="running", usage={"input_tokens": 20}, usage_sources=sources)
+                row = self.section(self.report(), "## Usage")[0]
+                self.assertEqual(f"S1: 20 tokens (input 20, cache write 0, cache read 0, output 0), {text}", row)
+
+    def test_one_model_gets_no_line_of_its_own_and_a_garbled_cost_is_not_printed(self):
+        record(RUN, "S1", status="running", usage={"input_tokens": 20}, usage_sources=["modelUsage"], cost_usd="x",
+               usage_models={"claude-opus-5-5": {"input_tokens": 20}})
+        self.assertEqual(["S1: 20 tokens (input 20, cache write 0, cache read 0, output 0), from modelUsage"],
+                         self.section(self.report(), "## Usage")[:-1])
 
     def test_what_the_interview_files_or_closes_is_filed_overnight(self):
         # A close comment is a comment on an issue, so it counts as the spec's filed or commented on.

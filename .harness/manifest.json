@@ -1,5 +1,5 @@
 {
-  "harness_commit": "7fe03dd420bcfd3854a257c06010e64e157a8c8f",
+  "harness_commit": "9d335454647c7cf69c02bc79465fc10726d2d5c2",
   "files": {
     ".claude/agents/branch-reviewer.md": "cbdcb74b32ca6d000b697d98396c86339c5feb271190d34be42f9eb98c1c8388",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -24,7 +24,7 @@
     ".claude/hooks/index-search-hint.py": "2ce5ad6a0a1c9cf7e0e84d00e998b2f35c9f5ab9b07d482ff61398df1586051f",
     ".claude/hooks/refresh-index.py": "07c9e2e79c4f016c37122d4aa87a5208ed11d16c345e0b83076047891b7fd091",
     ".claude/scripts/dispatch_board.py": "98b8ea6714313921fc741b73304ed0f6baf5c27cea47c5aa9a827842248aebab",
-    ".claude/scripts/dispatch_run.py": "6c5a89aef64d635a37dbe17b3de7204f09123bf478c803948e5aa7c924886e89",
+    ".claude/scripts/dispatch_run.py": "faf7d45ab03b85b5678794d9b08206918212ed8e47d9af221f82d56b7b990fb8",
     ".claude/scripts/gh-issue-create.sh": "0c5c0813e192fc2a9e03c42374cd4d8e274f754a1d80b0fb68773d129b3013ad",
     ".claude/scripts/gh-issue-harness.sh": "844a9cc199245ea338e7c2e5b397721fc00543cb4f19390fce95702fa7713985",
     ".claude/scripts/gh-issue-list.sh": "560cd1f7e51edfb3a2eefa46e095b3adc5f998323a47827ca378791d94a900ca",
@@ -62,7 +62,7 @@
     ".claude/scripts/test_command_runbooks.py": "87552eba8b86a009d7fa44dd31614f741f093c6cd8dccec43217a7781880f586",
     ".claude/scripts/test_destructive_classes.py": "63454febdd41c1218f1c7dffbb3f96a98b057ec5fae5ef82c7c98c632477a7da",
     ".claude/scripts/test_dispatch_board.py": "53adf12598d80dfab1de12c959b90a909484b68cb0c69e54825433415eb986fd",
-    ".claude/scripts/test_dispatch_run.py": "5de4d0bb1e758dfcb5deadc63f0f18fd1600eb0d21f6df5b9a0442371e0442f9",
+    ".claude/scripts/test_dispatch_run.py": "f77cbb956681cf08268ab0aebdf2ee2c83cca3d71b61c9f48558cdc5dadb3ded",
     ".claude/scripts/test_dispatch_sync.py": "a9f3c77bb0322bc2d070159df18a8eda543be8a850ac0cbf1b64a401193831ef",
     ".claude/scripts/test_edit_target_guard.py": "8dd33a3f9c8f3e7ada61e8715a5a997da587d8fe701b2e51f3c34421313cfd04",
     ".claude/scripts/test_gh_issue_create.py": "e8304bc7f502dab70da833e2a9fd21bf6c3679ae7de64343e8650f60a7c23df3",
@@ -143,7 +143,7 @@
     ".harness/settings.base.json": "6ca441fe7838a1fa2181ed8de3b4a9e3916bb09094fcc3879f8d09af2d09e834",
     "docs/commands/branch.md": "7c14ecf44ed099a6f1c48f6ef30c8640b01c45fe7ca31e92db564139732cbede",
     "docs/commands/bug-sweep.md": "a144d9dc35be1e14abf636416dd5ce38e6b69e93dddd45a4e25b60aa19756e01",
-    "docs/commands/dispatch.md": "b001f2094c9105b4b025b02d8e3ad7921b8445ce18b4de39d61a5eeb1e884a1c",
+    "docs/commands/dispatch.md": "f6e72a81dd1312ccb71278fa4553049dbdc10108b1126b26f456c1b190615ea7",
     "docs/commands/security-sweep.md": "60beb0926acb7be96689bc92ccd9eee26b7c931173f0b65491c26d8fdcefd61a",
     "docs/commands/ship.md": "90a47a69d90d969917bb14f994d3b51e6bad4f5935326b95c86f92ec1e495bd7",
     "docs/commands/team.md": "1cdc4bcab8a82727ec98ab1a56d0420d115fc37e6f4b8075dad8c7cfdd8311b2",

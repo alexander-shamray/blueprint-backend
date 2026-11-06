@@ -317,6 +317,14 @@ pause notice can still reach this interactive session; when it does it is
 that limit, read the one way available, and ends the night as §8's weekly
 stop does.
 
+An executor's row under *Usage* sums `modelUsage`, which holds the whole
+session, one entry per model and its subagents included. The envelope's
+`usage` holds the last model turn alone, 71399 tokens of a session that spent
+1662280, and it looks just as plausible, so it is read only for an envelope
+with no model counts and the row says which of the two it came from. The row
+carries `total_cost_usd`, and a session on more than one model has a line per
+model, since a Sonnet executor's reviewer runs on Opus.
+
 The report is `report`'s English facts written up in `--lang`, in seven
 sections, the spec's §10's and *Syncs*, with what only the session saw added:
 a refused removal, a refused drop, a failed pull, a failed `record`, the
