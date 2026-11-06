@@ -402,10 +402,11 @@ frozen.
   - *Review examples*: from `.claude/commands/review-branch.md` *What counts
     as a finding*.
 - [ ] **Step 3:** Write `.harness/sweep-rows.tsv` from frontend's own awk
-  `row_of` in `sweep-slices.sh`, its tests in order: `core`, `screens`,
-  `suites`, `tooling`, `native`, `samples`; security `source`, `tooling`,
-  `native`, `samples`. `tooling` gains `.harness/`, which the function does not
-  know.
+  `row_of` in `sweep-slices.sh`, keeping the function's test order, a `.spec.ts`
+  before `core` and `screens`, so a first match gives what it gives today. The
+  rows are the set `core`, `screens`, `suites`, `tooling`, `native`, `samples`;
+  for security `source`, `tooling`, `native`, `samples`. `tooling` gains
+  `.harness/`, which the function does not know.
 - [ ] **Step 4:** Write `.github/locality-gate/classes.yml` in backend's
   grammar from §3's table, adding `.harness/**` to Class D as backend's map
   has it, since every sync's manifest is there. §3 then cites the file as the
