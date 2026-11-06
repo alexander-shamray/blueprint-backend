@@ -86,6 +86,7 @@ its row, so a module added there is measured here too.
 | `test_destructive_classes.py` | 1.3 | `test_harness_denies_backend.py` | 0.5 |
 | `test_command_grants_backend.py` | 0.3 | `test_command_runbooks_backend.py` | 0.1 |
 | `test_dispatch_run_backend.py` | 0.1 | `test_gh_issue_suppresses_backend.py` | 0.1 |
+| `test_sync_pr.py` | 93.1 | | |
 
 `test_team_board.py` arrived after that measurement and was timed the same
 way on its own branch, #1578's; so were the five `/dispatch` modules, on
@@ -94,7 +95,10 @@ the sync to blueprint-harness fd87ad6 and was timed alone on its branch, as
 `discover -s .claude/scripts -p test_python_hygiene.py` over three runs. The
 eleven modules the sync to blueprint-harness f5e2536 added, and
 `test_pr_helpers.py` and `test_sweep_slices.py`, which it cut, were timed by
-this script on that sync's branch.
+this script on that sync's branch. `test_sync_pr.py` arrived with the sync to
+blueprint-harness 0652b27 and was timed alone as
+`discover -s .claude/scripts -p test_sync_pr.py`, because this script stops a
+module with no ceiling of its own at 90 seconds.
 
 **Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
 owns the rule). Every CI job that runs Python pins 3.12, and a

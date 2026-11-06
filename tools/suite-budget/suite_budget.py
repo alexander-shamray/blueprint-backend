@@ -36,6 +36,7 @@ CEILINGS = {
     "test_pr_helpers_backend.py": 100,
     "test_git_push_force.py": 50,
     "test_sweep_slices.py": 40,
+    "test_sync_pr.py": 190,
     "test_index_search_hint.py": 40,
 }
 # A module this table does not name, a new one included, is still held to a budget rather than waved through.
