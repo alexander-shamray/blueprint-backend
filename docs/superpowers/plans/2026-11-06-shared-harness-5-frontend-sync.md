@@ -403,15 +403,17 @@ frozen.
 Harness session, owner steps named.
 
 **Files (harness):**
-- Modify: `targets.json`, `README.md`, `rulesets/main.json`
+- Modify: `targets.json`, `README.md`, `rulesets/main.json`,
+  `harness_sync/tests/test_ruleset.py`, which asserts the targets exactly
 - Modify (frontend, by an owner script): `.github/workflows/ci.yml`
 
 - [ ] **Step 1 (owner):** Add frontend to `HARNESS_SYNC_TOKEN`'s repositories,
   with Contents, Pull requests and Workflows read-write.
-- [ ] **Step 2:** Add frontend to `targets.json`; `/ship`. Confirm from the
-  `sync.yml` run that it reads *current* or opens a sync. A red run for frontend
-  with a token error is Step 1 undone; no other target is affected
-  (`fail-fast: false`).
+- [ ] **Step 2:** Add frontend to `targets.json`; `/ship`. `sync.yml`'s path
+  filter is `payload/**` and `harness_sync/**`, so start a run by
+  `workflow_dispatch` unless the merge touched either. Confirm it reads
+  *current* or opens a sync. A red run for frontend with a token error is Step 1
+  undone; no other target is affected (`fail-fast: false`).
 - [ ] **Step 3:** Frontend's `ci.yml` runs each new gate directory's suite, in
   a job the harness's `payload-suites` gate step shapes, added to `main-red`'s
   `needs`. Owner script, `/ship`.
