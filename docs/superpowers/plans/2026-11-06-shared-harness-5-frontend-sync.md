@@ -215,12 +215,15 @@ base change reaches every target's rendered file.
   `test_refresh_index.py`; `skills/codebase-index/scripts/cbx`;
   `payload/.harness/settings.base.json`; `payload/.claude/commands/pr.md`,
   `ship.md`; `docs/commands/ship.md`; `payload/docs/harness-boundaries.md`;
-  `test_harness_denies.py`, `test_hook_timeouts.py`; `README.md`, whose *Tests*
+  `test_harness_denies.py`, `test_hook_timeouts.py`,
+  `test_edit_target_guard.py`, `test_git_argv_guard.py`,
+  `test_sed_crlf_guard.py`; `README.md`, whose *Tests*
   recipe types `git worktree remove --force` and takes a scratch clone instead
 
 **Interfaces:**
 - Produces: `sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh" <guard>`,
-  the form the base's four guard commands take: `guard-git-argv.py`,
+  the form the base's four guards take, in five commands, since
+  `guard-git-argv.py` is wired for Bash and for PowerShell. The others are
   `guard-index-argv.py`, `guard-sed-crlf.py` and `guard-edit-target.py`. The
   two hints stay on `hint-bound.sh` and `refresh-index` and `index-mcp-root` on
   `runpy`.
@@ -240,8 +243,10 @@ base change reaches every target's rendered file.
 - [ ] **Step 3 (settings):** Take `run-guard.sh` and `run-guard.py`, make the
   closed set the four guards, and rewrite those commands. Add `Bash(gh pr
   merge:*)` and `Bash(git worktree remove:*)` to the base's denies. Update
-  `test_hook_timeouts.py`'s count of `py` and `hint-bound` commands, and record
-  the no-Git-Bash residual in the boundaries. Cases:
+  `test_hook_timeouts.py`'s count of `py` and `hint-bound` commands, restate the
+  `py -3.12` floor cases of the three guard suites against the wrapper and
+  `run-guard.py`'s floor, and record the no-Git-Bash residual in the boundaries.
+  Cases:
   - `test_each_guard_runs_through_the_wrapper`;
   - `test_a_missing_interpreter_blocks_a_guard`, exit 2;
   - `test_an_unknown_hook_exits_2`: a guard name missing from the set must not
