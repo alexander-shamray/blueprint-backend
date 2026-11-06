@@ -168,7 +168,8 @@ class TheRealSuite(unittest.TestCase):
         rows = re.findall(r"`(test\w*\.py)` \| (\d+\.\d) \|", text)
         figures = {m: float(s) for m, s in rows}
         self.assertEqual(len(rows), len(figures), "a module has two rows")
-        self.assertEqual(set(figures), set(suite_budget.modules(self.directory)))
+        # A subset: a row may land before its module (docs/testing.md, *Each of its modules has a time budget*).
+        self.assertLessEqual(set(suite_budget.modules(self.directory)), set(figures))
         for module, seconds in figures.items():
             with self.subTest(module):
                 due = math.ceil(seconds * 2 / 10) * 10

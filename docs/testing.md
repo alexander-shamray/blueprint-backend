@@ -58,8 +58,11 @@ that adds a module there or slows one. The ceilings are `CEILINGS` and
 `DEFAULT_CEILING` in that script, and each named ceiling follows its row in
 this table. The table's base measurement ran each module alone on Windows 11
 under Python 3.12 at `e037e499`: 704 tests, 482 seconds in all. The script's
-suite holds the table to the directory, a row per module, and each ceiling to
-its row, so a module added there is measured here too.
+suite holds each module in the directory to a row, and each ceiling to its
+row, so a module added there is measured here too. A row due no named ceiling
+may land before its module, because a `chore/harness-sync-*` branch is never
+committed to; the cost is that such a row outlives a module a sync deletes, and
+nothing flags it.
 
 | Module | Seconds | Module | Seconds |
 |---|---:|---|---:|
@@ -86,7 +89,9 @@ its row, so a module added there is measured here too.
 | `test_destructive_classes.py` | 1.3 | `test_harness_denies_backend.py` | 0.5 |
 | `test_command_grants_backend.py` | 0.3 | `test_command_runbooks_backend.py` | 0.1 |
 | `test_dispatch_run_backend.py` | 0.1 | `test_gh_issue_suppresses_backend.py` | 0.1 |
-| `test_sync_pr.py` | 93.1 | | |
+| `test_sync_pr.py` | 93.1 | `test_git_worktree_sync.py` | 12.8 |
+| `test_dispatch_sync.py` | 6.9 | `test_gh_issue_harness.py` | 6.6 |
+| `test_ship_sync.py` | 0.1 | | |
 
 `test_team_board.py` arrived after that measurement and was timed the same
 way on its own branch, #1578's; so were the five `/dispatch` modules, on
@@ -98,7 +103,9 @@ eleven modules the sync to blueprint-harness f5e2536 added, and
 this script on that sync's branch. `test_sync_pr.py` arrived with the sync to
 blueprint-harness 0652b27 and was timed alone as
 `discover -s .claude/scripts -p test_sync_pr.py`, because this script stops a
-module with no ceiling of its own at `KILL_FACTOR` times `DEFAULT_CEILING`.
+module with no ceiling of its own at `KILL_FACTOR` times `DEFAULT_CEILING`. The
+four modules the sync to blueprint-harness 5cc23b5 added were timed by this
+script on that sync's branch, and their rows landed before it.
 
 **Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
 owns the rule). Every CI job that runs Python pins 3.12, and a
