@@ -1,5 +1,5 @@
 {
-  "harness_commit": "9f63bd2825173e72a38e09a9aa717fba73af8286",
+  "harness_commit": "5ab509b3039216de70e8c264b81d82cd4342a78e",
   "files": {
     ".claude/agents/branch-reviewer.md": "cbdcb74b32ca6d000b697d98396c86339c5feb271190d34be42f9eb98c1c8388",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -15,7 +15,7 @@
     ".claude/commands/style-pass.md": "f92088c139bcf7e240f659e5051af966d7fc5d630cfb03b0cf8f3916a011455d",
     ".claude/commands/team.md": "bd49e736abd8a3922543733e88920a624d9dfa722572e39af693b7a8f201a2f6",
     ".claude/hooks/guard-edit-target.py": "228e0a44142267f57b28eb09d4e8d50649d2ffec397a0ecc0f6bdab1472d3a07",
-    ".claude/hooks/guard-git-argv.py": "22671b5776ed4a9d5cff4326da81461fd33a9ad55d0890b8a4d1726a3dc2ada8",
+    ".claude/hooks/guard-git-argv.py": "5856cdd70c74d365ba69ea87aa51fa0241aceb85cf8fc3b51aff151fd9f29771",
     ".claude/hooks/guard-index-argv.py": "89ee78f9531539f42ad369e16a60ba0954aa090937beb61eea74dea8df741441",
     ".claude/hooks/guard-sed-crlf.py": "4c1084541314ad1a4b866fe3eb904af38c0459005dc92489b80dcf88bbb10951",
     ".claude/hooks/hint-bound.sh": "4b66c9c0cd90c38a9d0230dd32a5f5e264adfe58769cfeba6c9a41d75e950f45",
@@ -69,7 +69,7 @@
     ".claude/scripts/test_gh_issue_harness.py": "c2fcd1798275d9d3259d68ed0b4862f24e5545352146cb01c711343c1a4502b8",
     ".claude/scripts/test_gh_issue_suppresses.py": "3c9a840d5209a72009be4fa22d9e2b5dc77c2180c50c2ead5eb46e9a3cfa943d",
     ".claude/scripts/test_gh_label_ensure.py": "3fe78cca195f326541a15d8a9c60713468c31ffc86dc3d8dd2572d357437f44c",
-    ".claude/scripts/test_git_argv_guard.py": "c0a678334f42b714d353185da1a4595b69cd4f71608cf198d10a691c687ebe71",
+    ".claude/scripts/test_git_argv_guard.py": "e451f2468996d77fcea1dd73fe4fa04cd4318e3ad11bcfcb95dd45b4015ffdd7",
     ".claude/scripts/test_git_branch_drop.py": "8ce81bf87ffc35111a28e193ff65735586aba298a21be92625e5a31be87af2af",
     ".claude/scripts/test_git_pr_trailer_helpers.py": "51d5987de7d6f43cf3b2e6af8b436d559cd9a2be807f5fa7f053f95408d783d8",
     ".claude/scripts/test_git_push_force.py": "2a7879bbd0c014c56fa810f18897b742609de58776b79702c98022f5a76dd585",
@@ -118,9 +118,9 @@
     ".github/comment-gate/README.md": "c40f9b55342aaeb4bdb4b2d0c32bbc474a9f37137e60c389e00dfc927952b782",
     ".github/comment-gate/comment_gate.py": "f904ad716f3281bb3c52a1085d3785562fea7d8b6c5136d164340436d3a8b07e",
     ".github/comment-gate/test_comment_gate.py": "2610d9f647132bd8cb2690d9e71d0fbba3147da0e9dcc4d4fb3eb3d9c7f3904d",
-    ".github/commit-gate/README.md": "ead1f7f2f212431b34c99bbca9a8fb31ea53883343628aaf9542a06ced1dfb50",
+    ".github/commit-gate/README.md": "74958c0d69ece60e2b53a67fb03e0c2f15b966a64168f3ff03119016562f7637",
     ".github/commit-gate/commit_gate.py": "4a7d8b14dc702e48b0931872af0153a725c01c79bb0324888109ac979a060fbc",
-    ".github/commit-gate/test_commit_gate.py": "192efc00abd96555d9a6e34723852d6b0227dd270426f42dda0353bf7a4c98c4",
+    ".github/commit-gate/test_commit_gate.py": "eafab74dbeba6fa1fce02eca5b70416daacb4c729c66efe0c120734940cbe1ee",
     ".github/harness-drift/README.md": "e1aa95bfef83f5cfed1fd22a2f1e3d2b17c8aced67d136c388b9aa45d531a8fe",
     ".github/harness-drift/drift_gate.py": "8a3390c6a975dad142ff02f157ded958c233e09ba5f06b72c8bf765051416363",
     ".github/harness-drift/test_drift_gate.py": "9b98638afd28b09a6edad9df04488cf839e6f72dfa20b6feebfcbe09fc858ed8",
@@ -137,7 +137,7 @@
     ".github/workflow-lint/broken-reference.yml": "1c277e1b5b960ed6d05707695759ae3ab658b667a587a06194d29ac6601217d2",
     ".github/workflows/closure-gate.yml": "c16ea96c62464a7b849922806a2b14d8a704865cee9b662a89d5d85bae46cd59",
     ".github/workflows/comment-gate.yml": "1bee768de62ee6b425cf7d6cb7c8499d68d1a9191b9e34af2e9687362457f819",
-    ".github/workflows/commit-gate.yml": "12062b9627f5539236df9023c8d6073e9d3dae3995f6de3b032fcb76336f5d76",
+    ".github/workflows/commit-gate.yml": "8e8e63971fca2966a96cadd8da259dd2aa592559092bba0f7db0481ce4994b51",
     ".github/workflows/harness-drift.yml": "7f4c08c47283a15629b1f9374f9e0e9a7e46ea07f5c10843e4224db6fb0d3cce",
     ".harness/agent-rules.md": "fe44464e7945a2f8b354e8c302eaac1dfa30a041aa317f00863360c862997796",
     ".harness/render.py": "f1f986b939d946627e8db682ab8be54ade13d936d8cc148eac150521b1a63c54",
@@ -151,6 +151,6 @@
     "docs/harness-boundaries.md": "7363de1845104d52eca25b6bbe530f7a22f8b29983a21ad6018400f57867c145",
     "docs/harness/pitfalls.md": "20a90ff61f6a0c8d99b4db03d9c3bcc211bb3124f6f7d695aec6c0828594dd38",
     "docs/harness/token-rules.md": "cd83a078de693e468130242357b1eb6994df7e5beb0fad5c5dff510c6e4c7300",
-    "docs/harness/working-rules.md": "1dee9a2f8c093644cf07c76aaf7ea3832b7206b0b0653b8584819b3e60eea368"
+    "docs/harness/working-rules.md": "e90b7d8768755ea915ee124915d739290ff4e06a8326713b789557956345ce29"
   }
 }
