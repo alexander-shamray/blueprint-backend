@@ -6,6 +6,7 @@ import io
 import json
 import subprocess
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -18,9 +19,24 @@ HEAD_NAME = f"chore/harness-sync-{NEW_H[:7]}"
 RUN_URL = "https://github.com/alexander-shamray/blueprint-harness/actions/runs/123"
 BODY = f"A sync.\n\n{sync_pr.FOOTER}, in run {RUN_URL}.\n"
 SEED = ("-c", "user.name=Seed", "-c", "user.email=seed@example.invalid", "-c", "commit.gpgsign=false")
-CONFIG = {"repo": "o/r", "task_list": ".todo/r.md", "local": ["docs/local.md"]}
+# A deny only the target's config adds, so a render that leaves the config out differs from the expected one.
+CONFIG = {"repo": "o/r", "task_list": ".todo/r.md", "local": ["docs/local.md"],
+          "settings": {"deny": ["Bash(target-only:*)"]}}
 SETTINGS_OLD = '{"old": true}\n'
-SETTINGS_NEW = '{"new": true}\n'
+# The renderer a target holds, so the proof runs the code a real sync carries, never a stand-in.
+RENDER_TEXT = (Path(__file__).resolve().parents[2] / ".harness" / "render.py").read_text(encoding="utf-8")
+BASE_TEXT = json.dumps({"permissions": {"allow": ["Bash(ls:*)"], "deny": ["Bash(rm:*)"]}, "hooks": {}}) + "\n"
+HEAD_PATHS = ["docs/a.md", "docs/b.md", ".claude/settings.json", ".harness/render.py", ".harness/settings.base.json"]
+
+
+def rendered(base_text=BASE_TEXT, config=CONFIG):
+    module = types.ModuleType("_expected_render")
+    exec(compile(RENDER_TEXT, "render.py", "exec"), module.__dict__)
+    cfg = types.SimpleNamespace(settings=config.get("settings", {}))
+    return module.dump_settings(module.render_settings(json.loads(base_text), cfg))
+
+
+SETTINGS_NEW = rendered()
 MAIN_FILES = {
     "README.md": "target\n",
     "docs/local.md": "first\nsee docs/c.md for the old rule\n",
@@ -31,6 +47,8 @@ MAIN_FILES = {
 PAYLOAD = {
     "docs/a.md": "A new\n",
     "docs/b.md": "BODY-OF-B\n",
+    ".harness/render.py": RENDER_TEXT,
+    ".harness/settings.base.json": BASE_TEXT,
 }
 
 
@@ -101,9 +119,7 @@ class SyncCase(unittest.TestCase):
         git(self.root, "push", "-q", "origin", "main")
         self.main = git(self.root, "rev-parse", "HEAD").strip()
         self.head_files = {
-            "docs/a.md": PAYLOAD["docs/a.md"], "docs/b.md": PAYLOAD["docs/b.md"],
-            ".claude/settings.json": SETTINGS_NEW,
-            ".harness/manifest.json": manifest(NEW_H, ["docs/a.md", "docs/b.md", ".claude/settings.json"]),
+            **PAYLOAD, ".claude/settings.json": SETTINGS_NEW, ".harness/manifest.json": manifest(NEW_H, HEAD_PATHS),
         }
         self.deleted = ["docs/c.md"]
         self.gh = FakeGh(self.root)
@@ -224,13 +240,13 @@ class VerifyTests(SyncCase):
 
     def test_settings_json_is_not_compared_with_the_payload(self):
         # The payload holds no settings.json (its template is .harness/settings.base.json), so this manifest path
-        # has nothing to match and the head's copy differs freely; the drift gate renders the real one. Check 4
-        # still counts it as a manifest path: changed but unlisted, it is outside the manifest.
+        # has nothing to match: it is compared with the render, not the payload. Check 4 still counts it as a
+        # manifest path: changed but no longer listed, it may only have been deleted.
         self.start()
         self.assertEqual(0, self.cli("verify", "7")[0])
-        self.head_files[".harness/manifest.json"] = manifest(NEW_H, ["docs/a.md", "docs/b.md"])
+        self.head_files[".harness/manifest.json"] = manifest(NEW_H, [p for p in HEAD_PATHS if "settings.json" not in p])
         self.start()
-        self.refused(".claude/settings.json")
+        self.refused(".claude/settings.json left the manifest but was changed, not deleted")
 
     def test_a_changed_path_with_a_newline_prints_on_one_line(self):
         # Windows cannot hold such a name, but git can: the head's author chooses the text of a changed path.
@@ -347,6 +363,191 @@ class VerifyTests(SyncCase):
                 self.refused("manifest path")
 
 
+class RenderedSettingsTests(SyncCase):
+    """The head's settings.json is what an executor in its worktree loads, before CI has judged it."""
+
+    def marker_renderer(self):
+        """A renderer that leaves a file when it runs, so a case can show it was never executed."""
+        self.marker = self.root / "executed"
+        return f"open({self.marker.as_posix()!r}, 'w').close()\n"
+
+    def assert_not_executed(self):
+        self.assertFalse(self.marker.exists(), "an unproved renderer ran")
+
+    def test_a_forged_settings_that_drops_a_deny_is_refused(self):
+        forged = json.loads(SETTINGS_NEW)
+        forged["permissions"]["deny"] = ["Bash(target-only:*)"]
+        self.head_files[".claude/settings.json"] = json.dumps(forged, indent=2) + "\n"
+        self.start()
+        out = self.refused(".claude/settings.json is not what .harness/render.py renders")
+        self.assertEqual(1, len(out.splitlines()), out)
+
+    def test_a_forged_settings_that_adds_a_session_start_hook_is_refused(self):
+        forged = json.loads(SETTINGS_NEW)
+        forged["hooks"] = {"SessionStart": [{"hooks": [{"type": "command", "command": "evil"}]}]}
+        self.head_files[".claude/settings.json"] = json.dumps(forged, indent=2) + "\n"
+        self.start()
+        self.refused(".claude/settings.json is not what .harness/render.py renders")
+
+    def test_the_render_takes_the_base_commits_config(self):
+        self.head_files[".claude/settings.json"] = rendered(config={})
+        self.start()
+        self.refused(".claude/settings.json is not what .harness/render.py renders")
+
+    def test_a_head_deleting_settings_json_is_refused(self):
+        del self.head_files[".claude/settings.json"]
+        self.deleted.append(".claude/settings.json")
+        self.start()
+        self.refused(".claude/settings.json is missing from the head")
+        # The old manifest lists it, so a head dropping it from its own would otherwise pass as a deletion.
+        self.head_files[".harness/manifest.json"] = manifest(NEW_H, [p for p in HEAD_PATHS if "settings.json" not in p])
+        self.start()
+        self.refused(".claude/settings.json is missing from the head")
+
+    def test_a_crlf_settings_blob_is_the_same_settings(self):
+        self.start()
+
+        # The runner reads text, which folds line endings already, so the blob is handed over with its CRLF intact.
+        def crlf(argv, cwd=None, timeout=60):
+            code, out, err = self.gh(argv, cwd, timeout)
+            whole = argv[:2] == ["git", "show"] and argv[2].endswith(":.claude/settings.json")
+            return code, out.replace("\n", "\r\n") if whole else out, err
+
+        with mock.patch.object(sync_pr, "run", crlf):
+            self.assertEqual((0, f"verified 7 {NEW_H}\n", ""), self.cli("verify", "7"))
+
+    def test_a_renderer_that_is_not_the_payloads_is_never_executed(self):
+        self.head_files[".harness/render.py"] = self.marker_renderer()
+        self.start()
+        self.refused(".claude/settings.json not checked: .harness/render.py is not the manifest's and the payload's")
+        self.assert_not_executed()
+
+    def test_a_base_that_is_not_the_payloads_is_not_trusted(self):
+        forged = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}, "hooks": {}}) + "\n"
+        self.head_files[".harness/settings.base.json"] = forged
+        self.head_files[".claude/settings.json"] = rendered(base_text=forged)
+        self.start()
+        self.refused(".claude/settings.json not checked: .harness/settings.base.json is not the manifest's")
+
+    def test_a_renderer_the_manifest_does_not_list_is_never_executed(self):
+        text = self.marker_renderer()
+        self.head_files[".harness/render.py"] = text
+        self.head_files[".harness/manifest.json"] = manifest(NEW_H, [p for p in HEAD_PATHS if "render" not in p])
+        self.start(payload={**PAYLOAD, ".harness/render.py": text})
+        self.refused(".claude/settings.json not checked: .harness/render.py is not the manifest's and the payload's")
+        self.assert_not_executed()
+
+    def test_a_renderer_at_a_commit_off_the_harness_main_is_never_executed(self):
+        # GitHub serves a fork's commit by oid through the parent, so a matching tree there proves nothing.
+        text = self.marker_renderer()
+        self.head_files[".harness/render.py"] = text
+        self.gh.compare = {"status": "ahead", "commits": []}
+        self.start(payload={**PAYLOAD, ".harness/render.py": text})
+        self.refused(".claude/settings.json not checked: the payload is not proved")
+        self.assert_not_executed()
+
+    def test_an_unread_payload_tree_is_a_failure_line_and_runs_nothing(self):
+        text = self.marker_renderer()
+        self.head_files[".harness/render.py"] = text
+        self.start(payload={**PAYLOAD, ".harness/render.py": text})
+        self.gh.fail = "/git/trees/"
+        self.refused(".claude/settings.json not checked: the payload is not proved")
+        self.assert_not_executed()
+
+    def test_a_renderer_that_raises_is_a_failure_line(self):
+        text = "raise ValueError('the renderer failed')\n"
+        self.head_files[".harness/render.py"] = text
+        self.start(payload={**PAYLOAD, ".harness/render.py": text})
+        out = self.refused("cannot render .claude/settings.json: ValueError('the renderer failed')")
+        self.assertEqual(1, len(out.splitlines()), out)
+
+    def test_a_base_the_renderer_refuses_is_a_failure_line(self):
+        text = '{"permissions": {"deny": ["Write(x)"]}}\n'
+        self.head_files[".harness/settings.base.json"] = text
+        self.start(payload={**PAYLOAD, ".harness/settings.base.json": text})
+        self.refused("cannot render .claude/settings.json: RenderError(")
+
+    def test_the_renderer_is_read_from_the_head_never_the_working_tree(self):
+        planted = self.marker_renderer()
+        self.start()
+        self.write({".harness/render.py": planted})
+        self.assertEqual(0, self.cli("verify", "7")[0])
+        self.assert_not_executed()
+
+
+class PinnedHeadTests(SyncCase):
+    """`--head <oid>` binds a verify or a review to the head a session checked out, not to origin's tip now."""
+
+    def out_path(self):
+        return str(self.root / "artifacts/review/sync-7-r1.diff")
+
+    def commands(self, oid):
+        return (("verify", "7", "--head", oid), ("review-diff", "7", self.out_path(), "--head", oid))
+
+    def moved_on_origin(self):
+        """Push another commit to the sync branch while the listing still names the first."""
+        self.head_files["docs/b.md"] = PAYLOAD["docs/b.md"] + "moved\n"
+        return self.publish_head()
+
+    def test_the_pinned_head_verifies_and_reviews(self):
+        oid = self.start()
+        self.assertEqual((0, f"verified 7 {NEW_H}\n", ""), self.cli("verify", "7", "--head", oid))
+        code, out, err = self.cli("review-diff", "7", self.out_path(), "--head", oid)
+        self.assertEqual(0, code, out + err)
+        self.assertIn(oid, Path(self.out_path()).read_text(encoding="utf-8"))
+
+    def test_a_listing_that_names_another_head_is_refused(self):
+        self.start()
+        for argv in self.commands("c" * 40):
+            with self.subTest(argv=argv[0]):
+                code, out, err = self.cli(*argv)
+                self.assertEqual(1, code, out + err)
+                self.assertIn("#7: the listed head", out)
+                self.assertIn("is not the pinned oid " + "c" * 40, out)
+        self.assertFalse(Path(self.out_path()).exists())
+
+    def test_a_branch_that_moved_after_the_pin_is_refused_though_the_listing_is_stale(self):
+        pinned = self.start()
+        moved = self.moved_on_origin()
+        self.assertNotEqual(pinned, moved)
+        # Without the pin the listing still agrees with the first head and the fetched tip is refused as moved.
+        self.refused("is not the listed oid")
+        for argv in self.commands(moved):
+            with self.subTest(argv=argv[0], pin="the new tip"):
+                self.assertIn("is not the pinned oid", self.cli(*argv)[1])
+        for argv in self.commands(pinned):
+            with self.subTest(argv=argv[0], pin="the first head"):
+                code, out, err = self.cli(*argv)
+                self.assertEqual(1, code, out + err)
+                self.assertIn(f"the fetched head {moved} is not the pinned oid {pinned}", out)
+        self.assertFalse(Path(self.out_path()).exists())
+
+    def test_a_pin_other_than_the_agreeing_listing_and_fetch_is_refused(self):
+        self.start()
+        moved = self.moved_on_origin()
+        self.gh.prs[0]["headRefOid"] = moved
+        for argv in self.commands("d" * 40):
+            with self.subTest(argv=argv[0]):
+                self.assertEqual(1, self.cli(*argv)[0])
+        # The listing and the fetch agree on `moved`, so a pin on it passes the pin; its edited file does not verify.
+        out = self.cli("verify", "7", "--head", moved)[1]
+        self.assertNotIn("pinned oid", out)
+        self.assertIn("docs/b.md", out)
+
+    def test_a_pin_that_is_not_40_lowercase_hex_is_a_refusal_with_nothing_read(self):
+        self.start()
+        for bad in ("", "abc", "A" * 40, "g" * 40, "a" * 41, "a" * 39, "HEAD", "-f", "a" * 40 + "\n"):
+            for argv in self.commands(bad):
+                with self.subTest(argv=argv[0], pin=bad):
+                    self.assertEqual(2, self.cli(*argv)[0])
+        self.assertEqual([], self.gh.calls)
+        self.assertFalse(Path(self.out_path()).exists())
+
+    def test_without_the_pin_nothing_changes(self):
+        self.start()
+        self.assertEqual((0, f"verified 7 {NEW_H}\n", ""), self.cli("verify", "7"))
+
+
 class LocalPathTests(SyncCase):
     def test_a_changed_local_path_is_refused(self):
         self.head_files["docs/local.md"] = "overwritten by a forged sync\n"
@@ -447,6 +648,37 @@ class ReviewDiffTests(SyncCase):
         self.assertEqual(Path(self.out_path()), Path(out.strip()))
         return Path(out.strip()).read_text(encoding="utf-8")
 
+    def test_a_managed_file_the_sync_also_deletes_is_not_a_local_citation(self):
+        # docs/d.md goes with docs/c.md and names it: a local file would be the target's to fix, this one is not.
+        self.write({"docs/d.md": "see docs/c.md\n",
+                    ".harness/manifest.json": manifest(OLD_H, ["docs/a.md", "docs/c.md", "docs/d.md",
+                                                               ".claude/settings.json"])})
+        git(self.root, "add", "-A")
+        git(self.root, *SEED, "commit", "-q", "-m", "a second managed file")
+        git(self.root, "push", "-q", "origin", "main")
+        self.main = git(self.root, "rev-parse", "HEAD").strip()
+        self.deleted = ["docs/c.md", "docs/d.md"]
+        self.start()
+        code, out, err = self.cli("review-diff", "7", self.out_path())
+        self.assertEqual(0, code, out + err)
+        text = Path(self.out_path()).read_text(encoding="utf-8")
+        self.assertIn("docs/local.md:2: see docs/c.md for the old rule", text)
+        self.assertNotIn("docs/d.md:1", text)
+
+    def test_a_citation_main_has_since_removed_is_not_listed(self):
+        # A sync never changes a local file, so main's tree is the true one: the fix that removed the citing line
+        # is on main and not on the head, and a re-take would otherwise raise the same finding for ever.
+        self.start()
+        self.write({"docs/local.md": "first\nthe fix removed the citation\n"})
+        git(self.root, "add", "-A")
+        git(self.root, *SEED, "commit", "-q", "-m", "fix the local line")
+        git(self.root, "push", "-q", "origin", "main")
+        code, out, err = self.cli("review-diff", "7", self.out_path())
+        self.assertEqual(0, code, out + err)
+        text = Path(self.out_path()).read_text(encoding="utf-8")
+        self.assertIn("- docs/c.md", text)
+        self.assertNotIn("docs/local.md:2", text)
+
     def test_review_diff_names_a_local_file_citing_a_deleted_path(self):
         text = self.run_diff()
         self.assertIn("docs/local.md:2: see docs/c.md for the old rule", text)
@@ -463,7 +695,7 @@ class ReviewDiffTests(SyncCase):
             self.assertNotIn(content, text)
         # The one managed file whose content is wanted: the rendered settings.
         self.assertIn('-{"old": true}', text)
-        self.assertIn('+{"new": true}', text)
+        self.assertIn('+  "permissions": {', text)
 
     def test_review_diff_survives_an_odd_compare_and_counts_what_it_leaves_out(self):
         self.gh.compare_old = {"status": "ahead", "total_commits": 253, "commits": [

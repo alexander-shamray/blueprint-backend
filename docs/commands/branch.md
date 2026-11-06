@@ -38,9 +38,9 @@ line fails the fork rather than the merge gate.
 **Anything that resolves upward from the worktree reaches the main checkout.**
 Claude Code reads every ancestor's `CLAUDE.md`, so a session in a worktree also
 reads `main`'s copy, and a branch that edits `CLAUDE.md` has two versions in
-context: the worktree's is the one the branch changes. MSBuild's
-`Directory.*.props`, `global.json` and the root-marked `.editorconfig` resolve
-in the worktree first and stop there. **Skills resolve the other way:** a
+context: the worktree's is the one the branch changes. A build tool's own
+root files and the root-marked `.editorconfig` resolve in the worktree first
+and stop there. **Skills resolve the other way:** a
 session in the main checkout also discovers each live worktree's
 `.claude/skills/`, so a branch that edits a skill offers that session both
 copies, the branch's under the worktree's path.
@@ -138,8 +138,8 @@ the diff says what it is.
 
 **A mixed tree takes the type of the change that carries the argument, not
 the one with the most files.** `chore/repo-guidance-and-explicit-types`
-touched `CLAUDE.md`, `.editorconfig` and nine chapters, and is `chore/`
-because the guidance change was the point and the chapter edits followed
+touched `CLAUDE.md`, `.editorconfig` and nine documents, and is `chore/`
+because the guidance change was the point and the document edits followed
 from it.
 
 Two genuinely unrelated changes cannot both be in the name. Say so, name the
@@ -153,7 +153,7 @@ what the branch is for rather than inventing a name.
 ## Step 3
 
 The type is the one the commit will carry, so the branch and its commits
-agree. A delivery-plan PR's name derives from its title so the branch, the
+agree. A roadmap PR's name derives from its title so the branch, the
 commit and the plan all read the same.
 
 ## Step 4
@@ -236,7 +236,7 @@ Then switch the session into it with **`EnterWorktree`**, passing the new
 directory as `path` — the worktree exists and `git worktree list` reports
 it, which is what that form of the tool requires. When both steps succeed,
 everything after this command — `/commit`, `/pr`, the review,
-`dotnet test` — runs there. The two paragraphs below are what happens when
+the test run — runs there. The two paragraphs below are what happens when
 either does not.
 
 **If `.claude/worktrees/` is not writable, `git worktree add` fails and the

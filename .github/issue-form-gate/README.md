@@ -7,10 +7,8 @@ access.** The kind and the area are owned by
 `docs/harness/working-rules.md`'s *Issues and the task list*, and the
 severity by
 [`gh-issue-create.sh`](../../.claude/scripts/gh-issue-create.sh)'s closed
-`case`. The gate reads the kind and the area from the copy in the file
-`--contract` names, by default backend's change contract, whose bullet
-opens `VOCABULARY_BULLET`; it does not yet read working-rules' own, so in
-a target that holds no such contract it fails rather than judges.
+`case`. The gate reads the kind and the area from that section's bullet,
+which opens `VOCABULARY_BULLET`; `--rules` names another file for a test.
 
 ## What it reads
 
@@ -24,7 +22,7 @@ a target that holds no such contract it fails rather than judges.
   does a form with a top-level `labels:` key, which would attach its labels
   to every issue the form opens whatever the answers said.
 - The form's kind against the kinds that bullet lists after `kind is`, its
-  area against the labels the bullet's `Area is` sentence names, and its
+  area against the labels the bullet's `area is` sentence names, and its
   severity against the helper's `case "$severity"` arm; as sets, with a
   repeated option refused. The sentence's trees are paths, which are not
   read as labels.

@@ -5,6 +5,7 @@ re-implementing are `review_helpers.py`'s.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -228,6 +229,12 @@ class LabelHelperHasNoFreeParameter(unittest.TestCase):
                       "harness", "code", "documentation", "test"):
             with self.subTest(label=label):
                 self.assertRegex(text, rf"(?m)^\s*{label}\)\s+colour=")
+
+    def test_every_description_fits_the_limit_github_enforces(self):
+        # The stub accepts any text; GitHub rejects a create over 100 characters, so the helper exits 3 and nothing files.
+        descriptions = re.findall(r'description="([^"]*)"', self.HELPER.read_text(encoding="utf-8"))
+        self.assertTrue(descriptions, "the description reader found nothing")
+        self.assertEqual([], [text for text in descriptions if len(text) > 100])
 
 
 

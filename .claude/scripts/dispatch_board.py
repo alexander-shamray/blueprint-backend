@@ -39,7 +39,9 @@ ISSUE_REF = re.compile(
     r"|\b(\d{2,6})'s\b", re.IGNORECASE)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 NUMBER = re.compile(r"(?<![\w-])#?(\d{2,6})(?![\w-])")
-GROUP_ID = re.compile(r"\b[A-Z]\d+\b")
+# A task-list group. A sync's is a run's alone, since no row ever holds one, so `tasks` takes only this.
+ROW_GROUP = re.compile(r"\b[A-Z]\d+\b")
+GROUP_ID = re.compile(rf"{ROW_GROUP.pattern}|\bsync-[1-9][0-9]*\b")
 SEPARATOR = re.compile(r"\|[\s:|-]+\|")
 OWED = "owed (not filed)"
 BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/()-]*")
@@ -179,7 +181,7 @@ def _row(section, line):
         wave, group = int(cells[WAVE]), cells[GROUP]
     elif section == "In progress":
         # The group it carried in Remaining, kept so a conflicts cell naming it still sees it; a dash is none.
-        if cells[0] != "—" and not re.fullmatch(GROUP_ID.pattern, cells[0]):
+        if cells[0] != "—" and not re.fullmatch(ROW_GROUP.pattern, cells[0]):
             raise Refusal(f"{key} has Group {cells[0]!r}, not a group id or a dash")
         group = None if cells[0] == "—" else cells[0]
     return Row(section, wave, group, number, key, cells, line)
@@ -284,7 +286,7 @@ def group_claim(group, bodies):
     own = {r.number for r in group.rows}
     for row in group.rows:
         paths |= extract_paths(f"{row.cells[TASK]} {row.cells[CONFLICTS]}")
-        named |= set(GROUP_ID.findall(row.cells[CONFLICTS])) - {group.id}
+        named |= set(ROW_GROUP.findall(row.cells[CONFLICTS])) - {group.id}
         issues |= _numbers(row.cells[CONFLICTS]) - own
         if row.number is not None:
             if row.number in bodies:
@@ -843,8 +845,9 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
     open_from = open_source or (lambda: open_issues(root))
     branch_from = branch_source or (lambda branch: branch_paths(root, branch))
     try:
-        # A group names files under the run, so only a group letter and number may reach a path.
-        if getattr(args, "group", None) is not None and not re.fullmatch(GROUP_ID.pattern, args.group):
+        # A group names files under the run, so only a group letter and number, or a sync's, may reach a path.
+        known = ROW_GROUP if args.command == "tasks" else GROUP_ID
+        if getattr(args, "group", None) is not None and not re.fullmatch(known.pattern, args.group):
             raise Refusal(f"{args.group!r} is not a group id")
         try:
             today = date.fromisoformat(args.today) if getattr(args, "today", None) else date.today()

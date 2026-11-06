@@ -33,6 +33,12 @@ GRANTS_BEFORE = (
     "Bash(git worktree prune:*)", "Bash(bash .claude/scripts/pr-locality.sh:*)",
     "Bash(bash .claude/scripts/gh-issue-create.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
 )
+DROP_GRANTS = ("Bash(bash .claude/scripts/git-branch-drop.sh:*)",)
+# The sync row's grants (test_ship_sync.py): a dispatched sync's reads and its one filing must be named by the
+# run's own grants, since an ungranted command is the auto classifier's to refuse.
+SYNC_GRANTS = ("Bash(py -3.12 .claude/scripts/sync_pr.py:*)", "Bash(bash .claude/scripts/git-worktree-sync.sh:*)",
+               "Bash(bash .claude/scripts/gh-issue-harness.sh:*)", "Bash(py -3.12 -m unittest discover:*)",
+               "Bash(bash .claude/scripts/gh-issue-list.sh)")
 BRANCH_GRANTS_BEFORE = (
     "Read", "Grep", "EnterWorktree", "Bash(git status:*)", "Bash(git diff:*)", "Bash(git branch --list:*)",
     "Bash(git branch --show-current)", "Bash(git branch -a)", "Bash(git log:*)", "Bash(git fetch origin:*)",
@@ -135,13 +141,14 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
         self.assertIn("only lines 1 and 8 run", skip)
         self.assertIn("no ExitWorktree", skip)
         self.assertIn("no git-worktree-remove.sh", skip)
-        # The numbers name lines of the eight-line block, so the block is read for them.
+        # The numbers name lines of the nine-line block, so the block is read for them.
         numbered = {m.group(2): m.group(1) for m in re.finditer(r"^(.*)# (\d)\.(?: |$)", step, re.MULTILINE)}
-        self.assertEqual(sorted(numbered), [str(n) for n in range(1, 9)])
+        self.assertEqual(sorted(numbered), [str(n) for n in range(1, 10)])
         self.assertIn("ExitWorktree", numbered["2"])
         self.assertIn("git-worktree-remove.sh", numbered["7"])
         self.assertIn("pr-state.sh", numbered["1"], "line 1, the verification, is kept")
         self.assertIn("git worktree prune", numbered["8"], "line 8, the prune, is kept")
+        self.assertIn("git-branch-drop.sh", numbered["9"], "line 9, the drop, is the dispatcher's once the run skips it")
 
     def test_step_0_leaves_a_finished_worktree_to_the_dispatcher(self):
         # A relaunch onto a branch that merged meets step 0's teardown before step 6's skip.
@@ -234,7 +241,7 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
         self.assertEqual(len(rows), 7)
 
     def test_the_grants_did_not_change(self):
-        self.assertEqual(grants(SHIP), GRANTS_BEFORE)
+        self.assertEqual(grants(SHIP), GRANTS_BEFORE + SYNC_GRANTS + DROP_GRANTS)
         self.assertEqual(grants(BRANCH), BRANCH_GRANTS_BEFORE)
         self.assertIn("Write", GRANTS_BEFORE, "the result is written with a tool the command already holds")
 

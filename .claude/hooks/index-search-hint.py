@@ -69,7 +69,7 @@ VALUED = {"-e", "-f", "-A", "-B", "-C", "-m", "-g", "-t", "-T", "-M",
           "--include", "--exclude", "--exclude-dir",
           "--regexp", "--file", "--context", "--before-context", "--after-context"}
 
-# The prose half of the tree is a grep question: which chapter owns a rule is
+# The prose half of the tree is a grep question: which section owns a rule is
 # not one the index answers, as the skill says.
 PROSE = re.compile(r"(?:^|[\\/])docs(?:[\\/]|$)|\.md$|^md$|^\*\.md$|^markdown$", re.IGNORECASE)
 

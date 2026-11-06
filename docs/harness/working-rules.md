@@ -199,7 +199,8 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   such as a ceiling a target holds on a command's bytes: measure a grown
   file against it before the harness pull request.
 - **A sync pull request is merged from its own branch**:
-  `gh-pr-merge.sh` binds to the branch checked out, so add a worktree
-  tracking the sync branch, merge from there, and remove it afterwards.
+  `gh-pr-merge.sh` binds to the branch checked out, so `/ship sync #<n>`
+  merges from a worktree on it (`/ship`, *A sync pull request is reviewed
+  once, for this target*) and removes it afterwards.
   The target merges by rebase, so a merged tip is checked against the
   pull request's `headRefOid`, never with `merge-base --is-ancestor`.

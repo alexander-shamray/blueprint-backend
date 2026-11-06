@@ -27,13 +27,13 @@ case "$area" in
 esac
 """
 
-CONTRACT = """\
-- **The issue vocabulary is wider than the label helper**: kind is
-  `security`, `bug`, `test-gap` or `documentation`, and the helper does
-  not create the last. Area is the tree: `harness` for `.claude/`,
+VOCABULARY = """\
+- **The issue vocabulary**: kind is
+  `security`, `bug`, `test-gap` or `documentation`; area is the tree:
+  `harness` for `.claude/`, its prose included,
   `documentation` for prose and `code` for `src/`, with `test` beside one.
   Nothing after it, `design`, is read.
-- **A reply is not a resolution.** Kind is `nothing` here.
+- **A reply is not a resolution.** Kind is `nothing` here, area is `none`.
 """
 
 LABELS = {"security", "bug", "test-gap", "documentation", "critical", "high", "medium", "low",
@@ -59,9 +59,9 @@ class IssueFormGateTests(unittest.TestCase):
         self.templates = root / "ISSUE_TEMPLATE"
         self.templates.mkdir()
         self.helper = root / "gh-issue-create.sh"
-        self.contract = root / "change-locality.md"
+        self.rules = root / "working-rules.md"
         self.helper.write_text(HELPER, encoding="utf-8")
-        self.contract.write_text(CONTRACT, encoding="utf-8")
+        self.rules.write_text(VOCABULARY, encoding="utf-8")
         self.write("config.yml", "blank_issues_enabled: false\n")
         self.write("finding.yml", form())
 
@@ -69,7 +69,7 @@ class IssueFormGateTests(unittest.TestCase):
         (self.templates / name).write_text(text, encoding="utf-8")
 
     def check(self, labels: set[str] = LABELS) -> list[str]:
-        return gate.check(self.templates, self.helper, self.contract, labels)
+        return gate.check(self.templates, self.helper, self.rules, labels)
 
     def assert_one(self, needle: str) -> None:
         problems = self.check()
@@ -79,13 +79,13 @@ class IssueFormGateTests(unittest.TestCase):
     def test_a_form_matching_its_owners_passes(self) -> None:
         self.assertEqual([], self.check())
 
-    def test_a_kind_the_contract_lacks_fails(self) -> None:
+    def test_a_kind_the_rules_lack_fails(self) -> None:
         self.write("finding.yml", form(kind="bug security test-gap documentation enhancement"))
         problems = self.check(LABELS | {"enhancement"})
         self.assertEqual(1, len(problems), problems)
         self.assertIn("extra ['enhancement']", problems[0])
 
-    def test_a_kind_the_contract_names_but_the_form_drops_fails(self) -> None:
+    def test_a_kind_the_rules_name_but_the_form_drops_fails(self) -> None:
         self.write("finding.yml", form(kind="bug security test-gap"))
         self.assert_one("missing ['documentation']")
 
@@ -103,35 +103,35 @@ class IssueFormGateTests(unittest.TestCase):
         self.write("finding.yml", form(area="harness code documentation test design"))
         problems = self.check(LABELS | {"design"})
         self.assertEqual(1, len(problems), problems)
-        self.assertIn("finding.yml's area differs from change-locality.md section 6", problems[0])
+        self.assertIn("finding.yml's area differs from working-rules.md", problems[0])
         self.assertIn("extra ['design']", problems[0])
 
-    def test_an_area_the_contract_names_but_the_form_drops_fails(self) -> None:
+    def test_an_area_the_rules_name_but_the_form_drops_fails(self) -> None:
         self.write("finding.yml", form(area="harness code documentation"))
         self.assert_one("missing ['test']")
 
     def test_an_area_the_helper_gains_fails(self) -> None:
         self.helper.write_text(HELPER.replace("code,test) ;;", "code,test|design) ;;"), encoding="utf-8")
-        self.assert_one("gh-issue-create.sh's area differs from change-locality.md section 6")
+        self.assert_one("gh-issue-create.sh's area differs from working-rules.md")
 
     def test_an_area_only_the_helper_s_comma_form_names_is_one_the_helper_files(self) -> None:
         # `test` sits in the helper's arm only beside another area, and it is still a word the helper files.
         self.helper.write_text(HELPER.replace("|harness,test|code,test) ;;", ") ;;"), encoding="utf-8")
         self.assert_one("missing ['test']")
 
-    def test_the_contract_area_list_stops_at_its_sentence_and_skips_paths(self) -> None:
-        self.assertEqual(["harness", "documentation", "code", "test"], gate.contract_areas(self.contract))
+    def test_the_area_list_stops_at_its_sentence_and_skips_paths(self) -> None:
+        self.assertEqual(["harness", "documentation", "code", "test"], gate.vocabulary_areas(self.rules))
 
-    def test_a_contract_without_the_area_sentence_is_refused(self) -> None:
-        self.contract.write_text(CONTRACT.replace("Area is", "The area is"), encoding="utf-8")
-        with self.assertRaisesRegex(gate.InputRefused, "no `Area is ...` sentence"):
+    def test_rules_without_the_area_sentence_are_refused(self) -> None:
+        self.rules.write_text(VOCABULARY.replace("area is", "areas are"), encoding="utf-8")
+        with self.assertRaisesRegex(gate.InputRefused, "no `area is ...` sentence"):
             self.check()
 
     def test_a_repeated_option_fails(self) -> None:
         self.write("finding.yml", form(severity="critical high medium low low"))
         self.assert_one("repeats an option")
 
-    def test_a_helper_kind_outside_the_contract_fails(self) -> None:
+    def test_a_helper_kind_outside_the_vocabulary_fails(self) -> None:
         self.helper.write_text(HELPER.replace("security|bug|test-gap", "security|bug|test-gap|chore"),
                                encoding="utf-8")
         self.assert_one("['chore']")
@@ -215,19 +215,19 @@ class IssueFormGateTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.InputRefused, "appears twice"):
             self.check()
 
-    def test_a_contract_without_the_bullet_is_refused(self) -> None:
-        self.contract.write_text("- **Something else**: kind is `bug`.\n", encoding="utf-8")
+    def test_rules_without_the_bullet_are_refused(self) -> None:
+        self.rules.write_text("- **Something else**: kind is `bug`.\n", encoding="utf-8")
         with self.assertRaisesRegex(gate.InputRefused, "no bullet opening"):
             self.check()
 
-    def test_the_contract_list_is_read_across_wrapped_lines(self) -> None:
-        self.assertEqual(["security", "bug", "test-gap", "documentation"], gate.contract_kinds(self.contract))
+    def test_the_kind_list_is_read_across_wrapped_lines(self) -> None:
+        self.assertEqual(["security", "bug", "test-gap", "documentation"], gate.vocabulary_kinds(self.rules))
 
     def test_a_kind_list_in_a_later_bullet_is_not_read(self) -> None:
-        self.contract.write_text("- **The issue vocabulary is wider than the label helper**: see below.\n"
-                                 "- **Another rule**: kind is `chore`.\n", encoding="utf-8")
+        self.rules.write_text("- **The issue vocabulary**: see below.\n"
+                              "- **Another rule**: kind is `chore`.\n", encoding="utf-8")
         with self.assertRaisesRegex(gate.InputRefused, "has no `kind is ...` list"):
-            gate.contract_kinds(self.contract)
+            gate.vocabulary_kinds(self.rules)
 
     def test_a_helper_without_the_arm_is_refused(self) -> None:
         self.helper.write_text("echo nothing\n", encoding="utf-8")
@@ -248,7 +248,7 @@ class IssueFormGateTests(unittest.TestCase):
 
     def main(self, stdin: str) -> int:
         return gate.main(["--templates", str(self.templates), "--helper", str(self.helper),
-                          "--contract", str(self.contract)], stdin=stdin)
+                          "--rules", str(self.rules)], stdin=stdin)
 
 
 class ThisRepositoryTests(unittest.TestCase):
@@ -257,6 +257,20 @@ class ThisRepositoryTests(unittest.TestCase):
     def test_this_repository_s_form_carries_every_governed_dropdown(self) -> None:
         found = gate.dropdowns(gate.DEFAULT_TEMPLATES / "finding.yml")
         self.assertEqual(set(gate.GOVERNED), set(found))
+
+    def test_this_repository_s_owners_are_read(self) -> None:
+        self.assertIn("documentation", gate.vocabulary_kinds(gate.DEFAULT_VOCABULARY))
+        self.assertIn("bug", gate.case_arm(gate.DEFAULT_HELPER, "kind"))
+        self.assertIn("low", gate.case_arm(gate.DEFAULT_HELPER, "severity"))
+        self.assertIn("code,test", gate.case_arm(gate.DEFAULT_HELPER, "area"))
+        self.assertEqual({"harness", "code", "documentation", "test"},
+                         set(gate.vocabulary_areas(gate.DEFAULT_VOCABULARY)))
+
+    def test_this_repository_s_forms_pass_against_their_own_options_as_labels(self) -> None:
+        labels = {option for options in gate.dropdowns(gate.DEFAULT_TEMPLATES / "finding.yml").values()
+                  for option in options}
+        problems = gate.check(gate.DEFAULT_TEMPLATES, gate.DEFAULT_HELPER, gate.DEFAULT_VOCABULARY, labels)
+        self.assertEqual([], problems)
 
 
 if __name__ == "__main__":

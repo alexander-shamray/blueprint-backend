@@ -1429,7 +1429,7 @@ class WeeklyTests(InRoot):
 class ReportTests(InRoot):
     # The morning report's facts, in English, for the dispatcher to write up in --lang (spec section 10).
     SECTIONS = ["## Merged", "## Needs a human", "## Interrupted", "## Filed overnight", "## Left in the backlog",
-                "## Usage"]
+                "## Usage", "## Syncs"]
 
     def report(self, text=FIXTURE):
         with open("todo.md", "w", encoding="utf-8", newline="") as handle:
@@ -1442,7 +1442,7 @@ class ReportTests(InRoot):
         rest = [i for i, text in enumerate(lines[start:], start) if text.startswith("## ")]
         return lines[start:rest[0] if rest else len(lines)]
 
-    def test_the_report_has_the_six_sections_in_order(self):
+    def test_the_report_has_the_seven_sections_in_order(self):
         record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=MERGED_S1["rounds"],
                review_end="clean", filed=[1701], usage={key: USAGE[key] for key in dr.TOKEN_KEYS})
         record(RUN, "M2", status="running")
