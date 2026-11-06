@@ -2,8 +2,8 @@
 
 ## Index
 
-**Read the section you need, not the file**: each is under 2.5k tokens and
-the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
+**Read the section you need, not the file**: each is under 3.5k tokens and
+the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 
 | Section | What it covers |
 |---|---|
@@ -18,7 +18,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
 | The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
-| Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers, the three lease-bound force-push helpers and the branch-drop helper. |
+| Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers, the three lease-bound force-push helpers, the branch-drop helper and the sync-PR reader. |
 | Pull request reads and the locality verdict | Fixed-field PR helpers, the gh allow-list gate, #150, and pr-locality.sh's contract. |
 | Sweep push denies and chained commands | Push denies in the sweeps, and why a command /ship runs before it pushes never denies push. |
 | Output deny and shell-expansion residuals | The --output entry closed by the hook, expansion readings, locale quotes, process substitution, crashes and pipes. |
@@ -183,6 +183,23 @@ CLI, which is started by the full path a PATH-only lookup found instead. The
 lock and the CLI's own run still hold files in the checkout while they last,
 which is why `/ship`'s `git-worktree-remove.sh` takes the lock before it
 removes.
+
+**The CLI is found on `PATH` alone, and the answer is a full path, so the
+operating system searches nothing.** A `PATH` entry naming a checkout is the
+bare name's hole by another route, so the lookup takes absolute entries only,
+none of them the working directory, and no candidate inside this checkout or
+the main checkout it was forked from, a link's target included. On Windows
+only an `.exe` or a `.com` counts, never `PATHEXT`'s `.bat` or `.cmd`: those
+run through `cmd.exe` in the checkout, which looks there first for every
+command the script names, so a shim found safely would reopen the search this
+closes. pip writes the console script as an `.exe`. The worker runs that
+script, then the module through its own interpreter: `py -3.12 -m pip` is a
+supported install that leaves the script in a directory that need not be on
+`PATH`, so both `cbx` wrappers fall back the same way, and a pipx install has
+no module this interpreter can import, so the script is not dropped for it.
+`CBX_NO_SKILL_AUTO_UPDATE` keeps an unpinned package from rewriting the
+tracked skill, and `-P` keeps a checkout's own `codebase_index.py` off the
+import path.
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a
@@ -633,7 +650,10 @@ five ways: every `permissions.deny` entry of the rendered root's
 `settings.base.json` is matched by some `deny` row's example, every row's
 example is refused by the layer it names, every non-`ruleset` row's *Test*
 names a suite file that exists, the push and drop helpers each have a
-`helper` row, and the table parses to at least fifteen rows.
+`helper` row, and the table parses to at least fifteen rows, so a renamed
+heading cannot leave the other four vacuous. Its root is the directory two
+above it: the rendered root in a target, `payload/` in the harness repository,
+which has the same layout.
 
 **The columns.** *Class* is the operation, *Example* one spelling of it,
 *Refused by* the layer the example exercises, and *Test* the suite file that
@@ -1018,6 +1038,14 @@ expired, or a branch made with no reflog, fails closed; and a branch that
 holds origin's tip only because it was rebased onto it is refused as well,
 where `git push origin <branch>` needs no force.
 
+Its exit codes are the rebase helper's, those it can reach: 0 published, or
+nothing to force because origin already holds `HEAD`; 2 usage, an argument
+given; 3 the branch is `main`, however it is spelled; 4 a detached `HEAD`; 6
+origin has no such branch, so push it normally; 7 origin carries commits this
+checkout never held; 12 origin could not be asked where the branch is, or
+fetched from. A push origin refuses, a lease that no longer holds among them,
+exits with git's own status, as the rebase helper's does.
+
 **One more helper relaxes a deny, and it deletes rather than pushes.** `git
 branch -d`, `-D` and `--delete` stay denied. `git-branch-drop.sh <branch>`
 refuses `main` in any spelling, a name that could be read as a flag, a
@@ -1039,6 +1067,39 @@ runs last, because `update-ref` does not make it, and the branch's
 configuration section, which `update-ref` leaves, is removed after the delete.
 Its residual is a worktree that checks the branch out between that check and
 the delete.
+
+Its exit codes, in the rebase helper's meanings where one fits: 0 dropped; 2
+usage, or a name it will not take, a symbolic ref among them; 3 the branch is
+`main`, however it is spelled; 4 the branch is checked out in a worktree, this
+one included, or is being rebased or bisected in one; 6 no local branch of
+that name, so nothing to drop; 7 it has not landed, with no `MERGED` row into
+`main` at its tip, or the tip moved after it was checked; 12 its pull requests
+or its worktrees could not be read, so whether it landed or is in use is
+unknown.
+
+**A reader of pull requests is granted by its whole command line.** `Bash(py
+-3.12 .claude/scripts/sync_pr.py:*)` admits `list`, `verify <n>`, `review-diff
+<n> <out>` and `local-suites`, and nothing in it writes to GitHub: its `gh`
+calls are `pr list` with a fixed field set and `gh api` reads of the harness
+repository's `git/trees` and `compare`, which it spells itself, so no caller
+chooses a field, a repository or a method. A pull request's body is text anyone
+can post, so `list` reads only whether its last line is the sync footer and
+never passes the body on. `verify` is what a branch name is not: it fetches the
+listed head and fails closed on anything it could not read, a truncated tree, a
+`gh` failure or timeout, a manifest it cannot parse, or a head whose oid is not
+the listed one. It proves five things: the pull request is a `list` row; the
+manifest's `harness_commit` is on the harness's `main` and not older than the
+commit `main`'s own manifest names, so a rollback fails; every manifest path but
+`.claude/settings.json` has the payload's blob id there, mode aside; the
+manifest lists each payload file the config neither excludes nor keeps local,
+and lists no path it does; and the head changes only manifest paths,
+old-manifest paths and the manifest, with `.harness/config.json` and every
+`local` path untouched. `review-diff` proves all of it first, on the head it
+then reads, and refuses with those lines. Its one write is a `.diff` under
+`artifacts/review/`. Not proved: the rendered `.claude/settings.json`, which the
+drift gate renders again, and the manifest's hashes. Residual: blob ids are
+compared exactly where apply and the gate fold CRLF, so a target whose stored
+blob holds CRLF is refused every sync; that fails closed.
 
 **Some of the rebase helper's edges are accepted rather than guarded.** A replay
 amended after a failed push no longer descends from the commit `publish`
@@ -1415,6 +1476,15 @@ target, Windows collapses it before the filesystem sees it — and the guard
 follows each rather than picking one, measured both ways in
 `.claude/scripts/test_edit_target_guard.py`.
 
+**That suite's link cases run against a real link, on every primitive the
+platform grants**: a symbolic link where the session may make one, and a
+directory junction on Windows, which is all an unprivileged process gets
+there. Neither is a skip, because a skip on a missing capability reports a
+pass, so a platform that grants no primitive fails the module. `..` after a
+link, case folding and the link primitives are asserted as the platform's or
+filesystem's own answer, because the guard follows each, so the verdict is the
+host's rather than a hard-coded expectation.
+
 **What an anchor is, and why it is two rules rather than one, is the part
 that shipped wrong.** An anchor excuses exactly one link traversal: the one
 on its own root prefix. So an anchor is a checkout **root** — the event's
@@ -1616,8 +1686,8 @@ of its diff; under `core.autocrlf`, whose index holds LF, the diff shows
 only the edited lines, and the cost is a working copy left LF for an
 analyser or an editorconfig check to find. Measured with GNU sed 4.9
 under Git Bash: `one\r\ntwo\r\n` through `sed -i 's/one/uno/'` comes back
-`uno\ntwo\n`, and through `sed --binary -i` keeps both CRs. `grep -c` cannot confirm it,
-since MSYS grep strips the CR before matching (#37).
+`uno\ntwo\n`, and through `sed --binary -i` keeps both CRs. `grep -c` cannot
+confirm it, since MSYS grep strips the CR before matching (#37).
 
 `.claude/hooks/guard-sed-crlf.py` is a `PreToolUse` hook on `Bash` that
 reads the file a `sed -i` names, because nothing in the command's text says
@@ -1639,6 +1709,13 @@ Edit tool, a Python script that opens the file with `newline=""`, or
 sed on Linux and macOS keeps the CR as an ordinary character, so a refusal
 there would block a harmless edit, the false refusal *The guards' threat
 model* files.
+
+**The line reader is one scan that tracks quotes**, because each of its
+three jobs turns on whether a character sits inside one: a backslash-newline
+inside single quotes is kept, a `#` starts a comment only where it begins a
+word, and a `<<` opens a heredoc only outside quotes. `shlex` knows none of
+this, so an indented continuation would reach it as a newline token, read
+as a separator, and an apostrophe in a comment as an unbalanced quote.
 
 **What it reads, and what a crafted path makes it run.** Only a regular
 file is opened, read-only, and nothing read leaves the hook but a path: the

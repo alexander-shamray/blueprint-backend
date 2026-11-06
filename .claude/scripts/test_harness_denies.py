@@ -1,10 +1,7 @@
 """settings.json's deny list: the editing boundaries the harness states.
 
-A command's own `disallowed-tools` boundary is a target's, held in that target's
-suite, since what it denies is the target's tree.
-
-The shared harness and the reason it shells out rather than
-re-implementing are `review_helpers.py`'s.
+A command's own `disallowed-tools` boundary is a target's, in that target's
+suite. The shared harness and why it shells out are `review_helpers.py`'s.
 """
 
 import json
@@ -51,11 +48,8 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
     def test_every_loaded_settings_file_is_denied(self):
         """Both settings files Claude Code loads are denied, not just one.
 
-        A deny on the exact file cannot cover a sibling, and .gitignore names
-        `settings.local.json` as the per-developer override. Denying
-        `.claude/**` wholesale is not the answer: `.claude/worktrees/` is
-        where /branch puts working checkouts, so that blanket would deny a
-        main-checkout session every edit to a live worktree.
+        `.gitignore` names `settings.local.json` as the per-developer override.
+        `.claude/**` is no answer: `/branch` puts live worktrees under it.
         """
         deny = self.deny()
         for name in ("settings.json", "settings.local.json"):

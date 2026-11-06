@@ -36,3 +36,7 @@ gate runs behind the solution build — not behind `scaffold-build`'s, which
 compiles a rendered service and takes no gate. The split is one the gate
 cannot avoid, because it reads what a build left. Run on its own it needs a
 restore and a build in front of it; `docs/testing.md` has the commands.
+
+`py -3.12 -m unittest discover -s .github/output-gate` runs the suite. A tree
+this gate does not walk is invisible to every test that builds its own, so a
+target with a solution also reads its real repository, in a suite of its own.

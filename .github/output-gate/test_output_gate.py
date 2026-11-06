@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 """What the gate is looking at, and what it does when it finds nothing.
 
-Every output check the gate makes is satisfied by an empty set, which is what
-a renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
-produces. Only the subject check refuses one, so most of what follows is about
-that check rather than the verdict. A tree this gate does not walk is
-invisible to every test that builds its own, so a target with a solution also
-reads its real repository, in a suite of its own.
-
-    py -3.12 -m unittest discover -s .github/output-gate
-"""
+Every output check is satisfied by an empty set, and only the subject check
+refuses one, so most of what follows is about that check, not the verdict."""
 from __future__ import annotations
 
 import io
@@ -25,14 +18,9 @@ def tree(root: Path, projects: dict[str, str], restored: list[str] | None = None
          built: list[str] | None = None, listed: list[str] | None = None) -> None:
     """A repository in miniature: some projects, a solution, some output.
 
-    `projects` maps a project name to the directory it lives in, relative to
-    the root. `restored` names the projects with an `artifacts/obj/` entry and
-    `built` those with an `artifacts/bin/` one; `listed` names the ones the
-    solution carries. All three default to every project, which is what makes a
-    test that overrides one of them a test about exactly that difference — and
-    what lets `restored` and `built` be set apart to reproduce a tree that has
-    been restored and not compiled.
-    """
+    `projects` maps a project to its directory; `restored`, `built`, `listed`
+    name those with an `artifacts/obj/` entry, an `artifacts/bin/` one and a
+    solution entry, all by default, so a test overriding one is about that."""
     restored = list(projects) if restored is None else restored
     built = list(projects) if built is None else built
     listed = list(projects) if listed is None else listed
@@ -139,9 +127,8 @@ class Residue(TemporaryRepository):
     def test_output_is_caught_at_any_depth_not_only_beside_a_csproj(self) -> None:
         """The claim is about the tree, not about project directories.
 
-        A `bin/` in a directory that holds no `.csproj` is still a build's
-        leavings in a source tree, and a gate keyed on project directories
-        would walk straight past it.
+        A `bin/` in a directory holding no `.csproj` is still a build's
+        leavings, and a gate keyed on project directories would walk past it.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         (self.root / "src/Services/Catalog/Catalog.Domain/Products/obj").mkdir(parents=True)
@@ -212,9 +199,8 @@ class Subject(TemporaryRepository):
     def test_a_project_outside_the_walked_roots_is_not_called_missing(self) -> None:
         """On disk, and outside this walk — two different things to be told.
 
-        A solution entry under a root that `SOURCE_ROOTS` does not name is a
-        subject failure, not a missing file, and a diagnostic saying otherwise
-        sends a reader to the wrong place.
+        A solution entry under a root `SOURCE_ROOTS` does not name is a subject
+        failure, not a missing file, and saying otherwise misdirects a reader.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         outside = self.root / "samples/Catalog.Sample"
@@ -235,9 +221,8 @@ class Subject(TemporaryRepository):
     def test_a_project_moved_without_the_solution_following_it_fails(self) -> None:
         """Reconciled by path, so a move is visible where a stem is not.
 
-        The two views hold the same project name and different directories. A
-        gate comparing names alone sees one set and reports nothing, which is
-        the defect that keeps a solution and a tree silently out of step.
+        The two views hold one project name and different directories; a gate
+        comparing names alone reports nothing, and they stay out of step.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         (self.root / "Platform.slnx").write_text(
@@ -253,9 +238,8 @@ class Subject(TemporaryRepository):
     def test_a_subject_mismatch_suppresses_the_other_findings(self) -> None:
         """Three reports of one defect is a worse report than one.
 
-        With the walk and the solution disagreeing, neither the missing-output
-        check nor the residue check is about the repository the solution
-        describes, so their findings would be noise around the one that matters.
+        With the walk and the solution disagreeing, the missing-output and
+        residue checks are about no real repository, so they would be noise.
         """
         tree(self.root,
              {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain",
@@ -327,8 +311,7 @@ class DuplicateNames(TemporaryRepository):
         """The defect the name check exists to stop, stated as a test.
 
         Both projects resolve to one `artifacts/obj/` and `artifacts/bin/`
-        entry, so a gate that looked output up by name would find it present
-        for both and report a project whose output it never located.
+        entry, so a lookup by name passes output it never located.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         second = self.root / "src/Services/Payments/Catalog.Domain"

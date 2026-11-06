@@ -690,13 +690,18 @@ READERS = {
 }
 
 
+def rendered(path):
+    """Where a sync renders a path: a rule reads that one, so the payload is judged as a target is."""
+    return path.removeprefix("payload/")
+
+
 def reader_for(path):
     """The comment reader for a repository path, or None for one it skips."""
     name = PurePosixPath(path).name
     if name == ".editorconfig":
         return editorconfig
     reader = READERS.get(PurePosixPath(path).suffix)
-    runs = (path.startswith(".github/workflows/")
+    runs = (rendered(path).startswith(".github/workflows/")
             or name in ("action.yml", "action.yaml"))
     return workflow if reader is yaml and runs else reader
 
@@ -752,7 +757,7 @@ def judge(path, text, added):
 
 def is_prose(path):
     """Whether the gate holds a path to the prose width: Markdown, outside the records it exempts."""
-    return path.endswith(".md") and not path.startswith(PROSE_EXEMPT)
+    return path.endswith(".md") and not rendered(path).startswith(PROSE_EXEMPT)
 
 
 def prose_width(path, text, added):
@@ -806,7 +811,7 @@ def findings(path, lines, added):
         if line.number not in added:
             continue
         for name, pattern, exempt in PATTERNS:
-            if not path.startswith(exempt) and pattern.search(line.said):
+            if not rendered(path).startswith(exempt) and pattern.search(line.said):
                 found.append((path, line.number, f"a comment names {name}"))
 
     run = []

@@ -54,7 +54,10 @@ reviewer (`Copilot`, `Grok`, `CodeQL`, `found in review`), history (`used
 to`, `went stale`, `this comment said`) and emphasis (`**…**`, `<b>`). The
 list is the gate's `PATTERNS`, which is its one copy. Under `.claude/` a
 reviewer's name is allowed, because the harness's helpers are about the
-reviewers and naming one there is a subject rather than a history.
+reviewers and naming one there is a subject rather than a history. A path
+under a leading `payload/` is judged as the path a sync renders it to, here
+and in the workflow reader and the prose exemption, so the harness repository
+reads its payload as a target will.
 
 **The block length.** A block is a run of lines holding nothing but comment;
 a blank line or a line of code ends it, and a multi-line token — a

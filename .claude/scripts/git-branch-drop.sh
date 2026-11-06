@@ -1,29 +1,8 @@
 #!/usr/bin/env bash
 # Delete one local branch once it has landed: `/ship` step 0's finished
 # predicate, made the only route to deleting a branch, whose raw `git branch`
-# spellings stay denied. Guards, each before the delete: the name is not `main`
-# in any spelling; the branch exists and is checked out in no worktree; and
-# pr-for-branch.sh reports a pull request for it MERGED into `main` whose head
-# is the branch's tip, so no commit on it is one the merge did not take.
-#
-# The delete is a compare-and-swap on the tip that was checked, not
-# `git branch -D`, which deletes whatever the branch holds when it runs. The
-# read of the pull requests takes seconds, and a commit landing on the branch
-# in that window would go with it; `git update-ref -d <ref> <tip>` refuses a
-# ref that has moved. It leaves the branch's configuration, which `branch -D`
-# would take, so that section is removed after it.
-#
-# Exit codes, in git-rebase-onto-main.sh's meanings where one fits:
-#   0  dropped
-#   2  usage, or a name this helper will not take, a symbolic ref among them
-#   3  the branch is `main`, however it is spelled
-#   4  the branch is checked out in a worktree, this one included, or is
-#      being rebased or bisected in one
-#   6  there is no local branch of that name: nothing to drop
-#   7  it has not landed: no MERGED row into `main` at its tip, or the tip
-#      moved after it was checked
-#   12 its pull requests or its worktrees could not be read, so whether it
-#      landed or is in use is unknown
+# spellings stay denied. Its guards, its compare-and-swap and its exit codes
+# are `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { echo "usage: git-branch-drop.sh <branch>" >&2; exit 2; }
@@ -82,11 +61,10 @@ held=$(printf '%s\n' "$worktrees" | tr -d '\r' | tr '[:upper:]' '[:lower:]' |
 [ "$held" = 0 ] ||
   { echo "$branch is checked out in a worktree (git worktree list): it is in use, and kept" >&2; exit 4; }
 
-# A worktree mid-rebase or mid-bisect has HEAD detached, so the list above says
-# `detached` while the branch is still the one it works on, as a conflicted
-# `git-rebase-onto-main.sh start` leaves it. git keeps the name in each git
-# dir's rebase-merge/head-name, rebase-apply/head-name, BISECT_START and, for a
-# branch a `rebase --update-refs` will move, rebase-merge/update-refs: where
+# A worktree mid-rebase or mid-bisect has HEAD detached while the branch is
+# still the one it works on, as a conflicted `git-rebase-onto-main.sh start`
+# leaves it. git keeps the name in each git dir's rebase-merge/head-name,
+# rebase-apply/head-name, BISECT_START and rebase-merge/update-refs, where
 # `git branch -D` looks too, from 2.38. Read here from every git dir, folded.
 named() {
   tr -d '\r' < "$1" | tr '[:upper:]' '[:lower:]'
