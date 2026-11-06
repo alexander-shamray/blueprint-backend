@@ -24,7 +24,7 @@ from dispatch_board import (BRANCH_NAME, MODEL, Group, Refusal, _blocker, _bodie
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
 MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
-# tools/quality-sets/quality_sets.py owns these four counts of a `claude -p` envelope's usage; a test holds them equal.
+# The four counts of a `claude -p` envelope's usage.
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 OUTCOMES = ("merged", "handed-back", "stopped")
 REVIEW_ENDS = ("clean", "comments-rule", "plan", "ceiling")

@@ -79,16 +79,16 @@ sweeps' `mktemp -d` ones.
 
    | | |
    |---|---|
-   | `docs/` | Blueprint prose, structure, cross-references |
+   | `docs/` | Prose, structure, cross-references |
    | `chore/` | Repo config — `.editorconfig`, `CLAUDE.md`, commands, CI |
    | `feat(<scope>)/` | Solution code that adds behaviour |
    | `fix/` | A defect in either |
    | `refactor/` | Shape change, no behaviour change |
 
-   Match `docs/split-by-chapter`, `chore/repo-guidance-and-explicit-types`.
+   Match `docs/split-the-runbook`, `chore/repo-guidance-and-explicit-types`.
    Summarise the change: `docs/sql-sample-indentation`, not `docs/update-docs`.
-   For a delivery-plan PR, derive it from the title in
-   `appendix-c-delivery-plan.md`: PR-01's
+   For a PR the roadmap `docs/harness-local.md` *Documents* names lists,
+   derive it from the title there:
    `chore: solution structure, SDK pin, central package management, CI skeleton`
    → `chore/solution-structure` (why: docs/commands/branch.md, *Step 3*).
 4. **Check the name and the directory are both free** — `git branch --list`,

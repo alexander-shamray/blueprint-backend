@@ -114,7 +114,8 @@ that prefix; one path elsewhere and it is reviewed as any other branch is.
 prefix prints only its new path, and the path it left is never tested. A
 plan is a pre-build record from the moment it merges and is never edited
 after, so wording, completeness and prose are not findings in it. A
-statement that cannot be true beside the blueprint, or beside another plan,
+statement that cannot be true beside the product specification
+`docs/harness-local.md` *Documents* names, or beside another plan,
 is a finding, and its fix lands in the plan this PR adds, because the
 others are already frozen.
 
@@ -131,6 +132,141 @@ of an earlier one is on the PR.
 not run it again.** A commit or rebase made there merges without a review
 reading it, and the report says so, because a plan is one round and step 6
 cannot buy it a second.
+
+## A sync pull request is reviewed once, for this target
+
+**A branch name proves nothing, so a sync is what `sync_pr.py verify` says it
+is.** Any same-repository branch can be named `chore/harness-sync-xxxxxxx`;
+`verify` is what shows the head holds the payload at a commit on the harness's
+`main` and changes nothing the config keeps (`docs/harness-boundaries.md`,
+*Grant inventory and push helpers*). It runs in the main checkout before a
+worktree exists, and a head that fails it is neither checked out nor reviewed,
+because the review that follows would be of a diff nobody proved. That is not
+one of the seven stops, which are things that failed while the chain ran and
+here nothing ran, but for two cases: a PR closed or merged under the run fails
+the verify as not a sync, so `pr-state.sh <n>` is read. `CLOSED` is the
+closed-unmerged stop, ending `stopped` with reason `closed unmerged`, which a
+later superseding sync depends on, and `MERGED` takes step 6's route for a merge
+another route made, since reporting it unmerged would be untrue. A PR closed
+before `list` has no head to read, which is why the state is read by number. A
+session reports the verify's lines and ends unmerged; an executor hands the
+change back with them as the reason, since nobody is there to read a report.
+
+**The worktree is opened on the branch that exists, not forked from `main`.**
+`/branch` would name a new branch, and a sync's commits are the harness's: the
+PR's head is the branch `gh-pr-merge.sh` binds to, so the merge must run from a
+checkout of it. `git-worktree-sync.sh` fetches the branch and adds the worktree
+tracking `origin/<branch>`, refusing any name that is not a sync head and every
+path and root `git-worktree-fork.sh` refuses. A sync taken again after the fix
+it waited for has merged finds that worktree and branch where the unmerged
+ending left them, and the helper would refuse a second make, so the run enters
+the one that exists and makes the same comparisons.
+
+**Step 2 runs the target's own suites and nothing else.** The managed files were
+checked in the harness, so *Ship checks* would read them a second time; what the
+harness never runs is the target-local test a payload change can trip
+(`docs/harness/working-rules.md`). Each is run as CI runs it, with `discover -s
+<dir> -p <file>`, because it imports its siblings from its own directory and a
+dotted module name cannot be formed from `.claude/` or `.github/comment-gate/`.
+The command is granted in the frontmatter, since a dispatched run's reads must
+be named by its own grants. A failing suite has no ending of its own, since step
+2 otherwise says to fix what the checks find and a sync branch is never
+committed to: it is a target-local finding, filed in the target, and the sync
+ends unmerged or is handed back with no round run, because the code under test
+is the target's and a review of the managed files cannot clear it. A re-take
+keeps `HEAD` at `<oid>` and so reruns the head's old copy of the suite: the fix
+the finding waits for is on `main`, not in this head, so only a later sync cut
+from the fixed `main` clears it. A finding in a local file the round reads is
+the other kind: the re-take's review diff reads main's tree, so the merged fix
+clears it.
+
+**Steps 3 and 4 do nothing, because a sync branch is never committed to.** A
+commit would make the head something `verify` never proved and the next sync
+overwrite it. Step 6's rebase helper is the one publish, a replay the head is
+re-proved after. A dirty tree is the sync row's own case, not the open-PR row's,
+whose answer is to commit: it is reported, with what it holds, and the run ends
+unmerged, and so it is at step 6, whose own route for a non-empty workspace
+commits, pushes and re-enters step 5.
+
+**One round, because the diff is the part that is this target's.** The reviewer
+is handed `review-diff`'s file, which leaves the managed content out, and not
+the branch diff, which holds every managed file once more. The file is written
+by the helper and never with `Write`: the helper proves the head first, and a
+file this session composed would not be that proof. Step 5's opening synchronise
+is skipped, because the branch tracks `origin` and the pull fast-forwards: a
+push after the proof would move `HEAD` and `review-diff` would then run the
+unproved head's script. A finding is filed in the repository whose code it is
+about, citing the sync, with the severity map the reviewer's words need for the
+filing helper, which takes `critical|high|medium|low`: a `bug` as `high`, a
+`medium` as itself. The sync then ends unmerged or is handed back. A payload
+finding is the harness's, so the fix's own sync supersedes this one. A
+target-local one, such as a local file citing a path the sync deletes, is fixed
+in the target, and this sync is taken again once that merges. The harness is not
+the checkout's repository, so a payload finding is filed with
+`gh-issue-harness.sh`, whose repository is a literal and which only `/ship`
+holds: a route or repository word to `gh-issue-create.sh` would be declared by
+the caller, and the sweeps hold that helper over a tree they cannot trust. A
+`low` goes where its code is, as the user-level filing rule sends it: a payload
+one into the one harness issue, and a target-local one into the target's own
+one; the merge goes on, and a `nit` is not filed. The harness filer only creates
+on a first filing: a re-taken sync meets the issue its first round filed, so it
+first searches the open issues for that exact title, with every call under a
+timeout, and comments on a match, and a failed search files nothing. Its area is
+the finding's tree, as `docs/harness/working-rules.md` maps it: `.claude/` is
+`harness`, other prose `documentation`, the rest `code`, with `test` beside
+`harness` or `code` for a suite. A target-local low goes through
+`gh-issue-create.sh`, which always creates, so a re-take reads
+`gh-issue-list.sh` first, and where an open issue already holds that title
+nothing is filed. A low that issue does not list stays in the run's report,
+naming the open issue's number, and under `--dispatched` in the result's
+`decisions`, since a dispatched merge's result has no other slot for it, and
+since the check is by title and not by item. A re-take that cannot find the
+citing line it raised gets the review diff's citations from main's tip and not
+the head's, because a sync never changes a local file and the head is not
+rebased, so its copy still holds a line the target's own fix removed. A
+hand-back for a low would be a stop, and the rule already sends lows to an
+issue.
+
+**Step 6 verifies again after a rebase, and that replaces the recheck.** A
+rebase rewrites the head, so what was proved is gone, and `verify` on the new
+head is the proof again. The step's ordinary route re-enters step 5 for a
+recheck after a rebase; a sync keeps its one round, because the verify compares
+the new head's managed files by blob id. A failed verify is handed back, as the
+first one is.
+
+**What was proved is what runs and merges, so the proof carries the head, and
+the first proof is not made by the tree it proves.** A `verify` run inside the
+worktree executes that head's own `sync_pr.py`, and a forged head carries one
+that always prints `verified`. So the first proof is made in the main checkout,
+which must be on `main`: on another branch it verifies with that branch's copy,
+so the run reports and ends unmerged. It uses the target's own `sync_pr.py` on
+`<oid>` from `list`, and `--head <oid>` makes the listing and the fetch each
+exactly that oid. In the worktree, `git rev-parse HEAD` must equal `<oid>` and
+`git status --short` must be empty before anything there runs: the commit is not
+the files, and a worktree that already existed on the right commit can hold a
+modified `sync_pr.py` or suite that step 2 would run before any later dirty
+read. Both together are what make the worktree's managed copy of `sync_pr.py`
+the proved one, and a difference is reported and ends unmerged. Every later
+`verify` and `review-diff` passes the same `--head <oid>`, because the branch
+could move before step 2 runs its suites, and step 6's `<oid>` is that value,
+since `pr-state.sh` reads the pull request's current `headRefOid` and a push
+after the proof would otherwise land unproved. One that differs is a moved sync,
+handed back with no merge. After step 6's rebase the new `HEAD` is the head, the
+replay being the session's own. A run that starts inside a sync worktree holds
+no proof, as nothing says what put that tree there: if it entered the worktree
+this session it leaves with `ExitWorktree`, which is why the rows that keep a
+run in its worktree except it, proves the head in the main checkout and enters
+again. A session that did not enter it gets an error from `ExitWorktree`, so it
+reports and ends unmerged, to be started again from the main checkout. A
+`--dispatched` sync run starts inside its worktree and holds no proof, so it
+hands back before anything in the tree runs.
+
+**Under `--dispatched` the group is `sync-<n>` and `issues` is `[]`.** The
+argument carries no `#<group>-<n>` tag for the Report's rule to read, and a sync
+answers no issue. `/ship` is granted `sync_pr.py` and the worktree helper in its
+frontmatter as well as in the settings, and the harness filer in its frontmatter
+alone: a dispatched run's reads must be named by its own grants, and one they do
+not name is the auto classifier's to refuse.
 
 ## Step 0: the finished predicate
 
@@ -234,8 +370,8 @@ merged is *unused*, not finished — and the difference is what makes an
 interrupted run resumable.** `/branch` forks a worktree and enters it; a
 run interrupted there leaves a branch with no commits, no PR and a pristine
 tree. Under a predicate asking only *does this hold work*, that reads as
-finished: step 0 removes the worktree, keeps the branch — `git branch -d`
-is denied — and step 1 then hands `git-worktree-fork.sh` a name that
+finished: step 0 removes the worktree, the drop then refuses the branch for
+want of a landing — and step 1 hands `git-worktree-fork.sh` a name that
 already exists, which it refuses. A stop with no defect behind it, and the
 workspace deleted on the way to it.
 
@@ -394,9 +530,22 @@ the removal waits for the refresh lock, and *Grant inventory and push helpers*
 why `git-worktree-remove.sh` replaces the withdrawn `git worktree remove`
 grant, whose trailing `-f` an allow rule could not exclude.
 
-Deleting the merged **branch** is not part of this. `git branch -d` is
-denied in `.claude/settings.json`, deliberately, and a merged branch costs
-nothing but a line in `git branch`. Name it in the report and leave it.
+**The merged branch is dropped once its worktree is gone**, by
+`git-branch-drop.sh <branch>`: after `git-worktree-remove.sh` exits 0, or, for
+an in-place branch, after the switch to `main`. Raw `git branch -d` and `-D`
+stay denied in `.claude/settings.json`; the helper is the one route, and it
+deletes only a branch a pull request merged into `main` at its tip, which
+`docs/harness-boundaries.md`, *Grant inventory and push helpers*, argues. A
+worktree whose removal was refused keeps its branch, because the branch is
+still checked out there and the helper would refuse it in any case. Leaving a
+landed branch behind costs a line in `git branch` per run, which no one reads
+and no one clears; the drop is cheap and keeps the list to live work.
+
+**A refused drop is reported and is not a stop.** The helper refuses a branch
+that has not landed, and keeping that branch is exactly right; the merge is
+done and stopping would strand a finished run. Exit 6 (no local branch) means
+there is nothing to drop, which a reader of the report wants to know and
+nothing more.
 
 ## Step 1: /branch
 
@@ -824,8 +973,8 @@ rule rather than complied with it.
 
 ## Step 6: the teardown
 
-**The order of the runbook's eight teardown lines is the instruction**, and
-three of them depend on which outcome step 1 produced; the line numbers
+**The order of the runbook's nine teardown lines is the instruction**, and
+four of them depend on which outcome step 1 produced; the line numbers
 below are that block's.
 
 **`main` ends at a descendant of the merge, not at the merge**, and the
@@ -884,8 +1033,9 @@ not to say.
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
-step 0 exists to stop the next run from starting in. The merged branch stays
-for step 0's teardown's reason.
+step 0 exists to stop the next run from starting in. Line 9 drops the merged
+branch for step 0's teardown's reason, and a dispatched run leaves it to
+`/dispatch`, which removes the worktree and so is the one that can.
 
 ## Report
 
@@ -931,8 +1081,9 @@ A stop is a case where the person has something to do, and a machine asleep
 under an unreported stop is the one failure this step could add, so every stop
 and every run that ended at step 0 skips it and says so.
 
-**A failed suspend is reported, not a stop, and it is the one helper whose
-non-zero exit the stop list does not take.** The PR has merged and the
+**A failed suspend is reported, not a stop, and it is one of the two helpers
+whose non-zero exit the stop list does not take; the other is the branch drop,
+argued in *Step 0: the teardown*.** The PR has merged and the
 workspace is torn down; nothing a retry could change is left, so the report
 says the machine was not suspended and why.
 
@@ -971,7 +1122,8 @@ dispatcher passes it: the launcher refuses a description that carries
 put the machine to sleep under a night run.
 
 **Nobody is there to ask, so the token's one new decision is when to hand
-back.** Three cases hand the change back unmerged beyond the seven stops,
+back.** Three cases hand the change back unmerged beyond the seven stops and the
+sync section's own,
 and they are the questions `/ship` has no recommended option for:
 
 - *An edit under `.claude/`.* The nested session's own sensitive-file
@@ -1014,7 +1166,9 @@ through the result's `filed`, which the dispatcher places.
 
 **The workspace is the worktree the session starts in**, and nothing new
 makes it so: the branch there is clean and holds nothing `origin/main` lacks,
-which is step 0's *unused* row, so step 0 stays and step 1 skips `/branch`.
+which is step 0's *unused* row, so step 0 stays and step 1 skips `/branch`. A
+sync is the exception: its branch holds the sync's commits and the run holds no
+proof, so it hands back as the sync section says.
 
 **The worktree outlives the session, and the dispatcher tears it down.** A
 session started inside a worktree it did not enter has no `EnterWorktree`

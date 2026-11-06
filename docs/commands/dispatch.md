@@ -37,7 +37,10 @@ the fork and the removal helpers run only from there.
 The executor never tears its own worktree down, because a session cannot
 delete its working directory on Windows; the dispatcher removes it once the
 merge is verified, and a removal the helper refuses is named in the report
-(spec §6.2).
+(spec §6.2). It then drops the merged branch through `git-branch-drop.sh`,
+which `/ship` under `--dispatched` leaves to it: the branch is checked out in
+the worktree until the removal, so only the dispatcher can. A refusal is
+reported and keeps the branch.
 
 ## One writer of the task list
 
@@ -256,8 +259,8 @@ stop does.
 
 The report is `report`'s English facts written up in `--lang`, in the
 spec's §10's six sections, with what only the session saw added: a refused
-removal, a failed pull, a failed `record`. It ends with the apply line every
-message here ends with.
+removal, a refused drop, a failed pull, a failed `record`. It ends with the
+apply line every message here ends with.
 
 ## Resume
 
@@ -300,7 +303,7 @@ Raw `gh issue edit`, `close` and `create` are denied, because the issue
 writes are `issue_decisions.py`'s, which accepts only the decision entry's
 shape, and `gh-issue-create.sh`'s.
 
-The git grants that write are the fork and removal helpers and
+The git grants that write are the fork, removal and branch-drop helpers and
 `git pull --ff-only`. `git log:*` reaches `--output=`, an arbitrary file
 write, which the guard hook refuses in every spelling but one the shell
 computes at run time, as `docs/harness-boundaries.md`'s *Output deny and

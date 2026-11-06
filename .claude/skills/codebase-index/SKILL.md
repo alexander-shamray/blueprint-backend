@@ -49,7 +49,7 @@ server each hardcode the number — so the seven results past the third arrive
 whether or not they are read, and on this corpus they find the implementation
 no more often than the first three do.
 
-Which chapter owns a rule is not a question for this index: half those
+Which section owns a rule is not a question for this index: half those
 answers are absent from ten results and the rest rank below the fifth, so
 grep the product specification `docs/harness-local.md` *Documents* names
 instead of widening.
