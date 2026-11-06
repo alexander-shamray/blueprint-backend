@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """The plan-size gate over this repository's own plans.
 
-`test_plan_size_gate.py` is the payload's and judges plans it writes per case; this one, split out of it by
-blueprint-harness#5, is local because only this repository keeps `docs/superpowers/plans/`.
-
-    py -3.12 -m unittest discover -s .github/plan-size-gate
+`test_plan_size_gate.py` is the payload's; this case reads `docs/superpowers/plans/`, which only this repository keeps.
 """
 from __future__ import annotations
 

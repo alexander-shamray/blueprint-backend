@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """The output gate read against this repository: its solution, its source roots and its `.gitignore`.
 
-`test_output_gate.py` is the payload's and builds every tree it walks, so all of it would still pass on the day
-`SOURCE_ROOTS` stopped naming where this repository keeps its code; this class, split out of it by
-blueprint-harness#5, is local because only this repository has the solution it reads.
-
-    py -3.12 -m unittest discover -s .github/output-gate
+`test_output_gate.py` is the payload's and builds every tree it walks, so only these notice `SOURCE_ROOTS` going stale.
 """
 from __future__ import annotations
 
@@ -18,15 +14,8 @@ import output_gate
 def check_ignore(path: str) -> subprocess.CompletedProcess[str]:
     """Ask git whether it would ignore one path in this checkout.
 
-    `--no-index` so the answer is the rules' rather than the index's, and `-v`
-    so a failure can name the rule that matched instead of leaving a reader to
-    find it. Exit 0 is ignored, 1 is not, and anything else is git failing —
-    which the assertions report rather than read as an answer.
-
-    The encoding is pinned rather than left to `text=True`, which takes the
-    console code page on Windows: a rule this could not decode would raise
-    from the wrong place, or come back short, in a helper whose whole job is
-    to be believed.
+    `--no-index` answers for the rules rather than the index, and `-v` names the rule that matched. Exit 0 is ignored,
+    1 is not, and anything else is git failing. The encoding is pinned because `text=True` takes the console code page.
     """
     return subprocess.run(
         ["git", "check-ignore", "--no-index", "-v", "--", path],
@@ -37,9 +26,8 @@ def check_ignore(path: str) -> subprocess.CompletedProcess[str]:
 class ThisRepository(unittest.TestCase):
     """Read against the checkout, because a fixture cannot check the subject.
 
-    Every test in `test_output_gate.py` builds the tree it then walks, so all of them would still
-    pass on the day `SOURCE_ROOTS` stopped naming where this repository keeps
-    its code. These are the assertions that notice.
+    Every test in `test_output_gate.py` builds the tree it then walks, so these are the assertions that notice
+    `SOURCE_ROOTS` going stale.
     """
 
     def test_every_project_in_the_solution_lives_under_a_walked_root(self) -> None:
@@ -69,15 +57,8 @@ class ThisRepository(unittest.TestCase):
     def test_git_really_ignores_what_this_gate_refuses(self) -> None:
         """Asked of git, rather than of `.gitignore`'s text.
 
-        `.gitignore` keeps residue out of an ordinary `git add`, so the rule
-        this gate relies on has to be active. A substring check on its text
-        survives the rule being commented out or negated, so git is asked
-        instead, about files inside the directories because `--no-index`
-        cannot tell a bare `.../obj` is a directory.
-
-        The matching rule is asserted as well as the verdict, because another
-        rule such as `[Dd]ebug/` can ignore the same path. The source file is
-        the control: a `.gitignore` of `*` would pass the other two.
+        A substring check survives the rule being commented out or negated. The matching rule is asserted as well as
+        the verdict, because `[Dd]ebug/` can ignore the same path, and the source file is the control against a `*`.
         """
         for path, rule in (
                 ("src/Services/Catalog/Catalog.Domain/obj/project.assets.json", "[Oo]bj/"),
