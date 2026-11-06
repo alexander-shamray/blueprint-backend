@@ -289,8 +289,9 @@ The rows are a tree fact, so they leave the managed script.
   - `test_a_malformed_line_exits_3_naming_it`;
   - `test_the_first_matching_row_wins`;
   - `test_the_checkout_partitions_with_no_unowned_path`, for both kinds, over
-    the checkout's own tree, so that it runs in every target. `TheRealTree` in
-    backend's sibling stays until a later sync drops it.
+    the checkout's own tree, so that it runs in every target. `TheRealTree` is
+    in backend's local sibling, which no sync deletes, so a backend pull
+    request removes it once this case has landed there.
 - [ ] **Step 3:** `sweep-slices.sh` takes frontend's one awk pass, with
   `row_of` a loop over the file's patterns: no `mapfile`, no associative array,
   and no fork per file. The commands' row tables become: *the rows
