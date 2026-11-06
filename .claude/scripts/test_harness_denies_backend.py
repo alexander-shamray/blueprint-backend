@@ -1,9 +1,7 @@
-"""This repository's commands' `disallowed-tools`: the editing boundaries `/validate-blueprint` and
-`/review-branch` state, held against this repository's own tracked tree.
+"""`/validate-blueprint`'s and `/review-branch`'s `disallowed-tools`, held against this repository's tracked tree.
 
-`test_harness_denies.py` is the payload's and holds settings.json's deny list and the no-symbolic-link case; this
-class, split out of it by blueprint-harness#5, is local because both commands and every tree and root file it
-enumerates are this repository's.
+`test_harness_denies.py` is the payload's and holds settings.json's deny list and the no-symbolic-link case; this class
+is local because both commands and every tree and root file it enumerates are this repository's.
 """
 
 import re
@@ -21,16 +19,8 @@ from review_helpers import (
 class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
     """A command that promises not to edit a tree is denied it in frontmatter.
 
-    `/validate-blueprint` says "never edit `src/`" and is step 2 of an
-    unattended `/ship` whose entire input is prose in the branch under review;
-    `/review-branch` says "do not fix the findings". A path-scoped
-    `disallowed-tools` backs both: `Edit(src/**)` refuses an edit under `src/`
-    while one under `docs/` succeeds in the same invocation, so it scopes
-    rather than removing the tool.
-
-    That list is a deny-list, so a tree added to the repository later is
-    editable by both commands until someone adds it. The subject of these
-    cases is what the list is looking at, not what it contains.
+    `docs/commands/validate-blueprint.md` and `docs/commands/review-branch.md` argue the boundary. The list is a
+    deny-list, so a tree added later is editable until added; these cases' subject is what the list is looking at.
     """
 
     # The one tree each command's job is, exempt because denying it would break
@@ -161,12 +151,9 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
     )
 
     def test_the_msbuild_auto_import_surface_is_denied(self):
-        # `tracked_root_files` reads `git ls-files`, so it enumerates what
-        # exists and the dangerous file is one that does not. MSBuild imports
-        # `Directory.Build.targets` into every build of every project beneath
-        # it, so creating a root file no enumeration contains and then running
-        # a build is host code execution — an `Exec` in an auto-imported
-        # `.targets` runs and `dotnet build` reports success.
+        # `tracked_root_files` reads `git ls-files`, so the dangerous file is one that does not exist yet. MSBuild
+        # imports `Directory.Build.targets` into every build beneath it, so an `Exec` in a new root `.targets` is host
+        # code execution that `dotnet build` reports as success.
         for name in self.SUBJECTS:
             rules = self.disallowed(name)
             for target in self.AUTO_IMPORTED:
@@ -188,13 +175,9 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
     DOTNET_GRANT = re.compile(r"(?:\w+=\S*\s+)*dotnet(?:\.exe)?(?:[\s*:]|$)", re.IGNORECASE)
 
     def test_no_command_grants_a_free_form_dotnet(self):
-        # `dotnet test:*` admits an arbitrary project path and
-        # `/p:CustomBeforeMicrosoftCommonTargets=<file>`, which imports
-        # whatever it points at — `suggestions.md`, which /review-branch
-        # writes, being a legal target. The executor is `dotnet-test.sh`, whose
-        # only variable is one word out of two. Asserted over every command
-        # rather than the one that held the grant, because a withdrawal that
-        # names two files leaves a third.
+        # `dotnet test:*` admits an arbitrary project and `/p:CustomBeforeMicrosoftCommonTargets=<file>`, which imports
+        # whatever it points at, `suggestions.md` included. The executor is `dotnet-test.sh`, whose one variable is one
+        # word out of two. Asserted over every command, because a withdrawal naming two files leaves a third.
         for path in sorted(COMMANDS.glob("*.md")):
             text = path.read_text(encoding="utf-8")
             granted = re.findall(r"^allowed-tools:\s*(.+)$", text, re.MULTILINE)
@@ -227,12 +210,8 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
     }
 
     def test_validate_blueprint_may_only_edit_what_it_audits(self):
-        # `docs/` is exempt as a tree and the command audits three paths inside
-        # it, so the rest of `docs/` — `superpowers/`, which `CLAUDE.md` calls
-        # a frozen record, along with `runbooks/` and the loose files — is
-        # denied entry by entry. The entries are read from git rather than
-        # listed here, so a new file under `docs/` fails this until someone
-        # decides which side it is on.
+        # `docs/` is exempt as a tree and the command audits three paths inside it, so the rest is denied entry by
+        # entry. The entries are read from git, so a new file under `docs/` fails this until someone decides its side.
         out = subprocess.run(
             [GIT, "ls-files", "docs/"], cwd=str(SCRIPTS.parent.parent),
             capture_output=True, text=True, encoding="utf-8",

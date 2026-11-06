@@ -1,8 +1,7 @@
 """This repository's own sweep held to the issue-set helpers: `/mutation-sweep`.
 
-`test_gh_issue_suppresses.py` is the payload's and holds its sweeps to the rule; this case, split out of it by
-blueprint-harness#5, holds the local one to the same cases. `/mutation-sweep` names `gh-issue-list.sh`
-mid-sentence rather than on a line of its own, so the payload's enumeration control does not read it.
+`test_gh_issue_suppresses.py` holds the payload's sweeps to the rule; this case holds the local one. `/mutation-sweep`
+names `gh-issue-list.sh` mid-sentence, so the payload's enumeration control does not read it.
 """
 
 import unittest

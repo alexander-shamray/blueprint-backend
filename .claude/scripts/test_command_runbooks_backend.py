@@ -1,8 +1,7 @@
 """This repository's own split commands and its `CLAUDE.md`, held to the payload's runbook ceilings.
 
-`test_command_runbooks.py` is the payload's and holds the payload's runbooks; these cases, split out of it by
-blueprint-harness#5, hold the local ones, whose ceilings are measured here. The payload's argument glob already
-reads this repository's `docs/commands/`, so each local argument is checked for its runbook there.
+`test_command_runbooks.py` holds the payload's runbooks; these cases hold the local ones, whose ceilings are measured
+here. The payload's argument glob reads `docs/commands/`, so each local argument is checked for its runbook there.
 """
 
 import unittest

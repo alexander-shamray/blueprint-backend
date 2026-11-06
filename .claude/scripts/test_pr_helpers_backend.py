@@ -1,8 +1,7 @@
 """This repository's own cases for pr-for-branch.sh and pr-locality.sh: the shipped class map, the locality gate
 that reads it, and the local `/review-branch`'s grants.
 
-`test_pr_helpers.py` is the payload's and holds every case a target without these files runs; these are the ones
-blueprint-harness#5 split out of it, local because only this repository has the files they read.
+`test_pr_helpers.py` holds every case a target without these files runs; these read files only this repository has.
 """
 
 import json
