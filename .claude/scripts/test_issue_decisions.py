@@ -236,6 +236,20 @@ class Cli(StubGh):
             calls[2], ["issue", "close", "9", "--repo", "acme/widgets", "--reason", "not planned"]
         )
 
+    def test_comment_posts_and_leaves_the_issue_open(self):
+        comment = self.write("interview/9-failure.txt", "Tried the hook edit; a deny stopped it.\n")
+        self.assertEqual(self.run_main(["comment", "9", "--comment-file", comment, "--run", RUN]), (0, ""))
+        calls = self.calls()
+        self.assertEqual(calls[1], ["issue", "comment", "9", "--repo", "acme/widgets", "--body-file", "-"])
+        self.assertEqual(2, len(calls), "a point of failure closes nothing")
+
+    def test_comment_takes_only_a_file_the_run_wrote_under_its_directory(self):
+        outside = self.write("9-failure.txt", "elsewhere", under=self.dir)
+        code, err = self.run_main(["comment", "9", "--comment-file", outside, "--run", RUN])
+        self.assertEqual(2, code)
+        self.assertIn("is not under the run's directory", err)
+        self.assertEqual([], self.calls())
+
     def test_close_takes_only_a_short_comment_the_run_wrote_under_its_directory(self):
         # The comment is posted to GitHub as it stands, so the file is held to the run and to an answer's size.
         cases = {

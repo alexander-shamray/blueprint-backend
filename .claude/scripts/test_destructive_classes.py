@@ -314,6 +314,7 @@ class DestructiveClasses(unittest.TestCase):
         examples = {row.example for row in table() if row.refused_by == "helper"}
         self.assertLessEqual(
             {"bash .claude/scripts/git-push-force.sh",
+             "bash .claude/scripts/git-trailer-pr.sh 7",
              "bash .claude/scripts/git-branch-drop.sh main"}, examples)
 
     def test_a_helper_row_must_name_a_test_its_suite_defines(self):
