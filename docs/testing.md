@@ -93,7 +93,7 @@ deletes, and nothing flags it.
 | `test_dispatch_run_backend.py` | 0.1 | `test_gh_issue_suppresses_backend.py` | 0.1 |
 | `test_sync_pr.py` | 93.1 | `test_git_worktree_sync.py` | 12.8 |
 | `test_dispatch_sync.py` | 6.9 | `test_gh_issue_harness.py` | 6.6 |
-| `test_ship_sync.py` | 0.1 | | |
+| `test_ship_sync.py` | 0.1 | `test_git_trailer_pr.py` | 5.7 |
 
 `test_team_board.py` arrived after that measurement and was timed the same
 way on its own branch, #1578's; so were the five `/dispatch` modules, on
@@ -108,6 +108,9 @@ blueprint-harness 0652b27 and was timed alone as
 module with no ceiling of its own at `KILL_FACTOR` times `DEFAULT_CEILING`. The
 four modules the sync to blueprint-harness 5cc23b5 added were timed by this
 script on that sync's branch, and their rows landed before it.
+`test_git_trailer_pr.py` was timed by this script on a copy of the head of
+the sync to blueprint-harness 9f63bd2, which adds it, the middle of three
+runs; its row landed before it.
 
 **Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
 owns the rule). Every CI job that runs Python pins 3.12, and a
