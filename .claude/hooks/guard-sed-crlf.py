@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Refuse a `sed -i` that would rewrite a tracked CRLF file with LF endings.
 
-Git Bash's sed drops the CR from every line it writes in place, so a file the checkout holds with CRLF endings comes
-back LF; the argument, what this hook reads and where it fails open are `docs/harness-boundaries.md`'s (*The sed
-line-ending guard*)."""
+Git Bash's sed drops the CR from every line it writes in place; the argument, what this hook reads and where it fails
+open are `docs/harness-boundaries.md`'s (*The sed line-ending guard*)."""
 
 import glob
 import itertools
@@ -76,11 +75,6 @@ def prepared(command):
 
     Each body is lifted out of the line and its opener replaced by `<< <BODY><n>`, so the body is never read as
     commands and a shell reading it can still be handed it.
-
-    One scan that tracks quotes, because each of the three is decided by whether the character sits inside one: a
-    backslash-newline inside single quotes is kept, a `#` starts a comment only where it begins a word, and a `<<`
-    opens a heredoc only outside quotes. `shlex` knows none of this, so an indented continuation reached it as a
-    newline token, read as a separator, and an apostrophe in a comment as an unbalanced quote.
     """
     out = []
     bodies = []

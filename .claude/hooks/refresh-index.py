@@ -84,9 +84,8 @@ def checkout_root(start: Path) -> Path | None:
 def edited(event: dict) -> Path | None:
     """The file the tool touched, resolved against the session's directory.
 
-    A relative path in the event is relative to `cwd`, and an absolute one
-    may name a different checkout entirely: `guard-edit-target` admits an
-    edit against the session's tree or the one it forked from.
+    A relative path is relative to `cwd`; an absolute one may name another
+    checkout: `guard-edit-target` admits the session's tree or its fork source.
     """
     given = event.get("tool_input")
     if not isinstance(given, dict):
@@ -223,11 +222,8 @@ def take_request(root: Path) -> bool:
 def busy(root: Path) -> bool:
     """Whether a worker already holds this checkout's lock.
 
-    Advisory, and deliberately so: a worker may start between this answer
-    and the spawn it saves. That costs one process which takes no lock and
-    exits at once, because the lock the worker itself takes is the one that
-    decides. Getting this wrong cannot produce two refreshes, only two
-    starts.
+    Advisory: a worker may start between this answer and the spawn it saves.
+    That costs one process that takes no lock, never two refreshes.
     """
     try:
         handle = open(root / LOCK, "a+b")
@@ -244,21 +240,8 @@ def inside(path: Path, tree: Path) -> bool:
 def console_script(root: Path) -> str | None:
     """`codebase-index` found on PATH alone, as a full path, or None.
 
-    Windows hands a bare program name to a search that tries the starting
-    process's own directory before PATH — not the `cwd=` the child is given
-    — so a worker started in a checkout's parent, or for a worktree in a
-    directory of the main checkout, would run whatever a merge put there;
-    `main` starts it in the temp directory for that reason. A PATH entry
-    naming a checkout is the same hole by another route.
-    The search is done here instead: absolute PATH entries only, none of them
-    the working directory, and no candidate inside this checkout or the main
-    checkout it was forked from, a link's target included. The answer is a
-    full path, so the operating system searches nothing.
-
-    On Windows only an `.exe` or a `.com` counts, never PATHEXT's `.bat` or
-    `.cmd`: those run through `cmd.exe` in the checkout, which looks there
-    first for every command the script names, so a shim found safely would
-    reopen the search this closes. pip writes the console script as an `.exe`.
+    Absolute PATH entries, nothing in a checkout, and on Windows only `.exe` or
+    `.com`: `docs/harness-boundaries.md`, *Index refresh and worktree seeding*.
     """
     fenced = [tree.resolve() for tree in (root, main_checkout(root)) if tree is not None]
     try:
@@ -295,14 +278,8 @@ def console_script(root: Path) -> str | None:
 def refresh(root: Path) -> bool:
     """One update, waited on and answered, because the streams are gone.
 
-    The console script first, by the full path `console_script` found, then
-    the module through this interpreter: `py -3.12 -m pip` is a supported
-    install and leaves the script in a directory that need not be on PATH,
-    so both `cbx` wrappers fall back the same way, and a pipx install has no
-    module this interpreter can import, so the script is not dropped for it.
-    CBX_NO_SKILL_AUTO_UPDATE keeps an unpinned package from rewriting the
-    tracked skill, and `-P` keeps a checkout's own codebase_index.py off the
-    import path.
+    The script by its full path, then the module through this interpreter:
+    `docs/harness-boundaries.md`, *Index refresh and worktree seeding*.
     """
     environment = dict(os.environ, CBX_NO_SKILL_AUTO_UPDATE="1", PYTHONSAFEPATH="1")
     script = console_script(root)
@@ -340,10 +317,8 @@ def refreshed(root: Path) -> bool:
 def drain(root: Path) -> bool:
     """Every outstanding request, refreshed; false when one was given up on.
 
-    The request is put back rather than dropped, so the edit behind it is
-    carried by the next worker instead of waiting for an edit that happens
-    to arrive. Returning here rather than looping on it is what keeps a put
-    back request from becoming a spin against an install that cannot work.
+    The request is put back so the next worker carries its edit, and returning
+    rather than looping keeps that from spinning against a broken install.
     """
     while take_request(root):
         if not refreshed(root):
@@ -355,10 +330,8 @@ def drain(root: Path) -> bool:
 def work(root: Path) -> int:
     """Refresh until no request is outstanding, holding the lock throughout.
 
-    The lock is held for the whole drain rather than per update, so an edit
-    arriving mid-run reaches this worker through the marker instead of
-    starting a second one. A worker that cannot take it has nothing to do:
-    the marker it was started for belongs to whoever holds the lock.
+    Held for the whole drain, so an edit arriving mid-run reaches this worker
+    through the marker; a worker that cannot take it leaves the marker alone.
     """
     while True:
         try:
@@ -373,10 +346,9 @@ def work(root: Path) -> int:
                 return 0
         # The lock is gone by here, and that is the point. A request made
         # between the last look above and this release found `busy` true and
-        # left a marker rather than a worker, so it is taken now instead of
-        # waiting for whatever edit comes next. Another worker may have taken
-        # the lock in between, and then the grab above fails and this returns:
-        # the marker is theirs.
+        # left a marker rather than a worker, so it is taken now. Another
+        # worker may have taken the lock in between, and then the grab above
+        # fails and this returns: the marker is theirs.
         if not (root / PENDING).exists():
             return 0
 
@@ -403,12 +375,9 @@ def main() -> int:
         return 0
 
     # The worker stands in the system temp directory, outside every checkout:
-    # Windows will not delete a directory that is a live process's working
-    # directory, and `/ship` removes a worktree moments after its last call;
-    # and a worker's directory is where Windows looks first for a program
-    # named bare. `root.parent` was neither safe: it is a checkout's parent,
-    # or for a worktree a directory of the main checkout. The CLI still runs
-    # in the checkout.
+    # Windows will not delete a live process's working directory, and looks
+    # there first for a program named bare. The CLI still runs in the checkout
+    # (`docs/harness-boundaries.md`, *Index refresh and worktree seeding*).
     root = root.absolute()
     try:
         subprocess.Popen(

@@ -1,10 +1,7 @@
 """git-push-force.sh: a force push of the branch in hand, and what bounds it.
 
-The helper takes no argument and publishes the branch checked out under a
-lease. A permission rule could pin its flags and nothing else; what makes it
-safe is a set of facts about the checkout, so the first class reads the flags
-and the rest run it against real repositories: a bare origin, a checkout of
-it, and where a test needs one, a second clone standing for another session.
+What bounds it is a set of facts about the checkout, which a permission rule
+cannot pin: the first class reads the flags, the rest run real repositories.
 """
 
 import unittest
@@ -212,12 +209,11 @@ class TheHelperRefusesBeforeItPushes(Fixture):
         self.assertEqual(theirs, self.remote(), "the other session's commit was discarded")
 
     def test_a_moved_remote_tip_refuses_the_push(self):
-        # Origin moves after the helper's fetch and before its push, which is
-        # the window the lease exists for. The checkout's tracking ref is set
-        # back first so that the fetch writes it, and a reference-transaction
-        # hook pushes the other session's commit at that moment, once. The
-        # tip the helper fetched is one this branch has been at, so every
-        # guard of its own passes and only git's lease is left to refuse.
+        # Origin moves after the helper's fetch and before its push, the window
+        # the lease exists for. The tracking ref is set back first so the fetch
+        # writes it, and a reference-transaction hook pushes the other
+        # session's commit at that moment, once. The fetched tip is one this
+        # branch has been at, so only git's lease is left to refuse.
         theirs = self.second_session(push=False)
         self.amend()
         self.at("git update-ref refs/remotes/origin/feat/x HEAD~1")

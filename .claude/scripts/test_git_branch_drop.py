@@ -1,12 +1,7 @@
 """git-branch-drop.sh: a local branch deleted only once it has landed.
 
-The helper deletes a branch when `pr-for-branch.sh` reports a pull request
-for it MERGED into `main` at the branch's own tip, and the branch is checked
-out nowhere. The repositories are real; GitHub is a `gh` shim on PATH that
-answers the two reads `pr-for-branch.sh` makes, so the rows go through that
-helper's own `jq` filter as they would in a session. Each refusal is paired
-with the drop succeeding on the same fixture, so a refusal is not the helper
-failing for another reason.
+Real repositories, and a `gh` shim answering `pr-for-branch.sh`'s two reads.
+Each refusal is paired with the drop succeeding, so it failed for its reason.
 """
 
 import json

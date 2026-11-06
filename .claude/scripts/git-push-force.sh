@@ -1,25 +1,8 @@
 #!/usr/bin/env bash
 # Force-push the current branch to origin under a lease, for a branch amended or
 # reworded for a reason neither git-rebase-onto-main.sh nor git-trailer-pr.sh
-# covers. It takes no argument: the branch is the one checked out, so no name a
-# caller passes can point it at another.
-#
-# Guards, each before the one push: the branch is in hand and not `main` in any
-# spelling; origin has it; and origin's tip, fetched fresh, is a commit this
-# branch has itself been at, as its reflog records. The push leases against
-# that fetched tip, so a push landing between the fetch and this one is git's
-# to refuse.
-#
-# Exit codes are git-rebase-onto-main.sh's, those this helper can reach:
-#   0  published, or nothing to force (origin already holds HEAD)
-#   2  usage: an argument was given
-#   3  the branch is `main`, however it is spelled
-#   4  a detached HEAD: there is no branch to publish
-#   6  origin has no such branch: push it normally, there is nothing to force
-#   7  origin carries commits this checkout never held
-#   12 origin could not be asked where the branch is, or fetched from
-# A push origin refuses, a lease that no longer holds among them, exits with
-# git's own status, as the rebase helper's does.
+# covers. It takes no argument. Its guards and its exit codes are
+# `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
 set -euo pipefail
 
 [ "$#" -eq 0 ] ||
@@ -62,10 +45,9 @@ fi
 
 # A lease is not consent: once another session's commits have been fetched,
 # they satisfy it and would be discarded. So origin's tip must be a commit this
-# branch has been at, which is git-rebase-onto-main.sh's
-# require_remote_carries_nothing_new for a rewrite with no fork point to
-# measure from. A reflog that has expired the entry, or was never kept, fails
-# closed.
+# branch has been at: git-rebase-onto-main.sh's
+# require_remote_carries_nothing_new with no fork point to measure from. A
+# reflog that has expired the entry, or was never kept, fails closed.
 held=$(git reflog show --format=%H "refs/heads/$branch" --) ||
   { echo "cannot read the reflog of $branch, so whether origin carries work it lacks is unknown" >&2; exit 7; }
 printf '%s\n' "$held" | grep -qxF -- "$lease" ||

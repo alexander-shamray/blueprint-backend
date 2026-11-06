@@ -4,13 +4,14 @@
 this repository's tree, so a new top-level directory no row owns fails here before a sweep passes over it.
 """
 
+import re
 import unittest
 
 from review_helpers import run_bash, setUpModule
-from test_sweep_slices import REPO, Sweep, git, listed, parse
+from test_sweep_slices import REPO, SLICES, Sweep, git, listed, parse
 
-# The slice budget sweep-slices.sh packs to, in bytes.
-BUDGET = 240000
+# The slice budget sweep-slices.sh packs to, in bytes, read from it because a sync can change that managed script.
+BUDGET = int(re.search(r"^BUDGET=(\d+)$", SLICES.read_text(encoding="utf-8"), re.MULTILINE).group(1))
 
 
 class TheRealTree(unittest.TestCase):

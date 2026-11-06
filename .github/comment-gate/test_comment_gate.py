@@ -1,8 +1,7 @@
 """The comment gate's subject: what it must find, and what it must not judge.
 
 Each reader's class pairs the comments it must find with the literals it must
-leave alone, because a literal is code, and each rule's class pairs a finding
-with its innocent neighbour.
+leave alone, and each rule's class pairs a finding with its innocent neighbour.
 """
 
 import os
@@ -304,6 +303,26 @@ class WhichFilesAreRead(unittest.TestCase):
         for path, reader in cases.items():
             with self.subTest(path=path):
                 self.assertIs(gate.reader_for(path), reader)
+
+
+class ThePayloadsPaths(unittest.TestCase):
+    def test_a_payload_workflow_is_read_as_the_workflow_it_renders_to(self):
+        found = judged("payload/.github/workflows/w.yml",
+                       "- run: |\n    true\n    # PR-1\n")
+        self.assertEqual([line for _, line, _ in found], [3])
+
+    def test_the_payloads_harness_tree_may_name_its_reviewer(self):
+        text = "# Copilot's login\n"
+        self.assertEqual(judged("payload/.claude/scripts/a.sh", text), [])
+        self.assertEqual(len(judged("payload/deploy/a.sh", text)), 1)
+
+    def test_a_record_in_the_payload_is_not_prose(self):
+        self.assertFalse(gate.is_prose("payload/docs/superpowers/specs/a.md"))
+        self.assertTrue(gate.is_prose("payload/docs/a.md"))
+
+    def test_only_a_leading_payload_directory_renders(self):
+        path = "tools/payload/.github/workflows/w.yml"
+        self.assertIs(gate.reader_for(path), gate.yaml)
 
 
 class ThePatterns(unittest.TestCase):

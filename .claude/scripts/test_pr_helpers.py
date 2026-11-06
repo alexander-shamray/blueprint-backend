@@ -170,11 +170,10 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
 
     def test_the_locality_rows_go_through_the_fixed_helper(self):
         # The change contract `docs/harness-local.md` *Documents* names asks a PR body for `| Class |` and
-        # `| Touch set |`, and no command may hold
-        # `gh pr view`, so the rows arrive through a helper that reads `body` and the changed names and nothing
-        # else, since a caller that chooses fields can choose `reviews`. The two `gh` lines are compared whole,
-        # because a substring check passes one that chains `--json reviews` after a semicolon; names arrive as
-        # JSON strings, because git permits a newline in a name.
+        # `| Touch set |`, and no command may hold `gh pr view`, so the rows arrive through a helper that reads `body`
+        # and the changed names and nothing else, since a caller that chooses fields can choose `reviews`. The two `gh`
+        # lines are compared whole, because a substring check passes one that chains `--json reviews` after a
+        # semicolon; names arrive as JSON strings, because git permits a newline in a name.
         helper = SCRIPTS / "pr-locality.sh"
         text = helper.read_text(encoding="utf-8")
         code = code_lines(text)

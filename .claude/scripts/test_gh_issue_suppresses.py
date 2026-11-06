@@ -30,18 +30,8 @@ ISSUE_LIST = SCRIPTS / "gh-issue-list.sh"
 class BothSweepsAgreeOnWhatSuppresses(unittest.TestCase):
     """Both sweeps state the same de-duplication gate.
 
-    An issue blocks a re-file only if the repository owner opened it. The
-    repository is public, so without that test any account could file "<topic>
-    is tracked" and have the next sweep suppress the real finding. A
-    maintainer-applied label is not a second sufficient condition: a label is
-    applied to an issue rather than to its contents, and the author can rewrite
-    the body afterwards while it stays, whereas authorship cannot be edited.
-
-    The predicate is prose an agent follows rather than code that runs, so
-    these cases pin only that both files still state it and that neither has
-    drifted back to the unconditional rule. `security-sweep.md` and
-    `bug-sweep.md` carry the gate word for word, and a rule fixed at one site
-    and not its neighbour is why a test exists at all.
+    It is prose an agent follows, so these cases pin only that `bug-sweep.md`
+    and `security-sweep.md` still state it; their runbooks argue it.
     """
 
     SWEEPS = ("security-sweep.md", "bug-sweep.md")
@@ -117,9 +107,8 @@ class BothSweepsAgreeOnWhatSuppresses(unittest.TestCase):
 class SuppressionStub:
     """A `gh` answering the two reads gh-issue-suppresses.sh makes.
 
-    Either answer can be made to fail, because the helper's fail direction is
-    the property under test: it must never call an issue "tracking" on a lookup
-    it could not complete.
+    Either answer can fail, because the helper must never call an issue
+    "tracking" on a lookup it could not complete.
     """
 
     def __init__(self, owner, authors, owner_fails=False, issue_fails=False):
@@ -164,17 +153,8 @@ class SuppressionStub:
 class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
     """`gh-issue-suppresses.sh` decides de-duplication, not a reader.
 
-    An open issue suppresses a sweep finding only if the repository owner
-    opened it: this repository is public, so otherwise a stranger files
-    "{topic} is being tracked" and the next sweep suppresses the real finding
-    and reports convergence — worse than a missed filing, because a clean round
-    is what stops the loop.
-
-    A drift check over the two command files can pin only that both still say
-    the rule; it cannot establish that a sweep applied it to an issue. The rule
-    the helper implements is authorship alone, because a label is applied to an
-    issue rather than to its contents and the author can rewrite the body
-    afterwards while the label stays.
+    A drift check over the two command files cannot establish that a sweep
+    applied the rule, so this holds the helper, whose test is authorship alone.
     """
 
     def stub(self, **kw):
@@ -387,10 +367,9 @@ class TheSweepsReachIssuesOnlyThroughTheHelpers(unittest.TestCase):
 
     def test_neither_sweep_can_read_an_issues_author_at_all(self):
         # Dropping `author` from the listing is half a control: an unrestricted
-        # `Bash(gh issue view:*)` returns `author` to the same session, so the
-        # decision the helper exists to take stays takeable. A helper that fixes
-        # its field set does not bind a caller who still holds the raw grant.
-        # Matching needs the body, which is an argument for a second
+        # `Bash(gh issue view:*)` returns `author` to the same session, and a
+        # helper fixing its field set does not bind a caller who holds the raw
+        # grant. Matching needs the body, which is an argument for a second
         # fixed-field helper rather than for keeping the grant.
         for name in self.SWEEPS:
             with self.subTest(command=name):

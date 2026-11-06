@@ -1,12 +1,8 @@
 """git-rebase-onto-main.sh: a leased force push, and what bounds it.
 
-A permission rule matches the text of a command, so it can pin a flag and
-cannot pin a fact about the checkout. The guards that make this force push
-safe are mostly the second kind, and the script's own header enumerates them;
-this docstring does not. The script is the boundary and this suite is what
-watches it. The first class reads the flags, the last reads this file, and the
-rest run the thing against real repositories.
-"""
+A permission rule cannot pin a fact about the checkout, so the guards are the
+script's, and its header lists them. The first class reads the flags, the last
+reads this file, and the rest run it against real repositories."""
 
 import ast
 import re
@@ -27,11 +23,8 @@ HELPER = SCRIPTS / "git-rebase-onto-main.sh"
 def run_bash(script, subject="", **env_extra):
     """`review_helpers.run_bash` with the caller's git configuration shut out.
 
-    `rebase.backend` picks the state directory the helper has to find,
-    `rebase.updateRefs` is a setting it spells a flag against, and
-    `core.autocrlf` rewrites the files a conflict is staged from, so ambient
-    configuration would decide what the fixtures reach. `/dev/null` is read by
-    git, which spells it the same way on every runner.
+    `rebase.backend`, `rebase.updateRefs` and `core.autocrlf` would each decide
+    what the fixtures reach. `/dev/null` is spelled the same on every runner.
     """
     return _run_bash(script, subject,
                      GIT_CONFIG_GLOBAL="/dev/null",
@@ -145,11 +138,8 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
     def test_the_scan_sees_what_a_line_scan_misses(self):
         """The scan's subject is the scan, not what it happened to find.
 
-        Every line below is a second, unleased force push, and a scan of line
-        starts sees none of the first six. The assertion is that the force
-        push is among what the scan now sees with its flags still attached,
-        because a scan that saw the command and cut it before `--force` would
-        pass a count.
+        Every line below is a second, unleased force push. Its flags must stay
+        attached: a scan that cut one before `--force` would pass a count.
         """
         hidden = (
             'GIT_SSH_COMMAND=ssh git push --force origin "$branch"',
@@ -376,9 +366,8 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
 class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
     """Exit 2 covers five conditions, so each case pins its message too.
 
-    No fixture, and that is the property: these refuse before anything reads
-    the checkout, so a guard that needed a repository would be one the
-    session's location could switch off.
+    No fixture, and that is the property: a guard that needed a repository
+    would be one the session's location could switch off.
     """
 
     def refuse(self, branch, mode="start"):
@@ -422,9 +411,8 @@ class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
 class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
     """The resolution belongs in the replayed commit, not in a merge commit.
 
-    So `start` leaves a conflicted rebase in progress rather than aborting it:
-    backing out would send the caller to the merge this repository stopped
-    making, and the tree would stop being a line.
+    So `start` leaves a conflicted rebase in progress: backing out would send
+    the caller to the merge this repository stopped making.
     """
 
     def setUp(self):
@@ -1239,12 +1227,10 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
 
 class EveryFixtureSaysItWasBuilt(unittest.TestCase):
     """With a failed fixture `self.root` is "" and `self.work` is "/work", so
-    every `cd` fails and the non-zero and empty-output assertions are
-    satisfied by the failed `cd` rather than by the state they name.
+    every `cd` fails and the assertions are satisfied by the failed `cd`.
 
-    Read from the AST, not as text: a comment is not in it, and an assertion
-    inside a lambda or a branch is not a top-level statement of `setUp`.
-    """
+    Read from the AST: a comment is not in it, and an assertion inside a lambda
+    or a branch is not a top-level statement of `setUp`."""
 
     @staticmethod
     def builds_the_fixture(function):

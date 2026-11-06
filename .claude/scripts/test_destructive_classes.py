@@ -1,38 +1,7 @@
 """The table of destructive classes in `docs/harness-boundaries.md`, held.
 
-*Destructive classes* says, per class of operation the harness exists to
-stop, an example and the layer that refuses it. A table nothing reads goes
-stale where a gate would not, so this suite reads it:
-
-- every `permissions.deny` entry of `.harness/settings.base.json` is matched
-  by some `deny` row's example, so a deny added without a row fails and is
-  named;
-- every row's example is refused by the layer the row names: a `deny` row
-  matches a base deny, and a guard row is fed to the real hook as the JSON a
-  PreToolUse call carries and must come back `deny`;
-- `git-push-force.sh` and `git-branch-drop.sh` each have a `helper` row,
-  because each relaxes a deny and its refusal of `main` is what bounds it;
-- the table is parsed, at least fifteen rows, so a renamed heading cannot
-  leave the checks above vacuous.
-
-A `ruleset` row is the server-side backstop. Its test is `ruleset-check`,
-which the table names and this suite does not run. It is blueprint-harness's
-`py -3.12 -m harness_sync ruleset-check`, which asks GitHub and is run by
-that repository's `rulesets` workflow against every target's `main` ruleset,
-so it is not in a target this suite is rendered into. A `helper` row is a
-lease-bound helper's refusal of `main`, and its test is that helper's suite
-and test, spelled `test_<helper>.py::test_main_is_refused_however_it_is_spelled`,
-which this suite does not run either: it checks that the example invokes a
-helper beside this file, that the suite is that helper's, and that the suite
-defines the test. Every other row's *Test* must name a suite file that exists
-beside this one.
-
-The root is the directory two above this file: the rendered root in a
-target, `payload/` in this repository, which has the same layout.
-
-To add a *Refused by* value, add one entry to `REFUSERS`, one function that
-returns `None` when the row is refused and the reason when it is not, and
-the column's value to the section's prose.
+*Destructive classes* says what is checked. A new *Refused by* value is one
+`REFUSERS` entry, returning `None` if refused, else the reason, and its prose.
 """
 
 import ast
@@ -108,9 +77,8 @@ def _regex(text):
 def deny_matches(rule, command):
     """Whether the permission `rule` matches `command`.
 
-    `Bash(x:*)` matches `x` and `x …`; a `*` inside a rule matches any run; a
-    rule without `:*` matches whole. `Edit(glob)` matches an example spelled
-    `Edit(<path>)`, `./` taken off both, `*` and `**` any run.
+    `Bash(x:*)` matches `x` and `x …`; a `*` inside any run; no `:*`, whole.
+    `Edit(glob)` matches `Edit(<path>)`, `./` off both, `*` and `**` any run.
     """
     name, _, rest = rule.partition("(")
     body = rest[:-1]

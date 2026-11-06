@@ -1,9 +1,7 @@
 """What `.claude/hooks/refresh-index.py` refreshes, and what it leaves alone.
 
-The hook suppresses every failure on purpose, so its exit status says
-nothing: a wrong checkout, an absent CLI and a hook nothing calls all look
-like success. The invariant held here is that the tree refreshed is the one
-the edit landed in, exactly one refresh owns it, or none of them run.
+The hook suppresses every failure, so its exit status says nothing. The tree
+refreshed is the one the edit landed in, exactly one refresh owns it, or none.
 """
 
 import importlib.util
@@ -84,9 +82,8 @@ class _Stdin:
 class Base(unittest.TestCase):
     """Every patch below is undone by addCleanup, and that is load-bearing.
 
-    `subprocess`, `os` and `sys` inside the hook are the interpreter's own
-    modules rather than copies of them, so an attribute set on one and left
-    there reaches every other suite in the same discover run.
+    `subprocess`, `os` and `sys` inside the hook are the interpreter's own, so
+    an attribute left set reaches every other suite in the same discover run.
     """
 
     def setUp(self):
@@ -169,7 +166,7 @@ class ChoosingTheCheckout(Base):
         working = Path(self.spawned[0][1]["cwd"]).resolve()
         # Not `root.parent` either: a worker's directory is where Windows looks
         # first for a program named bare, and that is a checkout's parent, or
-        # for a worktree a directory of the main checkout (#6).
+        # for a worktree a directory of the main checkout.
         self.assertEqual(Path(tempfile.gettempdir()).resolve(), working)
         self.assertNotEqual(root.resolve().parent, working)
 
@@ -450,10 +447,8 @@ class SeedingAWorktree(Base):
 class OneRefreshAtATime(Base):
     """`codebase-index update` does not serialise, so this has to.
 
-    Overlapping runs against one checkout leave a single winner and
-    `database is locked` for the rest, and the loser may be the run carrying
-    the newest edit — a stale index, said nothing about, because the streams
-    are discarded.
+    Overlapping runs leave one winner and `database is locked` for the rest,
+    and the loser may carry the newest edit: a stale index, said nothing about.
     """
 
     def test_the_worker_refreshes_once_for_one_request(self):
@@ -767,11 +762,8 @@ def plant(directory: Path) -> Path:
 class FindingTheCli(Base):
     """`codebase-index` is looked for on PATH alone, and never in a checkout.
 
-    On Windows a bare name is searched for in the starting process's own
-    directory before PATH, so a worker started in a checkout's parent, or for
-    a worktree in a directory of the main checkout, would run a stub a pull
-    request committed there on the next hook fire (#6). The full path the
-    lookup answers with is what makes no directory searched at all.
+    Windows searches the starting process's directory for a bare name first, so
+    a committed stub could run; the full path the lookup answers searches none.
     """
 
     def search(self, *entries, cwd=None, root=None):
@@ -923,9 +915,8 @@ class DocumentedConfiguration(unittest.TestCase):
     """The example carries the installed block, which only a test can keep true.
 
     `docs/harness-boundaries.md` says the two are the same block, and Claude
-    Code never reads anything under `examples/` — so a divergence costs
-    nothing at the moment it happens and everything to whoever copies it.
-    """
+    Code never reads anything under `examples/`, so a divergence costs nothing
+    at the moment it happens and everything to whoever copies it."""
 
     def test_the_example_is_the_installed_block(self):
         self.assertEqual(
@@ -940,8 +931,7 @@ class RestoresWhatItPatched(unittest.TestCase):
     """The canary, and it sorts after the suites above on purpose.
 
     A leaked patch is invisible to the file that leaks it and fatal to every
-    file loaded after it, so the suite that would notice has to be one that
-    runs later.
+    file loaded after it, so the suite that notices has to run later.
     """
 
     def test_the_interpreters_modules_are_as_they_were(self):

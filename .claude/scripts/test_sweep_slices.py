@@ -1,9 +1,7 @@
 """sweep-slices.sh and sweep-mark.sh: the partition, the budget and the ref.
 
-The partition runs here against small repositories built per case. A target
-whose tree the rows partition also runs it against its own tree, in a suite of
-its own, so a new top-level directory no row owns fails there before a sweep
-passes over it.
+The partition runs here on small repositories built per case. A target whose
+tree the rows partition also runs it on that tree, in a suite of its own.
 """
 
 import os
