@@ -215,7 +215,8 @@ base change reaches every target's rendered file.
   `test_refresh_index.py`; `skills/codebase-index/scripts/cbx`;
   `payload/.harness/settings.base.json`; `payload/.claude/commands/pr.md`,
   `ship.md`; `docs/commands/ship.md`; `payload/docs/harness-boundaries.md`;
-  `test_harness_denies.py`, `test_hook_timeouts.py`
+  `test_harness_denies.py`, `test_hook_timeouts.py`; `README.md`, whose *Tests*
+  recipe types `git worktree remove --force` and takes a scratch clone instead
 
 **Interfaces:**
 - Produces: `sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh" <guard>`,
@@ -247,10 +248,10 @@ base change reaches every target's rendered file.
     pass a call unguarded, so frontend's refusal stands;
   - `test_each_raw_form_is_denied_and_the_helper_is_not`, using the
     `bash_deny_matches` the suite has.
-- [ ] **Step 4:** Run the backend replay of Task 2 against the settings'
-  denies by reading: `git worktree remove` and `gh pr merge` typed bare in a
-  backend transcript since 2026-10-19 is a stop this adds, and the PR body
-  gives that count. The syncs this opens land by `/ship sync` or `/dispatch`,
+- [ ] **Step 4:** Run Task 2's replay against the settings' denies by reading,
+  over backend's and the harness's transcripts: `git worktree remove` or `gh pr
+  merge` typed bare since 2026-10-19 is a stop this adds, and the PR body gives
+  that count. The syncs this opens land by `/ship sync` or `/dispatch`,
   which backend and the harness both have now.
 
 ### Task 4: Each target owns its sweep rows
