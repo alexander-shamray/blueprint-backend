@@ -152,20 +152,25 @@ class TheRealSuite(unittest.TestCase):
 
     directory = suite_budget.ROOT / suite_budget.SUITE
 
+    @staticmethod
+    def rows():
+        text = (suite_budget.ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+        return re.findall(r"`(test\w*\.py)` \| (\d+\.\d) \|", text)
+
     def test_every_module_ci_runs_from_the_suite_directory_is_timed(self):
         loaded = discovered(self.directory)
         self.assertTrue(loaded)
         self.assertEqual(suite_budget.modules(self.directory), loaded)
 
-    def test_every_ceiling_names_a_module_that_exists(self):
-        self.assertLessEqual(set(suite_budget.CEILINGS), set(suite_budget.modules(self.directory)))
+    def test_every_ceiling_names_a_module_or_its_row(self):
+        recorded = {module for module, _ in self.rows()}
+        self.assertLessEqual(set(suite_budget.CEILINGS), set(suite_budget.modules(self.directory)) | recorded)
 
     def test_every_ceiling_is_positive(self):
         self.assertTrue(all(c > 0 for c in suite_budget.CEILINGS.values()), suite_budget.CEILINGS)
 
     def test_each_ceiling_is_twice_its_recorded_figure_rounded_up_to_ten(self):
-        text = (suite_budget.ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
-        rows = re.findall(r"`(test\w*\.py)` \| (\d+\.\d) \|", text)
+        rows = self.rows()
         figures = {m: float(s) for m, s in rows}
         self.assertEqual(len(rows), len(figures), "a module has two rows")
         # A subset: a row may land before its module (docs/testing.md, *Each of its modules has a time budget*).
