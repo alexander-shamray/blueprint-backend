@@ -260,8 +260,9 @@ Each round is the review done once, end to end:
    the mediums and lows recorded but not filed, and the by-inspection limit
    restated.
 
-Name the residuals rather than hide them. (why: docs/commands/bug-sweep.md,
-*Residuals*)
+Name the residuals rather than hide them: `git-worktree-detach.sh` now refuses
+a pinned commit carrying a tracked link, and the rest stays open. (why:
+docs/commands/bug-sweep.md, *Residuals*)
 
 ## Where it stops
 

@@ -529,6 +529,33 @@ rather than an inconvenience — the same refusal `/security-sweep`'s
 teardown uses. A worktree it declines to remove is left where it is and
 named in the report.
 
+**Its exit says what is left, and the directory is checked as well as git's
+status.** Git for Windows, failing to delete a file a process holds open,
+can unregister the worktree and leave its directory behind, exiting non-zero
+or, with the delete failing late, zero. A teardown read as done would leave a
+directory nobody looks at, which the next `/branch` on that slug stops on, so
+the helper asks whether git still registers the worktree, by the branch it
+holds, which needs no comparison of directory spellings under MSYS. A worktree
+still registered is the dirty-tree refusal and keeps git's own status and
+message. One no longer registered is tried with `rmdir`, which refuses a
+directory holding anything and an empty one a process holds: an emptied one is
+gone and the removal succeeded, so the helper exits 0 whatever git's status
+was, and any other is named with exit 4 for the owner to remove, the branch
+kept.
+
+**The helper takes the path and the branch forked there, and removes only
+the worktree registered at that path holding that branch.** A path alone made
+registration stand for ownership: a prefix grant with a caller-chosen path
+could remove any clean forked worktree, another run's pull request checkout
+included. `main` is refused, so is a detached worktree, which holds no branch,
+and the directory name need not echo the branch, since `/branch` cuts it to a
+word or two of the change. What remains is a caller that already knows another
+run's path and branch together. Step 6 passes the branch `/ship` created at
+step 1; step 0 may remove a worktree an earlier run forked, so it takes the
+branch from the `git worktree list` it already runs.
+The branch pattern is the one `git-branch-create.sh` and `git-worktree-fork.sh`
+use, which admits parentheses because `/branch` cuts `feat(<scope>)/` names.
+
 **The index lock and the helper in place of a grant are
 `docs/harness-boundaries.md`'s**: *Index refresh and worktree seeding* says why
 the removal waits for the refresh lock, and *Grant inventory and push helpers*
@@ -542,7 +569,9 @@ stay denied in `.claude/settings.json`; the helper is the one route, and it
 deletes only a branch a pull request merged into `main` at its tip, which
 `docs/harness-boundaries.md`, *Grant inventory and push helpers*, argues. A
 worktree whose removal was refused keeps its branch, because the branch is
-still checked out there and the helper would refuse it in any case. Leaving a
+still checked out there and the helper would refuse it in any case; an
+exit 4, a directory that holds something or that a process holds, keeps it
+too. Leaving a
 landed branch behind costs a line in `git branch` per run, which no one reads
 and no one clears; the drop is cheap and keeps the list to live work.
 
@@ -1192,7 +1221,8 @@ takes it, on the dispatcher's proof as the sync section says.
 session started inside a worktree it did not enter has no `EnterWorktree`
 to undo, so `ExitWorktree` answers with an error that it had nothing to exit,
 and `git-worktree-remove.sh` deregisters the worktree but cannot delete the
-directory the session is standing in, which Windows holds open. Lines 3 to
+directory the session is standing in, which Windows holds open, so it exits
+4 naming it. Lines 3 to
 6 go with them: the main checkout holds `main` for the whole night, so the
 switch to `main` is refused, and from a linked worktree
 `git fetch origin main:main` is refused too, git declining to move a branch

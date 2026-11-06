@@ -60,6 +60,7 @@ import re
 import shlex
 import sys
 import traceback
+from bisect import bisect_left
 
 # Flags that write or execute rather than inspect. Matched on a prefix, so
 # `--exec-path=<dir>` — a directory of binaries for git to run — is the same act
@@ -292,7 +293,7 @@ def quote_states(command, quotes=True):
     return states
 
 
-def _quoting(command, quotes=True, data=()):
+def _quoting(command, quotes=True, data=(), start=0):
     """Walk `command`, yielding `(index, state, escaped)` per character.
 
     `data` is spans this scanner must read as data rather than as shell text —
@@ -333,7 +334,7 @@ def _quoting(command, quotes=True, data=()):
     # one: in `git log --grep=foo\\ #bar;git push origin +HEAD:main` bash keeps
     # `#bar` inside the `--grep` argument and runs the push.
     at_word_start = True
-    index = 0
+    index = start  # Read as unquoted and as beginning a word.
     # Whether this character is the one the backslash before it escapes.
     pending = False
     # A cursor rather than a search: this walk is monotonic, so the spans are
@@ -417,24 +418,174 @@ def _quoting(command, quotes=True, data=()):
         index += 1
 
 
-def _arithmetic_spans(line):
-    """Every outermost `((…))` in `line`, `$((…))` included, in order."""
-    # A sum closes on `))`: `((a) | b)` is two subshells. One pass over a stack,
-    # because `_closing_paren` per sum is quadratic and a timeout fails open.
-    found, stack, previous = [], [], None
-    for index, state, escaped in _quoting(line):
+def _opened_body(command, index, pending):
+    """`(start, end, expands)` for a `<<` at `index`, past `pending`: None if no body, `end` None if none closes it."""
+    # `<<<` is a here-string: `cat <<<EOF` passes the word `EOF` on stdin and the
+    # next line is an ordinary command, so matching `<<EOF` at its second
+    # character would swallow that line. Two tests, because the operator has two
+    # ends: an index inside a run of `<`, and an operator continuing past `<<`.
+    if index > 0 and command[index - 1] == "<":
+        return None
+    if command.startswith("<<<", index):
+        return None
+    match = HEREDOC.match(command, index)
+    if not match:
+        return None
+    # One parse of the delimiter word, quote removal included —
+    # `<<\EOF` is a quoted delimiter to bash the same way `<<'EOF'`
+    # is, and `<<E"OF"` is one in parts.
+    delimiter, expands = _heredoc_delimiter(match.group("word"))
+    if delimiter is None:
+        # A delimiter this file cannot decode opens no body, so the
+        # lines after it stay commands and are judged as such.
+        return None
+    intro_end, dash = match.end(), bool(match.group("dash"))
+
+    # An introducer inside an earlier body is body text, which the scanner
+    # settles by not walking a body at all. Two heredocs stacked on one
+    # line both introduce before either body starts, which is `pending`'s
+    # job below.
+
+    # A body begins on the next line: everything between the introducer
+    # and that newline is still command line, as the push in
+    # `cat <<'A' ; git push origin +HEAD:main` is.
+    newline = command.find("\n", intro_end)
+    if newline == -1:
+        # An introducer with no line after it opens no body at all.
+        return None
+
+    # Stacked bodies queue: the second starts where the first terminated,
+    # which is past its own line break.
+    start = max(newline + 1, pending)
+    # The terminator is the delimiter and nothing else: bash accepts no
+    # indented or trailing-spaced terminator — only `<<-` strips leading
+    # tabs — so a commit body that indents the word keeps going.
+    terminator = (
+        rf"^\t*{re.escape(delimiter)}$" if dash
+        else rf"^{re.escape(delimiter)}$")
+    closing = re.search(terminator, command[start:], re.MULTILINE)
+    return start, None if closing is None else start + closing.end(), expands
+
+
+def _closes_inside_backtick(command, index, end):
+    """Whether a body ending at `end` does so before the backtick around `index` closes."""
+    return end is not None and command.find("`", index) > end
+
+
+def _sums_in_group(command, start):
+    """Whether each `(` of the group opening at `start` opens a sum, and its end."""
+    # As bash decides a `((`: quotes are read, and a heredoc only where a `$(…)`
+    # or a backtick runs commands. A sum closes on `))`: `((a) | b)` is two
+    # subshells. One pass over a stack, because `_closing_paren` per sum is
+    # quadratic and a timeout fails open.
+    verdicts, stack, previous, end = {}, [], None, len(command)
+    substitutions, doubled, ticked, unsettled = [], [], False, False
+    bodies, pending, hunting = [], 0, True
+    for index, state, escaped in _quoting(command, data=bodies, start=start):
         if state or escaped:
             continue
-        if line[index] == "(":
+        if command[index] == "(":
+            if stack and stack[-1] == index - 1:
+                doubled.append(index - 1)
             stack.append(index)
-        elif line[index] == ")" and stack:
-            start = stack.pop()
-            if previous == (start + 1, index - 1):
-                while found and found[-1][0] > start:
-                    found.pop()
-                found.append((start, index))
-            previous = (start, index)
-    return found
+            if (command[index - 1:index] == "$"
+                    and command[index + 1:index + 2] != "("):
+                substitutions.append(index)
+        elif command[index] == ")":
+            opener = stack.pop()
+            verdicts[opener] = previous == (opener + 1, index - 1)
+            previous = (opener, index)
+            for parens in (substitutions, doubled):
+                if parens and parens[-1] == opener:
+                    parens.pop()
+            if not stack:
+                end = index + 1
+                break
+        elif command[index] == "`":
+            ticked = not ticked
+        elif command.startswith("<<", index) and (ticked or substitutions):
+            if not hunting or (not ticked and doubled and doubled[-1] > substitutions[-1]):
+                unsettled = True
+                continue
+            body = _opened_body(command, index, pending)
+            if body is None:
+                continue
+            # With no close in reach, the next `<<` would search to the end too.
+            hunting = body[1] is not None and (
+                not ticked or _closes_inside_backtick(command, index, body[1]))
+            if hunting:
+                pending = body[1]
+                bodies.append(body[:2])
+    verdicts.update(dict.fromkeys(stack, False))
+    # A `<<` this read could not settle may hide a close. A sum opens no body, so
+    # the lines after stay commands, and the cost is a false refusal.
+    return dict.fromkeys(verdicts, True) if unsettled else verdicts, end
+
+
+class _Sums:
+    """Which `<<` are shifts, for the walk `heredoc_spans` makes.
+
+    A group is read ahead only where a `<<` needs the verdict, and no two reads
+    overlap, so the walk stays linear.
+    """
+
+    def __init__(self, command):
+        self.command = command
+        # The parens open at the walk, those a `$` leads, and each `((` among
+        # them not yet refused, named by its outer paren. All three ascend.
+        self.opened, self.substitutions, self.pairs = [], [], []
+        self.verdicts, self.read_to, self.backtick, self.bodiless_to = {}, 0, None, 0
+
+    def open(self, index):
+        if self.opened and self.opened[-1] == index - 1:
+            self.pairs.append(index - 1)
+        if self.command[index - 1:index] == "$":
+            self.substitutions.append(index)
+        self.opened.append(index)
+
+    def close(self):
+        if not self.opened:
+            return
+        index = self.opened.pop()
+        for parens in (self.substitutions, self.pairs):
+            if parens and parens[-1] == index:
+                parens.pop()
+
+    def tick(self, index):
+        self.backtick = index if self.backtick is None else None
+
+    def is_shift(self, index, pending):
+        """Whether a `<<` at `index` is in a sum and opens no body."""
+        pairs, substitutions = self.pairs, self.substitutions
+        while pairs:
+            if pairs[-1] >= self.read_to:
+                first = pairs[bisect_left(pairs, self.read_to)]
+                verdicts, self.read_to = _sums_in_group(self.command, first)
+                self.verdicts.update(verdicts)
+            # A read that did not see this paren is one a body's lone quote put
+            # out of step, which is a syntax error in bash too. Reading a shift
+            # opens no body, so the lines after it stay commands.
+            if self.verdicts.get(pairs[-1], True):
+                if self.backtick is None or self.backtick < pairs[-1]:
+                    return not substitutions or substitutions[-1] <= pairs[-1]
+                return not self._backtick_holds_body(index, pending)
+            pairs.pop()
+        return False
+
+    def _backtick_holds_body(self, index, pending):
+        """Whether a `<<` at `index` closes its body before its backtick closes."""
+        if index < self.bodiless_to:
+            return False
+        body = _opened_body(self.command, index, pending)
+        if body is None:
+            return False
+        # A backtick's heredoc ends with its text, so the lines after that are
+        # commands. Once per backtick, or each `<<` in it searches to the end.
+        if not _closes_inside_backtick(self.command, index, body[1]):
+            close = self.command.find("`", index)
+            self.bodiless_to = len(self.command) if close == -1 else close
+            return False
+        return True
 
 
 def heredoc_spans(command, unclosed=None, openers=None):
@@ -465,83 +616,23 @@ def heredoc_spans(command, unclosed=None, openers=None):
     # appends spans that start ahead of it, so the list is sorted by
     # construction and the walk stays monotonic.
     data, spans, pending = [], [], 0
-    # Sums are read a line at a time, because an earlier body's apostrophe would
-    # quote every later one, and no body shares a line with an opener. A sum
-    # spanning lines, or hard against the `#` after a string that crossed one,
-    # is missed, and its shift reads as an opener.
-    sums, line_end, unquoted, crossed = [], 0, 0, False
-    for index, in_quotes, in_comment in shell_positions(command, data):
-        # `pending` tells a string's newline from a body's.
-        if in_quotes and index >= pending and command[index] == "\n":
-            crossed = True
-        if in_quotes or in_comment:
+    sums = _Sums(command)
+    for index, state, escaped in _quoting(command, data=data):
+        if state:
             continue
-        if crossed and command[index] in "'\"":
-            # From its line's start, this closing quote would read as opening.
-            unquoted, crossed = index + 1, False
+        if not escaped and command[index] == "(":
+            sums.open(index)
+        elif not escaped and command[index] == ")":
+            sums.close()
+        elif not escaped and command[index] == "`":
+            sums.tick(index)
+        if not command.startswith("<<", index) or sums.is_shift(index, pending):
             continue
-        if not command.startswith("<<", index):
+        body = _opened_body(command, index, pending)
+        if body is None:
             continue
-        if index >= line_end:
-            line_start = max(command.rfind("\n", 0, index) + 1, unquoted)
-            line_end = command.find("\n", index)
-            line_end = len(command) if line_end == -1 else line_end
-            # Reversed, so the walk pops the nearest as it passes them.
-            sums = [(line_start + start, line_start + end) for start, end
-                    in _arithmetic_spans(command[line_start:line_end])][::-1]
-        # A shift, not an opener. A heredoc in a `$(…)` nested in the sum lands
-        # here too, and its body is then judged as commands, which over-refuses.
-        while sums and sums[-1][1] <= index:
-            sums.pop()
-        if sums and sums[-1][0] <= index:
-            continue
-        # `<<<` is a here-string: `cat <<<EOF` passes the word `EOF` on stdin
-        # and the next line is an ordinary command, so matching `<<EOF` at its
-        # second character would swallow that line. Two tests, because the
-        # operator has two ends: an index inside a run of `<` is not the start
-        # of an operator, and an operator that continues past `<<` is not a
-        # heredoc.
-        if index > 0 and command[index - 1] == "<":
-            continue
-        if command.startswith("<<<", index):
-            continue
-        match = HEREDOC.match(command, index)
-        if not match:
-            continue
-        # One parse of the delimiter word, quote removal included —
-        # `<<\EOF` is a quoted delimiter to bash the same way `<<'EOF'`
-        # is, and `<<E"OF"` is one in parts.
-        delimiter, expands = _heredoc_delimiter(match.group("word"))
-        if delimiter is None:
-            # A delimiter this file cannot decode opens no body, so the
-            # lines after it stay commands and are judged as such.
-            continue
-        intro_end, dash = match.end(), bool(match.group("dash"))
-
-        # An introducer inside an earlier body is body text, which the scanner
-        # settles by not walking a body at all. Two heredocs stacked on one
-        # line both introduce before either body starts, which is `pending`'s
-        # job below.
-
-        # A body begins on the next line: everything between the introducer
-        # and that newline is still command line, as the push in
-        # `cat <<'A' ; git push origin +HEAD:main` is.
-        newline = command.find("\n", intro_end)
-        if newline == -1:
-            # An introducer with no line after it opens no body at all.
-            continue
-
-        # Stacked bodies queue: the second starts where the first terminated,
-        # which is past its own line break.
-        start = max(newline + 1, pending)
-        # The terminator is the delimiter and nothing else: bash accepts no
-        # indented or trailing-spaced terminator — only `<<-` strips leading
-        # tabs — so a commit body that indents the word keeps going.
-        terminator = (
-            rf"^\t*{re.escape(delimiter)}$" if dash
-            else rf"^{re.escape(delimiter)}$")
-        closing = re.search(terminator, command[start:], re.MULTILINE)
-        if closing is None:
+        start, end, expands = body
+        if end is None:
             # No span, so nothing is stripped. A delimiter this guard cannot
             # find means either an unterminated heredoc, whose tail is data and
             # over-refuses, or a delimiter read wrongly, whose tail holds
@@ -549,7 +640,7 @@ def heredoc_spans(command, unclosed=None, openers=None):
             if unclosed is not None:
                 unclosed.append(index)
             break
-        pending = start + closing.end()
+        pending = end
         spans.append((start, pending, expands))
         data.append((start, pending))
         # One for one with `spans`: a reader pairing bodies with openers takes

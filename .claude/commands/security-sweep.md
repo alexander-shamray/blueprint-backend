@@ -213,9 +213,9 @@ Each round is the review done once, end to end:
    new issues filed (with numbers), candidates dropped at each gate and why,
    and the lows/infos recorded but not filed.
 
-The verdict text reaching the parent, and the auditor's reads of the host, are
-named residuals, not closed. (why: docs/commands/security-sweep.md,
-*Residuals*)
+The verdict text reaching the parent and the auditor's reads of the host are
+named residuals; `git-worktree-detach.sh` now refuses a pinned commit carrying
+a tracked link. (why: docs/commands/security-sweep.md, *Residuals*)
 
 ## Where it stops
 
