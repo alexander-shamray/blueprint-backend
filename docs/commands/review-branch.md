@@ -104,13 +104,15 @@ They are **enumerated** rather than denied wholesale, and `suggestions.md` is
 why: it lives at the root, it is this command's one legitimate output, and it
 is untracked — so denying every *tracked* root file leaves it alone, where a
 blanket `Edit(**)` or a `/*` root pattern would take the deliverable with it.
-`test_harness_denies.py` reads the tracked set from `git ls-files` and asserts
-each is denied, so a new root file is a red build rather than a silent gap.
+`test_harness_denies_backend.py` reads the tracked set from `git ls-files` and
+asserts each is denied, so a new root file is a red build rather than a silent
+gap.
 
 **One limit, stated rather than glossed.** The list is a deny-list, so a tree
-added later is editable until someone adds it. `test_harness_denies.py` asserts
-the list covers every tracked top-level tree, which is what makes that a red
-build instead of a quiet widening.
+added later is editable until someone adds it.
+`test_harness_denies_backend.py` asserts the list covers every tracked
+top-level tree, which is what makes that a red build instead of a quiet
+widening.
 
 The rest of this argument — that the deny-list cannot see a file that does
 not exist yet, that MSBuild auto-imports `Directory.Build.targets`, why the
