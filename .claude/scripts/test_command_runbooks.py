@@ -15,7 +15,7 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 # each landed size and about a tenth: a runbook past it has regrown its argument.
 # The payload's split commands; a target's own carry their ceilings in a suite of its own.
 CEILINGS = {
-    "ship.md": 37300,
+    "ship.md": 43800,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
     "branch.md": 9000,

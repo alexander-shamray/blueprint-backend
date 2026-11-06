@@ -14,8 +14,8 @@ that does fewer than four is not done.
 ## 1. Name the rule
 
 State it in one sentence before touching anything, and say what it implies for
-cases the example does not show. `builder.Services` / `.AddReverseProxy()` /
-`.LoadFromConfig(…)` is not "indent that chain four" — it is *a broken
+cases the example does not show. `query` / `.where(…)` /
+`.orderBy(…)` is not "indent that chain four" — it is *a broken
 fluent chain puts every call on its own line at head + 4, the first call
 included*, which then decides what happens to a chain whose head is a wrapped
 initialiser line.
@@ -33,10 +33,10 @@ the source too, because one dialect governs both.
 
 Grep gets you candidates; reading them gets you the shape. Anything structural
 — bracket depth, chain heads, continuation columns, raw-string boundaries —
-has to track whether it is inside a ```csharp fence, a ```sql fence, a C# raw
-string literal, or prose, because the rules differ per context, and that
-tracking is done by reading the file rather than by a script this command can
-run unattended.
+has to track whether it is inside a fence of one language or another, a
+string literal holding a second one, or prose, because the rules differ per
+context, and that tracking is done by reading the file rather than by a
+script this command can run unattended.
 
 **This command holds no interpreter grant, and the absence is deliberate.**
 `Bash(python:*)` would be a prefix grant on a general-purpose interpreter:
@@ -67,8 +67,8 @@ here does.
 
 **Confirm each hit by reading it.** The recurring false positives are real and
 they repeat: `})` closing a lambda mid-chain is a continuation, not a chain
-head; `(await conn.QueryAsync<T>(` opens two brackets on one line legitimately;
-an expression-bodied member is not a lambda; commas inside a generic argument
+head; `(await fetch(` opens two brackets on one line legitimately;
+a one-line function body is not a lambda; commas inside a generic argument
 list are not list elements.
 
 ## 3. Record it in the style guide
@@ -96,16 +96,15 @@ Three outcomes, and the third is as important as the others:
 
 - **A setting expresses the rule** — set it, with a comment saying what it
   costs and which sites depend on it.
-- **A setting would fight the rule** — `dotnet format`'s defaults would undo
+- **A setting would fight the rule** — a formatter's defaults can undo
   several of these. Pin the setting that keeps a format run idempotent.
-- **No setting expresses it** — Roslyn has no wrapping engine, so most of
-  these rules cannot be enforced at all. Add it to the "no setting expresses
+- **No setting expresses it** — a formatter with no wrapping engine cannot
+  enforce most of these rules at all. Add it to the "no setting expresses
   these" list in the file, so a reviewer does not go hunting for a key that
   does not exist. Never invent a key.
 
-SQL is the extreme case: it lives inside C# raw string literals, which no
-formatter reads. There is deliberately no `[*.sql]` section and there will be
-no `.sql` files (§7.4).
+The extreme case is a language held inside another's string literals, which
+no formatter reads: it gets no section of its own, and the style guide says so.
 
 ## 5. Verify
 

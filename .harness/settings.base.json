@@ -21,6 +21,7 @@
       "Bash(bash .claude/scripts/git-push-force.sh:*)",
       "Bash(bash .claude/scripts/git-branch-drop.sh:*)",
       "Bash(py -3.12 .claude/scripts/sync_pr.py:*)",
+      "Bash(bash .claude/scripts/git-worktree-sync.sh:*)",
       "Bash(git remote -v)",
       "Bash(ls:*)",
       "Bash(wc:*)",

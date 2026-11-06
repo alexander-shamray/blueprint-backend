@@ -201,6 +201,21 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
                     self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
 
 
+    def test_each_sweep_refuses_the_harness_filing_helper(self):
+        # /ship alone files in the harness, and a sweep reads a tree it cannot trust; the settings do not allow
+        # the helper, and this deny holds the line if one ever did (as the force-push helpers' deny does).
+        for name in self.SWEEPS:
+            with self.subTest(command=name):
+                self.assertTrue(any(bash_deny_matches(rule, "bash .claude/scripts/gh-issue-harness.sh bug high harness")
+                                    for rule in self.denies(name)))
+
+    def test_only_ship_grants_the_harness_filing_helper(self):
+        grants = {p.name for p in COMMANDS.glob("*.md")
+                  if any("gh-issue-harness.sh" in e
+                         for e in frontmatter_list(p.read_text(encoding="utf-8"), "allowed-tools"))}
+        self.assertEqual({"ship.md"}, grants)
+
+
 class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
     # The bare tool and a leading wildcard each grant what the per-command checks look for by name.
     BROAD_BASH = re.compile(r"Bash(?:\(\*.*\))?")
