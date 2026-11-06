@@ -1,5 +1,5 @@
 {
-  "harness_commit": "5cc23b594648b6ad2ad12ca33cdec658523a5e71",
+  "harness_commit": "7fe03dd420bcfd3854a257c06010e64e157a8c8f",
   "files": {
     ".claude/agents/branch-reviewer.md": "cbdcb74b32ca6d000b697d98396c86339c5feb271190d34be42f9eb98c1c8388",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -60,7 +60,7 @@
     ".claude/scripts/test_cbx.py": "f7dd504cb5de3b9f12184cb6680bd89cff63eacb41b08a7058a5d157597dd644",
     ".claude/scripts/test_command_grants.py": "749b8ae7c90956d9eeada8ebdccd549b328d49b1ae5b68a3f8449905c81fbda7",
     ".claude/scripts/test_command_runbooks.py": "87552eba8b86a009d7fa44dd31614f741f093c6cd8dccec43217a7781880f586",
-    ".claude/scripts/test_destructive_classes.py": "83f170315fa81f35c873331a201a69a734eeab5b50779af777415cc53d93d90a",
+    ".claude/scripts/test_destructive_classes.py": "63454febdd41c1218f1c7dffbb3f96a98b057ec5fae5ef82c7c98c632477a7da",
     ".claude/scripts/test_dispatch_board.py": "53adf12598d80dfab1de12c959b90a909484b68cb0c69e54825433415eb986fd",
     ".claude/scripts/test_dispatch_run.py": "5de4d0bb1e758dfcb5deadc63f0f18fd1600eb0d21f6df5b9a0442371e0442f9",
     ".claude/scripts/test_dispatch_sync.py": "a9f3c77bb0322bc2d070159df18a8eda543be8a850ac0cbf1b64a401193831ef",
@@ -147,7 +147,7 @@
     "docs/commands/security-sweep.md": "60beb0926acb7be96689bc92ccd9eee26b7c931173f0b65491c26d8fdcefd61a",
     "docs/commands/ship.md": "90a47a69d90d969917bb14f994d3b51e6bad4f5935326b95c86f92ec1e495bd7",
     "docs/commands/team.md": "1cdc4bcab8a82727ec98ab1a56d0420d115fc37e6f4b8075dad8c7cfdd8311b2",
-    "docs/harness-boundaries.md": "9c01e448d7282b2c91456a21a176cc0523cfca902cd4a77fc51fe5f162a2898f",
+    "docs/harness-boundaries.md": "e1e1652960b779619a5126bec6db678eb0888a0bbb67c82261b1ff3c9905d653",
     "docs/harness/pitfalls.md": "20a90ff61f6a0c8d99b4db03d9c3bcc211bb3124f6f7d695aec6c0828594dd38",
     "docs/harness/token-rules.md": "cd83a078de693e468130242357b1eb6994df7e5beb0fad5c5dff510c6e4c7300",
     "docs/harness/working-rules.md": "1dee9a2f8c093644cf07c76aaf7ea3832b7206b0b0653b8584819b3e60eea368"

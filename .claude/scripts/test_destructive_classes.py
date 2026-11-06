@@ -6,6 +6,7 @@
 
 import ast
 import contextlib
+import importlib.util
 import json
 import os
 import re
@@ -183,6 +184,38 @@ def _refused_by_edit_target(row):
     return None if verdict == "refused" else verdict or "the hook admitted it"
 
 
+@contextlib.contextmanager
+def crlf_checkout():
+    """A scratch git checkout tracking `crlf.txt`, which holds CRLF endings."""
+    # Its cleanup clears the read-only bit git sets on an object, which
+    # `rmtree` would stop at on Windows and leave the directory behind.
+    with tempfile.TemporaryDirectory(prefix="destructive-crlf-") as root:
+        with open(os.path.join(root, "crlf.txt"), "wb") as handle:
+            handle.write(b"one\r\ntwo\r\n")
+        for arguments in (["init", "-q"],
+                          ["-c", "core.autocrlf=false", "add", "crlf.txt"]):
+            subprocess.run(["git", "-C", root, *arguments], check=True,
+                           capture_output=True, timeout=HOOK_TIMEOUT)
+        yield root
+
+
+def sed_guard():
+    """The hook as a module: run as a process it judges on Windows alone."""
+    spec = importlib.util.spec_from_file_location(
+        "guard_sed_crlf", HOOKS / "guard-sed-crlf.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _refused_by_sed_crlf(row):
+    with crlf_checkout() as root:
+        event = {"hook_event_name": "PreToolUse", "cwd": root,
+                 "tool_name": "Bash", "tool_input": {"command": row.example}}
+        reason = sed_guard().offence(event, strips_cr=True)
+    return None if reason else "the hook admitted it"
+
+
 def _backstop(row):
     """A server-side row is checked by `ruleset-check`, not here."""
     if row.test != "ruleset-check":
@@ -224,6 +257,7 @@ REFUSERS = {
     "deny": _refused_by_deny,
     "guard-git-argv": _refused_by_git_argv,
     "guard-edit-target": _refused_by_edit_target,
+    "guard-sed-crlf": _refused_by_sed_crlf,
     "ruleset": _backstop,
     "helper": _refused_by_helper,
 }
@@ -308,6 +342,10 @@ class DestructiveClasses(unittest.TestCase):
         self.assertIsNotNone(refusal_problem(
             Row("planted", "Edit(linked/chapter.md)", "guard-edit-target",
                 "none")))
+        # `--binary` keeps the CR, so the hook admits it on this very file.
+        self.assertIsNotNone(refusal_problem(
+            Row("planted", "sed --binary -i s/one/uno/ crlf.txt",
+                "guard-sed-crlf", "none")))
 
     def test_deny_matches_follows_the_prefix_semantics(self):
         self.assertTrue(deny_matches("Bash(git clean:*)", "git clean"))
