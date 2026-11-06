@@ -98,7 +98,7 @@ eleven modules the sync to blueprint-harness f5e2536 added, and
 this script on that sync's branch. `test_sync_pr.py` arrived with the sync to
 blueprint-harness 0652b27 and was timed alone as
 `discover -s .claude/scripts -p test_sync_pr.py`, because this script stops a
-module with no ceiling of its own at 90 seconds.
+module with no ceiling of its own at `KILL_FACTOR` times `DEFAULT_CEILING`.
 
 **Why Python is `py -3.12`** (`.harness/agent-rules.md`, *Hard rules*,
 owns the rule). Every CI job that runs Python pins 3.12, and a
