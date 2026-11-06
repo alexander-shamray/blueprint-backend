@@ -1,5 +1,5 @@
 {
-  "harness_commit": "9f63bd2825173e72a38e09a9aa717fba73af8286",
+  "harness_commit": "09a62df1946b91274b6a5da6069eb51ce7105050",
   "files": {
     ".claude/agents/branch-reviewer.md": "cbdcb74b32ca6d000b697d98396c86339c5feb271190d34be42f9eb98c1c8388",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -15,7 +15,7 @@
     ".claude/commands/style-pass.md": "f92088c139bcf7e240f659e5051af966d7fc5d630cfb03b0cf8f3916a011455d",
     ".claude/commands/team.md": "bd49e736abd8a3922543733e88920a624d9dfa722572e39af693b7a8f201a2f6",
     ".claude/hooks/guard-edit-target.py": "228e0a44142267f57b28eb09d4e8d50649d2ffec397a0ecc0f6bdab1472d3a07",
-    ".claude/hooks/guard-git-argv.py": "22671b5776ed4a9d5cff4326da81461fd33a9ad55d0890b8a4d1726a3dc2ada8",
+    ".claude/hooks/guard-git-argv.py": "5856cdd70c74d365ba69ea87aa51fa0241aceb85cf8fc3b51aff151fd9f29771",
     ".claude/hooks/guard-index-argv.py": "89ee78f9531539f42ad369e16a60ba0954aa090937beb61eea74dea8df741441",
     ".claude/hooks/guard-sed-crlf.py": "4c1084541314ad1a4b866fe3eb904af38c0459005dc92489b80dcf88bbb10951",
     ".claude/hooks/hint-bound.sh": "4b66c9c0cd90c38a9d0230dd32a5f5e264adfe58769cfeba6c9a41d75e950f45",
@@ -69,7 +69,7 @@
     ".claude/scripts/test_gh_issue_harness.py": "c2fcd1798275d9d3259d68ed0b4862f24e5545352146cb01c711343c1a4502b8",
     ".claude/scripts/test_gh_issue_suppresses.py": "3c9a840d5209a72009be4fa22d9e2b5dc77c2180c50c2ead5eb46e9a3cfa943d",
     ".claude/scripts/test_gh_label_ensure.py": "3fe78cca195f326541a15d8a9c60713468c31ffc86dc3d8dd2572d357437f44c",
-    ".claude/scripts/test_git_argv_guard.py": "c0a678334f42b714d353185da1a4595b69cd4f71608cf198d10a691c687ebe71",
+    ".claude/scripts/test_git_argv_guard.py": "e451f2468996d77fcea1dd73fe4fa04cd4318e3ad11bcfcb95dd45b4015ffdd7",
     ".claude/scripts/test_git_branch_drop.py": "8ce81bf87ffc35111a28e193ff65735586aba298a21be92625e5a31be87af2af",
     ".claude/scripts/test_git_pr_trailer_helpers.py": "51d5987de7d6f43cf3b2e6af8b436d559cd9a2be807f5fa7f053f95408d783d8",
     ".claude/scripts/test_git_push_force.py": "2a7879bbd0c014c56fa810f18897b742609de58776b79702c98022f5a76dd585",
