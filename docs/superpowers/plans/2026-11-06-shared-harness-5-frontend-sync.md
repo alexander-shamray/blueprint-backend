@@ -310,17 +310,20 @@ Harness session.
     `.claude/settings.json` at the pin;
   - `settings.allow`: `Bash(bash .claude/scripts/npm-checks.sh:*)`, since the
     payload's `/ship` carries no stack grant;
-  - `local`: the *Local* rows of *Decisions*, `test_npm_checks.py`, cluster
-    rows marked `local`, `.harness/sweep-rows.tsv`,
-    `.github/locality-gate/classes.yml`;
+  - `local`: the *Local* rows of *Decisions*, `test_npm_checks.py`,
+    `.harness/sweep-rows.tsv`, `.github/locality-gate/classes.yml`, and any
+    frontend-only path Task 1's `local` rows move to. A `local` row in a
+    file the payload manages moves to a new path first, as the npm cases do:
+    `apply` refuses a local path the payload manages when the target differs;
   - `exclude`: `.github/output-gate/**`.
 - [ ] **Step 2:** Add `test_frontend_config_renders`: the file loads and every
   one of the 29 denies is in the rendered settings, with every base deny and
   hook intact. Backend's and the harness's own rendered settings are unchanged
   by it.
 - [ ] **Step 3:** Rehearse on a scratch clone of frontend `main`, as #1773 did:
-  apply at the harness tip with this config, with Task 7's deletions made. Then
-  run:
+  apply at the harness tip with this config, with Task 7's deletions made and
+  its created files in place, the row file, `classes.yml`,
+  `docs/harness-local.md` and `test_npm_checks.py`. Then run:
   - the drift gate, which must print nothing wrong;
   - `py -3.12 -m unittest discover -s .claude/scripts`;
   - each gate directory's suite;
