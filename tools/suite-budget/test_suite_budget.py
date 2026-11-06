@@ -130,6 +130,7 @@ class Runs(unittest.TestCase):
         self.assertIn("AssertionError: red", text)
 
     def test_the_report_marks_a_module_with_no_row_unmeasured(self):
+        self.assertNotIn("test_passing.py", dict(suite_budget.rows()))
         written = io.StringIO()
         with contextlib.redirect_stdout(written), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(suite_budget.main(["--dir", str(self.directory), "test_passing.py"]), 0)
