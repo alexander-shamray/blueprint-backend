@@ -51,7 +51,7 @@ helper reads its own checkout's `classes.yml` too, where CI reads the base
 branch tip's, so a review round's class verdict is this gate's only while the
 branch's map matches that tip's: a pull request that edits it, or a branch
 behind a base whose map has since moved, is judged in CI by the base copy;
-`test_pr_helpers.py` runs both on one payload.
+`test_pr_helpers_backend.py` runs both on one payload.
 
 The suite is negative cases with their positive controls, plus reads of the
 shipped map, so the gate has been observed looking at the file CI hands it.
