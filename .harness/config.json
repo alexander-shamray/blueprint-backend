@@ -30,7 +30,6 @@
     "docs/commands/review-branch.md",
     "docs/commands/validate-blueprint.md",
     ".github/comment-gate/test_comment_gate_backend.py",
-    ".github/issue-form-gate/test_issue_form_gate_backend.py",
     ".github/output-gate/test_output_gate_backend.py",
     ".github/plan-size-gate/test_plan_size_gate_backend.py"
   ],
