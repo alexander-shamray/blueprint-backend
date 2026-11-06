@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 import zoneinfo
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -25,8 +25,9 @@ from sync_pr import SYNC_HEAD
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
 MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
-# The four counts of a `claude -p` envelope's usage.
+# The four counts of a `claude -p` envelope, as its `usage` names them and as `modelUsage` names them per model.
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+MODEL_KEYS = ("inputTokens", "cacheCreationInputTokens", "cacheReadInputTokens", "outputTokens")
 OUTCOMES = ("merged", "handed-back", "stopped")
 REVIEW_ENDS = ("clean", "comments-rule", "plan", "ceiling")
 ROUND_KEYS = ("kind", "raised", "fixed", "refused")
@@ -576,6 +577,9 @@ class SessionEnd:
     usage: dict[str, int]
     denials: list[str]
     session_id: str | None = None
+    usage_source: str | None = None
+    usage_models: dict[str, dict[str, int]] = field(default_factory=dict)
+    cost_usd: float | None = None
 
 
 def _envelope(stdout):
@@ -659,6 +663,45 @@ def _text_reset(text, base):
     return None
 
 
+def _add_counts(earlier, later):
+    earlier = earlier if isinstance(earlier, dict) else {}
+    return {key: (earlier[key] if _count(earlier.get(key)) else 0) + later.get(key, 0) for key in TOKEN_KEYS
+            if key in earlier or key in later}
+
+
+def _spent(envelope):
+    """(counts, the field they came from, each model's counts). `usage` holds the last model turn alone, and
+    `modelUsage` the whole session, subagents included, so `usage` is read only for an envelope without model counts."""
+    listed = envelope.get("modelUsage")
+    models = {}
+    for name, entry in listed.items() if isinstance(listed, dict) else ():
+        counts = {key: entry[wire] for key, wire in zip(TOKEN_KEYS, MODEL_KEYS)
+                  if _count(entry.get(wire))} if isinstance(entry, dict) else {}
+        if counts:
+            models[one_line(name, 80)] = counts
+    if models:
+        total = {}
+        for counts in models.values():
+            total = _add_counts(total, counts)
+        return total, "modelUsage", models
+    last = envelope.get("usage") if isinstance(envelope.get("usage"), dict) else {}
+    usage = {key: last[key] for key in TOKEN_KEYS if _count(last.get(key))}
+    return usage, "usage" if any(usage.values()) else None, {}
+
+
+def _usage_sources(entry):
+    """The fields a group's counts came from; counts with no such list predate it, so came from `usage`."""
+    listed = entry.get("usage_sources")
+    sources = [item for item in listed if isinstance(item, str) and item in USAGE_SOURCES] \
+        if isinstance(listed, list) else []
+    return sources or ["usage"]
+
+
+def _cost(value):
+    # json.loads also takes NaN, Infinity and an int no float holds.
+    return float(value) if type(value) in (int, float) and 0 <= value < 1e9 else None
+
+
 def session_end(raw):
     code = raw.get("exit")
     code = code if isinstance(code, int) and not isinstance(code, bool) else -1
@@ -667,8 +710,7 @@ def session_end(raw):
     envelope = _envelope(stdout)
     flagged = envelope.get("is_error") if envelope else None
     is_error = code != 0 or not isinstance(flagged, bool) or flagged
-    spent = envelope.get("usage") if envelope and isinstance(envelope.get("usage"), dict) else {}
-    usage = {key: spent[key] for key in TOKEN_KEYS if _count(spent.get(key))}
+    usage, source, models = _spent(envelope or {})
     listed = envelope.get("permission_denials") if envelope else None
     denials = [one_line(d.get("tool_name") or "unknown" if isinstance(d, dict) else d, 80)
                for d in (listed if isinstance(listed, list) else [])]
@@ -687,7 +729,8 @@ def session_end(raw):
             resets = resets or _text_reset(f"{notice}\n{stderr}", ended)
     session = envelope.get("session_id") if envelope else None
     session = session if isinstance(session, str) and SESSION_ID.fullmatch(session) else None
-    return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session)
+    cost = _cost((envelope or {}).get("total_cost_usd"))
+    return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session, source, models, cost)
 
 
 def classify(end, result, crashes, now):
@@ -936,10 +979,15 @@ def absorb(root, run, gid, run_refused=None):
         reason = UNREVIEWED
     # Summed over every session the group ran this move, so a relaunched group is not reported as its last session.
     spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
-    usage = {key: (spent[key] if _count(spent.get(key)) else 0) + end.usage.get(key, 0) for key in TOKEN_KEYS
-             if key in spent or key in end.usage}
+    sources = _usage_sources(entry) if any(spent.values()) else []
+    if end.usage_source and end.usage_source not in sources:
+        sources.append(end.usage_source)
+    models = entry.get("usage_models") if isinstance(entry.get("usage_models"), dict) else {}
+    models = {**models, **{name: _add_counts(models.get(name), counts) for name, counts in end.usage_models.items()}}
+    costs = [cost for cost in (_cost(entry.get("cost_usd")), end.cost_usd) if cost is not None]
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
-                 usage=usage, denials=end.denials, reason=reason, unreviewed=unreviewed,
+                 usage=_add_counts(spent, end.usage), usage_sources=sources, usage_models=models,
+                 cost_usd=sum(costs) if costs else None, denials=end.denials, reason=reason, unreviewed=unreviewed,
                  review_seen="transcript" if seen else None)
     if decision in ("relaunch", "crash-hand-back"):
         entry["crashes"] = crashes + 1
@@ -1258,6 +1306,7 @@ def resume(root, run):
 REPORT_SECTIONS = ("Merged", "Needs a human", "Interrupted", "Filed overnight", "Left in the backlog", "Usage",
                    "Syncs")
 TOKEN_NAMES = ("input", "cache write", "cache read", "output")
+USAGE_SOURCES = {"modelUsage": "from modelUsage", "usage": "from usage, the last turn alone"}
 UNFINISHED = {None: "moved, never launched", "merged-claimed": "merge claimed, not yet verified"}
 
 
@@ -1328,6 +1377,24 @@ def _weekly_lines(usage):
     return out
 
 
+def _tokens_text(spent):
+    counts = [spent.get(key) if _count(spent.get(key)) else 0 for key in TOKEN_KEYS]
+    return f"{sum(counts)} tokens (" + ", ".join(f"{name} {n}" for name, n in zip(TOKEN_NAMES, counts)) + ")"
+
+
+def _usage_lines(gid, entry):
+    spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
+    if not spent:
+        return []
+    cost = _cost(entry.get("cost_usd"))
+    sources = _usage_sources(entry)
+    parts = [_tokens_text(spent), *([f"${cost:.2f}"] if cost is not None else []),
+             ", and ".join(text for source, text in USAGE_SOURCES.items() if source in sources)]
+    models = entry.get("usage_models") if isinstance(entry.get("usage_models"), dict) else {}
+    apart = [f"{gid} {name}: {_tokens_text(counts)}" for name, counts in models.items() if isinstance(counts, dict)]
+    return [f"{gid}: " + ", ".join(parts), *(apart if len(apart) > 1 else [])]
+
+
 def report(root, run, tasks_path, today, body_source, open_source):
     directory = run_dir(root, run)
     state = load_state(directory)
@@ -1382,11 +1449,7 @@ def report(root, run, tasks_path, today, body_source, open_source):
                          + _decisions_text(entry.get("decisions")))
         else:
             interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
-        spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
-        if spent:
-            counts = [spent.get(key) if _count(spent.get(key)) else 0 for key in TOKEN_KEYS]
-            usage.append(f"{gid}: {sum(counts)} tokens ("
-                         + ", ".join(f"{name} {n}" for name, n in zip(TOKEN_NAMES, counts)) + ")")
+        usage += _usage_lines(gid, entry)
     if _holds_rows(directory, lambda: (listed, None))[0]:
         # The same test `start` reopens by, so the line appears exactly when the next /dispatch resumes this run.
         interrupted.append(f"resume: run /dispatch again in the main checkout; it resumes run {run}")

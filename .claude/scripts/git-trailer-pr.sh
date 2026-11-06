@@ -10,8 +10,13 @@ pr="$1"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number: $pr" >&2; exit 2; }
 
 branch=$(git branch --show-current)
-[ -n "$branch" ] && [ "$branch" != main ] ||
-  { echo "not on a PR branch: nothing to add the trailer to" >&2; exit 3; }
+[ -n "$branch" ] || { echo "not on a PR branch: nothing to add the trailer to" >&2; exit 3; }
+# Folded and spelled out as git-rebase-onto-main.sh does: on this host's case-insensitive filesystem `Main` is `main`'s
+# ref, and one string compare is one spelling.
+case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
+  main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
+    echo "refusing to rewrite main, spelled $branch: not on a PR branch" >&2; exit 3 ;;
+esac
 dirty=$(git status --porcelain)
 [ -z "$dirty" ] || { echo "the tree is not clean: commit or stash first" >&2; exit 3; }
 

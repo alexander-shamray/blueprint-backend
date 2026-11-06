@@ -605,15 +605,14 @@ def git(repo, *args):
 
 class TheGateOnARepository(unittest.TestCase):
     def setUp(self):
-        self.repo = tempfile.mkdtemp()
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.repo = holder.name
         git(self.repo, "init", "-q", "-b", "main")
         self.write("Old.cs", "// PR-1\n" + "".join(
             f"// {k}\n" for k in range(11)))
         self.write("Moved.cs", "// PR-2\n")
         self.commit("base")
-
-    def tearDown(self):
-        subprocess.run(["git", "-C", self.repo, "clean", "-qfdx"])
 
     def write(self, name, text, encoding="utf-8"):
         target = Path(self.repo, name)
