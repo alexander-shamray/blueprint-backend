@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -55,6 +56,17 @@ def run_bash(script, subject="", **env_extra):
         text=True, encoding="utf-8",
         env=env,
     )
+
+
+def temp_root(case):
+    """A directory bash and Python both open, gone after `case` whatever its fixture's build did.
+
+    Python makes it: `mktemp -d` in a build gives an MSYS path Python on Windows cannot open, and a build that fails
+    before it prints that path removes nothing. Its cleanup clears the read-only bit git sets on an object.
+    """
+    holder = tempfile.TemporaryDirectory()
+    case.addCleanup(holder.cleanup)
+    return Path(holder.name).as_posix()
 
 
 def python_as_py(env, directory):

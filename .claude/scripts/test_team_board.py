@@ -8,7 +8,6 @@ import contextlib
 import io
 import json
 import os
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,8 +57,9 @@ class Checkout(unittest.TestCase):
     """A throwaway checkout holding one source file and one measurement, with a run opened on it."""
 
     def setUp(self):
-        scratch = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, scratch, ignore_errors=True)
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        scratch = Path(holder.name)
         # A file beside the checkout, so a path climbing out of it names something that exists.
         (scratch / "outside.txt").write_text("secret\n", encoding="utf-8")
         self.root = scratch / "checkout"

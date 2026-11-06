@@ -6,6 +6,7 @@ reads this file, and the rest run it against real repositories."""
 
 import ast
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from review_helpers import (
     code_lines,
     git_commands,
     setUpModule,
+    temp_root,
     run_bash as _run_bash,
 )
 
@@ -37,7 +39,6 @@ def run_bash(script, subject="", **env_extra):
 # moved since — the state every branch update starts from.
 BUILD = '''
 set -eu
-root=$(mktemp -d)
 git init -q --bare --initial-branch=main "$root/remote.git"
 git init -q --initial-branch=main "$root/work"
 cd "$root/work"
@@ -53,7 +54,6 @@ git checkout -q main
 echo moved > c.txt && git add -A && git commit -qm "main moved"
 git push -q origin main
 git checkout -q feat/x
-printf %s "$root"
 '''
 
 # Each test's own copy of that state, built once per module: about twenty git
@@ -61,26 +61,23 @@ printf %s "$root"
 FIXTURE = '''
 set -eu
 : "${TEMPLATE:?}"
-root=$(mktemp -d)
 cp -Rp "$TEMPLATE/." "$root/"
 git -C "$root/work" remote set-url origin "$root/remote.git"
-printf %s "$root"
 '''
 _template = []
 
 
 def template():
     if not _template:
-        built = run_bash(BUILD)
-        if built.returncode != 0 or not built.stdout.strip():
+        holder = tempfile.TemporaryDirectory()
+        unittest.addModuleCleanup(holder.cleanup)
+        root = Path(holder.name).as_posix()
+        built = run_bash(BUILD, root=root)
+        if built.returncode != 0:
             raise RuntimeError(f"the rebase fixture did not build: {built.stderr}")
-        _template.append(built.stdout.strip())
+        _template.append(root)
     return _template[0]
 
-
-def tearDownModule():
-    for root in _template:
-        run_bash('rm -rf "$R"', R=root)
 
 # Both sides edit the same line, so the replay cannot proceed without a person.
 CONFLICT = '''
@@ -201,9 +198,9 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
 class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
 
     def helper(self, branch, mode="start"):
@@ -416,9 +413,9 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
         self.at(CONFLICT)
 
@@ -611,9 +608,9 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
     loses it before the push, which no lease can see."""
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
 
     def at(self, script):
@@ -749,9 +746,9 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
 class TheHelperPublishesWhatItRebased(unittest.TestCase):
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
 
     def at(self, script):
@@ -1091,9 +1088,9 @@ class TheApplyBackendIsNeverTheOneThatRuns(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
         self.at("git config rebase.backend apply")
         self.at(CONFLICT)
@@ -1184,9 +1181,9 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
     itself and left in progress, because nothing here may drop a commit."""
 
     def setUp(self):
-        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.root = temp_root(self)
+        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
+        self.assertEqual(0, built.returncode, built.stderr)
         self.work = self.root + "/work"
         self.at(CONFLICT)
 
@@ -1226,7 +1223,7 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
 
 
 class EveryFixtureSaysItWasBuilt(unittest.TestCase):
-    """With a failed fixture `self.root` is "" and `self.work` is "/work", so
+    """With a failed fixture `self.work` is a directory that does not exist, so
     every `cd` fails and the assertions are satisfied by the failed `cd`.
 
     Read from the AST: a comment is not in it, and an assertion inside a lambda
@@ -1238,22 +1235,19 @@ class EveryFixtureSaysItWasBuilt(unittest.TestCase):
                    for node in ast.walk(function))
 
     @staticmethod
-    def asserts_its_root(function):
+    def asserts_its_build(function):
         for statement in function.body:
             if not isinstance(statement, ast.Expr):
                 continue
             call = statement.value
             if not (isinstance(call, ast.Call)
                     and isinstance(call.func, ast.Attribute)
-                    and call.func.attr == "assertTrue"
+                    and call.func.attr == "assertEqual"
                     and isinstance(call.func.value, ast.Name)
                     and call.func.value.id == "self"):
                 continue
-            subject = call.args[0] if call.args else None
-            if (isinstance(subject, ast.Attribute)
-                    and subject.attr == "root"
-                    and isinstance(subject.value, ast.Name)
-                    and subject.value.id == "self"):
+            if any(isinstance(subject, ast.Attribute) and subject.attr == "returncode"
+                   for subject in call.args):
                 return True
         return False
 
@@ -1269,15 +1263,15 @@ class EveryFixtureSaysItWasBuilt(unittest.TestCase):
                     continue
                 watched.append(node.name)
                 self.assertTrue(
-                    self.asserts_its_root(member),
+                    self.asserts_its_build(member),
                     f"{node.name} builds the fixture and never says whether it "
-                    "worked: a failed one makes self.work '/work' and every "
+                    "worked: a failed one leaves no self.work and every "
                     "assertion under it vacuous")
         # Exact, so a class the recogniser sees cannot arrive without this
         # number moving in the same edit, which is the moment to check it.
         self.assertEqual(6, len(watched),
                          f"this gate is watching {watched}: a fixture class was "
-                         "added or renamed. Check that each one asserts its root, "
+                         "added or renamed. Check that each one asserts its build, "
                          "then move this number deliberately")
 
 

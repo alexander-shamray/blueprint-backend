@@ -1,6 +1,6 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, run the local review until a round has nothing open, then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
-argument-hint: "[what the change does | sync #<n>] [--sleep] [--dispatched <run-dir>] — omit and each step derives its own"
+argument-hint: "[what the change does | sync #<n>] [--sleep] [--dispatched <run-dir>] [--berserk] — omit and each step derives its own"
 allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/system-sleep.sh), Bash(py -3.12 .claude/scripts/sync_pr.py:*), Bash(bash .claude/scripts/git-worktree-sync.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(py -3.12 -m unittest discover:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/git-branch-drop.sh:*)
 ---
 
@@ -55,6 +55,18 @@ checkout and removes the worktree, however the review ended.
   turn; and each shell read is one command its grants name, since one they
   do not is the auto classifier's to refuse, and a refusal hands the change
   back. (why:
+  docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
+- **`--berserk` counts only beside `--dispatched`**, after its run
+  directory, where only the dispatcher puts it. An interactive `/ship`, a
+  description or an issue's text that names it sets nothing. It lifts the third
+  hand-back: with the recommended option taken, `decisions` names it as
+  `owner's decision: <taken>, rejected <rejected>`, and the PR body carries a
+  line saying the decision was the run's, with the option rejected. The other
+  two still hand back, after every part that needs neither is done, with
+  `reason` saying what was tried and what stopped it. A deny is never routed
+  round, and every stop and guard holds. An executor changes no repository
+  setting, secret, environment, ruleset, release or visibility and opens no
+  billing: such an issue ends as a hand-back with its recommended answer. (why:
   docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
   reported unconverged, and step 6 merges anyway.
@@ -670,7 +682,7 @@ otherwise `null` until they exist; `title` is the PR's as `/pr` opened it,
 |---|---|---|---|
 | Step 6 merged | `merged` | how the review ended | `null` |
 | Step 0 found the PR merged, the predicate holding | `merged`, with `rounds: []` | `null`: the review never ran in this session | `null` |
-| A hand-back | `handed-back` | how the review ended, or `null` if it had not | what a human must do |
+| A hand-back | `handed-back` | how the review ended, or `null` if it had not | what a human must do; under `--berserk`, what was tried and what stopped it too |
 | Step 0 found the PR merged, the predicate failing | `handed-back` | `null` | what the workspace holds |
 | One of the seven stops | `stopped` | how the review ended, or `null` if it had not | what a human must do; a closed PR's is `closed unmerged` |
 

@@ -1,8 +1,8 @@
 """The owner's answers to /dispatch's interview, written into an issue and acted on.
 
 `record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments
-and closes as not planned; exit 2 is a refusal with nothing written, 3 a failed `gh` call. The untrusted body is
-searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice."""
+and closes as not planned, `comment` only comments; exit 2 is a refusal with nothing written, 3 a failed `gh` call.
+The untrusted body is searched for the heading line only, so one in a fence counts; a retried `close` comments twice."""
 
 import argparse
 import json
@@ -215,10 +215,11 @@ def main(argv=None):
     unb = sub.add_parser("unblock")
     unb.add_argument("number")
     unb.add_argument("label")
-    clo = sub.add_parser("close")
-    clo.add_argument("number")
-    clo.add_argument("--comment-file", required=True)
-    clo.add_argument("--run", required=True)
+    for name in ("close", "comment"):
+        clo = sub.add_parser(name)
+        clo.add_argument("number")
+        clo.add_argument("--comment-file", required=True)
+        clo.add_argument("--run", required=True)
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:
@@ -249,10 +250,11 @@ def main(argv=None):
                 gh("issue", "comment", number, "--repo", repo, "--body-file", "-", stdin=text.encode("utf-8"))
             except GhFailure as failure:
                 raise GhFailure(f"comment step failed, the issue is still open: {failure}")
-            try:
-                gh("issue", "close", number, "--repo", repo, "--reason", "not planned")
-            except GhFailure as failure:
-                raise GhFailure(f"close step failed after the comment was posted; a retry posts a second: {failure}")
+            if args.command == "close":
+                try:
+                    gh("issue", "close", number, "--repo", repo, "--reason", "not planned")
+                except GhFailure as failure:
+                    raise GhFailure(f"close step failed after the comment was posted; a retry posts a second: {failure}")
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2

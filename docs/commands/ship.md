@@ -1110,8 +1110,8 @@ cannot read the argument.
 
 `/dispatch` forks a worktree per task-list group and starts `/ship` in it as
 a headless session, with the group's tag first and
-`--dispatched <run-dir>` last; the list of what the token changes is the
-dispatch design's §6.2
+`--dispatched <run-dir>` last, but for `--berserk`, which follows it on a
+flagged run; the list of what the token changes is the dispatch design's §6.2
 (`docs/superpowers/specs/2026-11-01-dispatch-design.md`), and the runbook
 carries that list and three consequences the design left unspelt: step 6's
 lines 3 to 6 go with the worktree's removal, step 0 skips its teardown of a
@@ -1123,8 +1123,8 @@ it did**: every rule the token adds opens "Under `--dispatched`".
 
 **It is a token, not a word**, for *Step 7*'s reason, and only the
 dispatcher passes it: the launcher refuses a description that carries
-`--dispatched` or `--sleep`, so a description cannot switch the mode on or
-put the machine to sleep under a night run.
+`--dispatched`, `--berserk` or `--sleep`, so a description cannot switch the
+mode on or put the machine to sleep under a night run.
 
 **Nobody is there to ask, so the token's one new decision is when to hand
 back.** Three cases hand the change back unmerged beyond the seven stops and the
@@ -1148,6 +1148,19 @@ Narrower would merge what the owner had to decide; wider would hand back what
 every other judgement is taken as *It runs to the end* takes it, the
 recommended option, and named in the result's `decisions`, which the morning
 report shows in place of the report nobody read.
+
+**`--berserk` lifts the third of those, for one run.** A run the owner started
+with `/dispatch --berserk` asks nothing first, so a decision the issue reserves
+was left to the run on purpose: the recommended option is taken. The other two
+are not questions. A deny and a missing resource stand whoever asks, so the flag
+changes only what is done before the hand-back: every part that needs neither,
+with `reason` saying what was tried and what stopped it, which the dispatcher
+comments on the issue. The token reads only beside `--dispatched`, after its run
+directory: the launcher is the one place that writes it, and text an issue or a
+caller supplies cannot, or an issue could widen the run reading it. `decisions`
+opens the entry `owner's decision:` because a group that was ready without the
+flag can reach such a decision too, and the morning report finds it by that
+opening. The PR body says so as well, since that is where a revert starts.
 
 **The result carries the PR's title**, which the design's §10 puts on each
 *Merged* line, because the dispatcher holds no helper that reads one:

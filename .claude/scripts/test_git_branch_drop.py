@@ -6,12 +6,11 @@ Each refusal is paired with the drop succeeding, so it failed for its reason.
 
 import json
 import os
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, setUpModule, run_bash as _run_bash  # noqa: F401
+from review_helpers import SCRIPTS, setUpModule, temp_root, run_bash as _run_bash  # noqa: F401
 
 HELPER = SCRIPTS / "git-branch-drop.sh"
 OWNER = "acme/widgets"
@@ -31,34 +30,31 @@ def run_bash(script, **env):
 
 # A remote, a checkout of it on `main`, and a branch with one commit, published.
 BUILD = '''
-root=$(mktemp -d)
-git init -q --bare --initial-branch=main "$root/remote.git"
-git init -q --initial-branch=main "$root/work"
-cd "$root/work"
+git init -q --bare --initial-branch=main "$R/remote.git"
+git init -q --initial-branch=main "$R/work"
+cd "$R/work"
 git config user.email test@example.invalid
 git config user.name Test
-git remote add origin "$root/remote.git"
+git remote add origin "$R/remote.git"
 echo base > a.txt && git add -A && git commit -qm "the base"
 git push -q -u origin main
 git checkout -qb feat/x
 echo work > b.txt && git add -A && git commit -qm "the branch work"
 git push -q -u origin feat/x
 git checkout -q main
-printf %s "$root"
 '''
 
 
 class Fixture(unittest.TestCase):
 
     def setUp(self):
-        built = run_bash(BUILD)
+        self.root = temp_root(self)
+        built = run_bash(BUILD, R=self.root)
         self.assertEqual(0, built.returncode, built.stderr)
-        self.root = built.stdout.strip()
-        self.assertTrue(self.root, "the fixture produced no path")
-        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
-        self.bin = tempfile.mkdtemp(prefix="ghstub-")
-        self.addCleanup(shutil.rmtree, self.bin, ignore_errors=True)
+        holder = tempfile.TemporaryDirectory(prefix="ghstub-")
+        self.addCleanup(holder.cleanup)
+        self.bin = holder.name
         stub = Path(self.bin, "gh")
         stub.write_text(
             "#!/usr/bin/env bash\n"
@@ -93,14 +89,30 @@ class Fixture(unittest.TestCase):
         return {"number": number, "state": state, "url": f"u{number}", "headRefOid": oid,
                 "baseRefName": base, "headRepository": {"nameWithOwner": owner}}
 
-    def helper(self, branch="feat/x", rows=None, exit_code="0", move=""):
+    def helper(self, branch="feat/x", rows=None, exit_code="0", move="", take=""):
         if rows is None:
             rows = [self.row(oid=self.tip())]
         return run_bash(
             f'cd "$W"\nbash "$H" "$B"',
-            W=self.work, H=str(HELPER), B=branch,
+            W=self.work, R=self.root, H=str(HELPER), B=branch,
             STUB_OWNER=OWNER, STUB_ROWS=json.dumps(rows), STUB_EXIT=exit_code,
-            STUB_MOVE=move, PATH=self.bin + os.pathsep + os.environ["PATH"])
+            STUB_MOVE=move, STUB_TAKE=take, PATH=self.bin + os.pathsep + os.environ["PATH"])
+
+    def stub_git(self):
+        """A `git` first on PATH that runs STUB_TAKE as the delete starts, after every read of the state.
+
+        `$R/blind` then fails the second read of the worktrees, and `$R/stuck` the branch's being put back.
+        """
+        stub = Path(self.bin, "git")
+        stub.write_text(
+            "#!/usr/bin/env bash\n"
+            "PATH=${PATH#*:}\n"
+            'if [ "$1 ${3:-}" = "update-ref -d" ]; then ( cd "$W" && eval "$STUB_TAKE" ) > /dev/null 2>&1; fi\n'
+            'if [ "$1 ${2:-}" = "worktree list" ] && [ -e "$R/blind" ]; then exit 1; fi\n'
+            'if [ "$1 ${3:-}" = "update-ref refs/heads/feat/x" ] && [ -e "$R/stuck" ]; then exit 1; fi\n'
+            'exec git "$@"\n',
+            encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
 
 
 class TheHelperKeepsWhatHasNotLanded(Fixture):
@@ -170,6 +182,76 @@ class TheHelperKeepsWhatHasNotLanded(Fixture):
         self.assertEqual(4, result.returncode, result.stderr)
         self.assertIn("checked out", result.stderr)
         self.assertTrue(self.exists())
+
+    def test_a_worktree_list_that_cannot_be_folded_keeps_the_branch(self):
+        # Nothing holds the branch, so the failed read is all that stops the drop.
+        stub = Path(self.bin, "tr")
+        stub.write_text(
+            "#!/usr/bin/env bash\n"
+            "PATH=${PATH#*:}\n"
+            'input=$(cat)\n'
+            'case "$input" in worktree\\ *) exit 1 ;; esac\n'
+            'printf "%s" "$input" | tr "$@"\n',
+            encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+        result = self.helper()
+        self.assertEqual(12, result.returncode, result.stderr)
+        self.assertIn("cannot read the worktrees", result.stderr)
+        self.assertTrue(self.exists())
+
+    def test_a_branch_a_worktree_takes_during_the_delete_is_put_back(self):
+        tip = self.tip()
+        self.stub_git()
+        result = self.helper(take='git worktree add -q "$R/elsewhere" feat/x')
+        self.assertEqual(4, result.returncode, result.stderr)
+        self.assertIn("checked out", result.stderr)
+        self.assertEqual(tip, self.tip())
+        self.assertEqual("feat/x", self.at('cd "$R/elsewhere" && git branch --show-current'))
+        self.assertEqual("origin", self.at("git config branch.feat/x.remote"), "the branch lost its configuration")
+
+    def test_a_delete_nobody_takes_part_in_still_drops(self):
+        self.stub_git()
+        result = self.helper(take=":")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.exists())
+
+    def test_a_second_read_that_fails_puts_the_branch_back(self):
+        tip = self.tip()
+        self.stub_git()
+        result = self.helper(take=': > "$R/blind"')
+        self.assertEqual(12, result.returncode, result.stderr)
+        self.assertIn("it is kept", result.stderr)
+        self.assertEqual(tip, self.tip())
+
+    def test_a_branch_that_cannot_be_put_back_is_named_with_its_tip(self):
+        tip = self.tip()
+        self.stub_git()
+        result = self.helper(take=': > "$R/stuck" && git worktree add -q "$R/elsewhere" feat/x')
+        self.assertEqual(4, result.returncode, result.stderr)
+        self.assertIn(f"git branch feat/x {tip}", result.stderr)
+        self.assertFalse(self.exists())
+
+    def test_a_state_file_that_cannot_be_read_keeps_the_branch(self):
+        # A `tr` that fails on the marked text stands for an unreadable file, on
+        # every platform: chmod stops no read on Windows, nor for root anywhere.
+        stub = Path(self.bin, "tr")
+        stub.write_text(
+            "#!/usr/bin/env bash\n"
+            "PATH=${PATH#*:}\n"
+            "input=$(cat)\n"
+            'if [ "$input" = unreadable ]; then exit 1; fi\n'
+            "printf '%s\\n' \"$input\" | tr \"$@\"\n",
+            encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+        for name in ("BISECT_START", "rebase-merge/head-name", "rebase-merge/update-refs"):
+            with self.subTest(name=name):
+                self.at(f'mkdir -p .git/rebase-merge && echo unreadable > ".git/{name}"')
+                result = self.helper()
+                self.assertEqual(12, result.returncode, result.stderr)
+                self.assertIn("it is kept", result.stderr)
+                self.assertTrue(self.exists())
+                self.at(f'rm ".git/{name}"')
+        self.assertEqual(0, self.helper().returncode, "the helper dropped nothing once the files had gone")
 
     def test_a_branch_under_a_conflicted_rebase_elsewhere_is_kept(self):
         # What git-rebase-onto-main.sh start leaves: HEAD detached mid-replay,
