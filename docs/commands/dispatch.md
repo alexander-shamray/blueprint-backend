@@ -37,7 +37,10 @@ the fork and the removal helpers run only from there.
 The executor never tears its own worktree down, because a session cannot
 delete its working directory on Windows; the dispatcher removes it once the
 merge is verified, and a removal the helper refuses is named in the report
-(spec §6.2).
+(spec §6.2). It then drops the merged branch through `git-branch-drop.sh`,
+which `/ship` under `--dispatched` leaves to it: the branch is checked out in
+the worktree until the removal, so only the dispatcher can. A refusal is
+reported and keeps the branch.
 
 ## One writer of the task list
 
@@ -222,6 +225,66 @@ that ran: a hand-back, the cautious side. Recording either writes
 still holds the slot; what this separates is a marker that only another
 process holds.
 
+## Sync pull requests
+
+A sync changes `.claude/` for every group after it, so on a night that starts
+with no group active one found at step 0 goes first and alone: while it runs
+nothing else launches, and a group launched after its merge forks from the new
+`main` and runs under the new settings. That costs one executor's time, about
+15 minutes, once a night. `wake` holds the others at `launch: none` while a sync
+group is active, without ending the night.
+
+A sync opening mid-night, or found by a resumed run with a group active, gets
+neither promise. `sync-launch` refuses to start beside a running group, and
+`wake` goes on launching while no sync is active, so it waits for the running
+groups and new launches can overtake it, perhaps to the end of the night. The
+cost is that those groups run under the settings the sync would replace.
+Holding a slot for it would stall the backlog for a change nobody is waiting
+on, so nothing reserves one: the morning's list shows it, and the next
+`/dispatch` that starts with no group active takes it first.
+
+**The proof binds.** The verify at step 0.3 and after each exit runs in the
+main checkout, because the executor runs that head's own copy of `sync_pr.py`,
+and a head cannot vouch for itself. `--oid` carries the proof to the launch:
+`sync-launch` writes nothing unless git shows the worktree on that branch, at
+that oid, and clean, and it records the oid. The executor then takes `<oid>`
+as `HEAD` (`docs/commands/ship.md`, *A sync pull request is reviewed once, for
+this target*), so `run` compares again before every relaunch: a tree a crash
+left somewhere else is refused and goes to `sync-close`, even where step 6's
+rebase moved it and the merge then landed. Nothing else can tell that crash
+from an unproved head, and the report's *Syncs* line says which tree it was.
+
+**No row.** No task-list row ever held a sync, and the next sync supersedes
+it, so the report carries it, in the seventh section. `sync-<n>` names a group
+in the run's state alone: `tasks` still takes only a letter and a number, so
+nothing places or moves one, and a conflicts cell cannot name one. Its record
+has no `rows`, which keeps it from `wake`'s running groups and from `tasks
+done` and `back`, and empty `keys`, so it never holds a reported run open.
+`sync-close` takes their place, runs after the teardown on a merge, sets
+`closed` and keeps the outcome, so `report` does not list a merged and
+confirmed sync as not confirmed in main. One left `verified`, by a failed pull
+or containment read, is named as merged and not confirmed, and claims no rows.
+A closed sync a human owes, each hand-back kind, is under *Needs a human* as
+well as *Syncs*, since its worktree waits for the owner; only one stopped by a
+closed pull request is left out, which the next sync supersedes.
+*Resume* has lines of its own for a sync, because `done`, `back` and the
+window's `wait` lead to `tasks`. A sync whose worktree is gone has no other
+way out, so `sync-close` takes it once no executor is alive and no exit is
+unread, as `crash-hand-back`: how it ended is unknown, so a human reads it.
+
+**Sonnet.** `verify`, CI and the `branch-reviewer` catch its errors, and the
+reviewer runs on its own profile's model (`docs/harness/token-rules.md`,
+*Which model a subagent runs on*).
+
+**Each exit lists again.** A sync's outcome can change what is open, so the
+reads after an exit are `list` and `verify` as well as the issues.
+`sync-launch` refuses a group this run holds, as a hand-back is never
+relaunched, so a sync that stopped on a closed pull request, or was handed back
+with its pull request still open, cannot loop; a new `take` is a new group. A
+later night's re-take finds the worktree and branch the hand-back left, which
+`git-worktree-sync.sh` refuses, so the dispatcher skips the helper and
+`sync-launch`'s checks decide.
+
 ## When the night ends
 
 The spec's §8 ends the night: the week's limit, nothing ready and nothing
@@ -254,10 +317,11 @@ pause notice can still reach this interactive session; when it does it is
 that limit, read the one way available, and ends the night as §8's weekly
 stop does.
 
-The report is `report`'s English facts written up in `--lang`, in the
-spec's §10's six sections, with what only the session saw added: a refused
-removal, a failed pull, a failed `record`. It ends with the apply line every
-message here ends with.
+The report is `report`'s English facts written up in `--lang`, in seven
+sections, the spec's §10's and *Syncs*, with what only the session saw added:
+a refused removal, a refused drop, a failed pull, a failed `record`, the
+superseded rows `list` names and a failed verify. It ends with the apply line
+every message here ends with.
 
 ## Resume
 
@@ -300,8 +364,10 @@ Raw `gh issue edit`, `close` and `create` are denied, because the issue
 writes are `issue_decisions.py`'s, which accepts only the decision entry's
 shape, and `gh-issue-create.sh`'s.
 
-The git grants that write are the fork and removal helpers and
-`git pull --ff-only`. `git log:*` reaches `--output=`, an arbitrary file
+The git grants that write are the fork, sync worktree, removal and
+branch-drop helpers and `git pull --ff-only`. `sync_pr.py` is granted for
+`list` and `verify`, and nothing in it writes to GitHub. `git log:*` reaches
+`--output=`, an arbitrary file
 write, which the guard hook refuses in every spelling but one the shell
 computes at run time, as `docs/harness-boundaries.md`'s *Output deny and
 shell-expansion residuals* states; the dispatcher's reads never pass it.

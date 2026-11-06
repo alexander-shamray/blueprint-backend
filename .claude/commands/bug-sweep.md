@@ -2,7 +2,7 @@
 description: Loop a defect audit up to seven rounds in a throwaway worktree, filing a GitHub issue per confirmed critical-or-high logic or execution bug, until a round surfaces nothing new
 argument-hint: "[scope hint, e.g. 'the outbox' or a path] — omit to sweep the whole repo; `full` ignores the last clean sweep"
 allowed-tools: Read, Grep, Glob, Agent(bug-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
-disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*)
+disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*)
 ---
 
 Sweep the repository for defects — code that does something other than what it
@@ -13,8 +13,8 @@ if empty, the whole repo.
 ## What this command hunts, and what it hands over
 
 **A defect is code that is wrong on its own terms** — against its own evident
-intent, not against a document. If explaining it requires quoting a chapter, it
-is not this command's finding.
+intent, not against a document. If explaining it requires quoting one, it is
+not this command's finding.
 
 | | |
 |---|---|
@@ -105,7 +105,7 @@ detached
   tree; it is a round that could not run, under *Never fail open*. **The round
   writes nothing inside `$work`**, so the teardown needs no `--force`.
 - **Prove the root is readable before the fan-out**: `Glob`
-  `$work/Platform.slnx` as an **absolute** path and require exactly one hit, or
+  `$work/CLAUDE.md` as an **absolute** path and require exactly one hit, or
   report a round that could not run, under *Never fail open*.
 - **Every read is an absolute path under `$work`** — every `Read`, `Grep` and
   `Glob` argument and every Agent prompt's stated root; the one exception is

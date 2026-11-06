@@ -72,7 +72,7 @@ detached
 
 — so compare the **`worktree `-prefixed lines only**, and strip that prefix
 before anything reads `$work`. Both halves matter and each fails differently.
-Left unstripped, `$work` is `worktree D:/…` and `$work/Platform.slnx` cannot
+Left unstripped, `$work` is `worktree D:/…` and `$work/CLAUDE.md` cannot
 resolve, which stops the sweep. Compared over the whole dump, a new detached
 worktree contributes a `worktree ` line **and** a `detached` line — two records,
 not one — so "exactly one appeared" is true of the prefixed lines and false of
@@ -114,7 +114,7 @@ case it was offered for. Nor is the basename: `mktemp` guarantees its six
 characters are unused **in the temp directory it chose**, not across every
 worktree this repository has registered, so an abandoned sweep under a different
 temp root can collide. That one is worth spelling out because of where it lands
-— the stale checkout contains `Platform.slnx` too, so the readable-root proof
+— the stale checkout contains `CLAUDE.md` too, so the readable-root proof
 below passes against it and the auditors read a commit nobody pinned. A wrong
 snapshot, silently, which is the failure this whole section exists to prevent.
 
@@ -141,8 +141,8 @@ there is no host where this line is skipped, because git always knows how to
 spell its own worktree.
 
 **`$work` is never unset, and that is the half with teeth.** Left unset, the
-readable-root proof below degrades from `$work/Platform.slnx` to a
-workspace-relative `Platform.slnx` — which this repository has at its root — so
+readable-root proof below degrades from `$work/CLAUDE.md` to a
+workspace-relative `CLAUDE.md` — which every repository has at its root — so
 the check passes against the caller's tree and reports a snapshot it never
 opened. That is the precise fail-open the named-file assertion exists to close,
 reintroduced by an unbound variable, so the proof takes an **absolute** path or
@@ -165,9 +165,10 @@ are outside it (`docs/harness-boundaries.md`) — so `$work` stays clean on its
 own and the teardown below removes it without `--force`.
 
 **Prove the root is readable before the fan-out, rather than trusting the add.**
-`Glob` a file the pinned commit is known to carry — `$work/Platform.slnx`, as an
-**absolute** path — and require exactly one hit. A path the shell created is not
-necessarily a path the built-in readers resolve, and the failure is not reliably
+`Glob` a file the pinned commit is known to carry — `$work/CLAUDE.md`, which
+every target tracks, as an **absolute** path — and require exactly one hit. A
+path the shell created is not necessarily a path the built-in readers resolve,
+and the failure is not reliably
 loud: `Glob` given a `path=` argument reports a directory that does not exist,
 but a *pattern* matching nothing returns `No files found`, which is exactly what
 a clean scope returns. Assert on a named tracked file rather than on a non-empty
@@ -363,7 +364,7 @@ hide a command from a hook exposed the next one, and none of them is how an
 agent doing ordinary work goes wrong, so such a spelling is recorded in the
 summary as outside the model rather than filed. What the model admits as a
 finding, and why, is the section *The guards' threat model* in
-blueprint-backend's `docs/harness-boundaries.md`.
+`docs/harness-boundaries.md`.
 
 ## Fan out
 
@@ -389,7 +390,7 @@ registered type that holds a shell, an editor or the network, because
 `allowed-tools` is an auto-approval list and only a deny refuses — argued and
 measured in `docs/harness-boundaries.md`, *Grant semantics*. That a deny list
 of agent types is an inventory, which admits by default a type it does not
-name, is that file's *Agent-type, push and dotnet entries*. The other
+name, is that file's *Agent-type and push entries*. The other
 read-only profiles belong on it too, because `bug-auditor` reports bugs
 rather than security findings, so a sweep run through it can return a clean
 *security* round having looked for something else.
@@ -639,7 +640,7 @@ its own.
 ## What this command does not do
 
 It **files**; it does not **fix**. A security fix is a code change with its own
-test and its own PR, and the delivery plan orders that work — this command's job
+test and its own PR — this command's job
 is to make the findings visible and tracked, not to edit source. If a finding is
 better closed than tracked (a one-line binding, a stray secret), say so in the
 round summary and leave the change to the user.

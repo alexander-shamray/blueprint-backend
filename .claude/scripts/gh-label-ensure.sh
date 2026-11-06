@@ -12,9 +12,9 @@ set -euo pipefail
 }
 label="$1"
 
-# The whole vocabulary, with the colour and text each label carries today, so a
-# create in a fresh clone reproduces what this repository already has rather
-# than inventing a second appearance for the same label. A name outside this
+# The whole vocabulary, with the colour and text each label is created with, so
+# a create in a fresh clone does not invent a second appearance for the same
+# label. A name outside this
 # case is refused rather than passed to gh — that refusal is the point of the
 # file.
 case "$label" in
@@ -27,7 +27,7 @@ case "$label" in
   low)      colour=0e8a16; description="Severity: latent (no current caller), hardening, or deferred follow-up" ;;
   harness)  colour=1d76db
             description="The Claude Code harness under .claude/: commands, hooks, scripts, agents, settings" ;;
-  code)     colour=006b75; description="Code and configuration: src/, tests/, tools/, deploy/ and the CI workflows" ;;
+  code)     colour=006b75; description="Code and configuration outside .claude/: the product, its tests, the CI workflows" ;;
   documentation) colour=0075ca; description="Improvements or additions to documentation" ;;
   test)     colour=c5def5; description="A test suite: a test that cannot fail, a flake, a coverage gap" ;;
   *) echo "not a label this helper will create: $label" >&2; exit 2 ;;

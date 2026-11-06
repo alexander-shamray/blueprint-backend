@@ -1,4 +1,4 @@
-"""The night's run of /dispatch under artifacts/dispatch/<run>/: start, launch, run, result, verify, wait, wake, resume.
+"""The night's run of /dispatch under artifacts/dispatch/<run>/: every group and sync, from start to report.
 
 Spec sections 6.2 to 6.4, 8 and 9. dispatch_board.py's command line reaches every subcommand here, so one grant
 covers both halves; the task list's half is imported from it. Only the dispatcher writes state.json.
@@ -20,11 +20,12 @@ from pathlib import Path
 from dispatch_board import (BRANCH_NAME, MODEL, Group, Refusal, _blocker, _bodies, _held, _number, _read, _row, _write,
                             git, group_claim, groups, helper, one_line, parse_tasks, path_which, pick, ready,
                             row_branch)
+from sync_pr import SYNC_HEAD
 
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
 MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
-# tools/quality-sets/quality_sets.py owns these four counts of a `claude -p` envelope's usage; a test holds them equal.
+# The four counts of a `claude -p` envelope's usage.
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 OUTCOMES = ("merged", "handed-back", "stopped")
 REVIEW_ENDS = ("clean", "comments-rule", "plan", "ceiling")
@@ -166,8 +167,9 @@ def open_run(root, tasks_path):
     return None, None
 
 
-# A group whose rows left In progress through this run's `done` or `back`; any other may still hold them.
-CLOSED = ("done", "returned")
+# A group whose rows left In progress through this run's `done` or `back`, or a sync, which held none, once closed;
+# any other may still hold them.
+CLOSED = ("done", "returned", "closed")
 
 
 def _in_progress_keys(tasks_path):
@@ -188,7 +190,8 @@ def _holds_rows(directory, listed):
     except Refusal as error:
         return True, str(error)
     for gid, entry in entries.items():
-        if isinstance(entry, dict) and entry.get("status") in CLOSED:
+        # Empty keys match no row, so a sync is judged without reading a list that might not read.
+        if isinstance(entry, dict) and (entry.get("status") in CLOSED or entry.get("keys") == []):
             continue
         keys, unread = listed()
         if keys is None:
@@ -263,6 +266,23 @@ def prompt(group, description, run):
     return f"/ship {tag} {description.strip()} --dispatched artifacts/dispatch/{run}"
 
 
+def sync_prompt(pr: int, run: str) -> str:
+    run_dir(".", run)
+    if not _number(pr):
+        raise Refusal(f"{pr!r} is not a pull request number")
+    return f"/ship sync #{pr} --dispatched artifacts/dispatch/{run}"
+
+
+def _prompt_for(gid, entry, description, run):
+    if entry.get("kind") == "sync":
+        if description is not None:
+            raise Refusal(f"{gid} is a sync, which takes no --description")
+        return sync_prompt(_field(entry, gid, "pr", _number), run)
+    if description is None:
+        raise Refusal(f"{gid} needs --description")
+    return prompt(_entry_group(gid, entry), description, run)
+
+
 def _same_path(path):
     return os.path.normcase(os.path.realpath(path))
 
@@ -277,6 +297,24 @@ def _worktree_branches(porcelain):
         elif not line:
             current = None
     return found
+
+
+def _worktree_on(root, worktree, branch):
+    # The fork is the dispatcher's own step, so the run trusts only what git shows: a worktree, on this branch.
+    listed = _worktree_branches(git(root, "worktree", "list", "--porcelain"))
+    if listed.get(_same_path(os.path.join(root, worktree))) != f"refs/heads/{branch}":
+        raise Refusal(f"{worktree} is not a worktree on {branch}")
+
+
+def _bound_to(root, worktree, oid):
+    """Refuse a sync's tree unless it is the head the main checkout proved: an executor runs that tree's own copy."""
+    tree = Path(root) / worktree
+    head = git(tree, "rev-parse", "HEAD").strip()
+    if head != oid:
+        raise Refusal(f"{worktree} is at {head}, not the proved {oid}")
+    held = git(tree, "status", "--porcelain").strip()
+    if held:
+        raise Refusal(f"{worktree} is not clean: {one_line(held, 200)}")
 
 
 def launch(root, run, gid, tasks_path, branch, worktree):
@@ -296,10 +334,7 @@ def launch(root, run, gid, tasks_path, branch, worktree):
     named = sorted({row_branch(r) or "none" for r in held})
     if named != [branch]:
         raise Refusal(f"{gid}'s In progress rows name {', '.join(f'`{n}`' for n in named)}, not {branch}")
-    # The fork is the dispatcher's own step, so the run trusts only what git shows: a worktree, on this branch.
-    listed = _worktree_branches(git(root, "worktree", "list", "--porcelain"))
-    if listed.get(_same_path(os.path.join(root, worktree))) != f"refs/heads/{branch}":
-        raise Refusal(f"{worktree} is not a worktree on {branch}")
+    _worktree_on(root, worktree, branch)
     # Only a fresh move leaves no status; a launch over a later one would remove its executor's pid and record.
     if entry.get("status") is not None:
         raise Refusal(f"{gid} is {entry['status']}, not moved and unlaunched")
@@ -309,6 +344,40 @@ def launch(root, run, gid, tasks_path, branch, worktree):
     _remove_stale(*(directory / f"{gid}{suffix}" for suffix in (".refused.json", ".json", ".session.json", ".pid")))
     entry.update(status="running", model=group.model, issues=[r.number for r in group.rows], branch=branch,
                  worktree=worktree, launched=now().isoformat(), crashes=0)
+    save_state(directory, state)
+
+
+def sync_launch(root, run, pr, branch, worktree, oid):
+    """Record a proved sync as its group, first and alone: it holds no task-list row, so no list is read or written."""
+    directory = run_dir(root, run)
+    state = load_state(directory)
+    if not _number(pr):
+        raise Refusal(f"{pr!r} is not a pull request number")
+    gid = f"sync-{pr}"
+    entries = state.setdefault("groups", {})
+    if gid in entries:
+        raise Refusal(f"{gid} is already in this run; a new take is a new group")
+    if (directory / "STOP").exists():
+        raise Refusal("stop file: the owner ended the night, so nothing more launches")
+    # A sync holds no rows, so a report can close its run with the executor alive, in the worktree a re-take reuses.
+    for earlier in sorted(p.parent for p in directory.parent.glob(f"*/{gid}.pid")):
+        if alive(_pid(earlier, gid)):
+            raise Refusal(f"{gid}'s executor from run {earlier.name} is still running")
+    # It changes .claude/ for every group after it, so it starts only with nothing beside it.
+    for other, entry in entries.items():
+        if isinstance(entry, dict) and entry.get("status") in ACTIVE:
+            raise Refusal(f"{other} is {entry['status']}; a sync is launched alone")
+    if not SYNC_HEAD.fullmatch(branch):
+        raise Refusal(f"{branch!r} is not a sync head")
+    if not _oid(oid):
+        raise Refusal(f"{oid!r} is not a whole oid")
+    _worktree_on(root, worktree, branch)
+    _bound_to(root, worktree, oid)
+    # `keys` is empty rather than absent: `_holds_rows` reads it, and a sync holds nothing open. `rows` stays absent,
+    # which is what keeps `wake`'s running groups and `tasks done` and `back` away from it.
+    entries[gid] = {"kind": "sync", "keys": [], "issues": [], "pr": pr, "oid": oid, "status": "running",
+                    "model": "Sonnet", "branch": branch, "worktree": worktree, "launched": now().isoformat(),
+                    "crashes": 0}
     save_state(directory, state)
 
 
@@ -353,11 +422,14 @@ def _launch(root, directory, run, gid, entry, description):
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
         raise Refusal("stop file: the owner ended the night, so nothing more launches")
-    text = prompt(_entry_group(gid, entry), description, run)
+    text = _prompt_for(gid, entry, description, run)
     flag = model_flag(entry.get("model"))
     worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
     if not worktree.is_dir():
         raise Refusal(f"{entry['worktree']} is not a directory")
+    if entry.get("kind") == "sync":
+        # A relaunch takes its <oid> from HEAD too, so what a crash left in the tree is held to the same head.
+        _bound_to(root, entry["worktree"], _field(entry, gid, "oid", _oid))
     command = list(CLAUDE_COMMAND) if CLAUDE_COMMAND else [path_which("claude")]
     if not command[0]:
         raise Refusal("no claude on PATH")
@@ -874,7 +946,9 @@ def absorb(root, run, gid, run_refused=None):
     if end.resets_at is not None:
         entry["resets_at"] = end.resets_at.isoformat()
     if isinstance(result, Result):
-        entry.update(pr=result.pr, title=result.title, merge_oid=result.merge_oid, filed=list(result.filed),
+        # A sync's pull request is its group's: a result may name none, and `verify` reads no other.
+        entry.update(pr=entry.get("pr") if entry.get("kind") == "sync" else result.pr, title=result.title,
+                     merge_oid=result.merge_oid, filed=list(result.filed),
                      review_end=result.review_end, rounds=list(result.rounds), decisions=list(result.decisions))
     entry["transcript"] = transcript
     save_state(directory, state)
@@ -937,6 +1011,38 @@ def verify(root, run, gid):
     entry["status"] = "verified"
     save_state(directory, state)
     return 0, f"verified {entry['merge_oid']}"
+
+
+# How a sync can end: `tasks done` and `back` close a group by its rows, and a sync holds none.
+SYNC_ENDED = ("verified", "window", *HANDED)
+
+
+def _worktree_kept(root, entry):
+    worktree = entry.get("worktree")
+    return _path_text(worktree) and (Path(root) / worktree).is_dir()
+
+
+def sync_close(root, run, gid):
+    directory = run_dir(root, run)
+    state = load_state(directory)
+    entry = _entry(state, gid)
+    if entry.get("kind") != "sync":
+        raise Refusal(f"{gid} is not a sync group; tasks done and back close its rows")
+    if entry.get("status") in ACTIVE and not _worktree_kept(root, entry):
+        pid = _pid(directory, gid)
+        if pid is not None and alive(pid):
+            raise Refusal(f"{gid}'s executor is still running")
+        record = directory / f"{gid}.session.json"
+        if _refused(directory, gid, entry) is not None or (record.exists()
+                                                            and not _read_already(directory, gid, entry)):
+            raise Refusal(f"{gid} has an exit not yet read; run result first")
+        # Nothing can relaunch it, and it would hold `wake` and `sync-launch` all night. It may have merged or left
+        # work, so it ends as a hand-back, which the report puts before a human.
+        entry.update(status="crash-hand-back", reason="its worktree is gone, so how its executor ended is unknown")
+        save_state(directory, state)
+    elif entry.get("status") not in SYNC_ENDED:
+        raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not a sync that ended")
+    _close(directory, gid, "closed")
 
 
 def _week_passed(entry, current):
@@ -1070,6 +1176,9 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
         return out + ["end: week"]
     if any(entry.get("status") == "week" and not _week_passed(entry, current) for entry in entries.values()):
         return out + ["end: week"]
+    # A group launched beside a sync would run under the settings the sync is about to replace.
+    if any(entries[gid].get("kind") == "sync" for gid in active):
+        return out + ["launch: none"]
     tasks = parse_tasks(_read(tasks_path))
     bodies = _bodies(tasks, directory, body_source)
     open_set = set(open_source())
@@ -1099,6 +1208,8 @@ def resume(root, run):
         if not isinstance(entry, dict):
             raise Refusal(f"{gid}'s record in state.json is not an object")
         status = entry.get("status")
+        # A sync holds no row, so its lines lead to `sync-close`, never `tasks done` or `tasks back`.
+        sync = entry.get("kind") == "sync"
         if status in ACTIVE:
             pid = _pid(directory, gid)
             if pid is not None and alive(pid):
@@ -1123,7 +1234,8 @@ def resume(root, run):
             if started is not None and started != entry.get("absorbed"):
                 out.append(f"result {gid}: its executor ended and its result was not read")
             elif status == "window":
-                out.append(f"wait {gid}: the window resets {entry.get('resets_at')}, then relaunch")
+                out.append(f"{'sync-wait' if sync else 'wait'} {gid}: the window resets {entry.get('resets_at')}, "
+                           "then relaunch")
             elif status == "week" and not _week_passed(entry, current):
                 stamp = _parse_stamp(entry.get("resets_at"))
                 out.append(f"wait {gid}: the week resets {stamp.isoformat() if stamp else 'unknown'}")
@@ -1134,15 +1246,17 @@ def resume(root, run):
         elif status == "merged-claimed":
             out.append(f"verify {gid}")
         elif status == "verified":
-            out.append(f"done {gid}: verified, its rows are still In progress")
+            out.append(f"sync-done {gid}: verified, not yet closed" if sync
+                       else f"done {gid}: verified, its rows are still In progress")
         elif status in HANDED:
-            out.append(f"back {gid}: {status}")
+            out.append(f"{'sync-close' if sync else 'back'} {gid}: {status}")
     return out
 
 
 # The morning report's facts (spec section 10), in English; the dispatcher writes report.md from them in --lang.
 
-REPORT_SECTIONS = ("Merged", "Needs a human", "Interrupted", "Filed overnight", "Left in the backlog", "Usage")
+REPORT_SECTIONS = ("Merged", "Needs a human", "Interrupted", "Filed overnight", "Left in the backlog", "Usage",
+                   "Syncs")
 TOKEN_NAMES = ("input", "cache write", "cache read", "output")
 UNFINISHED = {None: "moved, never launched", "merged-claimed": "merge claimed, not yet verified"}
 
@@ -1173,6 +1287,31 @@ def _decisions_text(decisions):
     return "; decisions: " + " / ".join(one_line(d, 200) for d in decisions if isinstance(d, str))
 
 
+def _review_text(entry):
+    # Cleared by its transcript, it reported no round: saying so beats "review not run", which it was not.
+    if entry.get("review_seen") == "transcript":
+        return "no rounds reported; a branch-reviewer round in its transcript"
+    return f"{_rounds_text(entry.get('rounds'))}; review {entry.get('review_end') or 'not run'}"
+
+
+def _superseded(entry):
+    # Somebody closed the pull request, and the next sync replaces it: the one ending that asks nothing of a human.
+    return entry.get("closed_from") == "stopped" and entry.get("reason") == "closed unmerged"
+
+
+def _sync_line(root, gid, entry):
+    """A closed sync's line under Syncs: its outcome, pull request and, on a merge, its oid."""
+    ended = entry.get("closed_from")
+    if ended == "verified":
+        unreviewed = f"{UNREVIEWED}; " if entry.get("unreviewed") else ""
+        line = (f"{gid} {_pr_text(entry)} merged as {entry.get('merge_oid')}: {unreviewed}{_review_text(entry)}; "
+                f"filed {_issues_text(entry.get('filed'))}")
+    else:
+        line = (f"{gid} {_pr_text(entry)} {ended}: {one_line(entry.get('reason') or 'no reason recorded')}; "
+                f"worktree {entry.get('worktree')} {'left in place' if _worktree_kept(root, entry) else 'removed'}")
+    return line + _decisions_text(entry.get("decisions"))
+
+
 def _weekly_lines(usage):
     usage = usage if isinstance(usage, dict) else {}
     out = []
@@ -1193,7 +1332,7 @@ def report(root, run, tasks_path, today, body_source, open_source):
     directory = run_dir(root, run)
     state = load_state(directory)
     entries = {gid: entry for gid, entry in state.get("groups", {}).items() if isinstance(entry, dict)}
-    merged, needs, interrupted, usage = [], [], [], []
+    merged, needs, interrupted, usage, syncs = [], [], [], [], []
     filed = [n for entry in entries.values() for n in (entry.get("filed") or []) if _number(n)]
     filed += [n for n in state.get("placed") or [] if _number(n)]
     filed = list(dict.fromkeys(filed))
@@ -1202,25 +1341,30 @@ def report(root, run, tasks_path, today, body_source, open_source):
     for gid, entry in entries.items():
         status = entry.get("status")
         ended = entry.get("closed_from") if status in ("done", "returned") else status
-        if ended == "verified" and status == "done" and entry.get("unreviewed"):
+        sync = entry.get("kind") == "sync"
+        if status == "closed":
+            syncs.append(_sync_line(root, gid, entry))
+            if entry.get("closed_from") == "verified" and entry.get("unreviewed"):
+                needs.append(f"{gid} {_pr_text(entry)} {UNREVIEWED}, as {entry.get('merge_oid')}")
+            elif entry.get("closed_from") in HANDED and not _superseded(entry):
+                needs.append(syncs[-1])
+        elif ended == "verified" and status == "done" and entry.get("unreviewed"):
             # It landed, but nobody reviewed it: the one kind of merge that is not a merge needing nothing.
             needs.append(f"{gid} {_pr_text(entry)} {UNREVIEWED}, as {entry.get('merge_oid')}: "
                          f"{_issues_text(entry.get('issues'))}; filed {_issues_text(entry.get('filed'))}"
                          + _decisions_text(entry.get("decisions")))
         elif ended == "verified" and status == "done":
-            # Cleared by its transcript, it reported no round: saying so beats "review not run", which it was not.
-            review = ("no rounds reported; a branch-reviewer round in its transcript"
-                      if entry.get("review_seen") == "transcript"
-                      else f"{_rounds_text(entry.get('rounds'))}; review {entry.get('review_end') or 'not run'}")
             merged.append(f"{gid} {_pr_text(entry)} merged as {entry.get('merge_oid')}: "
-                          f"{_issues_text(entry.get('issues'))}; {review}; filed {_issues_text(entry.get('filed'))}"
+                          f"{_issues_text(entry.get('issues'))}; {_review_text(entry)}; "
+                          f"filed {_issues_text(entry.get('filed'))}"
                           + _decisions_text(entry.get("decisions")))
         elif status == "verified":
             # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
             unreviewed = f", {UNREVIEWED}" if entry.get("unreviewed") else ""
+            rows = "" if sync else "its rows are still In progress and "
             needs.append(f"{gid} {_pr_text(entry)} merged as {entry.get('merge_oid')}{unreviewed}, "
                          "not confirmed in main: "
-                         f"its rows are still In progress and worktree {entry.get('worktree')} is left in place"
+                         f"{rows}worktree {entry.get('worktree')} is left in place"
                          + _decisions_text(entry.get("decisions")))
         elif ended in HANDED or status == "returned":
             worktree = entry.get("worktree")
@@ -1234,7 +1378,7 @@ def report(root, run, tasks_path, today, body_source, open_source):
             keys = entry.get("keys") if isinstance(entry.get("keys"), list) else []
             rows = (f"its In progress rows keep run {run} open until they are sent back or removed"
                     if listed & set(map(str, keys)) else "its rows are no longer In progress")
-            needs.append(f"{gid} {status}: its worktree {entry.get('worktree')} is gone; {rows}"
+            needs.append(f"{gid} {status}: its worktree {entry.get('worktree')} is gone" + ("" if sync else f"; {rows}")
                          + _decisions_text(entry.get("decisions")))
         else:
             interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
@@ -1257,7 +1401,7 @@ def report(root, run, tasks_path, today, body_source, open_source):
     left.append(f"Tracking: {len(tasks.tracking)} rows and Paused: {len(tasks.paused)} rows, which no night runs")
     spent = (usage or ["executors: no usage read"]) + _weekly_lines(state.get("usage"))
     out = []
-    for name, lines in zip(REPORT_SECTIONS, (merged, needs, interrupted, [_issues_text(filed)], left, spent)):
+    for name, lines in zip(REPORT_SECTIONS, (merged, needs, interrupted, [_issues_text(filed)], left, spent, syncs)):
         out += [f"## {name}", *(lines or ["none"])]
     return out
 
@@ -1269,7 +1413,7 @@ def add_commands(sub):
     s.add_argument("--pairs", type=int, required=True)
     s.add_argument("--lang", default="en")
     s.add_argument("--tasks", required=True)
-    for name in ("launch", "run", "result", "verify", "wait"):
+    for name in ("launch", "run", "result", "verify", "wait", "sync-close"):
         s = sub.add_parser(name)
         s.add_argument("run")
         s.add_argument("group")
@@ -1277,9 +1421,14 @@ def add_commands(sub):
             for option in ("tasks", "branch", "worktree"):
                 s.add_argument(f"--{option}", required=True)
         if name == "run":
-            s.add_argument("--description", required=True)
+            s.add_argument("--description")
         if name == "result":
             s.add_argument("--refused")
+    s = sub.add_parser("sync-launch")
+    s.add_argument("run")
+    s.add_argument("pr", type=int)
+    for option in ("branch", "worktree", "oid"):
+        s.add_argument(f"--{option}", required=True)
     w = sub.add_parser("wake")
     w.add_argument("run")
     w.add_argument("--tasks", required=True)
@@ -1309,6 +1458,10 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
         print(new_run(root, args.pairs, args.lang, now()))
     elif args.command == "launch":
         launch(root, args.run, args.group, args.tasks, args.branch, args.worktree)
+    elif args.command == "sync-launch":
+        sync_launch(root, args.run, args.pr, args.branch, args.worktree, args.oid)
+    elif args.command == "sync-close":
+        sync_close(root, args.run, args.group)
     elif args.command == "run":
         run_session(root, args.run, args.group, args.description)
     elif args.command == "result":
