@@ -401,9 +401,10 @@ frozen.
   `native`, `samples`. `tooling` gains `.harness/`, which the function does not
   know.
 - [ ] **Step 4:** Write `.github/locality-gate/classes.yml` in backend's
-  grammar from §3's table. §3 then cites the file as the owner of the tree
-  sets, and its gap paragraph keeps saying there is no gate in CI, which stays
-  true.
+  grammar from §3's table, adding `.harness/**` to Class D as backend's map
+  has it, since every sync's manifest is there. §3 then cites the file as the
+  owner of the tree sets, and its gap paragraph keeps saying there is no gate in
+  CI, which stays true.
 - [ ] **Step 5:** Move the npm cases to `test_npm_checks.py` by the script, and
   add `.claude/skills/codebase-index/.skill_version` to `.gitignore`.
 - [ ] **Step 6:** Write one owner-run script, under agent-rules *Handing over
