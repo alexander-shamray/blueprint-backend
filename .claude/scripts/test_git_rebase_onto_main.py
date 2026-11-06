@@ -1,4 +1,4 @@
-"""git-rebase-onto-main.sh: the only force push, and what bounds it.
+"""git-rebase-onto-main.sh: a leased force push, and what bounds it.
 
 A permission rule matches the text of a command, so it can pin a flag and
 cannot pin a fact about the checkout. The guards that make this force push
@@ -584,7 +584,7 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
     def test_continue_fails_closed_when_the_starting_commit_is_unreadable(self):
         # The lease alone would not stop this: another session's commits that
         # this checkout has fetched satisfy it. Skipping the check that does
-        # would leave the only force push in the repository unguarded.
+        # would leave this force push unguarded.
         self.assertEqual(8, self.helper("start").returncode)
         self.at('rm -f "$(git rev-parse --git-path rebase-merge)"/orig-head '
                 '"$(git rev-parse --git-path rebase-merge)"/head')

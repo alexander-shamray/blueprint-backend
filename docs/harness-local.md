@@ -39,6 +39,10 @@ Selected by the class the PR body will carry (`docs/change-locality.md`
 A Class A runbook edit runs neither, and its PR body says so rather than
 claiming a run.
 
+The required checks, which `/ship` step 6's wait holds the list to, as the
+`main` ruleset requires them: `changes`, `build`, `closure-gate`,
+`locality-gate`, `commits` and `commit-gate`.
+
 ## Residuals
 
 Two passages the managed `docs/harness-boundaries.md` no longer carries

@@ -1,7 +1,7 @@
 ---
 description: Open a pull request with a body in the house form
 argument-hint: "[title — omit to derive it from the commits]"
-allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh)
 ---
 
 Open a PR for the current branch. Title: $ARGUMENTS — if empty, derive it
@@ -28,9 +28,14 @@ happening silently.
 
 **Two kinds of push are denied in `.claude/settings.json`, and neither is a
 step to work around:** rewriting history (`--force`, `-f`, `--force-with-lease`,
-`--delete`) and anything landing on `main`. A branch wanting either is raising
-a decision — stop and say so. The trailer helper in *Steps* is not a way
-round the first: it carries its own lease (`docs/harness-boundaries.md`).
+`--delete`) and anything landing on `main`. A branch amended or reworded since
+it was pushed, and so wanting a force push to itself, runs
+`bash .claude/scripts/git-push-force.sh`: it takes no argument, publishes the
+branch checked out under a lease, and refuses `main`, a branch origin lacks,
+and a remote carrying commits this checkout never held
+(`docs/harness-boundaries.md`). The trailer helper in *Steps* carries its own
+lease the same way. Neither is a way round the deny: a refusal from either, a
+deletion, or a push reaching `main` is raising a decision — stop and say so.
 Do not reach for `gh pr create`'s own offer to
 push either: it is the same action by a route that skips the upstream check
 above, so it pushes without ever reporting that it did.

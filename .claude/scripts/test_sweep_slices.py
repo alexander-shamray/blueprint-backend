@@ -1,7 +1,9 @@
 """sweep-slices.sh and sweep-mark.sh: the partition, the budget and the ref.
 
-The partition runs against this repository's own tree, so a new top-level
-directory no row owns fails here before a sweep passes over it.
+The partition runs here against small repositories built per case. A target
+whose tree the rows partition also runs it against its own tree, in a suite of
+its own, so a new top-level directory no row owns fails there before a sweep
+passes over it.
 """
 
 import os
@@ -17,7 +19,6 @@ MARK = SCRIPTS / "sweep-mark.sh"
 DETACH = SCRIPTS / "git-worktree-detach.sh"
 DROP = SCRIPTS / "git-worktree-drop.sh"
 REPO = str(SCRIPTS.parent.parent)
-BUDGET = 240000
 GIT_ID = "-c user.name=t -c user.email=t@example.invalid"
 
 
@@ -79,35 +80,6 @@ def listed(slices):
         assert read.returncode == 0, read.stderr
         paths += read.stdout.splitlines()
     return paths
-
-
-class TheRealTree(unittest.TestCase):
-    """Both partitions hold over this repository, within the budget."""
-
-    def test_every_tracked_path_is_listed_or_counted_and_every_slice_fits(self):
-        # `full`, so a ref a real sweep left in this checkout does not narrow it.
-        sweep = Sweep(self, REPO)
-        tracked = len(git(REPO, "ls-tree -r --name-only --full-tree HEAD").splitlines())
-        for kind in ("bug", "security"):
-            with self.subTest(kind=kind):
-                run_bash('rm -rf "$W.slices"', W=sweep.path)
-                result = sweep.slices(kind, "full")
-                self.assertEqual(0, result.returncode, result.stderr)
-                head, slices = parse(result.stdout)
-                self.assertEqual("full", head["mode"])
-                counts = head["counts"]
-                self.assertEqual(tracked, counts["tracked"])
-                skipped = sum(v for k, v in counts.items() if k not in ("tracked", "listed"))
-                self.assertEqual(counts["tracked"], counts["listed"] + skipped)
-                for row, files, size, _ in slices:
-                    self.assertTrue(size <= BUDGET or files == 1, (row, files, size))
-                paths = listed(slices)
-                self.assertEqual(counts["listed"], len(paths))
-                self.assertEqual(len(paths), len(set(paths)), "a path in two slices")
-                for top in ("src/", "tests/", "tools/", ".claude/", "deploy/", "docs/"):
-                    self.assertTrue(any(p.startswith(top) for p in paths), top)
-                self.assertTrue(any("/" not in p for p in paths), "the root files")
-                self.assertFalse(any(p.startswith("docs/superpowers/") for p in paths))
 
 
 # One file in every row both sweeps own, so a small repository partitions the

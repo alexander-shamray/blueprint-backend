@@ -1,7 +1,7 @@
 """The review loop's helper suites' harness; `docs/harness-boundaries.md` argues Claude Code's grants and refusals.
 
 Negatives pair with positive controls; pattern cases run the scripts' own `grep -E` or `jq`, as `re` would be a second
-specification, and call-site cases may read the scripts with `re`. To run it, see `docs/harness-local.md`'s Testing row.
+specification, and call-site cases may use `re`. To run it, see the testing document `docs/harness-local.md` names.
 """
 
 import os

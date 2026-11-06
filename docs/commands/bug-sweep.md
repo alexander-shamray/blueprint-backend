@@ -860,14 +860,16 @@ the cited-path one. A capability boundary that refuses arbitrary `Bash` is what
 "no file's contents can be altered" would need, and no grant here expresses
 one.
 
-**`git push` is a different case**, and its argument — the global allow,
-the measured `Bash(...)` deny in this key, and why a terminal read-only
-command keeps it — is owned by `docs/harness-boundaries.md`, *Sweep push denies
-and chained commands*. Both sweeps deny `git push origin`, its `-u` form and
-the raw `gh issue create` by name. A `Write` grant for issue bodies is
-refused: it would re-open source editing, and a read-only claim resting on
-prose while the grant permits writing every undenied path is unenforced.
-Bodies go through `gh-issue-create.sh` on stdin for exactly this reason.
+**`git push` is a different case**, and its argument — the global allow, the
+measured `Bash(...)` deny in this key, and why a terminal read-only command
+keeps it — is owned by `docs/harness-boundaries.md`, *Sweep push denies and
+chained commands*. Both sweeps deny `git push origin`, its `-u` form, the two
+helpers the base settings grant to force-push or delete a branch,
+`git-push-force.sh` and `git-branch-drop.sh`, and the raw `gh issue create` by
+name. A `Write` grant for issue bodies is refused: it would re-open source
+editing, and a read-only claim resting on prose while the grant permits
+writing every undenied path is unenforced. Bodies go through
+`gh-issue-create.sh` on stdin for exactly this reason.
 
 **No mutation is scoped by discipline: every grant that could steer one is a
 helper.** Each is recorded because the reasoning generalises:

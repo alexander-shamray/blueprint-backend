@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
@@ -25,6 +24,30 @@ from review_helpers import (
 
 # A `gh` grant in any spelling: the bare prefix, a wildcard, a subcommand, `.exe`, any case, an env prefix.
 GH_GRANT = re.compile(r"(?:\w+=\S*\s+)*gh(?:\.exe)?(?:\s|\*|$)", re.IGNORECASE)
+
+
+# The class map every locality case reads unless it names its own: the shape of a target's
+# `.github/locality-gate/classes.yml`, small enough that each verdict below follows from it, so no case here passes
+# or fails on what one target's map holds. Each class lists the trees a case needs it to admit; a target's shipped
+# map is held to its locality gate in that target's own suite.
+CLASSES = """\
+A:
+  - 'src/**'
+  - 'tests/**'
+  - 'docs/runbooks/**'
+B:
+  - 'src/**'
+  - 'tests/**'
+C:
+  - 'src/**'
+  - 'tests/**'
+  - 'docs/backend-architecture/**'
+D:
+  - 'docs/**'
+  - '.claude/**'
+E:
+  - 'Directory.Packages.props'
+"""
 
 
 def code_lines(text):
@@ -96,6 +119,10 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertNotIn(command, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
         self.assertIsNone(GH_GRANT.match("ghost"))
 
+    # The payload's commands that hold each helper's grant; a target's own commands that do are held to it there.
+    BRANCH_LOOKUP_COMMANDS = ("pr.md", "ship.md")
+    LOCALITY_COMMANDS = ("ship.md",)
+
     def test_the_branch_lookup_goes_through_the_fixed_helper(self):
         # Which pull requests exist for a branch is the harmless thing the
         # commands need, so one helper with a fixed field set serves them.
@@ -111,7 +138,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         for line in code:
             self.assertNotIn("reviews", line)
             self.assertNotIn("comments", line)
-        for name in ("pr.md", "review-branch.md", "ship.md"):
+        for name in self.BRANCH_LOOKUP_COMMANDS:
             with self.subTest(command=name):
                 frontmatter = (COMMANDS / name).read_text(
                     encoding="utf-8").split("---")[1]
@@ -124,7 +151,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             with self.subTest(branch=bad):
                 result = subprocess.run(
                     [BASH, str(SCRIPTS / "pr-for-branch.sh"), bad],
-                    capture_output=True, text=True)
+                    capture_output=True, text=True, encoding="utf-8")
                 self.assertEqual(2, result.returncode)
                 self.assertNotIn("reviews", result.stdout)
 
@@ -142,7 +169,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         self.assertNotIn("$2", helper)
 
     def test_the_locality_rows_go_through_the_fixed_helper(self):
-        # `docs/change-locality.md` asks a PR body for `| Class |` and `| Touch set |`, and no command may hold
+        # The change contract `docs/harness-local.md` *Documents* names asks a PR body for `| Class |` and
+        # `| Touch set |`, and no command may hold
         # `gh pr view`, so the rows arrive through a helper that reads `body` and the changed names and nothing
         # else, since a caller that chooses fields can choose `reviews`. The two `gh` lines are compared whole,
         # because a substring check passes one that chains `--json reviews` after a semicolon; names arrive as
@@ -161,7 +189,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             gh_calls,
         )
         self.assertNotIn("$2", text)
-        for name in ("review-branch.md", "ship.md"):
+        for name in self.LOCALITY_COMMANDS:
             with self.subTest(command=name):
                 frontmatter = (COMMANDS / name).read_text(encoding="utf-8")
                 frontmatter = frontmatter.split("---")[1]
@@ -170,11 +198,14 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         for bad in ("--json", "12x", "-1", "1 --json reviews"):
             with self.subTest(arg=bad):
                 out = subprocess.run(
-                    [BASH, str(helper), bad], capture_output=True, text=True,
+                    [BASH, str(helper), bad], capture_output=True, text=True, encoding="utf-8",
                 )
                 self.assertEqual(out.returncode, 2, out.stderr)
 
-    def _run_locality_with_gh(self, script, scripts=SCRIPTS):
+    def _run_locality_with_gh(self, script, scripts=None):
+        # Over CLASSES unless a case names its own map: run over a target's map, a refusal case would pass on the
+        # map's own refusal in a target that has none, since both exit 3 with nothing printed.
+        scripts = scripts or self._scripts_with_map(CLASSES)
         return self._run_helper_with_gh("pr-locality.sh", "187", script, scripts=scripts)
 
     def _scripts_with_map(self, text):
@@ -411,7 +442,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertNotIn("ignore", r.stderr)
 
     def test_one_row_without_the_other_is_refused(self):
-        # A class alone gives /review-branch no set, and a set alone gives it
+        # A class alone gives /ship's review no set, and a set alone gives it
         # no class to judge the set by, so the pair is required, or neither.
         for body in ("| Class | D |\n", "| Touch set | docs/x.md |\n"):
             with self.subTest(body=body):
@@ -538,34 +569,6 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         r = self._run_locality_with_gh(self._gh_printing(body.replace("| C |", "| C+A |"), files))
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertIn("inside docs/runbooks/outbox-growth.md", r.stdout.splitlines())
-
-    def test_the_class_verdict_is_the_gates_own(self):
-        # One payload through both readers of classes.yml: a path is
-        # `outside-class` here exactly when the gate says it is outside the
-        # class's tree set, whatever the row admits, on these paths over the shipped map.
-        paths = [
-            "src/Services/Ordering/A.cs", "tests/Ordering.Domain.Tests/A.cs", "docs/x.md",
-            ".claude/scripts/x.sh", ".github/workflows/x.yml", "deploy/compose/x.yml",
-            "tools/new-service/x.py", "Directory.Packages.props", "Platform.slnx",
-            "src/Services/Ordering/Ordering.Api/Ordering.Api.csproj", "CLAUDE.md",
-        ]
-        root = SCRIPTS.parent.parent
-        gate = root / ".github" / "locality-gate" / "locality_gate.py"
-        for cls in ("A", "B", "C", "D", "E", "C+E", "A+D+E"):
-            with self.subTest(cls=cls):
-                body = f"| Class | {cls} |\n| Touch set | {', '.join(paths[:6])} |\n"
-                r = self._run_locality_with_gh(self._gh_printing(body, "\n".join(paths) + "\n"))
-                self.assertEqual(0, r.returncode, r.stderr)
-                ours = {line.split(" ", 1)[1] for line in r.stdout.splitlines()
-                        if line.startswith("outside-class ")}
-                payload = json.dumps({"number": 1, "body": body, "files": paths, "changedFiles": len(paths)})
-                g = subprocess.run(
-                    [sys.executable, str(gate), "--root", str(root)], input=payload,
-                    capture_output=True, text=True, encoding="utf-8")
-                self.assertIn(g.returncode, (0, 1), g.stderr)
-                theirs = set(re.findall(r"`([^`]+)` is outside class", g.stderr))
-                self.assertEqual(theirs, ours)
-                self.assertTrue(ours or cls == "A+D+E", "a class with nothing outside it proves nothing")
 
     def test_a_class_map_that_cannot_be_read_refuses_the_run(self):
         # The gate refuses a map it cannot read whole, so a verdict half-read

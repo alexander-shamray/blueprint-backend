@@ -200,12 +200,31 @@ class PathTests(unittest.TestCase):
     def over(self, a, b, a_id="A1", a_issues=(), b_id="B1", b_issues=()):
         return db.overlaps(a, a_id, set(a_issues), b, b_id, set(b_issues))
 
+    # The directories a case's dotless tokens are judged against, laid out as a checkout of its own: the walk is the
+    # subject, and the checkout this suite sits in is a different tree in every target.
+    CHECKOUT = ("src/Services/Ordering", "src/Services/Catalog", "deploy/rabbitmq", "tools/quality-sets", "docs")
+
+    def in_checkout(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        for directory in self.CHECKOUT:
+            (Path(tmp.name) / directory).mkdir(parents=True)
+        # The walk is cached for the process, so it is emptied on the way in, or a walk of the real checkout made
+        # earlier would answer instead, and on the way out, after the patch is gone, so this tree's names do not stay.
+        self.addCleanup(db._directory_names.cache_clear)
+        patcher = mock.patch.object(db, "ROOT", Path(tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        db._directory_names.cache_clear()
+
     def test_paths_are_taken_from_backticks_and_bare_file_names(self):
+        self.in_checkout()
         found = db.extract_paths("Edit `src/A/b.cs:28`, then definitions.json and docs/x.md. Run `gh issue list`.")
         self.assertEqual({"src/a/b.cs", "definitions.json", "docs/x.md"}, found)
         self.assertEqual({"deploy/rabbitmq"}, db.extract_paths("the `deploy/rabbitmq/` folder"))
 
     def test_slash_commands_and_dotted_identifiers_are_not_paths(self):
+        self.in_checkout()
         self.assertEqual(frozenset(), db.extract_paths("`/ship` `OrderLine.Total` `--dispatched` `gh issue list`"))
         found = db.extract_paths("`src/Services/Catalog/` and `deploy/rabbitmq/definitions.json` and `/ship`")
         self.assertEqual({"src/services/catalog", "deploy/rabbitmq/definitions.json"}, found)
@@ -213,6 +232,7 @@ class PathTests(unittest.TestCase):
         self.assertTrue(claim.unknown)
 
     def test_a_backticked_slash_token_is_a_path_only_with_a_dot_or_a_directory_name(self):
+        self.in_checkout()
         self.assertEqual(frozenset(), db.extract_paths("`and/or` `read/write` `yes/no`"))
         found = db.extract_paths("`tools/quality-sets/` `.github/comment-gate` `v1.2/notes`")
         self.assertEqual({"tools/quality-sets", ".github/comment-gate", "v1.2/notes"}, found)
@@ -221,8 +241,8 @@ class PathTests(unittest.TestCase):
             self.assertEqual({"and/or"}, db.extract_paths("`and/or`"))
 
     def test_a_dotless_token_under_a_nested_directory_still_claims(self):
+        self.in_checkout()
         # src/Services/Ordering is in the checkout, so a body naming the subtree from below src still claims it.
-        self.assertTrue((db.ROOT / "src" / "Services" / "Ordering").is_dir())
         self.assertEqual({"services/ordering"}, db.extract_paths("touches `Services/Ordering` only"))
         # Each claim names one other file, so neither is unknown and only the shared subtree can make them overlap.
         a = db.group_claim(group_of(line(task="Edit `Services/Ordering` and `a.md`")), {1700: ""})

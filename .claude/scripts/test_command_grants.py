@@ -75,7 +75,8 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         self.assertNotRegex(profile, r"(?m)^skills:")
 
     def test_the_reviewer_and_the_auditors_run_on_opus(self):
-        # An error from any of them is a silent miss, so none takes the session's model (token-plan step 7d).
+        # An error from any of them is a silent miss, so none takes the session's model
+        # (`docs/harness/token-rules.md`, *Which model a subagent runs on*).
         for name in ("branch-reviewer", "bug-auditor", "security-auditor", "team-peer"):
             with self.subTest(profile=name):
                 profile = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
@@ -172,7 +173,12 @@ class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
 
 
 class TheSweepsDenyEveryGhCommand(unittest.TestCase):
-    """Raw filing is denied as a whole, not as the one spelling a deny list named (`docs/harness-boundaries.md`)."""
+    """Raw filing is denied as a whole, not as the one spelling a deny list named (`docs/harness-boundaries.md`).
+
+    `SWEEPS` names the payload's sweeps; a target with a sweep of its own subclasses this and names that one.
+    """
+
+    SWEEPS = ("bug-sweep.md", "security-sweep.md")
 
     FILINGS = ("gh issue create --repo a/b --title t", "gh issue new --repo a/b --title t",
                "gh api repos/a/b/issues -f title=t", "gh issue view 1 --json author,body")
@@ -182,14 +188,14 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
         return frontmatter_list((COMMANDS / name).read_text(encoding="utf-8"), "disallowed-tools")
 
     def test_each_sweep_refuses_each_spelling(self):
-        for name in ("bug-sweep.md", "security-sweep.md", "mutation-sweep.md"):
+        for name in self.SWEEPS:
             for command in self.FILINGS:
                 with self.subTest(command=name, filing=command):
                     self.assertTrue(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
 
     def test_the_helpers_stay_reachable(self):
         # The control: a deny that refused these would take the sweeps' only route with it.
-        for name in ("bug-sweep.md", "security-sweep.md", "mutation-sweep.md"):
+        for name in self.SWEEPS:
             for command in self.HELPERS:
                 with self.subTest(command=name, helper=command):
                     self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
@@ -222,8 +228,9 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
     Restoring one reads as hardening and breaks the chain silently (`docs/harness-boundaries.md`).
     """
 
-    CHAINED_BEFORE_A_PUSH = ("ship.md", "branch.md", "validate-blueprint.md",
-                             "check-links.md", "commit.md", "pr.md")
+    # The payload's commands the chain runs before it pushes; a target whose Ship checks name commands of its own
+    # holds them to the same case.
+    CHAINED_BEFORE_A_PUSH = ("ship.md", "branch.md", "commit.md", "pr.md")
 
     PUSHES = ("git push origin fix/a-branch",
               "git push -u origin fix/a-branch")

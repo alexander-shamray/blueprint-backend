@@ -250,7 +250,7 @@ class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
     """The predicate is prose, so nothing but this class reads what it says.
 
     Reverting a fenced line leaves every other test here green, which is the
-    failure `CLAUDE.md` calls this repository's most-repeated.
+    failure `.harness/agent-rules.md`, *Hard rules*, calls the most-repeated.
     """
 
     def test_the_tip_read_is_there(self):

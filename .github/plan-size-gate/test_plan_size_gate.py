@@ -66,9 +66,6 @@ class PlanSizeGateTests(unittest.TestCase):
     def test_the_cutoff_is_the_day_the_rule_landed(self) -> None:
         self.assertEqual(date(2026, 10, 7), gate.RULE_LANDED)
 
-    def test_this_repository_s_plans_pass(self) -> None:
-        self.assertEqual([], gate.check(gate.DEFAULT_PLANS))
-
     def test_main_exits_non_zero_on_a_failure(self) -> None:
         self.write("2026-10-08-feature.md", gate.LIMIT_BYTES + 1)
         self.assertEqual(1, gate.main(["--plans", str(self.plans)]))
