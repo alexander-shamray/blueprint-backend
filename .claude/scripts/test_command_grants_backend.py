@@ -6,6 +6,7 @@ name here: unittest runs every TestCase in this namespace, so an alias would run
 
 import unittest
 
+import local_commands
 import test_command_grants as payload
 
 
@@ -25,7 +26,7 @@ class MutationSweepGrantsNoHelperThatTakesARoute(unittest.TestCase):
 class TheLocalShipChecksDenyNoPush(unittest.TestCase):
     """The payload's case, over the commands this repository's Ship checks add to the chain."""
 
-    CHAINED_BEFORE_A_PUSH = ("validate-blueprint.md", "check-links.md")
+    CHAINED_BEFORE_A_PUSH = local_commands.CHAINED_BEFORE_A_PUSH
     PUSHES = payload.NothingShipChainsDeniesPush.PUSHES
 
     # The case itself rather than a subclass, so the payload's matcher controls are not run a second time.
