@@ -19,6 +19,7 @@ CLAUDE = SCRIPTS.parent
 HOOK = CLAUDE / "hooks" / "index-mcp-root.py"
 SETTINGS = CLAUDE / "settings.json"
 CBX = CLAUDE / "skills" / "codebase-index" / "scripts" / "cbx"
+SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "PreToolUse"
 MATCHER = "mcp__codebase-index__.*"
 COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
@@ -213,6 +214,15 @@ class WhatItNames(Checkouts):
         for sub, _, _ in load("index_mcp_root", HOOK).COMMANDS.values():
             with self.subTest(sub=sub):
                 self.assertIn(sub, admitted)
+
+    def test_every_tool_it_maps_is_a_subcommand_the_skill_approves(self):
+        """The wrapper admitting a subcommand is not the grant: the skill's
+        `allowed-tools` is, so a dropped one sends the command it names to a
+        permission prompt instead of the index."""
+        front = SKILL.read_text(encoding="utf-8").split("---")[1]
+        for tool, (sub, _positional, _tagged) in load("index_mcp_root", HOOK).COMMANDS.items():
+            with self.subTest(tool=tool):
+                self.assertIn(f"Bash(bash .claude/skills/codebase-index/scripts/cbx {sub}:*)", front)
 
     def test_the_query_hint_maps_its_routes_the_same_way(self):
         hint = load("index_query_hint", CLAUDE / "hooks" / "index-query-hint.py")

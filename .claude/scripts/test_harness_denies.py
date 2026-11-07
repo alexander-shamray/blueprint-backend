@@ -8,7 +8,10 @@ import json
 import subprocess
 import unittest
 
+import re
+
 from review_helpers import (
+    COMMANDS,
     SCRIPTS,
     SETTINGS,
     GIT,
@@ -36,6 +39,24 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
             for prefix in ("", "./"):
                 with self.subTest(path=path, prefix=prefix):
                     self.assertIn(f"Edit({prefix}{path})", deny)
+
+    MACHINERY = (".git/**", ".git", ".mcp.json", ".codeindexignore")
+
+    def test_every_editing_command_is_held_off_the_machinery_by_the_settings(self):
+        # Edit and Write have no path scope, so a command granted either reaches the tree the checks and the
+        # index run from unless the settings deny it; the deny is global because the grant is per command.
+        deny = self.deny()
+        editing = [path.name for path in sorted(COMMANDS.glob("*.md"))
+                   if re.search(r"(^|,\s*)(Edit|Write)(\s*,|\s*$)",
+                                " ".join(re.findall(r"^allowed-tools:\s*(.+)$",
+                                                    path.read_text(encoding="utf-8").split("\n---", 1)[0],
+                                                    re.MULTILINE)))]
+        self.assertGreaterEqual(len(editing), 3, "found almost no editing commands")
+        for name in editing:
+            for path in self.MACHINERY:
+                for prefix in ("", "./"):
+                    with self.subTest(command=name, path=path, prefix=prefix):
+                        self.assertIn(f"Edit({prefix}{path})", deny)
 
     def test_the_rules_are_edit_and_never_write(self):
         # `Edit(path)` covers every file-editing tool, Write included. A

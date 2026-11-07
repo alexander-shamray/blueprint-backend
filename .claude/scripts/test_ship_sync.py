@@ -102,7 +102,7 @@ class TheSyncRow(unittest.TestCase):
         self.assertIn("A payload low goes into the one harness issue", step)
         # The helper only creates on a first filing: on a re-take it comments on the open issue of that title.
         self.assertIn("which the helper adds a comment to when one is open under that title", step)
-        self.assertIn("a target-local low into the target's own, filed with gh-issue-create.sh", step)
+        self.assertIn("a target-local low into the target's own, filed with gh-issue-hand.sh", step)
         # The title-only check files nothing for a low a re-take newly raises, so the run's report is where it stays.
         self.assertIn("a low that issue does not list stays in the run's report", step)
         self.assertIn("A low that issue does not list stays in the run's report",
@@ -220,7 +220,7 @@ class TheSyncRow(unittest.TestCase):
         self.assertIn("py -3.12 -m unittest discover -s <dir> -p <file>", step)
         self.assertIn("nothing else in *Ship checks*", step)
         # Step 2 otherwise says to fix what the checks find, and a sync branch is never committed to.
-        self.assertIn("a failing suite is a target-local finding: filed in the target with gh-issue-create.sh, the "
+        self.assertIn("a failing suite is a target-local finding: filed in the target with gh-issue-hand.sh, the "
                       "sync ends unmerged or is handed back, and no round runs", step)
         # A re-take keeps HEAD at <oid>, so it reruns the head's old suite: only a later sync from the fixed main clears it.
         self.assertIn("A re-take of this head does not clear it, since it reruns the head's old copy, so a later sync "
@@ -277,7 +277,7 @@ class TheSyncRow(unittest.TestCase):
     def test_a_payload_finding_is_filed_by_the_harness_helper(self):
         step = bullet("Step 5")
         self.assertIn("bash .claude/scripts/gh-issue-harness.sh bug <severity> <area>", step)
-        self.assertNotIn("gh-issue-create.sh bug", step)
+        self.assertNotIn("gh-issue-hand.sh bug", step)
 
 
 DROP = "bash .claude/scripts/git-branch-drop.sh"

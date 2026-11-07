@@ -9,6 +9,18 @@ set -euo pipefail
 pr="$1"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number: $pr" >&2; exit 2; }
 
+# A target's hooks never run inside this helper, for git-rebase-onto-main.sh's reason: a `pre-rebase`,
+# `post-rewrite`, `commit-msg` or `pre-push` hook of its own would run in, and could veto or alter, a rewrite of
+# published history. `core.hooksPath` is an empty directory made for the run, set once through the environment before
+# any git runs, so the sequencer's git and the amend in the exec inherit it. The entry is appended to any the caller
+# already set.
+no_hooks=$(mktemp -d)
+trap 'rmdir "$no_hooks" 2>/dev/null || :' EXIT
+hook_entry="${GIT_CONFIG_COUNT:-0}"
+export "GIT_CONFIG_KEY_$hook_entry=core.hooksPath" \
+  "GIT_CONFIG_VALUE_$hook_entry=$no_hooks" \
+  "GIT_CONFIG_COUNT=$((hook_entry + 1))"
+
 branch=$(git branch --show-current)
 [ -n "$branch" ] || { echo "not on a PR branch: nothing to add the trailer to" >&2; exit 3; }
 # Folded and spelled out as git-rebase-onto-main.sh does: on this host's case-insensitive filesystem `Main` is `main`'s
@@ -66,7 +78,11 @@ fi
 # The exec skips a commit that has the trailer, so a rerun after a failed push changes nothing already done.
 if [ "$owned" -lt "$total" ]; then
   exec_cmd="git log -1 --format=%B | git interpret-trailers --parse | grep -qx '$wanted' || git commit --amend --no-edit --trailer '$wanted'"
-  if ! GIT_SEQUENCE_EDITOR=true git rebase --quiet -x "$exec_cmd" "$base_oid"; then
+  # The flags are spelled, as git-rebase-onto-main.sh spells them, and the result is force-pushed. The last three are
+  # defensive: git limits `rebase.autoSquash` to interactive mode and takes no fork point when a base is named, so
+  # they hold against a change of git's version or mode.
+  if ! GIT_SEQUENCE_EDITOR=true git rebase --quiet --no-rebase-merges --no-update-refs --no-autosquash \
+      --no-fork-point --no-autostash -x "$exec_cmd" "$base_oid"; then
     git rebase --abort || true
     echo "adding the trailer failed; the branch is as it was" >&2; exit 6
   fi

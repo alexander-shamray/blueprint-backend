@@ -51,6 +51,14 @@ class GuardIndexArgv(unittest.TestCase):
         self.assertIsNone(self.judge(
             'bash .claude/skills/codebase-index/scripts/cbx search "X" --json'))
 
+    def test_a_single_quoted_term_is_admitted(self):
+        """The form the hints and the skill give: nothing in it is expanded,
+        a quote inside it included."""
+        cbx = "bash .claude/skills/codebase-index/scripts/cbx"
+        for term in ("X", "a b", "$event", "it'" + chr(92) + "''s"):
+            with self.subTest(term=term):
+                self.assertIsNone(self.judge(f"{cbx} refs '{term}' --json"))
+
     def test_a_substitution_is_refused(self):
         reason = self.judge('codebase-index search "$(rm -rf /)" --json')
         self.assertIsNotNone(reason)
