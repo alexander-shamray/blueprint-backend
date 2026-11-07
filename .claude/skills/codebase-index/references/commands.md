@@ -5,8 +5,8 @@ Load this reference only when the intent table in `SKILL.md` is insufficient.
 ## Retrieval
 
 ```bash
-bash .claude/skills/codebase-index/scripts/cbx search "<query>" --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx explain "<topic or flow>" --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search '<query>' --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx explain '<topic or flow>' --session <tag> --json
 ```
 
 Useful search options:
@@ -28,11 +28,11 @@ it over repeatedly rewording a broad search.
 
 ```bash
 bash .claude/skills/codebase-index/scripts/cbx architecture --json
-bash .claude/skills/codebase-index/scripts/cbx refs "<symbol>" --json
-bash .claude/skills/codebase-index/scripts/cbx impact "<file-or-symbol>" --direction up --depth 2 --json
+bash .claude/skills/codebase-index/scripts/cbx refs '<symbol>' --json
+bash .claude/skills/codebase-index/scripts/cbx impact '<file-or-symbol>' --direction up --depth 2 --json
 bash .claude/skills/codebase-index/scripts/cbx diff-impact --base HEAD --direction up --depth 2 --json
-bash .claude/skills/codebase-index/scripts/cbx path "<source>" "<target>" --json
-bash .claude/skills/codebase-index/scripts/cbx describe "<file-or-symbol>" --json
+bash .claude/skills/codebase-index/scripts/cbx path '<source>' '<target>' --json
+bash .claude/skills/codebase-index/scripts/cbx describe '<file-or-symbol>' --json
 ```
 
 - `architecture` reads module analysis cached at index time.
@@ -52,7 +52,7 @@ invocation this skill can run. Use `architecture`, `refs`, `path`, and
 
 ```bash
 bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx verify "<path:start-end@hash>" ... --json
+bash .claude/skills/codebase-index/scripts/cbx verify '<path:start-end@hash>' ... --json
 ```
 
 - `verify` is read-only and needs no index: it checks evidence against the
@@ -75,10 +75,10 @@ Low symbol counts or partial graph coverage can explain weak results.
 ## Query examples
 
 ```bash
-bash .claude/skills/codebase-index/scripts/cbx search "auth token refresh" --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx search "AuthService class" --mode symbol --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx search "connection reset by peer" --mode fts --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx explain "checkout flow" --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx impact "User" --direction up --depth 2 --json
-bash .claude/skills/codebase-index/scripts/cbx path "ApiController" "Database" --json
+bash .claude/skills/codebase-index/scripts/cbx search 'auth token refresh' --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search 'AuthService class' --mode symbol --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search 'connection reset by peer' --mode fts --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx explain 'checkout flow' --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx impact 'User' --direction up --depth 2 --json
+bash .claude/skills/codebase-index/scripts/cbx path 'ApiController' 'Database' --json
 ```

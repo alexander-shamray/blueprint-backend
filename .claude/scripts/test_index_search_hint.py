@@ -511,13 +511,20 @@ class OneRoute(Scratch):
         self.assertIn("select:mcp__codebase-index__find_refs,mcp__codebase-index__find_symbol", text)
         self.assertNotIn("cbx", text)
 
+    def test_a_quote_inside_a_term_cannot_end_its_quoting(self):
+        single = module().single
+
+        self.assertEqual("'MapPost'", single("MapPost"))
+        self.assertEqual("'it'" + chr(92) + "''s'", single("it's"))
+
     def test_a_linked_worktree_is_sent_to_the_cli_alone(self):
         _main, tree = self.worktree()
         text = self.refused(*bash_call('grep -rnE "MapPost|MapPut" .'), cwd=tree / "src")
 
-        self.assertIn('cbx refs "MapPost" --json', text)
-        self.assertIn('cbx refs "MapPut" --json', text)
-        self.assertIn('cbx symbol "MapPost" --json', text)
+        self.assertIn("cbx refs 'MapPost' --json", text)
+        self.assertIn("cbx refs 'MapPut' --json", text)
+        self.assertIn("cbx symbol 'MapPost' --json", text)
+        self.assertNotIn('"', text)
         self.assertIn("codebase-index skill", text)
         self.assertIn("from the worktree's root", text)
         self.assertIn("each alone on its line", text)
@@ -562,7 +569,7 @@ class WhatItCannotRead(Scratch):
         _main, tree = self.worktree()
         text = self.refused(*grep_call("\u0141\u00f3d\u017aRelay"), cwd=tree)
 
-        self.assertIn('cbx refs "\u0141\u00f3d\u017aRelay"', text)
+        self.assertIn("cbx refs '\u0141\u00f3d\u017aRelay'", text)
 
 
 class TheSkillAgrees(Scratch):

@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -170,6 +174,138 @@ class Reading(unittest.TestCase):
             self.assertEqual(main(["--pr", "7", self.base, "no-such-ref"]), 2)
         finally:
             os.chdir(previous)
+
+
+WORKFLOW = Path(__file__).resolve().parent.parent / "workflows" / "commit-gate.yml"
+DEPENDABOT_LOGIN = "dependabot[bot]"
+DEPENDABOT_MAKER = ("49699333+dependabot[bot]@users.noreply.github.com", "noreply@github.com")
+HUMAN = "someone@example.com"
+STANDS_DOWN = "if: steps.dependabot.outputs.own != 'true'"
+
+
+def find_bash() -> str | None:
+    # Git for Windows' bash first: a bare `bash` on a Windows PATH can be WSL's.
+    if sys.platform == "win32" and shutil.which("git"):
+        top = Path(shutil.which("git")).resolve().parent.parent
+        for candidate in (top / "bin" / "bash.exe", top.parent / "bin" / "bash.exe"):
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which("bash")
+
+
+BASH = find_bash()
+
+
+def setUpModule() -> None:
+    # Not a skip: a skip reports a pass for a gate nothing has run.
+    if BASH is None:
+        raise RuntimeError("bash is needed to run the workflow's deciding step")
+
+
+def workflow_steps() -> list[str]:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    return re.split(r"\n(?=      - )", text.split("\n    steps:\n", 1)[1])
+
+
+def deciding_step() -> str:
+    return next(s for s in workflow_steps() if "id: dependabot" in s)
+
+
+def run_block(step: str) -> str:
+    lines = step.split("\n")
+    at = next(i for i, line in enumerate(lines) if line.strip() == "run: |")
+    return "\n".join(line[10:] for line in lines[at + 1:]) + "\n"
+
+
+class Standing(unittest.TestCase):
+    """The deciding step of commit-gate.yml, run as written against real commits."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.root = Path(self._dir.name) / "repo"
+        self.root.mkdir()
+        git(self.root, "init", "-q", "-b", "main")
+        git(self.root, "commit", "-q", "--allow-empty", "-m", "chore: base")
+        self.base = git(self.root, "rev-parse", "HEAD")
+
+    def commit(self, author: str, committer: str) -> None:
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "a", "GIT_AUTHOR_EMAIL": author,
+            "GIT_COMMITTER_NAME": "c", "GIT_COMMITTER_EMAIL": committer,
+        }
+        subprocess.run(
+            ["git", "-C", str(self.root), "commit", "-q", "--allow-empty", "-m", "chore: x"],
+            env=env, check=True, capture_output=True,
+        )
+
+    def own(self, opener: str) -> str:
+        step = deciding_step()
+        declared = re.search(r"^ +DEPENDABOT: (.+)$", step, re.M)
+        out = Path(self._dir.name) / "output"
+        out.write_text("", encoding="utf-8")
+        env = {
+            **os.environ,
+            "PR_AUTHOR": opener,
+            "BASE_SHA": self.base,
+            "HEAD_SHA": git(self.root, "rev-parse", "HEAD"),
+            "DEPENDABOT": declared.group(1).strip(),
+            "GITHUB_OUTPUT": out.as_posix(),
+        }
+        subprocess.run(
+            [BASH, "-c", run_block(step)],
+            cwd=self.root, env=env, check=True, capture_output=True,
+            text=True, encoding="utf-8",
+        )
+        return re.search(r"^own=(\w+)$", out.read_text(encoding="utf-8"), re.M).group(1)
+
+    def test_dependabots_own_commits_on_its_own_pull_request_stand_down(self) -> None:
+        self.commit(*DEPENDABOT_MAKER)
+        self.commit(*DEPENDABOT_MAKER)
+        self.assertEqual(self.own(DEPENDABOT_LOGIN), "true")
+
+    def test_a_human_committer_on_dependabots_pull_request_is_judged(self) -> None:
+        self.commit(*DEPENDABOT_MAKER)
+        self.commit(DEPENDABOT_MAKER[0], HUMAN)
+        self.assertEqual(self.own(DEPENDABOT_LOGIN), "false")
+
+    def test_a_wholly_human_commit_on_dependabots_pull_request_is_judged(self) -> None:
+        self.commit(*DEPENDABOT_MAKER)
+        self.commit(HUMAN, HUMAN)
+        self.assertEqual(self.own(DEPENDABOT_LOGIN), "false")
+
+    def test_a_human_author_with_githubs_committer_is_judged(self) -> None:
+        self.commit(HUMAN, DEPENDABOT_MAKER[1])
+        self.assertEqual(self.own(DEPENDABOT_LOGIN), "false")
+
+    def test_dependabots_commits_on_a_pull_request_a_human_opened_are_judged(self) -> None:
+        self.commit(*DEPENDABOT_MAKER)
+        self.assertEqual(self.own("someone"), "false")
+
+    def test_an_empty_range_is_judged(self) -> None:
+        self.assertEqual(self.own(DEPENDABOT_LOGIN), "false")
+
+
+class WorkflowShape(unittest.TestCase):
+    def test_the_job_has_no_condition_so_a_human_push_is_judged(self) -> None:
+        head = WORKFLOW.read_text(encoding="utf-8").split("\n    steps:\n", 1)[0]
+        job = head.split("\n  commit-gate:\n", 1)[1]
+        self.assertNotRegex(job, r"(?m)^    if:")
+
+    def test_the_checkout_runs_first_with_full_history_and_no_condition(self) -> None:
+        first = workflow_steps()[0]
+        self.assertIn("actions/checkout", first)
+        self.assertIn("fetch-depth: 0", first)
+        self.assertNotIn("if:", first)
+
+    def test_every_step_after_the_decision_stands_down_with_it(self) -> None:
+        steps = workflow_steps()
+        at = steps.index(deciding_step())
+        self.assertEqual(at, 1)
+        self.assertGreater(len(steps[at + 1:]), 0)
+        for step in steps[at + 1:]:
+            self.assertRegex(step, r"(?m)^        " + re.escape(STANDS_DOWN) + "$")
 
 
 if __name__ == "__main__":

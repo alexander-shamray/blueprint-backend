@@ -319,7 +319,7 @@ so the summary names the commit the sweep actually read.
 caller's tree, which would silently forfeit the stable-snapshot property this
 section buys. A failed `git worktree add` is a round that could not run,
 reported like any other tool error under *Never fail open* below. **The round
-writes nothing inside `$work`** — issue bodies are piped to `gh-issue-create.sh`
+writes nothing inside `$work`** — issue bodies are piped to `gh-issue-sweep.sh`
 on stdin (the File step), not written to files, and the slice lists and the ref
 are outside it (`docs/harness-boundaries.md`) — so `$work` stays clean and the
 teardown below removes it without `--force`.
@@ -421,7 +421,7 @@ or high.** Three gates, and each drops candidates the round must not file:
   blocks a re-file **only while its fix is still present** — if the defect
   **currently reproduces** because the fix was reverted, the bug is back, and
   it re-files rather than being silenced by a closure that no longer holds —
-  **re-files**, because the grant carries `gh-issue-create.sh` and no `reopen`,
+  **re-files**, because the grant carries `gh-issue-sweep.sh` and no `reopen`,
   and a duplicate that says why beats a capability this command does not have.
   Re-filing a genuinely-tracked finding is the drift this repo exists to close;
   suppressing a reintroduced one is worse. (The
@@ -560,9 +560,16 @@ push entries*. The other sweeps' read-only profiles belong on it too,
 because `security-auditor` run here can miss the logic and execution defects
 this command exists to find.
 
-**The rows are `sweep-slices.sh`'s, which cuts them into slices**: its
-`row_of` holds each row's paths, and the runbook's table in *The round*
-says why each row exists.
+**The rows are the checkout's, and `sweep-slices.sh` cuts them into
+slices**: `.harness/sweep-rows.tsv` holds each row's paths and what it
+holds, because which trees a repository has is that repository's fact, and
+a table in the managed helper partitioned one target's tree and refused
+every other's. The file is read from the checkout running the sweep, as
+the helpers are, and trusted as they are. That is no defence against the
+commit under audit, which is usually that checkout's own `HEAD` and wrote
+both: a line moving a script into `samples`, where a file with no fence is
+counted and not read, changes what every sweep reads, so it is reviewed as
+a change to the helper would be.
 **The rows have to partition the repository, not merely sample it.** A row is
 an auditor's **reporting** ownership, so a path no row owns is not a path
 without defects — it is a path nobody was answerable for, reported as a clean
@@ -573,10 +580,11 @@ class the bar ranks critical when it finds it in someone else's code.
 so `.git` and anything ignored were never its subject, and a tracked path
 no row owns exits 3 naming it: a round error under *Never fail open*, not a
 gap to widen by hand. Rows written as remainders survive the repository
-growing — all of `src/**` but `BuildingBlocks`, and every tracked file at
-the root, so §4.1's `src/Gateway` is owned the day it lands — while a new
-top-level tree refuses the run until the helper, and the suite that runs
-it over this tree, give it a row.
+growing — a line for a whole tree after the lines for its parts, and one
+for every tracked file at the root, so a new service or build file is owned
+the day it lands — while a new top-level tree refuses the run until a line
+of the row file gives it a row; the payload's suite partitions each
+checkout's own tree, so that refusal reaches CI first.
 
 **A row bounds what an auditor reports, never what it may read**, and
 collapsing those two loses real defects quietly. Reachability is evidence a
@@ -611,7 +619,15 @@ verify and de-duplicate gates below could check the claim against a record.
 full` or `mode since <sha>`, one `tracked` line counting what it listed
 and each reason it skipped the rest, and one
 `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
-bytes, about 60k tokens, unless one file is larger. A sample's bytes are
+bytes, about 60k tokens, unless one file is larger. **A binary file is
+named, not only counted**, in the list a `binary <files> <list>` line points
+at: what `git grep -I` calls binary no auditor reads. The swept tree's
+`.gitattributes` never decide it, since the helper reads attributes from
+the empty tree and a line there could mark any script binary
+(blueprint-backend#1784); a NUL byte still does, and a script can hold one,
+so the parent reads the list and the summary names every path on it that
+is not an asset. A git older than 2.41 has no `--attr-source` and fails the
+run rather than trusting the tree's attributes. A sample's bytes are
 its fenced lines, so a `samples` auditor reads the fences and not the
 prose, and a docs file with no fence is not sliced. The closed records,
 `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are owned and
@@ -651,7 +667,7 @@ verifier on a cheaper model can refute what it should confirm, never file
 what the fan-out did not find. **This step does not open `$work` itself.** An
 unverified agent claim still never becomes an issue — two independent
 read-only readings, neither able to mutate, must agree — and the audited tree
-never enters the one invocation that holds `gh-issue-create.sh`. A verdict of
+never enters the one invocation that holds `gh-issue-sweep.sh`. A verdict of
 `unreadable-root` is a round error under *Never fail open*, not a dropped
 record, and is read before the shape and location checks below. A verdict of
 `refuted` or `outside-root` drops the candidate. **A record that is not in
@@ -674,7 +690,7 @@ state → path → wrong outcome, the reachability evidence, a fix, and the
 severity — **every one of those composed from the verdict record's fields
 in that order, and from nothing the parent read in `$work`**, because it
 read nothing there. **Pipe the title and the body together to
-`bash .claude/scripts/gh-issue-create.sh bug <severity> <area> sweep` on
+`bash .claude/scripts/gh-issue-sweep.sh bug <severity> <area>` on
 stdin** in a
 quoted heredoc — the title as its first line, then a blank line, then the
 body — so nothing is written to disk and the command needs no `Write`
@@ -700,9 +716,10 @@ is the record's, so a crafted tree can steer which area an issue carries, but
 only among the helper's closed set, which is no more than a mislabelled triage
 queue.
 
-**The fourth argument is the route, and `sweep` is the one this command
-passes.** The line above is the sentence that route requires; the helper
-refuses it under `hand`, and refuses `hand`'s sentence here. The fixed last
+**The route is the entry point, and `sweep` is the one this command
+files under.** The line above is the sentence that route requires; the helper
+refuses `hand`'s sentence here, and there is no word to pass that would
+change it. The fixed last
 line is the detector for a heredoc that closed early, and the route keeps
 it from being a provenance claim every issue makes whether or not it is
 true of them.
@@ -737,9 +754,10 @@ exposed** inside the helper, and only at position one: a leading backtick
 or a leading space both suppress the conversion and a bare `/` does not.
 
 **The helper closes it, and it is the one thing a helper can do that the
-grant could not.** `gh-issue-create.sh` sets `MSYS2_ARG_CONV_EXCL` for its
-own `gh` child, so the conversion never sees the title; the command's grant
-is on the script and is unchanged. Writing the subject in backticks —
+grant could not.** `gh-issue-create.sh`, which `gh-issue-sweep.sh` execs,
+sets `MSYS2_ARG_CONV_EXCL` for its own `gh` child, so the conversion never
+sees the title; the command's grant is on the entry point and is
+unchanged. Writing the subject in backticks —
 `` `/bug-sweep` `` — is still the house form for a title that names a command,
 because a reader of the tracker deserves it, not because the filing needs
 it.
@@ -749,7 +767,7 @@ it.
 **Residual — the parent's context still receives the verdict, and a verdict is
 text.** Step 2 does not open `$work` in the invocation that files: the fan-out
 contains the auditor, the verify dispatch contains the verifier, the parent
-composes from a record with declared fields, and `gh-issue-create.sh` leaves
+composes from a record with declared fields, and `gh-issue-sweep.sh` leaves
 `gh issue create` with no free parameter — the repository is resolved from the
 checkout and the labels are a closed set, so nothing a finding says can choose
 *where* an issue lands. What an issue *says* is the record's fields, and a
@@ -771,6 +789,23 @@ that mounts only `$work` — is a real capability decision, not a command
 edit, and needs infrastructure under `.claude/` a command session is
 edit-denied from. Until that decision is taken, the path check above is the
 mitigation and this is the residual, named rather than hidden.
+
+**One half of it is closed, and it was the half a path rule could never have
+reached.** "Root every path under `$work`" is a rule about the SPELLING of a
+path, and a git worktree preserves tracked symbolic links, so
+`$work/leak -> ~/.ssh/id_rsa` is an absolute path under `$work` whose target is
+not, and `Read`, `Grep` and `Glob` all follow it. No discipline about spellings
+catches that, and the auditor profile cannot either: those three tools are
+exactly what an auditor is left with. `git-worktree-detach.sh` now refuses a
+pinned commit carrying any tracked link, before the worktree exists and before
+any stale one is dropped. It asks the pinned COMMIT rather than `main`, because
+the commit is what the worktree materialises and the branch is where a link
+would arrive. It refuses rather than prunes the link: a sweep over a tree with a
+file removed would report a clean audit of something that is not the branch.
+
+What stays open is the rest of the paragraph above: a crafted file can still
+name a host path in prose, and only the path rule and the verify step stand
+against an agent that follows it.
 
 ## Where it stops
 
@@ -870,17 +905,20 @@ helpers the base settings grant to force-push or delete a branch,
 name. A `Write` grant for issue bodies is refused: it would re-open source
 editing, and a read-only claim resting on prose while the grant permits
 writing every undenied path is unenforced. Bodies go through
-`gh-issue-create.sh` on stdin for exactly this reason.
+`gh-issue-sweep.sh` on stdin for exactly this reason.
 
 **No mutation is scoped by discipline: every grant that could steer one is a
 helper.** Each is recorded because the reasoning generalises:
 
-- **`gh-issue-create.sh`, not `Bash(gh issue create:*)`.** A prefix grant pins
+- **`gh-issue-sweep.sh`, not `Bash(gh issue create:*)`.** A prefix grant pins
   no repository, so "always `--repo` for this repository" would be prose. The
-  helper resolves the repository from the checkout, closes the label
-  vocabulary, takes the title and the body on stdin so neither crosses this
-  shell's command line, and sets `MSYS2_ARG_CONV_EXCL` for its own child — the
-  title defect a prefix match cannot close.
+  helper it execs, `gh-issue-create.sh`, resolves the repository from the
+  checkout, closes the label vocabulary, takes the title and the body on
+  stdin so neither crosses this shell's command line, and sets
+  `MSYS2_ARG_CONV_EXCL` for its own child — the title defect a
+  prefix match cannot close. The route is the entry point, not an argument:
+  `gh-issue-sweep.sh` can file under the sweep route alone, and
+  `gh-issue-create.sh`, which takes the route, is denied by name.
 - **`gh-label-ensure.sh`, not `Bash(gh label create:*)`, because "create"
   understates what that grant reaches.** `gh label create <existing> --force`
   *updates* an existing label's colour and description — `gh`'s own help reads

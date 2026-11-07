@@ -125,6 +125,25 @@ def offences(root: Path, check) -> list[str]:
             for line in check(path.read_text(encoding="utf-8"))]
 
 
+def rebound(source: str) -> list[str]:
+    """The names `source` binds twice at module level."""
+    seen: set[str] = set()
+    twice = []
+    for node in ast.parse(source).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bound = [node.name]
+        elif isinstance(node, ast.Assign):
+            bound = [name.id for target in node.targets for name in ast.walk(target)
+                     if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            bound = [node.target.id]
+        else:
+            continue
+        twice.extend(name for name in bound if name in seen)
+        seen.update(bound)
+    return twice
+
+
 class PythonHygiene(unittest.TestCase):
     def test_no_text_true_without_encoding(self) -> None:
         self.assertEqual(offences(ROOT, text_without_encoding), [],
@@ -140,6 +159,20 @@ class PythonHygiene(unittest.TestCase):
 
     def test_no_fixture_makes_its_root_with_mktemp(self) -> None:
         self.assertEqual(offences(ROOT, mktemp_fixture), [], "take the root from review_helpers.temp_root")
+
+    def test_no_hook_binds_a_module_level_name_twice(self) -> None:
+        # A name bound twice keeps only the second, so a reader editing the
+        # first changes nothing.
+        self.assertEqual(["A"], rebound("A = 1\nA = 2\n"))
+        self.assertEqual(["f"], rebound("f = 1\ndef f(): pass\n"))
+        self.assertEqual(["B"], rebound("A, B = 1, 2\nB: int = 3\n"))
+        self.assertEqual([], rebound("A = 1\nB = 2\n"))
+        self.assertEqual([], rebound("A = {}\nA['k'] = 1\nA.x = 2\n"))
+        hooks = sorted((Path(__file__).resolve().parent.parent / "hooks").glob("*.py"))
+        self.assertGreater(len(hooks), 3)
+        for hook in hooks:
+            with self.subTest(hook=hook.name):
+                self.assertEqual([], rebound(hook.read_text(encoding="utf-8")))
 
     def test_the_walk_reaches_the_harness(self) -> None:
         # Without this, a walk that found nothing would pass every check above.

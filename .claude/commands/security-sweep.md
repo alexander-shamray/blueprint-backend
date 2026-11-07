@@ -1,8 +1,8 @@
 ---
 description: Loop a defensive security audit up to seven rounds, filing a GitHub issue per confirmed medium-or-above finding, until a round surfaces nothing new
 argument-hint: "[scope hint, e.g. 'the compose stack' or a path] — omit to sweep the whole repo; `full` ignores the last clean sweep"
-allowed-tools: Read, Grep, Glob, Agent(security-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
-disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(bug-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*)
+allowed-tools: Read, Grep, Glob, Agent(security-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
+disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(bug-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*)
 ---
 
 Sweep the repository for security findings, file the real ones as GitHub
@@ -138,12 +138,9 @@ Each round is the review done once, end to end:
    bash .claude/scripts/sweep-slices.sh security "$posix"      # `full` as a third argument when asked
    ```
 
-   | | |
-   |---|---|
-   | `tooling` | CI, the harness and its `.harness/`, and the command and agent definitions |
-   | `source` | the services, the building blocks and the suites that stand up their hosts |
-   | `deploy` | deployment and configuration, and **every tracked file at the repository root** |
-   | `samples` | fenced code in `docs/` — a credential or an unsafe default an adopter copies; the closed records are owned and not read |
+   The rows are those `.harness/sweep-rows.tsv` names for `security`, with
+   what each holds, the first matching line winning; `samples` is read for
+   its fenced code alone, and the closed records are owned and not read.
 
    A tracked path no row owns makes the helper exit 3 naming it: a round
    error under *Never fail open*, never a gap to widen by hand.
@@ -155,11 +152,14 @@ Each round is the review done once, end to end:
    in-tree comment calls deliberate is **reported, not dropped**.
 
    The helper prints the round's plan: `pinned`, `mode full` or
-   `mode since <sha>`, one `tracked` line, and one
+   `mode since <sha>`, one `tracked` line, a `binary <files> <list>` line
+   when it skipped a binary file, and one
    `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
    bytes, unless one file is larger. Read the lists only to `Grep` for a path
    a scope hint names, keeping the slices that hold it or the slices of the
-   rows it names; the summary says which it dropped.
+   rows it names; the summary says which it dropped. **Read the binary list
+   whole**: no auditor reads it, and a NUL byte makes a script binary, so the
+   summary names each path on it that is not an asset.
 
    **Round 1 is one auditor per slice; every later round follows leads**: one
    auditor per row that produced a new candidate in the round before, handed
@@ -186,8 +186,8 @@ Each round is the review done once, end to end:
    form: a summary, the affected lines quoted, why it is exploitable, a fix,
    and the severity — composed from the verdict record's fields in that
    order, and from nothing read in `$work`. **Pipe the title and the body
-   together to `bash .claude/scripts/gh-issue-create.sh security <severity>
-   <area> sweep` on stdin** in a quoted heredoc — the title as its first
+   together to `bash .claude/scripts/gh-issue-sweep.sh security <severity>
+   <area>` on stdin** in a quoted heredoc — the title as its first
    line, then a blank line, then the body; never `--body`, a temp file, or
    the title as an argument. End the body with this line, exactly, as its
    last non-blank line:
@@ -198,7 +198,8 @@ Each round is the review done once, end to end:
 
    - The area is the label `docs/harness/working-rules.md`, *Issues and the
      task list*, gives the tree the record's file is in.
-   - The route is `sweep`, never `hand`.
+   - The route is the entry point's: `gh-issue-sweep.sh` files under `sweep`
+     alone.
    - **The heredoc delimiter is never `EOF`** or any word a file could hold;
      it is a token of the form `ISSUE_BODY_END`, and **before the command is
      composed, every line of the payload is checked against it**; a payload
@@ -213,9 +214,9 @@ Each round is the review done once, end to end:
    new issues filed (with numbers), candidates dropped at each gate and why,
    and the lows/infos recorded but not filed.
 
-The verdict text reaching the parent, and the auditor's reads of the host, are
-named residuals, not closed. (why: docs/commands/security-sweep.md,
-*Residuals*)
+The verdict text reaching the parent and the auditor's reads of the host are
+named residuals; `git-worktree-detach.sh` now refuses a pinned commit carrying
+a tracked link. (why: docs/commands/security-sweep.md, *Residuals*)
 
 ## Where it stops
 

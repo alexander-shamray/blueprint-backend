@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Remove a /branch worktree under .claude/worktrees/, without -f, once no
-# code-index refresh holds it. A prefix grant on `git worktree remove` also
-# buys the `-f` that discards what git's refusal protects; here the command is
-# fixed and its one argument shape-checked, so no flag can arrive.
+# Remove the /branch worktree at <path> holding <branch>, without -f, once no
+# code-index refresh holds it. The command is fixed and both arguments are
+# shape-checked, so no flag can arrive; docs/commands/ship.md says who passes
+# the branch and what the binding leaves open.
 set -euo pipefail
-[ "$#" -eq 1 ] || { echo "usage: git-worktree-remove.sh <path>" >&2; exit 2; }
+[ "$#" -eq 2 ] ||
+  { echo "usage: git-worktree-remove.sh <path> <branch>" >&2; exit 2; }
 path="$1"
+branch="$2"
 [[ "$path" =~ ^\.claude/worktrees/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
   { echo "path must be .claude/worktrees/<name>" >&2; exit 2; }
+# The pattern git-branch-create.sh and git-worktree-fork.sh use, which admits
+# `()` because `/branch` cuts `feat(<scope>)/` names.
+[[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] && [[ "$branch" != *..* ]] ||
+  { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
+# Folded, as git-rebase-onto-main.sh folds it: a case-insensitive host's `Main`
+# is `main`'s ref.
+[ "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" != main ] ||
+  { echo "main is never a forked branch: $branch" >&2; exit 2; }
 git rev-parse --git-dir >/dev/null 2>&1 ||
   { echo "not in a git repository" >&2; exit 2; }
 [ -z "$(git rev-parse --show-prefix)" ] ||
@@ -24,17 +34,38 @@ common_there=$(git -C "$path" rev-parse --path-format=absolute --git-common-dir)
   { echo "not a git worktree: $path" >&2; exit 3; }
 [ "$common_there" = "$common_here" ] && [ "$dir_there" != "$common_there" ] ||
   { echo "not a linked worktree of this repository: $path" >&2; exit 3; }
-# Every refresh worker holds this lock for its whole run, the index update
-# included, and Windows will not delete a file held open: a remove meanwhile
-# deletes part of the tree and fails. So the lock is taken first, with the
-# hook's own primitive, and one still held at the bound removes nothing.
-cache="$path/.claude/cache/codebase-index"
-if [ -f "$cache/refresh.lock" ] || [ -f "$cache/refresh.pending" ]; then
+# The branch is asked of the worktree itself, as git answers there, which holds
+# on Windows where a comparison of directory spellings does not. A detached
+# worktree has no symbolic HEAD and holds no branch, so it is refused too.
+[ "$(git -C "$path" symbolic-ref --quiet HEAD || :)" = "refs/heads/$branch" ] ||
+  { echo "not the worktree of this repository holding ${branch}: $path" >&2; exit 3; }
+# A refresh worker holds this lock for its whole run, and Windows will not
+# delete a file held open, so it is taken first, in the git directory, and one
+# held at the bound removes nothing. It covers a worker, not the survivor a
+# killed one left on the record: meeting that, a Windows removal can leave
+# part of the tree, which exit 4 reports.
+state="$common_here/index-refresh"
+# The files' name, taken while the path still stats: it is the worktree's
+# device and inode, which a later worktree can be given once this one is gone.
+# Where the state exists and the name cannot be had, a refresh may hold the
+# tree and nothing can wait on it, so nothing is removed.
+keyed=
+if [ -d "$state" ]; then
   python=python3
   command -v py >/dev/null 2>&1 && python="py -3.12"
-  if ! $python -I - "$cache" <<'PY'; then
+  # Only the hex crosses the pipe: Windows writes a path in the ANSI code page,
+  # which bash does not read back as the path it passed in.
+  key=$($python -I -c '
+import hashlib, os, sys
+info = os.stat(sys.argv[1])
+print(hashlib.sha256(f"{info.st_dev}:{info.st_ino}".encode()).hexdigest()[:32])' "$path" | tr -d '\r') ||
+    { echo "nothing removed: $path; its refresh lock cannot be named" >&2; exit 5; }
+  keyed="$state/$key"
+fi
+if [ -n "$keyed" ] && { [ -e "$keyed.lock" ] || [ -e "$keyed.pending" ]; }; then
+  if ! $python -I - "$keyed" <<'PY'; then
 import os, sys, time
-lock, pending = (os.path.join(sys.argv[1], name) for name in ("refresh.lock", "refresh.pending"))
+lock, pending = sys.argv[1] + ".lock", sys.argv[1] + ".pending"
 bound, grace = 30, 2
 if sys.platform == "win32":
     import msvcrt
@@ -83,7 +114,36 @@ PY
     exit 5
   fi
 fi
+# The worktree's lock and marker go with it, and a file that will not go is not
+# the removal failing.
+forget() {
+  [ -z "$keyed" ] || rm -f "$keyed.lock" "$keyed.pending" 2>/dev/null || :
+}
 # Windows refuses a path past 260 characters unless git asks for long paths:
 # git then refuses a worktree holding files it cannot read, or, failing to
 # delete one, unregisters the worktree anyway and leaves its directory behind.
-git -c core.longpaths=true worktree remove "$path"
+# The status is captured, so the checks below run whatever git exits.
+status=0
+git -c core.longpaths=true worktree remove "$path" || status=$?
+# Git still registering the worktree is the dirty-tree refusal; one it no longer
+# registers is a failed delete. Asked by branch, so no spellings are compared.
+if [ -e "$path" ]; then
+  listed=$(git worktree list --porcelain) ||
+    { echo "cannot read the worktree list, so whether $path is still registered is unknown" >&2
+      exit "$((status == 0 ? 1 : status))"; }
+  if ! grep -Fxq "branch refs/heads/$branch" <<<"$listed"; then
+    # Git can fail after it has deleted the files and the registration, with
+    # only the directory left. `rmdir` refuses one holding anything, so an
+    # empty directory goes and the removal succeeded, and any other is named.
+    if rmdir "$path" 2>/dev/null; then
+      [ "$status" -eq 0 ] ||
+        echo "git exited $status after deleting $path; the empty directory is removed" >&2
+      forget
+      exit 0
+    fi
+    echo "unregistered but not deleted: $path is still there; remove it by hand" >&2
+    exit 4
+  fi
+fi
+[ "$status" -ne 0 ] || forget
+exit "$status"

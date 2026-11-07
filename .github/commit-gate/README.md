@@ -35,9 +35,15 @@ against a throwaway repository. The testing document `docs/harness-local.md`
 ## How it runs
 
 [`commit-gate.yml`](../workflows/commit-gate.yml), on every pull request with no
-path filter but Dependabot's: its job skips a pull request whose author is
-`dependabot[bot]`, whose commits carry no trailer. **The gate that judges is
-read out of the base commit**, while the suite runs the branch's copy, so a pull
+path filter. Dependabot's commits carry no trailer, so the gate stands down only
+where Dependabot opened the pull request and every commit's author and committer
+are Dependabot's. The opener alone is not enough, and the gate judges by the
+identities a commit records, not by who pushed it: a local amend or rebase
+keeps Dependabot as author but records the pusher as committer. Once the gate
+judges, it walks the whole range, so every commit must carry the trailer and
+the form, Dependabot's included, and the commits are rewritten or the branch
+replaced. **The gate that judges is read out of the base commit**, while the
+suite runs the branch's copy, so a pull
 request cannot supply its own judge. The pull request that introduces the gate
 has no base copy and is judged by its own, with a notice; a base without the
 gate and a head without it fails. The workflow file itself is the branch's copy,
