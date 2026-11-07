@@ -2904,10 +2904,11 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
         git("update-ref", "HEAD", parent)
         return parent
 
-    def render(self, root: Path, parent: str) -> tuple[dict[str, bytes], Path]:
+    def render(
+            self, root: Path, parent: str, tool_root: Path = REPO_ROOT) -> tuple[dict[str, bytes], Path]:
         scaffolded = scaffold.reproduce.Scaffolded("c" * 40, parent, PROBE, True, None, MIGRATION_ID)
         directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        return scaffold.reproduce.render(root, scaffolded, directory), directory
+        return scaffold.reproduce.render(root, scaffolded, directory, tool_root), directory
 
     def shipped_copy(self, directory: Path) -> None:
         source = REPO_ROOT / scaffold.reproduce.SCAFFOLD
@@ -2925,6 +2926,29 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
                     ScaffoldError, "tools/new-service/new_service.py is not the one this script shipped with"):
                 self.render(root, parent)
 
+    def test_the_verified_repository_s_own_origin_main_does_not_vouch_for_its_parent(self):
+        # A clone of a fork answers for itself: its origin/main is the fork's, and holds this parent.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
+            scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
+
+            with self.assertRaisesRegex(
+                    ScaffoldError, "tools/new-service/new_service.py is not the one this script shipped with"):
+                self.render(root, parent)
+
+    def test_a_parent_landed_on_the_script_s_repository_runs_from_another_repository(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            root, tool_root = Path(first), Path(second)
+            parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
+            scaffold.reproduce.git(tool_root, "init", "--quiet")
+            scaffold.reproduce.git(tool_root, "fetch", "--quiet", str(root), parent)
+            scaffold.reproduce.git(tool_root, "update-ref", scaffold.reproduce.LANDED, parent)
+
+            rendered, _ = self.render(root, parent, tool_root)
+
+        self.assertIn("seen.txt", rendered)
+
     def test_a_landed_parent_scaffold_runs_without_the_caller_s_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2932,7 +2956,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
             scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
 
             with mock.patch.dict(scaffold.reproduce.os.environ, {"SCAFFOLD_CALLER_ONLY": "1"}):
-                rendered, _ = self.render(root, parent)
+                rendered, _ = self.render(root, parent, root)
 
         seen = rendered["seen.txt"].decode("utf-8").split()
         self.assertNotIn("SCAFFOLD_CALLER_ONLY", seen)
@@ -2957,7 +2981,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
             })
             scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
 
-            rendered, _ = self.render(root, parent)
+            rendered, _ = self.render(root, parent, root)
 
         self.assertEqual(b"source", rendered["mark.txt"])
 
@@ -2965,7 +2989,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.shipped_copy(Path(directory))
 
-            scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+            scaffold.reproduce.vouch("p" * 40, Path(directory), REPO_ROOT)
 
     def test_a_file_the_shipped_scaffold_lacks_or_a_changed_gate_is_refused(self):
         for relative, content in (("tools/new-service/re.py", "raise SystemExit"),
@@ -2975,7 +2999,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
                 (Path(directory) / relative).write_text(content, encoding="utf-8")
 
                 with self.assertRaisesRegex(ScaffoldError, f"its {re.escape(relative)} is not"):
-                    scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+                    scaffold.reproduce.vouch("p" * 40, Path(directory), REPO_ROOT)
 
     def test_a_link_on_the_way_to_the_scaffold_is_refused_though_every_file_matches(self):
         # Patched rather than created: Windows grants a symlink only to an elevated or developer account.
@@ -2986,7 +3010,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
 
                 with (mock.patch.object(scaffold.reproduce.Path, "is_symlink", lambda path: path == link),
                       self.assertRaisesRegex(ScaffoldError, f"'s {re.escape(linked)} is a link")):
-                    scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+                    scaffold.reproduce.vouch("p" * 40, Path(directory), REPO_ROOT)
 
 
 

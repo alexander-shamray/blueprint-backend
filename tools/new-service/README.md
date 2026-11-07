@@ -255,14 +255,15 @@ Running the parent's scaffold runs that tree's Python, so `--verify` holds
 it to a rule modelled on `load_scan_gate`'s, which `vouch` in
 [`scaffold/reproduce.py`](scaffold/reproduce.py) owns: the parent must be
 in the history of
-`origin/main` as this checkout fetched it, or carry `tools/new-service/`
-and the secret scan as this script's own copy has them, byte for byte once
-line endings are set aside, with no link on the way to either. Anything
-else is refused before it runs: a commit on a pull request branch is the
-author's code, and the pull request's diff need not show it. The scaffold
-runs with none of the caller's environment but `SYSTEMROOT`, which
-Windows' interpreter needs to start, and reads no `__pycache__` the tree
-carries.
+`origin/main` as the repository this script shipped with fetched it, never
+as `--repo-root`'s did, whose `origin/main` its owner names, or carry
+`tools/new-service/` and the secret scan as this script's own copy has
+them, byte for byte once line endings are set aside, with no link on the
+way to either. Anything else is refused before it runs: a commit on a pull
+request branch is the author's code, and the pull request's diff need not
+show it. The scaffold runs with none of the caller's environment but
+`SYSTEMROOT`, which Windows' interpreter needs to start, and reads no
+`__pycache__` the tree carries.
 
 ## The tests
 

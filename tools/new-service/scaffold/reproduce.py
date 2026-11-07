@@ -127,20 +127,21 @@ def arguments(repo_root: Path, commit: str) -> Scaffolded:
     return Scaffolded(full, parent, name, worker, port, ids[0], pure_consumer)
 
 
-def landed(repo_root: Path, commit: str) -> bool:
-    """Whether the commit is in the history of the main branch this checkout fetched."""
+def landed(tool_root: Path, commit: str) -> bool:
+    """Whether the commit is in the history of the main branch the script's own repository fetched."""
     ancestry = subprocess.run(
-        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", commit, LANDED],
+        ["git", "-C", str(tool_root), "merge-base", "--is-ancestor", commit, LANDED],
         capture_output=True, check=False)
     return ancestry.returncode == 0
 
 
-def vouch(repo_root: Path, parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
+def vouch(parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
     """Refuse to run a parent's scaffold that neither landed nor is the shipped one.
 
     Modelled on `load_scan_gate`'s rule, made before the tree runs, where that check compares
-    the tree with itself. A landed parent ran through review, so it stands as it is."""
-    if landed(repo_root, parent):
+    the tree with itself. A landed parent ran through review, so it stands as it is. Landed is
+    asked of `tool_root`, because the repository under verification names its own origin/main."""
+    if landed(tool_root, parent):
         return
     entries = [directory / SCAN_GATE]
     for top, folders, files in os.walk(directory / SCAFFOLD):
@@ -163,7 +164,8 @@ def vouch(repo_root: Path, parent: str, directory: Path, tool_root: Path = TOOL_
                 f"from a checkout whose {SCAFFOLD} matches, or once the parent has landed.")
 
 
-def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str, bytes]:
+def render(
+        repo_root: Path, scaffolded: Scaffolded, directory: Path, tool_root: Path = TOOL_ROOT) -> dict[str, bytes]:
     """Every file the parent's scaffold writes, rendered into the parent's own tree."""
     archive = git(repo_root, "archive", "--format=tar", scaffolded.parent)
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
@@ -173,7 +175,7 @@ def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str
     script = directory / "tools" / "new-service" / "new_service.py"
     if not script.is_file():
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
-    vouch(repo_root, scaffolded.parent, directory)
+    vouch(scaffolded.parent, directory, tool_root)
     kept = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
     # -B stops writing bytecode, not reading it; an empty prefix means no __pycache__ in the tree is read.
     with tempfile.TemporaryDirectory(prefix="scaffold-bytecode-") as bytecode:
