@@ -156,9 +156,9 @@ def vouch(parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
         shipped = tool_root / relative
         if not shipped.is_file() or normalised(shipped.read_bytes()) != normalised(path.read_bytes()):
             raise ScaffoldError(
-                f"{parent[:8]} is not on {LANDED} and its {relative} is not the one this script "
+                f"{parent[:8]} is not on {tool_root}'s {LANDED} and its {relative} is not the one this script "
                 f"shipped with, so verifying it would execute code nobody has reviewed. Verify it "
-                f"from a checkout whose {SCAFFOLD} matches, or once the parent has landed.")
+                f"from a checkout whose {SCAFFOLD} matches, or once the parent has landed there.")
 
 
 def render(
