@@ -47,6 +47,14 @@
       "Edit(./.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
       "Edit(./.claude/settings.local.json)",
+      "Edit(.git/**)",
+      "Edit(./.git/**)",
+      "Edit(.git)",
+      "Edit(./.git)",
+      "Edit(.mcp.json)",
+      "Edit(./.mcp.json)",
+      "Edit(.codeindexignore)",
+      "Edit(./.codeindexignore)",
       "Bash(git push --force:*)",
       "Bash(git push --force-with-lease:*)",
       "Bash(git push -f:*)",
@@ -84,6 +92,11 @@
             "type": "command",
             "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-index-argv.py\"",
             "statusMessage": "checking index argv"
+          },
+          {
+            "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-helper-argv.py\"",
+            "statusMessage": "checking helper argv"
           },
           {
             "type": "command",

@@ -1,7 +1,7 @@
 ---
 description: Open a pull request with a body in the house form
 argument-hint: "[title — omit to derive it from the commits]"
-allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh)
+allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(bash .claude/scripts/gh-pr-create.sh:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh)
 ---
 
 Open a PR for the current branch. Title: $ARGUMENTS — if empty, derive it
@@ -36,9 +36,8 @@ and a remote carrying commits this checkout never held
 (`docs/harness-boundaries.md`). The trailer helper in *Steps* carries its own
 lease the same way. Neither is a way round the deny: a refusal from either, a
 deletion, or a push reaching `main` is raising a decision — stop and say so.
-Do not reach for `gh pr create`'s own offer to
-push either: it is the same action by a route that skips the upstream check
-above, so it pushes without ever reporting that it did.
+The create in *Steps* never pushes: it names the head, so `gh` offers no
+push that would skip the upstream check above.
 
 **The deny list is defence in depth, not the guard.** It matches on command
 prefixes, and a refspec has more spellings than a prefix list can hold —
@@ -46,6 +45,15 @@ prefixes, and a refspec has more spellings than a prefix list can hold —
 say one thing, and only the first two are enumerated. What actually keeps this
 safe is the rule above: push the **current branch, by name**, and nothing else.
 A push whose destination is not the branch you are on is not this step.
+
+**The allow rules do not guarantee the push runs.** A refused push comes back
+with the harness's "has been denied" text and no hook reason. It is a
+**stop**, not a retry: report that the push did not happen and no PR was
+opened, give the line for the caller — `! git push -u origin <branch>`, or
+the tracking form — and name the remedy, which is user-level: this
+repository and its `origin` named as trusted source control in
+`autoMode.environment`. Never reach the remote by another spelling or a
+wrapper that hides it; that is routing around a refusal.
 
 ## Title
 
@@ -158,20 +166,26 @@ result instead, and report it as it actually came out.
 ## Before opening
 
 - `bash .claude/scripts/pr-for-branch.sh` — an OPEN row means you are
-  updating, not creating. Say so and stop.
+  updating, not creating. Say so and stop. It lists only pull requests into
+  `main`, so one into another base does not stop you.
 - Confirm the checks `docs/harness-local.md` *Ship checks* names have run
   over the change, or say plainly that they have not.
 
 ## Steps
 
-Write the body to a scratchpad file and pass it with `--body-file`; heredocs
-through `gh` mangle the wrapping. Then:
+With `Write`, put the title, one line, in `artifacts/pr/title.txt` and the
+body in `artifacts/pr/body.md`; a heredoc mangles the wrapping. Then:
 
 ```bash
-gh pr create --base main --title "<title>" --body-file <path>
+bash .claude/scripts/gh-pr-create.sh artifacts/pr/title.txt artifacts/pr/body.md
 ```
 
-Then stamp the number `gh pr create` printed on the branch's commits,
+The helper fixes the repository, head and base, keeps the title, whose
+backticked names double quotes would run, off the command line, and removes
+both files once the PR is open (`docs/harness-boundaries.md`, *Grant
+inventory and push helpers*).
+
+Then stamp the number the helper printed on the branch's commits,
 before anything reviews them:
 
 ```bash

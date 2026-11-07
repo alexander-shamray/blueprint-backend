@@ -17,7 +17,8 @@ SHIP = ROOT / ".claude" / "commands" / "ship.md"
 BRANCH = ROOT / ".claude" / "commands" / "branch.md"
 
 # The grants as they stood before the token: one that needed a new grant would
-# be a wider change than section 6.2's, so these are literals, not a read.
+# be a wider change than section 6.2's, so these are literals, not a read. The create grant is the helper's since
+# plan 5 Task 3 withdrew the raw `gh pr create`: a swap in place, not a grant the token added.
 GRANTS_BEFORE = (
     "Read", "Grep", "Glob", "Write", "Skill", "Agent(branch-reviewer)", "EnterWorktree", "ExitWorktree",
     "Bash(git status:*)", "Bash(git diff:*)", "Bash(git branch --list:*)", "Bash(git branch --show-current)",
@@ -26,12 +27,12 @@ GRANTS_BEFORE = (
     "Bash(bash .claude/scripts/git-switch-existing.sh:*)", "Bash(bash .claude/scripts/git-rebase-onto-main.sh:*)",
     "Bash(git rev-parse:*)", "Bash(git worktree list:*)", "Bash(ls:*)", "Bash(git add:*)", "Bash(git commit:*)",
     "Bash(bash .claude/scripts/git-unstage.sh:*)", "Bash(git push -u origin:*)", "Bash(git push origin:*)",
-    "Bash(wc:*)", "Bash(gh pr create:*)", "Bash(bash .claude/scripts/pr-state.sh:*)",
+    "Bash(wc:*)", "Bash(bash .claude/scripts/gh-pr-create.sh:*)", "Bash(bash .claude/scripts/pr-state.sh:*)",
     "Bash(bash .claude/scripts/pr-for-branch.sh:*)", "Bash(bash .claude/scripts/git-trailer-pr.sh:*)",
     "Bash(gh pr checks:*)", "Bash(bash .claude/scripts/gh-pr-merge.sh:*)", "Bash(git pull --ff-only)",
     "Bash(git merge-base --is-ancestor:*)", "Bash(bash .claude/scripts/git-worktree-remove.sh:*)",
     "Bash(git worktree prune:*)", "Bash(bash .claude/scripts/pr-locality.sh:*)",
-    "Bash(bash .claude/scripts/gh-issue-create.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
+    "Bash(bash .claude/scripts/gh-issue-hand.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
 )
 DROP_GRANTS = ("Bash(bash .claude/scripts/git-branch-drop.sh:*)",)
 # The sync row's grants (test_ship_sync.py): a dispatched sync's reads and its one filing must be named by the

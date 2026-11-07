@@ -66,7 +66,6 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
     # fields as surely as `gh pr view`, and a helper that fixes its field set
     # does not bind a caller who still holds the raw grant.
     GH_GRANTS_THAT_CANNOT_REACH_A_FEED = {
-        "gh pr create",
         "gh pr diff",
         "gh pr checks",
         "gh issue create",
@@ -107,7 +106,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             grant for path in COMMANDS.glob("*.md")
             for grant in self.granted_bash(path) if grant.startswith("gh ")
         ]
-        self.assertGreaterEqual(len(seen), 3)
+        # `gh pr checks` alone is left since the create became `gh-pr-create.sh`'s.
+        self.assertGreaterEqual(len(seen), 1)
         for banned in ("gh pr view", "gh pr list", "gh api"):
             self.assertNotIn(banned, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
 
@@ -546,6 +546,119 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             r.stdout.splitlines(),
         )
 
+    # A map admitting every path, so a verdict below is the row's alone.
+    EVERYTHING = "".join(f"{c}:\n  - '{{*,**/*}}'\n" for c in "ABCDE")
+
+    def _verdicts(self, touch_set, files, scripts=None):
+        body = f"| Class | D |\n| Touch set | {touch_set} |\n"
+        r = self._run_locality_with_gh(self._gh_printing(body, files),
+                                       scripts=scripts or self._scripts_with_map(self.EVERYTHING))
+        self.assertEqual(0, r.returncode, r.stderr)
+        return r.stdout.splitlines()[1:]
+
+    def test_a_touch_set_may_spell_what_a_changed_path_may(self):
+        # A changed path may hold `@` and `+`, and a declared set naming either was refused with exit 3, which
+        # callers read as a body with no rows.
+        self.assertEqual(
+            ["inside src/app/@types/x.d.ts", "inside docs/a+b.md", "outside src/Foo.ts"],
+            self._verdicts("src/app/@types/**, docs/a+b.md", "src/app/@types/x.d.ts\ndocs/a+b.md\nsrc/Foo.ts\n"))
+
+    def test_a_plus_in_a_token_is_a_character_and_not_a_quantifier(self):
+        # An unescaped `docs/a+b.md` matches `docs/aab.md`: a wrong `inside` for a caller that acts on verdicts.
+        self.assertEqual(["outside docs/aab.md", "outside docs/ab.md"],
+                         self._verdicts("docs/a+b.md", "docs/aab.md\ndocs/ab.md\n"))
+
+    def test_a_class_map_item_may_spell_an_at_and_a_plus_and_the_plus_is_a_character(self):
+        # The class tree set takes the same token grammar and the same translation as the row.
+        tree = "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\n  - 'docs/a+b.md'\n  - 'pkg/@scope/**'\nE:\n  - 'x.props'\n"
+        self.assertEqual(
+            ["inside docs/a+b.md", "outside-class docs/aab.md", "inside pkg/@scope/x.ts"],
+            self._verdicts("docs/**, pkg/**", "docs/a+b.md\ndocs/aab.md\npkg/@scope/x.ts\n",
+                           scripts=self._scripts_with_map(tree)))
+
+    def test_the_globstar_placeholder_cannot_be_spelled_by_a_token(self):
+        # BSD sed reads `\x01` as the literal `x01`, so the sentinel was an escape on one platform
+        # only. The placeholder is built from `%`, which no token may hold, and a token holding the old
+        # sentinel's characters translates as itself.
+        code = "\n".join(line for line in (SCRIPTS / "pr-locality.sh").read_text(encoding="utf-8").splitlines()
+                         if not line.lstrip().startswith("#"))
+        self.assertNotIn(r"\x01", code)
+        self.assertIn("%%GLOBSTAR%%", code)
+        body = "| Class | D |\n| Touch set | docs/%%GLOBSTAR%%.md |\n"
+        r = self._run_locality_with_gh(self._gh_printing(body, "docs/a.md\n"))
+        self.assertEqual(3, r.returncode, r.stderr)
+        self.assertEqual("", r.stdout)
+        self.assertEqual(["inside docs/x01/a.md", "outside docs/other/a.md"],
+                         self._verdicts("docs/x01/**", "docs/x01/a.md\ndocs/other/a.md\n"))
+
+    def test_an_empty_brace_alternative_is_refused_on_every_platform(self):
+        # `{a,}` and `{}` became an empty ERE alternative, which GNU grep and BSD grep read differently, so the
+        # same set judged a path `inside` on one machine and `outside` on another. A refusal is the same on both.
+        files = "docs/a.md\ndocs/.md\nsrc/x.ts\nsrc/ax.ts\n"
+        for token in ("docs/{a,}.md", "src/{}x.ts", "lib/{a,b{}}/x.ts"):
+            with self.subTest(token=token):
+                body = f"| Class | D |\n| Touch set | {token} |\n"
+                r = self._run_locality_with_gh(self._gh_printing(body, files))
+                self.assertEqual(3, r.returncode, r.stderr)
+                self.assertEqual("", r.stdout)
+                self.assertEqual("the Touch set row has an empty brace alternative\n", r.stderr)
+        # A leading empty alternative is the boundary check's, and keeps its own message.
+        body = "| Class | D |\n| Touch set | docs/{,a}.md |\n"
+        r = self._run_locality_with_gh(self._gh_printing(body, files))
+        self.assertEqual("the Touch set row names a path outside the repository\n", r.stderr)
+        self.assertEqual(["inside docs/a.md", "outside docs/.md", "inside src/x.ts", "inside src/ax.ts"],
+                         self._verdicts("docs/{a,b}.md, src/{x,ax}.ts", files))
+
+    def test_an_empty_brace_alternative_in_a_class_map_item_is_refused(self):
+        body = "| Class | D |\n| Touch set | docs/x.md |\n"
+        rest = "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nE:\n  - 'x.props'\n"
+        for item in ("docs/{a,}.md", "docs/{}x.md"):
+            with self.subTest(item=item):
+                tree = rest + f"D:\n  - '{item}'\n"
+                r = self._run_locality_with_gh(self._gh_printing(body), scripts=self._scripts_with_map(tree))
+                self.assertEqual(3, r.returncode, r.stderr)
+                self.assertEqual("", r.stdout)
+                self.assertIn("classes.yml has an item with an empty brace alternative", r.stderr)
+
+    def _spawns_for(self, body, files):
+        # `grep` and `sed` are the tools the helper ran per item; a function logs its name and runs the real one.
+        # Functions are found before any PATH entry, and `BASH_ENV` is read by a non-interactive bash first.
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        log = d / "spawns.log"
+        log.write_text("", encoding="utf-8")
+        (d / "gh").write_text("#!/usr/bin/env bash\n" + self._gh_printing(body, files), encoding="utf-8")
+        (d / "gh").chmod(0o755)
+        (d / "counting.sh").write_text(
+            'grep() { printf "grep\\n" >> "$LOCALITY_SPAWN_LOG"; command grep "$@"; }\n'
+            'sed() { printf "sed\\n" >> "$LOCALITY_SPAWN_LOG"; command sed "$@"; }\n',
+            encoding="utf-8", newline="\n")
+        scripts = self._scripts_with_map(CLASSES)
+        env = dict(os.environ)
+        env["PATH"] = str(d) + os.pathsep + env["PATH"]
+        env["BASH_ENV"] = (d / "counting.sh").as_posix()
+        env["LOCALITY_SPAWN_LOG"] = log.as_posix()
+        r = subprocess.run([BASH, str(scripts / "pr-locality.sh"), "187"],
+                           capture_output=True, text=True, encoding="utf-8", env=env)
+        self.assertEqual(0, r.returncode, r.stderr)
+        return r, log.read_text(encoding="utf-8").splitlines()
+
+    def test_the_spawn_count_does_not_grow_with_the_changed_paths(self):
+        # A grep per path per pattern is quadratic in what a pull request grows, and on Windows, where a process is
+        # the expensive operation, a helper that appears to hang. The same set against two diffs of different
+        # sizes must spawn the same tools.
+        body = "| Class | D |\n| Touch set | docs/**, .claude/scripts/*.sh, e2e/{a,b}/**, src/app/x.ts |\n"
+        small = "docs/a.md\nsrc/b.ts\n"
+        large = "".join(f"docs/d{i}.md\nsrc/s{i}.ts\ne2e/b/t{i}.ts\n" for i in range(8))
+        r_small, small_spawns = self._spawns_for(body, small)
+        r_large, large_spawns = self._spawns_for(body, large)
+        # The control: the stand-ins were the tools the helper ran and the verdicts came back whole.
+        self.assertIn("grep", small_spawns)
+        self.assertIn("sed", small_spawns)
+        self.assertEqual(3, len(r_small.stdout.splitlines()))
+        self.assertEqual(25, len(r_large.stdout.splitlines()))
+        self.assertEqual(sorted(small_spawns), sorted(large_spawns))
+
     def test_a_path_the_row_admits_and_the_class_does_not_is_outside_class(self):
         # The CI gate judges each path against the class's tree set in
         # classes.yml as well as the row, so a runbook added to a Class C
@@ -595,6 +708,45 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertEqual("", r.stdout)
                 self.assertIn("classes.yml", r.stderr)
                 self.assertIn(reason, r.stderr)
+
+
+# What bash 3.2, /bin/bash on macOS, refuses: `mapfile` and `readarray`, an
+# associative array, and the case-changing expansions.
+BASH_4 = re.compile(
+    r"\b(?:mapfile|readarray)\b|\b(?:declare|local|typeset)\s+-[a-zA-Z]*A|\$\{\w+(?:\[[^]]*\])?(?:,|\^)")
+
+
+class NoHelperNeedsBash4(unittest.TestCase):
+    """Frontend's required `harness (macos-latest)` leg runs the helpers under bash 3.2."""
+
+    def shell_scripts(self):
+        # The helper directories alone: `.claude/worktrees/` holds every forked
+        # checkout, each with a copy of the helpers at its own base.
+        paths = [p for d in ("scripts", "hooks", "skills") for p in (SCRIPTS.parent / d).rglob("*")]
+        for path in sorted(paths):
+            if not path.is_file() or path.name.startswith("test_") or path.suffix == ".py":
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if path.suffix == ".sh" or re.match(r"#!.*\b(?:ba)?sh\b", text):
+                yield path, text
+
+    def test_no_helper_uses_a_bash_4_construct(self):
+        scripts = list(self.shell_scripts())
+        self.assertGreater(len(scripts), 20, "the script walk stopped finding the helpers")
+        for path, text in scripts:
+            with self.subTest(script=path.name):
+                self.assertEqual([], [line for line in code_lines(text) if BASH_4.search(line)])
+
+    def test_the_pattern_sees_each_construct(self):
+        # The positive control: a pattern that matched nothing would pass every script.
+        for line in ("mapfile -d '' tree < x", "readarray -t a", "declare -A seen=()", "local -rA x",
+                     'echo "${name,,}"', 'echo "${name^^}"', 'echo "${name^}"'):
+            with self.subTest(line=line):
+                self.assertRegex(line, BASH_4)
+        for line in ('echo "${name}"', 'echo "${name:-a,b}"', "declare -a list=()", 'echo "${#list[@]}"',
+                     'echo "${name/,/;}"'):
+            with self.subTest(line=line):
+                self.assertNotRegex(line, BASH_4)
 
 
 if __name__ == "__main__":

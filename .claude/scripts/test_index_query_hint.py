@@ -242,12 +242,34 @@ class TheSkillAgrees(unittest.TestCase):
         self.assertEqual(1, len(search))
         self.assertIn("--limit 3", search[0])
 
+    def test_no_command_double_quotes_the_term(self):
+        """Inside double quotes bash still runs a `$(…)`, a backtick or a
+        `$VAR` the term carries. The guard refuses the first two and not the
+        third, so `cbx refs "$event"` asks about nothing. Every `cbx` line in
+        the skill's markdown is held, and a subcommand written bare in prose."""
+        bare = re.compile(r"`(?:search|explain|symbol|refs|impact|path|describe|verify) +\"")
+        lines = [line for path in sorted(SKILL.parent.rglob("*.md"))
+                 for line in path.read_text(encoding="utf-8").splitlines()
+                 if "scripts/cbx " in line or bare.search(line)]
+        self.assertGreater(len(lines), 20, "found almost no cbx lines")
+        for line in [*lines, *(row[2] for row in _module().ROUTES)]:
+            with self.subTest(line=line):
+                self.assertNotIn('"', line)
+        # The positive control: the term is still there, single-quoted.
+        self.assertTrue(all("'X'" in row[2] for row in _module().ROUTES))
+        self.assertIn(QUOTE_RULE, self.skill)
+
     def test_every_subcommand_it_names_is_one_the_skill_approves(self):
         front = self.skill.split("---")[1]
         for _kind, _pattern, command in _module().ROUTES:
             prefix = " ".join(command.split()[:3])
             with self.subTest(command=command):
                 self.assertIn(f"Bash({prefix}:*)", front)
+
+
+# How a single quote goes inside a term, spelled in the skill: a quote, a
+# backslash, two quotes.
+QUOTE_RULE = "term as `" + "'" + chr(92) + "''" + "`"
 
 
 def _module(path: Path = HINT):
