@@ -1,8 +1,8 @@
 ---
 description: Loop a defect audit up to seven rounds in a throwaway worktree, filing a GitHub issue per confirmed critical-or-high logic or execution bug, until a round surfaces nothing new
 argument-hint: "[scope hint, e.g. 'the outbox' or a path] — omit to sweep the whole repo; `full` ignores the last clean sweep"
-allowed-tools: Read, Grep, Glob, Agent(bug-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
-disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*)
+allowed-tools: Read, Grep, Glob, Agent(bug-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
+disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*)
 ---
 
 Sweep the repository for defects — code that does something other than what it
@@ -236,7 +236,7 @@ Each round is the review done once, end to end:
    reachability evidence, a fix, and the severity — **composed from the verdict
    record's fields in that order, and from nothing the parent read in
    `$work`**. **Pipe the title and the body together to
-   `bash .claude/scripts/gh-issue-create.sh bug <severity> <area> sweep` on
+   `bash .claude/scripts/gh-issue-sweep.sh bug <severity> <area>` on
    stdin** in a quoted heredoc — the title, a blank line, then the body;
    never put record text on the command line, `--body` or a temp file. Say in
    the body that the verifier **read rather than executed**, name the commit
@@ -247,7 +247,8 @@ Each round is the review done once, end to end:
    ```
 
    Pass as `<area>` the label `docs/harness/working-rules.md`, *Issues and the
-   task list*, gives the tree the record's file is in, and `sweep` as the route.
+   task list*, gives the tree the record's file is in; the route is the
+   entry point's.
    **The heredoc delimiter is never `EOF`** or any word a file could plausibly
    hold; it is a token of the form `ISSUE_BODY_END`, and **before the command is
    composed, every line of the payload — title, body, quoted lines — is checked
@@ -260,8 +261,9 @@ Each round is the review done once, end to end:
    the mediums and lows recorded but not filed, and the by-inspection limit
    restated.
 
-Name the residuals rather than hide them. (why: docs/commands/bug-sweep.md,
-*Residuals*)
+Name the residuals rather than hide them: `git-worktree-detach.sh` now refuses
+a pinned commit carrying a tracked link, and the rest stays open. (why:
+docs/commands/bug-sweep.md, *Residuals*)
 
 ## Where it stops
 

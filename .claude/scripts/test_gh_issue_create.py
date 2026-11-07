@@ -274,6 +274,54 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         create = [c for c in self.calls() if c.startswith("issue create ")]
         self.assertIn("--label documentation ", create[0])
 
+    def run_entry(self, name, *args, body=""):
+        env = dict(os.environ)
+        env["PATH"] = self.dir + os.pathsep + env["PATH"]
+        return subprocess.run(
+            [BASH, str(SCRIPTS / name), *args],
+            capture_output=True, text=True, encoding="utf-8", input=body, env=env,
+        )
+
+    def test_neither_entry_point_takes_a_route_at_all(self):
+        # A route word, or any fourth word, is refused by arity before `gh` runs, so a command granted an entry
+        # point cannot name another route's trailer.
+        for name in ("gh-issue-sweep.sh", "gh-issue-hand.sh"):
+            for route in ("sweep", "hand", "mutation", "request", "-R other/repo", ""):
+                with self.subTest(entry=name, route=route):
+                    self.assert_refused_before_gh(
+                        self.run_entry(name, "bug", "low", "code", route, body=self.STDIN))
+            with self.subTest(entry=name, args="short"):
+                self.assert_refused_before_gh(self.run_entry(name, "bug", "low", body=self.STDIN))
+
+    def test_the_entry_points_offer_no_kind_they_cannot_file(self):
+        # An enhancement files under the request route alone, which neither entry point spells.
+        for name in ("gh-issue-sweep.sh", "gh-issue-hand.sh"):
+            with self.subTest(entry=name):
+                result = self.run_entry(name)
+                self.assertEqual(2, result.returncode)
+                self.assertIn(f"usage: {name} <security|bug|test-gap>", result.stderr)
+                self.assertNotIn("enhancement", result.stderr)
+
+    def test_each_entry_point_files_one_route_and_refuses_the_other_trailer(self):
+        # The positive controls come first in each pair: an entry point that refused everything would satisfy
+        # the refusals.
+        for name, own, other in (("gh-issue-sweep.sh", self.STDIN, self.HAND_STDIN),
+                                 ("gh-issue-hand.sh", self.HAND_STDIN, self.STDIN)):
+            with self.subTest(entry=name):
+                created = len([c for c in self.calls() if c.startswith("issue create ")])
+                result = self.run_entry(name, "bug", "low", "code", body=own)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(created + 1, len([c for c in self.calls() if c.startswith("issue create ")]))
+                before = len(self.calls())
+                self.assertEqual(2, self.run_entry(name, "bug", "low", "code", body=other).returncode)
+                self.assertEqual(before, len(self.calls()))
+
+    def test_the_entry_points_do_not_file_a_trailer_of_the_routes_nothing_files_under(self):
+        for name in ("gh-issue-sweep.sh", "gh-issue-hand.sh"):
+            for body, kind in ((self.MUTATION_STDIN, "test-gap"), (self.REQUEST_STDIN, "enhancement")):
+                with self.subTest(entry=name, kind=kind):
+                    self.assert_refused_before_gh(self.run_entry(name, kind, "low", "code", body=body))
+
     def test_a_body_without_the_trailer_is_refused(self):
         # The detector for an early heredoc close: a body cut short by a
         # repository line equal to the delimiter has lost its last line.

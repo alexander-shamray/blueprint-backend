@@ -158,7 +158,8 @@ result instead, and report it as it actually came out.
 ## Before opening
 
 - `bash .claude/scripts/pr-for-branch.sh` — an OPEN row means you are
-  updating, not creating. Say so and stop.
+  updating, not creating. Say so and stop. It lists only pull requests into
+  `main`, so one into another base does not stop you.
 - Confirm the checks `docs/harness-local.md` *Ship checks* names have run
   over the change, or say plainly that they have not.
 
