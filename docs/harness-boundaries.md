@@ -13,7 +13,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
 | Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
-| Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards and the quoting bypass. |
+| Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards, the quoting bypass and the helper argv guard. |
 | The guards' threat model | What the guard hooks are written against, which guard findings are filed, and which are recorded as out of scope. |
 | Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
@@ -125,6 +125,20 @@ its prompt, not its tools — the sweeps' residual for the same tool set. The re
 is the parent's: it holds the shell the reviewer was denied, so a finding
 written to steer an edit is caught by that verification or not at all.
 
+**The residual is that the chain has no outside reader, and no grant expresses
+it.** What reviews a branch before it merges is the same model family that
+wrote it, with its own context and its own blind spots, and `/ship` merges
+unattended. Nothing in the harness can close that: independence of judgement is
+not a tool grant. It is accepted, the external reviewers being archived (*Grant
+semantics* says where they are held; blueprint-frontend recorded the decision
+in its #117), and the control is procedural and stated: a full pass, a recheck
+of every fix with a full pass again after a `bug`-severity or large one, a
+seventh-round ceiling whose open findings are filed as issues rather than
+dropped, and CI, which judges the branch by rules the model did not choose. It
+is recorded because a reader who learns only that the reviewer is read-only has
+been told the safe half. Restoring an outside reader starts from
+`archive/external-reviewers`.
+
 **`team-peer` rests on it too, over a wider input.** `/team`'s peers hold
 the same three tools and read a board other peers wrote, so a line planted
 in the code can reach a second peer as a claim. The residual is that
@@ -147,6 +161,12 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 `watch` are refused.
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
+`cbx.ps1` runs in its caller's process, so the two variables it sets
+(`CBX_NO_SKILL_AUTO_UPDATE` and `PYTHONSAFEPATH`) are put back in a `finally`,
+and the one `exit` after it is the only way out: left set, `PYTHONSAFEPATH`
+takes the script's directory off `sys.path` for every later `python` the
+session starts. `test_cbx.py` runs it with `&`, in a session that reports its
+environment afterwards, and skips where PowerShell is not installed.
 
 **`CBX_NO_SKILL_AUTO_UPDATE=1` is also in `.claude/settings.json`'s `env`,
 because the wrapper is not the only way the CLI runs.** A bare
@@ -173,16 +193,81 @@ an index that cannot refresh is not a reason to fail the call that provoked
 it. The exit status is the one thing it does keep, and a request whose update
 failed goes back rather than counting as served: contention is what fails
 here, the streams that would have said so are gone, and the loser may be the
-run carrying the newest edit. The worker runs from the system temp directory,
+run carrying the newest edit. A marker the worker cannot remove, a directory
+in its place or a file Windows has open, is not an absent one: read as absent,
+the worker took the lock and looked again for ever. It lets go of the lock,
+waits briefly and tries a bounded number of times, then leaves the marker for
+the next edit. The worker runs from the system temp directory,
 outside every checkout, and only the CLI inside the checkout: Windows will not
 delete a live process's working directory and `/ship` removes a worktree
 moments after its last call, and Windows looks in the starting process's own
 directory for a program named bare, so a checkout's parent, or for a worktree
 a directory of the main checkout, would let a merged file stand in for the
 CLI, which is started by the full path a PATH-only lookup found instead. The
-lock and the CLI's own run still hold files in the checkout while they last,
-which is why `/ship`'s `git-worktree-remove.sh` takes the lock before it
-removes.
+CLI's own run still holds files in the checkout while it lasts, and the worker
+holds the lock for that whole run, which is why `/ship`'s
+`git-worktree-remove.sh` takes the lock before it removes. The lock covers a
+worker and not the survivor its record names after a kill, which the helper
+does not wait for: on Windows such a removal can leave part of the tree, and
+the helper's exit 4 reports that. The worker is
+started in a session of its own on POSIX, and on Windows with
+`CREATE_NO_WINDOW` and a new process group, never `DETACHED_PROCESS`: a worker
+started with that flag was measured to exit 0 without its child ever running,
+and the hook discards every stream, so nothing said so while the index went
+stale. `test_refresh_index.py` holds the set, because a run only passes on a
+machine that tolerates the wrong one.
+
+**The lock and the marker are the hook's own writes, so they live in the git
+directory and not in the tree.** Each checkout has a pair under
+`<git directory>/index-refresh/`, named for the checkout's device and inode so
+that two spellings of one path share it. A branch can track a link at any
+component of `.claude/cache/codebase-index/`, and `open` follows a link there
+and truncates what it finds, so a state kept in the tree would be written
+wherever the branch aimed it. Git tracks nothing under its own directory. The
+directory is the one the hook file's own checkout reports, never the target's,
+and where it, or the state directory in it, is itself a link there is no
+state and so no refresh. Only those two names are looked at, so a link higher
+up the path to the git directory is not seen. `git-worktree-remove.sh`
+computes the same name from the worktree it removes, and
+`test_git_worktree_remove.py` takes the hook's own for the lock it holds, so a
+name that drifts in either fails there. It takes the name while the path still
+stats and deletes the pair once the removal succeeded, because the inode a
+later worktree is given would inherit the file and the pid in it; a file that
+will not go does not change the helper's exit, and a worktree that never had a
+pair is not given one.
+
+**The hook refreshes a checkout of its own repository that holds an index,
+and nothing else.** The repository is the one the hook file's own checkout
+belongs to, compared by git directory, so a checkout of another repository,
+or a submodule, that holds a cache directory is not this hook's to write
+into. An index is a file past SQLite's 100-byte header: a cache directory
+alone is not one, and an `update` there is a build, which the hook never
+starts. An event that names a file the hook cannot place, a relative path
+with no `cwd` or one the system cannot resolve, refreshes nothing, and is
+never answered with the `cwd`, which names a tree the edit did not touch. The
+worker is handed its root as an argument and runs for as long as edits keep
+arriving, so it judges the root again at its entry and before every update.
+
+**The lock is the worker's, and the indexer it starts is not.** A worker
+killed mid-update frees the lock while the indexer goes on writing the cache,
+and the next edit would start a second beside it. So the worker writes its own
+pid into the lock file, through the handle that holds the lock, before it
+starts the CLI, the CLI's once it exists, and nothing once the CLI is known to
+be gone: reaped after a kill, not merely asked to end. A worker that takes the
+lock and finds a live process recorded leaves the tree to it, and the marker
+stays for the next edit. Whether a pid is live is asked of the system without
+starting anything, `kill(pid, 0)` on POSIX and `OpenProcess` with the exit
+code on Windows, where `os.kill` would end the process. Where it cannot be
+told, the process counts as running: one skipped refresh, never two indexers.
+The look is made before every attempt, a retry included, since an attempt
+overwrites the record. The record is read with its age, the file's
+modification time, so that a pid something else now holds cannot hold workers
+off for ever: past 630 seconds, `REFRESH_TIMEOUT` plus `REAP_TIMEOUT`, a record
+names nothing. A worker that finds its indexer outliving the kill writes the
+record again, so the bound runs from that moment and not from the start of an
+update that has already used it up. The cost is a residual: nothing kills the
+orphan of a killed worker, so once its record is that old a worker may start an
+update beside it.
 
 **The CLI is found on `PATH` alone, and the answer is a full path, so the
 operating system searches nothing.** A `PATH` entry naming a checkout is the
@@ -199,7 +284,10 @@ supported install that leaves the script in a directory that need not be on
 no module this interpreter can import, so the script is not dropped for it.
 `CBX_NO_SKILL_AUTO_UPDATE` keeps an unpinned package from rewriting the
 tracked skill, and `-P` keeps a checkout's own `codebase_index.py` off the
-import path.
+import path. The hook sets `NoDefaultCurrentDirectoryInExePath` for everything
+it starts, the worker and the CLI, and does not leave it to its launcher: the
+CLI runs in the checkout, where a branch can plant a program that Windows
+would otherwise find first for any name the CLI starts bare.
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a
@@ -219,7 +307,11 @@ a full `index` inside the agent's turn: 230 s here, where copying the main
 checkout's `index.sqlite` took 0.4 s and the `update` after it 5 s. The
 worker seeds under the refresh lock before it updates, through SQLite's
 backup rather than a file copy, because the main checkout's index may be
-mid-`update` and a copied file can tear. Only `index.sqlite` crosses — the
+mid-`update` and a copied file can tear. The copy is made beside the index
+under a name for the worker's process and renamed in only once its header
+says WAL, the mode the package's readers need, and the next seed, which holds
+the same lock, removes the partial and the files SQLite opened beside it that
+a killed worker left. Only `index.sqlite` crosses — the
 main checkout's memory and configuration are its own state — and only from a
 regular file at the main checkout's own index path. The worktree is told
 from the files git writes, a `gitdir:` pointer whose `commondir` leads to a
@@ -228,6 +320,72 @@ main checkout with no index leaves the worktree with none, and any other
 checkout with no index is left alone, because unindexed is not stale.
 `git-worktree-fork.sh` runs the new worktree's own hook once, because
 `/branch` enters it mid-session, where no `SessionStart` fires.
+
+**A checkout's `.git` is a claim it makes about itself, so the hook takes
+only a checkout git made.** A directory whose `.git` file names one of this
+repository's admin directories reports this repository's common directory
+without git having made it, and its tree would be indexed with this
+checkout's tooling. So a `.git` directory must be the repository's own, and a
+`.git` file must be no link, have one name, and name an admin directory under
+`<common>/worktrees/` whose `gitdir` names that file back. A hard link shares
+the real file's inode and so its backlink, which is why a second name is
+refused; while one exists the real worktree is refused too, a denial of
+refresh by someone who can already write beside the repository rather than a
+tree of theirs being indexed. The main checkout a worktree is seeded from is
+judged the same way. A checkout named `secsweep-…`, in any case and as it
+resolves through a link, is refused outright: both sweeps detach their
+worktrees under that prefix, and the tree one holds is audit input.
+
+**An index is opened only at rest, in WAL mode, and with no link on its
+path.** A branch can force-track any file under
+`.claude/cache/codebase-index/`, the first connection to a rollback-mode
+database replays a `-journal` it finds beside it, and SQLite opens each
+sidecar by name, so a link at one aims its write where the branch chose.
+`index_openable` refuses a link at any component of the cache path, at the
+database or at its `-wal`, `-shm` or `-journal`, a journal at all, and a
+header that is not WAL; a root with no index, or one shorter than a header,
+is admitted, since nothing in it can be replayed. It is asked of the target,
+of the seed's source and target, before every update, and before and after a
+compaction. A `-wal` is admitted: every open reader keeps one. The cost of a
+refusal is a stale index, never a write.
+
+**A seed lands only where git ignores the index path.** It leaves the main
+checkout's indexed text at a path only `.gitignore` keeps out of a commit,
+and a branch checked out in the worktree can drop that line, which would put
+that text in front of an unscoped `/commit`. `git check-ignore` is asked
+last, only where a seed could otherwise happen, so a checkout with no index
+and nothing to seed it from costs no git call; it is asked once per root and
+process, with `GIT_DIR` and its kin removed and a three-second git budget,
+and a yes or a no git gave is kept; an answer
+git did not give is a no, and is asked again later. Nothing is seeded over
+anything already at the index path, a placeholder a branch tracks included.
+
+**The worker compacts what it refreshed, because the package never does.**
+Each `update` leaves full-text segments and free pages behind, and with
+`auto_vacuum` off the file only grows. Past half the file in free pages, or
+ten segment rows per chunk, a successful update is followed, under the same
+lock, by FTS `optimize` and `VACUUM`, never in place: the index is read
+through an immutable read-only connection, which takes no lock, reads no log
+and replays no journal, copied into the state directory, compacted there on
+a connection that distrusts the file's schema and has its triggers off, and
+renamed over the index. Only a file whose tables are the package's shape is
+touched. Nothing is done while a `-wal`, `-shm` or `-journal` exists, since a
+log beside a replaced database is replayed into it; that, the file's size and
+modification time are asked again just before the rename, and a statement or
+a copy step past the update's timeout is interrupted. Every failure leaves the
+index as it was. Two residuals stand: the state directory and the index must
+share a volume, or every rename fails; and a connection that opens the index
+between the last look and the rename would have its log replayed into the new
+file.
+
+**`cbx` asks the same judgement before it starts the CLI.** `gate.sh` runs
+`gate-index.py`, which loads this hook and asks `index_openable` of the
+working directory and of the checkout git puts it in; exit 3 is a refusal,
+and no Python 3.12 is exit 4 rather than a pass, since the CLI would open an
+index nobody judged. `cbx.ps1` runs no gate: the skill neither grants nor
+teaches it, so a session reaches it only through a prompt, and the window
+between the gate's look and the CLI's own open is the one every check here
+leaves.
 
 **The approval of `.mcp.json`'s servers belongs to a directory, so the fork
 carries it.** A session started in a worktree reads that worktree's own
@@ -287,7 +445,14 @@ spawns nothing and leaves with 0 whatever happened: exit 2 under this event
 blocks the prompt and erases it, which is also why it is started the way the
 paragraph on hook commands below says. `test_index_query_hint.py` holds
 every command it emits to a row of the route table and a prefix the skill
-approves.
+approves. **The term in each command is single-quoted**, here, in the skill's
+table and references, and in the search hint's refusal: inside double quotes
+bash still runs a `$(…)`, a backtick or a `$VAR` the term carries, and a term
+copied from a log or a branch's file can carry one. `guard-index-argv.py`
+refuses the first two and not the third, so `cbx refs "$event"` asks about
+nothing and says so to no one. A single quote inside a term is written
+`'\''`, and `test_index_query_hint.py` holds every `cbx` line of the skill's
+markdown free of a double quote.
 
 **`PreToolUse` runs `.claude/hooks/index-search-hint.py` before `Grep` and
 both shell tools, because the prompt is not where the code questions are.**
@@ -589,14 +754,32 @@ the earlier probe was refused by the classifier layer — a second net worth
 noting and not evidence. It is evidence now, and it says the deny was genuinely
 defeatable rather than theoretically so.
 
+**The helper grants have the index grants' gap, and a guard of their own.**
+`Bash(py -3.12 .claude/scripts/dispatch_board.py:*)` matches the typed string
+too, and takes text a model composes from issue titles, where a backticked
+name is the house style; a pull request's title is the same text. So the text
+stays off the command line, in the files `/dispatch` *Issue text stays off the
+command line* names, and in the title file `gh-pr-create.sh` reads, which
+withdrew the raw `gh pr create` grant (*Grant inventory and push helpers*).
+`.claude/hooks/guard-helper-argv.py` is what holds when a session spells it
+otherwise: it refuses a command substitution anywhere in a command that runs a
+`.py` under `.claude/scripts/` or `gh pr create`, as `guard-index-argv.py` does
+for its own. So `oid=$(git rev-parse HEAD)` and a helper line beneath it are
+refused though that line is clean: a heredoc's substitution runs for the
+helper's stdin on no helper line, so the whole command is what is judged, and
+such a value is read in a call of its own. It leaves the `.sh` helpers, whose
+arguments are numbers and names, and it judges substitutions alone: a second
+command is the grant's own matching.
+
 ## The guards' threat model
 
 **The guard hooks catch an agent's honest mistakes; they are not a sandbox
 against a session that sets out to defeat them.** `guard-git-argv.py`,
-`guard-edit-target.py`, `guard-index-argv.py` and `guard-sed-crlf.py` are
-written against a session that types a dangerous command by accident or by
-a plausible shortcut — a forced push, a write into a denied tree, a removal
-of a parent of the checkout, a `sed -i` over a CRLF file — in any spelling
+`guard-edit-target.py`, `guard-index-argv.py`, `guard-helper-argv.py` and
+`guard-sed-crlf.py` are written against a session that types a dangerous
+command by accident or by a plausible shortcut — a forced push, a write
+into a denied tree, a removal of a parent of the checkout, a `sed -i` over
+a CRLF file — in any spelling
 a shell user writes in ordinary work: quoting, `-C` and `--work-tree`,
 environment prefixes, `cd` chains, the launchers and wrappers, heredocs,
 pipes into a shell. A guard that judges a file the command names, as
@@ -751,6 +934,10 @@ row is therefore a spelling the deny list does not match.
 | Edit the skills | `Edit(.claude/skills/codebase-index/SKILL.md)` | `deny` | `test_destructive_classes.py` |
 | Edit the settings | `Edit(.claude/settings.json)` | `deny` | `test_destructive_classes.py` |
 | Edit the local settings | `Edit(.claude/settings.local.json)` | `deny` | `test_destructive_classes.py` |
+| Edit inside the git directory | `Edit(.git/config)` | `deny` | `test_destructive_classes.py` |
+| Edit the git directory itself | `Edit(.git)` | `deny` | `test_destructive_classes.py` |
+| Edit the MCP server definitions | `Edit(.mcp.json)` | `deny` | `test_destructive_classes.py` |
+| Edit the index's ignore list | `Edit(.codeindexignore)` | `deny` | `test_destructive_classes.py` |
 | Edit a hook through a link | `Edit(linked/hooks/guard-git-argv.py)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the settings through a link | `Edit(linked/claude/settings.json)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the agent notes through a link | `Edit(linked/remember/notes.md)` | `guard-edit-target` | `test_destructive_classes.py` |
@@ -976,13 +1163,27 @@ Two are `/ship`'s, and both are closed:
 failing checks. Both are withdrawn. `gh-pr-merge.sh` takes a number and a
 head oid, spells `--rebase --match-head-commit` itself, and refuses a pull
 request that is not the checked-out branch's own, from this repository, into
-`main`. `git-worktree-remove.sh` takes one `.claude/worktrees/<name>` path,
-run from the main checkout, refuses a directory that is not a linked worktree
-of this repository, and spells `git worktree remove` with no flag, under
-`core.longpaths` so that a file past Windows' 260 characters is deleted too
-rather than left in a directory git has already unregistered; it first
-waits, to a bound it declares, for the worktree's code-index refresh lock,
-because Windows will not delete a file a running refresh holds (#516).
+`main`. `git-worktree-remove.sh` takes a `.claude/worktrees/<name>` path and
+the branch forked there, run from the main checkout. It refuses `main` as that
+branch, a directory that is not a linked worktree of this repository, and one
+that does not hold the branch, a detached one included. It spells
+`git worktree remove` with no flag, under `core.longpaths` so that a file past
+Windows' 260 characters is deleted too rather than left in a directory git has
+already unregistered; it first waits, to a bound it declares, for the
+worktree's code-index refresh lock, because Windows will not delete a file a
+running refresh holds (#516).
+
+Another, shared by `/pr` and `/ship`, is closed the same way:
+`Bash(gh pr create:*)` admitted a trailing `--repo`, `--head`, `--base` or
+`--body-file`, which choose a repository, a branch, a base and a body the
+command never derived, and the last publishes any file it can read. It is
+withdrawn for `gh-pr-create.sh`, taken from blueprint-frontend. It takes two
+paths, the title's and the body's, reads the repository and the head from the
+checkout and spells the base `main`, and refuses an input that is not a file
+git ignores under the checkout's `artifacts/`, is a symbolic link itself, or
+resolves outside `artifacts/`: an ignored file is untracked, so the branch
+under review never writes its own pull request, and every target already
+ignores `artifacts/`.
 
 **Two more sat in the sweep command files rather than in this paragraph, and
 both are now closed — which is worth recording because they were closed the
@@ -1009,7 +1210,15 @@ the client's policy and the deny list does not move. What lets the client
 relax at all is the `main` ruleset on the server, read back green for every
 target, so a helper that got its guards wrong still cannot rewrite or delete
 `main` (*Destructive classes*). `git-rebase-onto-main.sh` carries the flags
-itself, takes one branch name that has to equal the one checked out, refuses
+itself, runs none of the target's hooks (`core.hooksPath` is an empty
+directory for the run, as in `git-trailer-pr.sh`), spells over every
+`rebase.*` key that changes a replay (`--no-rebase-merges` and
+`--no-update-refs` answer settings that act today; `--no-autosquash`,
+`--no-fork-point` and `--no-autostash` are defensive, since git limits
+`rebase.autoSquash` to interactive mode, takes no fork point when an upstream
+is named and the start refuses a dirty tree; `--merge` keeps the apply backend
+out, which leaves a commit it never applied looking like one a resolution
+emptied), takes one branch name that has to equal the one checked out, refuses
 `main` by name before it reads the checkout at all, refuses a remote holding
 commits this checkout lacks, and leases the push against the commit the same
 run read. **A rule could have bought none of that**: a permission pattern
@@ -1155,7 +1364,7 @@ it.** `<bug|test-gap|enhancement> <critical|high|medium|low>
 request route's), for the sync row, which finds payload defects from a target
 whose checkout is another repository. The repository is a literal in the helper
 and no word selects it: a word `gh-issue-create.sh` took would be the caller's
-to declare, and the sweeps hold that helper over a tree they cannot trust. So
+to declare, which is why no command is granted that helper. So
 the grant is the boundary: `/ship`'s frontmatter names the helper, the settings
 do not allow it, and both sweeps deny it by the same key as the force-push
 helpers, for the day someone allows it globally. It first searches the open
@@ -1164,6 +1373,47 @@ issues for that exact title and comments on a match instead of creating, every
 sibling, which resolves the checkout's repository, so a label the harness lacks
 fails the create rather than being made. Residual: `/ship` can file any text in
 the harness with it, which is its whole use.
+
+**The issue route is the entry point a command is granted, never an argument.**
+`gh-issue-create.sh` takes the route as its fourth word and so lets whoever
+holds a prefix grant on it claim any route's last line, among them the sweep
+route's sentence that a second read-only auditor verified the finding. So no
+command is granted it. `gh-issue-sweep.sh <kind> <severity> <area>` fixes the
+`sweep` route and is the sweeps' only filing grant; `gh-issue-hand.sh` fixes
+`hand` and is `/ship`'s, `/team`'s and `/dispatch`'s;
+`gh-issue-mutation.sh <severity> <area>` fixes `mutation` and the kind
+`test-gap`, the one its sentence is true of, and is for a target's local
+mutation sweep, so no payload command holds it. Each execs
+`gh-issue-create.sh` with the route spelled, so the kind, severity, area, stdin
+and trailer checks stay in one place. A grant on one entry point withholds
+nothing from another, so each command denies the entries it does not hold by
+name, and `gh-issue-create.sh` besides; `/ship` denies agent types and no tool a
+command it chains uses, because a deny on one of those outlasts the step.
+`test_command_grants.py` walks every command in the tree it runs in, a target's
+local ones too, so whether a route needs an entry point is a question about
+every target, not the payload.
+The `request` route has none, since no command in any target files under it; it
+stays reachable by calling `gh-issue-create.sh` directly, and a command that
+comes to need it gets its own entry point of the same shape. Residual: a prefix
+grant on a helper lets its holder choose that helper's own arguments, which here
+are the severity, the area and, on every entry but the mutation one, the kind,
+all in closed sets.
+
+**The replay's provenance and its divergence baseline are files under `.git`,
+and that is a stated limit.** The helper keeps a record in the git directory
+(`claude-rebase-pending`, naming the branch, the lease and the replayed
+commit), writes a marker into the rebase state (`started-by-this-helper`), and
+reads git's own `orig-head` for where a replay began. `continue` takes the
+marker as proof that the helper started the rebase and `publish` forces over
+the lease the record names, so anything able to write there could steer a
+publish: a forged marker passes `continue`, a rewritten record moves the lease.
+What stands in the way is partial: the base settings deny `Edit` on `.git` in
+both spellings for every session, and `guard-helper-argv.py` refuses a command
+substitution in a command that runs a helper. Neither reaches a `Bash` command
+that writes there by another route. It is accepted, not guarded, because the
+same files exist in every target that runs the helper; this repository measured
+nothing about it, and the limit is written down so a reader does not take the
+helper's own checks for protection of the files they read.
 
 **Some of the rebase helper's edges are accepted rather than guarded.** A replay
 amended after a failed push no longer descends from the commit `publish`
@@ -1201,6 +1451,22 @@ because a caller that chooses fields can choose `reviews`. **`gh pr list`
 was the door found last**: `--json reviews,comments` returns every pull
 request's review bodies at once, and three commands kept it for the
 harmless job of finding a branch's PR.
+
+**`pr-for-branch.sh` answers three questions before its caller reads a row.**
+Its listing asks `gh` for `--limit 1000`, because the default page of 30 is cut
+before the fork filter and the landed row can vanish; a response of exactly the
+limit may be a prefix and is refused with exit 4. Only rows into `main` are
+listed, since every pull request this chain opens targets `main`, and a newer
+one into another base would otherwise mask it. A `MERGED` row is dropped when
+the row's merge commit is an ancestor of the local branch: that branch was
+recreated from a `main` holding the merge, so the row is an earlier
+incarnation of a reused name. A branch with commits added after its merge does
+not carry the merge commit, and keeps the row. With no local branch, or a merge
+commit not fetched, the row stays, since stopping is the answer when the drop
+cannot be shown. The merge commit is requested and not published. Residual: a
+landing that leaves the branch on the merge commit itself, such as a
+fast-forward, loses its row, which keeps a workspace standing rather than
+removing one.
 
 **The gate that pins this is an ALLOW-list of `gh` subcommands, and it is the
 second one in this repository to be rewritten that way.** Its first version
@@ -1278,16 +1544,29 @@ class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
 in balanced backticks, of path and glob characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
-alternatives included. A row that fails its grammar exits 3 naming the row
+alternatives included. A token may hold `@` and `+` as a changed path may,
+the `+` read as a character and not as a quantifier, in the class map's items
+as in a row; an empty brace alternative is refused, because GNU and BSD `grep`
+read an empty alternative differently and one set would judge a path `inside`
+on one machine and `outside` on another. The verdicts come from one `grep`
+per pattern over every changed path, and a path is checked by `case`, so no
+process is spawned per path: on Windows a spawn per path and pattern made
+the helper look hung. A row that fails its grammar exits 3 naming the row
 and not its content, and so does a class map that is absent, names a class
 twice, leaves one without items, or holds a line or a token outside its
-grammar: the gate refuses that map, so a verdict half-read from it is an
-answer CI never gives. **The verdict narrows
+grammar: a verdict half-read from a map the helper refuses would be one no
+gate gives. **The verdict narrows
 and grants nothing**: the caller's deny list and the class's tree set hold
 authority, an `outside` or `outside-class` line is a finding, and an
 `inside` line is not a licence for anything the caller's grant refuses.
-`test_pr_helpers.py` pins all of it, and runs the CI gate beside the helper
-to hold the two to one answer.
+`test_pr_helpers.py` pins all of it.
+
+**Residual: the helper's token grammar is the wider one a frontend-style
+tree needs.** It admits `@` and `+`, as a changed path may. A target's own
+locality gate is that target's file and must be widened in step, and a gate
+that is not refuses them: until it is, a row naming `@` or `+` reads `inside`
+here and is refused in CI. Backend's gate is such a one today. A token both
+admit is held to one answer by the target's own suite, not by this one.
 
 **Every `gh` read these helpers make is bounded, because one that stalls
 holds every step chained behind it.** #603 was `pr-locality.sh` printing
@@ -1336,7 +1615,14 @@ runs before it pushes never denies push.** It reads as hardening and is not —
 `settings.json` refuse `main`, force and delete whoever asks.
 `NothingShipChainsDeniesPush` in `test_command_grants.py` names the commands and
 fails if one denies push. A terminal, read-only command — the two sweeps — keeps
-its deny, because nothing pushes after it.
+its deny, because nothing pushes after it. A target whose *Ship checks* run a
+command of its own names it in `CHAINED_BEFORE_A_PUSH` in a `local_commands.py`
+of its own beside the suites, listed under `local`: that case holds it to
+denying no push, and `ACommandThatDoesNotPublishCannotPush` stops asking it to
+deny one. A subclass in the target's own suite could do the first and not the
+second: `unittest discover` still runs the payload's
+`ACommandThatDoesNotPublishCannotPush` as written, which asks every command it
+does not exempt to deny push.
 
 ## Output deny and shell-expansion residuals
 
@@ -1425,16 +1711,35 @@ alternative fails open on a wrapper nobody listed.
 ## Agent-type and push entries
 
 **A seventh thing is a gap in the mechanism rather than in a grant.** Pinning a
-command to one subagent type is a **deny list of every other type**, because the
-harness has no "only this type" allow — so `security-sweep.md`,
-`bug-sweep.md` and `team.md` each deny every registered type but the one
-they grant, and **a newly added agent under `.claude/agents/` is admitted by
-default** until someone adds it to every list; `test_command_grants.py` fails
-a granting command that does not. That is the shape this repository already
-knows rots; it is taken here because the alternative on offer is prose. **It
-rotted once already on the day a third agent arrived**: `review-adjudicator`
-was added for #149 and every command then holding a list had to name it,
-which is the enumeration's cost paid in the change that proves it.
+command to one subagent type is a **deny list of every other type**, because
+the harness has no "only this type" allow — so `security-sweep.md`,
+`bug-sweep.md`, `team.md` and `ship.md` each deny every registered type but the
+one they grant (`ship.md` also leaves `general-purpose`, which step 2
+dispatches its audits as), and **a newly added agent under `.claude/agents/` is
+admitted by default** until someone adds it to every list;
+`test_command_grants.py` fails a granting command that does not. That is the
+shape this repository already knows rots; it is taken here because the
+alternative on offer is prose. **It rotted once already on the day a third
+agent arrived**: `review-adjudicator` was added for #149 and every command then
+holding a list had to name it, which is the enumeration's cost paid in the
+change that proves it.
+
+**A command that does not publish denies `git push`, and one that holds `Edit`
+or `Write` is held off the repository's machinery by the settings.** The
+settings allow `git push origin`, so a command that neither grants nor denies
+push reaches it; `ACommandThatDoesNotPublishCannotPush` in
+`test_command_grants.py` derives the commands from their frontmatter, so a new
+one fails until it decides. `branch.md` and `commit.md` are the exemption:
+`/ship` runs them before it pushes, and a frontmatter deny outlasts the step.
+`Edit` and `Write` carry no path scope, so `.git`, `.mcp.json` and
+`.codeindexignore` are denied in the base settings in both spellings, for
+every command at once, because the grant is per command and a new editing
+command should arrive behind the deny; `test_harness_denies.py` checks it
+against each command that holds either tool. No payload command edits any of
+the three, so the deny costs none. A target whose own command must edit one
+changes the base in `blueprint-harness`, because a deny beats every allow.
+Residual, as for the rest of the list: `Bash` redirection still writes what
+`Edit` refuses.
 
 **The eighth was the push deny-list (#23), and it closed the way the sixth
 did.** Two broad allows — `Bash(git push origin:*)` and the `-u` form — paired
@@ -1467,6 +1772,20 @@ and it is that repository's to keep, under *Residuals* in its
 `docs/harness-local.md`: a file the build imports by name that does not exist
 yet is on no list read from what exists, so a deny enumerated from the tree
 cannot cover it.
+
+**A boundary an agent must keep across turns lives on its profile.** It was
+measured in blueprint-admin (its #19, #23 and #27) and blueprint-backend (its
+#52 and #149) while a writing agent still ran in the chain, and this repository
+has not re-measured it. A command loaded inside an agent can discard its own
+frontmatter deny; a type list inside a subagent's `Agent` grant is ignored; a
+command's `disallowed-tools` lasts only the turn that loaded it, so a deny a
+later step must still meet cannot be put there. A command's `disallowed-tools`
+propagate to the subagents it spawns, and a path deny reaches a `Bash` command
+naming the path; the harness offers no deny that reaches the parent and not the
+child. The local review holds no writing agent, so none of this binds a
+boundary today, and it binds the first one added: `branch-reviewer`,
+`bug-auditor`, `security-auditor` and `team-peer` hold `Read`, `Grep` and
+`Glob` on their profiles for that reason.
 
 ## The edit-target guard
 
@@ -1770,6 +2089,20 @@ directory, whose checkout may be foreign: the call switches
 hostile config names, and sets `GIT_OPTIONAL_LOCKS=0` so the read writes no
 index. Each git call is bounded at 5 seconds, and a command at 200 files.
 
+**Which git it runs.** The first on `PATH` by the hook's own search, the
+rule *Index refresh and worktree seeding* gives its console script but for
+the main checkout, which it does not fence, and never
+`shutil.which`: on Windows that looks in the current directory first, where
+a merged change could plant a `git.cmd` to run inside this hook, and only
+`NoDefaultCurrentDirectoryInExePath`, which a hook cannot rely on, turns
+that off. Only absolute entries count, and nothing at or below the hook's
+working directory, the event's `cwd` or `CLAUDE_PROJECT_DIR`. On Windows
+only an `.exe` or a `.com` counts, never a `.cmd` or a `.bat`: those run
+through `cmd.exe`, which reads an `&` in the file name the command gave as
+its own. So a git installed under one of those directories, as under a
+session started in the home directory or at a drive root, and a git that is
+only a `.cmd`, read as no git on `PATH`.
+
 **Where it fails open, by design rather than by crash.** An operand holding
 an expansion (`"$FILE"`, `$(git ls-files)`), a `cd` it cannot follow, a file
 that does not exist or cannot be read, a command `shlex` cannot tokenise, no
@@ -1831,8 +2164,19 @@ After `verify`, the dispatcher pulls with `--ff-only`, checks
 containment with `git merge-base --is-ancestor`, runs `tasks done` and
 removes the worktree with `git-worktree-remove.sh`.
 
-**What an executor reports is not trusted.** A prompt-injected issue body
-reaches an executor as it reaches any `/ship`. Its result file is checked
+**An issue is a work order only from the repository owner.** The repositories
+are public, so anyone can open an issue, and a row the night launches merges
+with nobody watching. `dispatch_board.py` takes `gh-issue-owned.sh`'s numbers in
+code, never from the session: `board`, `wake` and `report` hold back a row whose
+issue is not among them, `launch` refuses one, `--berserk` lifts neither, and a
+failed read refuses rather than reading as empty. The test is authorship, as
+`gh-issue-suppresses.sh`'s is, and not a label: a label stays on an issue its
+author then rewrites. Work the owner wants from such an issue is filed as their
+own, in their words, which the interview offers.
+
+**What an executor reports is not trusted.** A prompt-injected body, which is
+now text an owner's issue quotes, reaches an executor as it reaches any
+`/ship`. Its result file is checked
 against `dispatch_run.py`'s schema by `result`, and a claimed merge is read
 from GitHub by `verify` before it counts; a missing or mis-shaped file is a
 crash, never a success.
@@ -1851,6 +2195,10 @@ crash, never a success.
   `state.json`. No step edits it, so an honest mistake does not reach it,
   and a session setting out to defeat the helper's checks is what *The
   guards' threat model* puts outside what the guards defend.
+- A stranger's issue still reaches the dispatcher as data: its row is added
+  and held, and the rebuild and the interview read its text. A collaborator's
+  is held like a stranger's, and under a repository an organisation owns every
+  row is, since no author is the organisation's login: the cautious side.
 
 ## Managed files
 

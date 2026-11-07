@@ -10,9 +10,9 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 # What a refusal names as the forms that keep the file's endings. `--binary` is admitted: measured under Git Bash's
 # GNU sed 4.9, `sed --binary -i` writes the CR back where a plain `-i` drops it.
@@ -359,6 +359,35 @@ def holds_crlf(path):
         return False
 
 
+def resolved(path):
+    return os.path.normcase(os.path.realpath(path))
+
+
+def inside(path, tree):
+    return path == tree or path.startswith(os.path.join(tree, ""))
+
+
+def git_on_path(cwd):
+    """git found on PATH alone, as a full path, or None.
+
+    Absolute PATH entries, nothing at or below where the session stands, and on Windows only `.exe` or `.com`:
+    `docs/harness-boundaries.md`, *The sed line-ending guard*."""
+    fenced = [resolved(tree) for tree in (os.getcwd(), cwd, os.environ.get("CLAUDE_PROJECT_DIR")) if tree]
+    names = ("git.exe", "git.com") if os.name == "nt" else ("git",)
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        directory = entry.strip('"')
+        # `Path`, not `os.path.isabs`: before Python 3.13 that calls `\tools`, which has no drive, absolute on Windows.
+        if not Path(directory).is_absolute() or any(inside(resolved(directory), tree) for tree in fenced):
+            continue
+        for name in names:
+            path = os.path.join(directory, name)
+            if not (os.path.isfile(path) and os.access(path, os.X_OK)):
+                continue
+            if not any(inside(resolved(path), tree) for tree in fenced):
+                return path
+    return None
+
+
 def tracked(path, git):
     """Whether `path` is in its checkout's index; `False` wherever git cannot say.
 
@@ -393,7 +422,7 @@ def offence(event, strips_cr=os.name == "nt"):
         return None
     cwd = event.get("cwd")
     cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
-    return judge(command, cwd, shutil.which("git"), [0], 0)
+    return judge(command, cwd, git_on_path(cwd), [0], 0)
 
 
 def judge(command, cwd, git, checked, depth):

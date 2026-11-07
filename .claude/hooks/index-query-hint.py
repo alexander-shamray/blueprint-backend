@@ -19,16 +19,16 @@ CBX = "bash .claude/skills/codebase-index/scripts/cbx"
 # table, `search` with the `--limit 3` the paragraph under it sets.
 ROUTES = (
     ("change-impact", r"\b(?:what (?:breaks|depends)|impact of)\b",
-     f'{CBX} impact "X" --json'),
+     f"{CBX} impact 'X' --json"),
     ("references", r"\b(?:who calls|what (?:calls|uses))\b",
-     f'{CBX} refs "X" --json'),
+     f"{CBX} refs 'X' --json"),
     # A sentence end stops `how does … work`; a dot inside a name does not.
     ("how-it-works", r"\bhow does (?:[^.?!]|\.[^\s.?!])* work(?:s|ing)?\b",
-     f'{CBX} explain "X" --session <tag> --json'),
+     f"{CBX} explain 'X' --session <tag> --json"),
     ("named-symbol", r"\bfind (?:the )?(?:class|method|handler)(?:es|s)?\b",
-     f'{CBX} symbol "X" --json'),
+     f"{CBX} symbol 'X' --json"),
     ("locate", r"\bwhere (?:is|are|does)\b",
-     f'{CBX} search "X" --limit 3 --session <tag> --json'),
+     f"{CBX} search 'X' --limit 3 --session <tag> --json"),
 )
 
 # The MCP tool asking each route's question; `index-search-hint.py` keeps the

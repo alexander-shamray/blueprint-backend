@@ -19,6 +19,20 @@ case " $ALLOWED " in
     ;;
 esac
 
+# The index is judged before the CLI opens it: a rollback journal or a link a
+# branch tracked under .claude/cache/codebase-index/ is refused, not replayed.
+case "$0" in
+  */* | *\\*) here=${0%[/\\]*} ;;
+  *) here=. ;;
+esac
+here=$(CDPATH= cd -- "$here" && pwd) || exit 4
+if [ ! -f "$here/gate.sh" ]; then
+  echo "cbx: no gate.sh beside cbx, so the index cannot be judged; refusing to open it" >&2
+  exit 4
+fi
+. "$here/gate.sh"
+gate_index "$here" || exit $?
+
 if command -v codebase-index >/dev/null 2>&1; then
   exec codebase-index "$@"
 elif command -v py >/dev/null 2>&1 && py -3.12 -P -c "import codebase_index" >/dev/null 2>&1; then

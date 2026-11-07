@@ -4,6 +4,7 @@ Negatives pair with positive controls; pattern cases run the scripts' own `grep 
 specification, and call-site cases may use `re`. To run it, see the testing document `docs/harness-local.md` names.
 """
 
+import importlib
 import os
 import re
 import shutil
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 SCRIPTS = Path(__file__).resolve().parent
 NEWLINE = chr(10)  # spelled this way so patch scripts cannot mangle it
@@ -20,6 +22,41 @@ BASH = shutil.which("bash")
 GREP = shutil.which("grep")
 GIT = shutil.which("git")
 JQ = shutil.which("jq")
+
+# The module a target keeps beside these suites, listed under `local`, to name its own commands to the payload's cases.
+LOCAL_COMMANDS = "local_commands"
+
+
+class Declared(NamedTuple):
+    chained: tuple  # its commands its Ship checks run before /ship pushes
+    ceilings: dict  # its split commands' runbook ceilings, in bytes
+
+
+def local_commands(name=LOCAL_COMMANDS):
+    """The target's declaration module, or None where it keeps none; a module whose own import fails is raised."""
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError as error:
+        if error.name != name:
+            raise
+        return None
+
+
+def declared(module):
+    """What `module` declares, refusing a shape that would read as something other than what it says."""
+    chained = getattr(module, "CHAINED_BEFORE_A_PUSH", ())
+    ceilings = getattr(module, "CEILINGS", {})
+    if not isinstance(chained, (tuple, list)) or not all(
+            isinstance(name, str) and name.endswith(".md") for name in chained):
+        raise TypeError(f"CHAINED_BEFORE_A_PUSH must be a tuple of command file names, not {chained!r}")
+    if not isinstance(ceilings, dict) or not all(
+            isinstance(name, str) and name.endswith(".md") and type(size) is int and size > 0
+            for name, size in ceilings.items()):
+        raise TypeError(f"CEILINGS must map command file names to positive byte counts, not {ceilings!r}")
+    return Declared(tuple(chained), dict(ceilings))
+
+
+LOCAL = declared(local_commands())
 
 
 def setUpModule():

@@ -2,6 +2,7 @@
 description: Apply one code-style form corpus-wide, then record it in the style guide and .editorconfig
 argument-hint: "<the corrected form — paste the code as it should read>"
 allowed-tools: Read, Grep, Glob, Edit, Bash(git diff:*), Bash(wc:*), Bash(ls:*)
+disallowed-tools: Bash(git push:*)
 ---
 
 A corrected code form has been given:
@@ -27,9 +28,13 @@ whole corpus and it is the user's.
 
 ## 2. Sweep the corpus
 
-The named site is one of many. Find the rest across every fenced block in
-the product specification `docs/harness-local.md` *Documents* names — and
-the source too, because one dialect governs both.
+The named site is one of many. Find the rest across every fenced block under
+`docs/`, the product specification among them, except the closed records
+`docs/harness-local.md` *Documents* names and the paths
+`.harness/manifest.json` manages, which a target's pass does not edit — and the
+source too, because one dialect governs all of it. A rule applied to the source
+and not to the samples leaves the samples teaching the form the pass just
+removed.
 
 Grep gets you candidates; reading them gets you the shape. Anything structural
 — bracket depth, chain heads, continuation columns, raw-string boundaries —
@@ -41,9 +46,7 @@ script this command can run unattended.
 **This command holds no interpreter grant, and the absence is deliberate.**
 `Bash(python:*)` would be a prefix grant on a general-purpose interpreter:
 `python -c "<anything>"` would be auto-approved, and one `open(…,'w')`
-reaches every path the `Edit(…)` denies cover — `.claude/scripts/**`,
-`.claude/commands/**`, `.claude/agents/**`, `.claude/hooks/**`,
-`.claude/settings.json`, `.claude/settings.local.json` and `.remember/**` —
+reaches every path the `Edit(…)` denies in `.claude/settings.json` cover,
 while one `subprocess.run` reaches every `git push --force` and `git switch -fC`
 the deny list and the `git-*.sh` helpers exist to keep out. A rule that
 matches `python -c` cannot see what the interpreter then does, so the whole
@@ -84,8 +87,11 @@ guide is the master copy.** If the form you corrected is one of the ones it
 names, the change has to reach both in this pass — a rule in two places that
 moves in one of them is the drift the split was accepted in order to buy.
 
-Update any count the change invalidates. Where the style guide cites site
-counts as evidence, a stale one is a defect.
+Where the change contract `docs/harness-local.md` *Documents* names forbids a
+document stating a number of sites in the present tense, remove a site count
+you find and write none: a count belongs in the commit or PR body, as a
+measurement taken at a named commit. Where it does not, update any count the
+change invalidates; a stale one is a defect.
 
 ## 4. Reconcile `.editorconfig`
 
@@ -109,13 +115,14 @@ no formatter reads: it gets no section of its own, and the style guide says so.
 ## 5. Verify
 
 Re-scan for the invariants the corpus holds. Each is a regression a pass can
-introduce:
+introduce. Take the limits from the style guide and `.editorconfig`, never from
+this file: the width, the indent unit and the line ending are the target's.
 
-- no line over 120 columns inside a code fence
+- no line over the guide's width inside a code fence
 - no leading `&&`, `||`, `??` or `=>` on a continuation line
-- every continuation indent a multiple of four
+- every continuation indent a multiple of the guide's indent unit
 - no ragged list — one line, or one element per line
-- fences balanced, CRLF intact, no trailing whitespace
+- fences balanced, the target's line ending intact, no trailing whitespace
 
 ## Report
 

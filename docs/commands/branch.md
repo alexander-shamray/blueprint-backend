@@ -333,5 +333,8 @@ remove` once the PR has landed.
 
 **A derived name is a guess, so show your work.** State that no description was
 passed, give the one-line reading of the diff the name came from, and say the
-name is still free to change: no upstream exists until `/pr` pushes, so
-`git branch -m <better-name>` costs nothing until then.
+name can still change until `/pr` pushes, since nothing refers to it yet.
+`git branch -m` is denied in the settings, so the change is a second branch at
+the same commit, `bash .claude/scripts/git-branch-create.sh <better-name>
+HEAD`; the first name stays in `git branch`, to be named in the report rather
+than deleted.

@@ -241,19 +241,17 @@ class SyncLaunch(Bound):
 
 class RunningASync(Bound):
 
-    def test_a_sync_group_takes_no_description(self):
+    def test_a_sync_group_reads_no_task_text(self):
         self.sync_launch()
-        self.assertIn(f"refused: {GID} is a sync, which takes no --description", self.run_group("--description", "x"))
-        self.assertIn("refused", (state_dir() / f"{GID}.refused.json").read_text(encoding="utf-8"))
         self.assertEqual("", self.run_group())
         seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
         self.assertEqual(dr.sync_prompt(PR, RUN), seen["stdin"])
         self.assertEqual(os.path.realpath(WORKTREE), os.path.realpath(seen["cwd"]))
         self.assertEqual("sonnet", seen["argv"][seen["argv"].index("--model") + 1])
 
-    def test_a_group_with_rows_still_needs_its_description(self):
+    def test_a_group_with_rows_still_needs_its_task_text(self):
         record(RUN, "S1", status="running")
-        self.assertIn("refused: S1 needs --description", self.run_group(gid="S1"))
+        self.assertIn("refused: could not read S1's task text", self.run_group(gid="S1"))
 
     def test_a_relaunch_runs_only_on_the_head_it_was_bound_to(self):
         # The executor takes <oid> from HEAD, so a tree a crash left elsewhere would be a head nobody proved.
@@ -626,7 +624,7 @@ class Runbook(unittest.TestCase):
                         loop.index("sync-launch <run> <n> --branch <head> --worktree .claude/worktrees/sync-<sha7> "
                                    "--oid <oid>"))
         self.assertLess(loop.index("sync-launch"), loop.index("dispatch_board.py wake <run>"))
-        self.assertIn("run <run> sync-<n> with no --description", loop)
+        self.assertIn("run <run> sync-<n>, the same on a relaunch", loop)
         # A handed-back sync leaves both, and the helper refuses both.
         self.assertIn("Skip the helper where that worktree already exists on that branch", loop)
 
