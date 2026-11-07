@@ -2,6 +2,7 @@
 description: Append an architecture decision record as its own file under adr/, with its row in Appendix A
 argument-hint: "<short title>  e.g. Cursor pagination for list endpoints"
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash(ls:*)
+disallowed-tools: Bash(git push origin:*), Bash(git push -u origin:*)
 ---
 
 Add an ADR titled `$ARGUMENTS`: one new file under
