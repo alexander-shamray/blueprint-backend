@@ -1,20 +1,14 @@
 """This repository's own split commands and its `CLAUDE.md`, held to the payload's runbook ceilings.
 
-`test_command_runbooks.py` holds the payload's runbooks; these cases hold the local ones, whose ceilings are measured
-here. The payload's argument glob reads `docs/commands/`, so each local argument is checked for its runbook there.
+`test_command_runbooks.py` holds the payload's runbooks; these cases hold the local ones, at `local_commands.py`'s
+ceilings. The payload's argument glob reads `docs/commands/`, so each local argument is checked for its runbook there.
 """
 
 import unittest
 
 from review_helpers import COMMANDS
+from local_commands import CEILINGS
 from test_command_runbooks import ARGUMENTS, ROOT, collapsed
-
-# Bytes with CRLF counted as LF, each landed size and about a tenth, as the payload's are.
-CEILINGS = {
-    "mutation-sweep.md": 7700,
-    "validate-blueprint.md": 9900,
-    "review-branch.md": 8400,
-}
 
 RESIDENT = {
     "CLAUDE.md": 9000,

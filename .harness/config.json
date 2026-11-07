@@ -15,6 +15,7 @@
     ".claude/commands/review-branch.md",
     ".claude/commands/validate-blueprint.md",
     ".claude/scripts/dotnet-test.sh",
+    ".claude/scripts/local_commands.py",
     ".claude/scripts/mutation-run.sh",
     ".claude/scripts/mutation_survivors.py",
     ".claude/scripts/stryker-config.json",
