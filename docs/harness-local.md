@@ -39,6 +39,13 @@ Selected by the class the PR body will carry (`docs/change-locality.md`
 A Class A runbook edit runs neither, and its PR body says so rather than
 claiming a run.
 
+`/new-adr` and `/new-chapter` are not checks, and step 2 runs neither. A
+`/ship` turn runs them before its push when the change records a decision or
+adds a chapter, and a frontmatter deny holds for the rest of the turn
+(`docs/harness-boundaries.md`, *Sweep push denies and chained commands*), so
+neither may deny push; `.claude/scripts/local_commands.py` declares them
+beside the two checks above.
+
 The required checks, which `/ship` step 6's wait holds the list to, as the
 `main` ruleset requires them: `changes`, `build`, `closure-gate`,
 `locality-gate`, `commits` and `commit-gate`.

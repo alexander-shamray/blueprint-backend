@@ -2,7 +2,6 @@
 description: Scaffold a blueprint chapter and rewire the index and neighbouring footers
 argument-hint: "<number> <title>  e.g. 16 Data migration"
 allowed-tools: Read, Grep, Glob, Write, Edit, Bash(ls:*)
-disallowed-tools: Bash(git push origin:*), Bash(git push -u origin:*)
 ---
 
 Add a chapter to `docs/backend-architecture/` from `$ARGUMENTS`: its first word
