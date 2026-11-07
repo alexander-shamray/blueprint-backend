@@ -470,15 +470,20 @@ def first(asked: Path) -> bool:
     return True
 
 
+def single(term: str) -> str:
+    """`term` in single quotes, so bash expands nothing in it."""
+    return "'" + term.replace("'", "'\\''") + "'"
+
+
 def ask(found: list[str], worktree: bool) -> str:
     """The refusal's reason: one route to the index, the one that answers
     from this tree, because the MCP server serves the checkout it started in."""
     named = ", ".join(f"`{name}`" for name in found)
     if worktree:
-        runs = ", ".join(f'`{CBX} refs "{name}" --json`' for name in found)
+        runs = ", ".join(f"`{CBX} refs {single(name)} --json`" for name in found)
         route = (f"load the codebase-index skill, whose grant the CLI runs under, then run from the "
                  f"worktree's root {runs}, adding `--kind callers` for call sites only, and "
-                 f"`{CBX} symbol \"{found[0]}\" --json` for where it is defined, each alone on its line, "
+                 f"`{CBX} symbol {single(found[0])} --json` for where it is defined, each alone on its line, "
                  "with no pipe, `;` or `&&`, which the index guard refuses; the CLI reads this worktree's "
                  "own index")
     else:

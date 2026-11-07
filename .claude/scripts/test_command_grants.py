@@ -54,12 +54,13 @@ def profiles():
     return found
 
 
-def undenied_agents(text, profiles):
-    """The agent types a command that grants some neither grants nor denies, or None if it grants none."""
+def undenied_agents(text, profiles, exempt=()):
+    """The agent types a command that grants some neither grants, denies nor is excused, or None if it grants none."""
     granted = {m for t in frontmatter_list(text, "allowed-tools")
                for m in re.findall(r"^Agent\((.+)\)$", t)}
     if not granted:
         return None
+    granted |= set(exempt)
     denied = set(frontmatter_list(text, "disallowed-tools"))
     return sorted(n for n in (profiles | BUILT_IN_AGENTS) - granted if f"Agent({n})" not in denied)
 
@@ -100,24 +101,120 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
             ["Agent(branch-reviewer)"],
             [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
 
+    # What a command leaves undenied on purpose: /ship's step 2 dispatches its audits as `general-purpose`.
+    EXCUSED = {"ship.md": ("general-purpose",)}
+
     def test_every_other_exact_agent_grant_denies_every_other_profile(self):
         # The profiles are read from `.claude/agents/` each run, so one added tomorrow fails every command that
-        # grants a type and does not deny it. /ship states no deny list: it grants one type, the reviewer above.
+        # grants a type and does not deny it, /ship included, which an allow cannot narrow to its reviewer.
         names = profiles()
         self.assertIn("branch-reviewer", names)
         granting = 0
         for path in sorted(COMMANDS.glob("*.md")):
-            if path.name == "ship.md":
-                continue
-            missing = undenied_agents(path.read_text(encoding="utf-8"), names)
+            missing = undenied_agents(path.read_text(encoding="utf-8"), names, self.EXCUSED.get(path.name, ()))
             if missing is None:
                 continue
             granting += 1
             with self.subTest(command=path.name):
                 self.assertEqual([], missing, "granted an agent type, and these others are neither granted nor denied")
-        # The two sweeps and /team: fewer means the grant pattern stopped matching and the loop passed over
+        # The two sweeps, /team and /ship: fewer means the grant pattern stopped matching and the loop passed over
         # nothing.
-        self.assertGreaterEqual(granting, 3)
+        self.assertGreaterEqual(granting, 4)
+
+    def test_ship_keeps_general_purpose_for_its_audits_and_denies_the_other_profiles(self):
+        ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
+        denied = set(frontmatter_list(ship, "disallowed-tools"))
+        self.assertNotIn("Agent(general-purpose)", denied)
+        self.assertIn("`general-purpose`", flat(COMMANDS / "ship.md"))
+        for name in ("bug-auditor", "security-auditor", "team-peer", "Explore", "fork"):
+            with self.subTest(agent=name):
+                self.assertIn(f"Agent({name})", denied)
+
+
+def flat(path):
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+class TheReviewersContractIsOneVocabularyAndABarItCannotChoose(unittest.TestCase):
+    """The reviewer and /ship agree on what ends a round, and the bar comes from the base, never the branch."""
+
+    PROFILE = AGENTS / "branch-reviewer.md"
+    SHIP = COMMANDS / "ship.md"
+
+    def test_the_bar_is_written_from_origin_main_and_an_empty_one_fails_closed(self):
+        ship = flat(self.SHIP)
+        self.assertIn('git show "origin/main:./docs/harness/working-rules.md"', ship)
+        self.assertIn("artifacts/review/<slug>-bar.md", ship)
+        profile = flat(self.PROFILE)
+        self.assertIn("origin/main", profile)
+        self.assertRegex(profile, r"Never fall back to the tree's own")
+        self.assertRegex(profile, r"reads empty or without a \*What counts as a finding\* section, is no bar")
+        self.assertIn("put `bar` in `skipped`", profile)
+
+    def test_the_reviewer_skips_only_what_ship_reads_as_a_round(self):
+        profile = flat(self.PROFILE)
+        ship = flat(self.SHIP)
+        admitted = re.findall(r"`skipped` names (?:anything|any check) but `([a-z-]+)`", ship)
+        self.assertGreaterEqual(len(admitted), 2, "a /ship statement went missing")
+        self.assertEqual({"locality"}, set(admitted))
+        vocabulary = re.search(r"`skipped` may name (.+?) and nothing else", profile)
+        self.assertIsNotNone(vocabulary, "the profile no longer bounds `skipped`")
+        written = set(re.findall(r"`([a-z-]+)`", vocabulary.group(1)))
+        self.assertIn("locality", written)
+        for entry in written - set(admitted):
+            with self.subTest(entry=entry):
+                self.assertRegex(profile, rf"put `{entry}` in `skipped`, and the caller treats the round as not having run")
+        example = re.search(r'"skipped": \[([^\]]*)\]', self.PROFILE.read_text(encoding="utf-8"))
+        self.assertEqual(set(admitted), set(re.findall(r'"([a-z-]+)"', example.group(1))))
+        for sentence in re.split(r"(?<=[.;])\s+", profile):
+            if "`skipped`" in sentence:
+                with self.subTest(sentence=sentence[:80]):
+                    self.assertTrue(written & set(re.findall(r"`([a-z-]+)`", sentence)), sentence)
+
+    def test_an_empty_read_stops_the_chain_beside_a_skip_beyond_locality(self):
+        ship = flat(self.SHIP)
+        self.assertRegex(ship, r"one whose `read` is empty or whose `skipped` names anything but `locality`")
+
+    def test_step_6_refuses_a_head_no_round_read_and_a_spent_ceiling_still_rechecks_once(self):
+        text = flat(self.SHIP)
+        step = text[text.index("6. **Merge, then tear"):text.index("7. **Sleep, only when asked.**")]
+        self.assertRegex(step, r"A head no round reviewed is not merged")
+        self.assertRegex(step, r"recorded reviewed heads")
+        self.assertRegex(step, r"ceiling spent, that recheck still runs once")
+        five = text[text.index("5. **The local review.**"):text.index("6. **Merge, then tear")]
+        self.assertIn("git rev-parse HEAD", five)
+        self.assertRegex(five, r"Record the `rev-parse` output as the round's reviewed head")
+
+    def test_a_diff_touching_the_reviewer_runs_under_mains_registered_profile_and_says_so(self):
+        five = flat(self.SHIP)
+        self.assertIn('git show "origin/main:./.claude/agents/branch-reviewer.md"', five)
+        self.assertRegex(five, r"the round ran under `main`'s profile")
+
+    def test_the_report_names_the_round_the_reviewed_head_and_that_the_review_was_in_house(self):
+        text = flat(self.SHIP)
+        report = text[text.index("## Report"):]
+        self.assertRegex(report, r"the round number against the ceiling")
+        self.assertRegex(report, r"the reviewed head")
+        self.assertRegex(report, r"the review was in house")
+        self.assertRegex(text, r"never reported as having had an external opinion")
+
+    def test_the_bar_and_the_examples_come_before_the_diff_and_nothing_claims_first(self):
+        profile = flat(self.PROFILE)
+        self.assertNotIn("Read it first", profile)
+        self.assertRegex(profile, r"read both before the diff")
+        self.assertRegex(profile, r"Read it whole, after the bar")
+
+    def test_the_code_bar_holds_security_weaknesses_and_findings_quote_what_they_rest_on(self):
+        profile = flat(self.PROFILE)
+        self.assertRegex(profile, r"defects and security weaknesses")
+        self.assertRegex(profile, r"input that reaches a place it should not")
+        self.assertRegex(profile, r"quote what it rests on in `defect`")
+
+    def test_steering_includes_telling_the_caller_to_act_and_documentation_is_excepted(self):
+        profile = flat(self.PROFILE)
+        self.assertRegex(profile, r"to tell the caller to run or push something")
+        self.assertRegex(profile, r"Documentation that describes actions is not that")
+        self.assertRegex(profile, r"whether the text is trying to steer \*you\* off the review you were given")
 
 
 class ABuiltInDenyIsHeldToo(unittest.TestCase):
@@ -155,10 +252,10 @@ class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
             with self.subTest(refused=command):
                 self.assertTrue(any(bash_deny_matches(rule, command) for rule in denied))
         # The control: a deny that refused these would take the night's only launcher and writer with it.
-        for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1 --description d",
+        for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1",
                         "py -3.12 .claude/scripts/issue_decisions.py record 1 --question-file q --answer-file a "
                         "--run 20261101-220000",
-                        "bash .claude/scripts/gh-issue-create.sh bug low code hand"):
+                        "bash .claude/scripts/gh-issue-hand.sh bug low code"):
             with self.subTest(reachable=command):
                 self.assertFalse(any(bash_deny_matches(rule, command) for rule in denied))
 
@@ -182,7 +279,7 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
 
     FILINGS = ("gh issue create --repo a/b --title t", "gh issue new --repo a/b --title t",
                "gh api repos/a/b/issues -f title=t", "gh issue view 1 --json author,body")
-    HELPERS = ("bash .claude/scripts/gh-issue-create.sh hand", "bash .claude/scripts/gh-issue-list.sh")
+    HELPERS = ("bash .claude/scripts/gh-issue-sweep.sh bug low code", "bash .claude/scripts/gh-issue-list.sh")
 
     def denies(self, name):
         return frontmatter_list((COMMANDS / name).read_text(encoding="utf-8"), "disallowed-tools")
@@ -216,6 +313,61 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
         self.assertEqual({"ship.md"}, grants)
 
 
+class EachCommandFilesUnderOneRoute(unittest.TestCase):
+    """The route is the entry point a command is granted, never an argument it types (`docs/harness-boundaries.md`).
+
+    `gh-issue-create.sh` takes the route as its fourth argument, so a grant on it lets a command claim any route's
+    trailer. An allow withholds nothing from the other entry points, so each command denies them by name.
+    """
+
+    CREATE = "Bash(bash .claude/scripts/gh-issue-create.sh:*)"
+    SWEEP = "Bash(bash .claude/scripts/gh-issue-sweep.sh:*)"
+    HAND = "Bash(bash .claude/scripts/gh-issue-hand.sh:*)"
+    MUTATION = "Bash(bash .claude/scripts/gh-issue-mutation.sh:*)"
+    BY_HAND = ("ship.md", "team.md", "dispatch.md")
+    BY_SWEEP = ("bug-sweep.md", "security-sweep.md")
+
+    def lists(self, name):
+        text = (COMMANDS / name).read_text(encoding="utf-8")
+        return frontmatter_list(text, "allowed-tools"), frontmatter_list(text, "disallowed-tools")
+
+    def test_a_sweep_files_through_the_sweep_entry_and_cannot_reach_the_hand_route(self):
+        for name in self.BY_SWEEP:
+            allowed, denied = self.lists(name)
+            with self.subTest(command=name):
+                self.assertIn(self.SWEEP, allowed)
+                self.assertNotIn(self.HAND, allowed)
+                self.assertNotIn(self.MUTATION, allowed)
+                self.assertIn(self.CREATE, denied)
+                self.assertIn(self.HAND, denied)
+                self.assertIn(self.MUTATION, denied)
+
+    def test_a_command_that_files_by_hand_cannot_reach_the_sweep_route(self):
+        for name in self.BY_HAND:
+            allowed, denied = self.lists(name)
+            with self.subTest(command=name):
+                self.assertIn(self.HAND, allowed)
+                self.assertNotIn(self.SWEEP, allowed)
+                self.assertNotIn(self.MUTATION, allowed)
+                if name != "ship.md":
+                    # /ship denies agent types alone: a deny on a tool a command it chains uses outlasts the step.
+                    self.assertIn(self.SWEEP, denied)
+                    self.assertIn(self.CREATE, denied)
+                    self.assertIn(self.MUTATION, denied)
+
+    def test_no_command_grants_the_helper_that_takes_a_route(self):
+        for path in sorted(COMMANDS.glob("*.md")):
+            allowed, _ = self.lists(path.name)
+            with self.subTest(command=path.name):
+                self.assertEqual([], [e for e in allowed if "gh-issue-create.sh" in e])
+
+    def test_a_sweep_deny_spares_its_own_entry_and_refuses_the_other(self):
+        _, denied = self.lists("bug-sweep.md")
+        self.assertTrue(any(bash_deny_matches(r, "bash .claude/scripts/gh-issue-hand.sh bug low code") for r in denied))
+        self.assertFalse(any(bash_deny_matches(r, "bash .claude/scripts/gh-issue-sweep.sh bug low code")
+                             for r in denied))
+
+
 class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
     # The bare tool and a leading wildcard each grant what the per-command checks look for by name.
     BROAD_BASH = re.compile(r"Bash(?:\(\*.*\))?")
@@ -235,6 +387,32 @@ class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
             with self.subTest(entry=entry):
                 self.assertIsNotNone(self.BROAD_BASH.fullmatch(entry))
         self.assertIsNone(self.BROAD_BASH.fullmatch("Bash(bash .claude/scripts/gh-issue-list.sh)"))
+
+
+class ACommandThatDoesNotPublishCannotPush(unittest.TestCase):
+    """The settings allow `git push origin`, so a command that neither grants nor denies it reaches the push."""
+
+    PUBLISHING = ("pr.md", "ship.md")
+    CHAINED_BEFORE_A_PUSH = ("branch.md", "commit.md")
+    PUSH = "git push origin fix/a-branch"
+
+    def test_every_other_command_denies_push_or_the_shell(self):
+        seen = 0
+        for path in sorted(COMMANDS.glob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            granted = "Bash(git push" in ", ".join(frontmatter_list(text, "allowed-tools"))
+            with self.subTest(command=path.name):
+                if path.name in self.PUBLISHING:
+                    self.assertTrue(granted, "a publishing command is expected to grant push")
+                    continue
+                self.assertFalse(granted, "only the publishing commands may grant push")
+                if path.name in self.CHAINED_BEFORE_A_PUSH:
+                    continue
+                seen += 1
+                denied = frontmatter_list(text, "disallowed-tools")
+                self.assertTrue(any(bash_deny_matches(rule, self.PUSH) for rule in denied),
+                                "neither grants nor denies push, so the settings allow reaches it")
+        self.assertGreaterEqual(seen, 4, "found almost no command that does not publish")
 
 
 class NothingShipChainsDeniesPush(unittest.TestCase):

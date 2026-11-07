@@ -98,7 +98,8 @@ night before starting one.
 
 Every issue waiting on a human is asked about before the night, because
 nobody answers at night and an executor that would have asked hands back
-instead (spec §5, §7). The list of who is asked is the spec's §5;
+instead (spec §5, §7). The list of who is asked is the spec's §5 and a
+stranger's row, which this file adds below;
 `OWNER` in *Depends on* is how step 0 records it once, so the helper's
 ready test never has to judge a wait written in prose. The test looks for
 the bare word `OWNER` in the *Task* cell too, where a row filed as an
@@ -125,6 +126,18 @@ because an issue body is text anyone can write and the dispatcher acts on
 the answers. A decision that surfaces during the night goes in the report,
 never into a second interview (spec §5).
 
+A stranger's issue gets a row, so it is seen, and that row never launches:
+`docs/harness-boundaries.md`, *Headless dispatched sessions*, argues the gate.
+It is the interview's because only the owner can take the work on, and no
+answer lifts it, since an answer attaches to an issue whose author can rewrite
+it afterwards. So the owner files the work as their own, in their own words,
+and closes the original; on a `--berserk` run, which asks nothing, the row
+stays where it is and *Left in the backlog* names it. Such a row takes a group
+of its own, so it holds no owner's row back: after the `board` that first shows
+it at the rebuild, and at the night's placement, which has no `board` before
+it, for every issue but those an executor filed, since any other may be a
+stranger's.
+
 When the night starts the owner is told how to stop it, that no other
 session may write the task list, and how to watch an executor: `wake` and
 `result` print each one's transcript path, and `watch_session.py` follows
@@ -133,7 +146,9 @@ it in another terminal, so watching costs this session nothing.
 ## Ready and free
 
 A group is ready by the spec's §6.1, judged mechanically by `board` and
-`wake` from the list and the open issues. A ready group is free when no
+`wake` from the list and the open issues, and behind one gate the spec does
+not have: every row's issue is the owner's, which they read from
+`gh-issue-owned.sh`. A ready group is free when no
 running group may touch a path it may touch; the spec leaves the extraction
 to the builder as long as it errs towards exclusive, and it does: a claim
 with no paths at all overlaps everything and runs alone, and a conflicts
@@ -170,6 +185,7 @@ the line.
 | A decision the issue reserves | Handed back | Recommended option taken, named in `decisions` and the PR body |
 | A resource only the owner has, a needed edit under `.claude/` | Handed back | The same, after every part that needs neither |
 | `paused`, `tracking`, an `owed (not filed)` row | Not run | Not run |
+| An issue the repository owner did not open | Not run | Not run |
 | A date, an open issue or free text in *Depends on* | Not run | Not run: `OWNER` is dropped and the rest reads as it did |
 | A sync | First and alone | The same, and its prompt never carries the token |
 
@@ -292,6 +308,20 @@ that ran: a hand-back, the cautious side. Recording either writes
 `state.json` in the same directory, so a directory refusing every write
 still holds the slot; what this separates is a marker that only another
 process holds.
+
+## Issue text stays off the command line
+
+A group's task and a placed row's cells come from issue titles, and anyone can
+write one. On a command line that text meets a shell, which runs a backtick
+pair or a `$(…)` inside double quotes, on a line a prefix grant has already
+approved. So it reaches the helpers as files under the run, written with the
+`artifacts/dispatch/` grant: `run` reads `<g>.task.txt` and takes no text
+argument, which also keeps a relaunch's task the first launch's, and `tasks
+place` reads `place-<n>.json`. The task is written before `tasks move`, so a
+resumed night finds it wherever the dispatcher stopped. `--refused` carries
+the helper's own line, in single quotes. `guard-helper-argv.py` is the
+backstop for a session that spells any of them otherwise
+(`docs/harness-boundaries.md`, *Prefix grants and wildcard denies*).
 
 ## Sync pull requests
 
@@ -439,7 +469,7 @@ as a shell command: the only launcher is `dispatch_board.py run`, which
 passes the settings' own permission mode and never a skip flag (spec §6.2).
 Raw `gh issue edit`, `close` and `create` are denied, because the issue
 writes are `issue_decisions.py`'s, which accepts only the decision entry's
-shape, and `gh-issue-create.sh`'s.
+shape, and `gh-issue-hand.sh`'s.
 
 The git grants that write are the fork, sync worktree, removal and
 branch-drop helpers and `git pull --ff-only`. `sync_pr.py` is granted for
@@ -448,8 +478,8 @@ branch-drop helpers and `git pull --ff-only`. `sync_pr.py` is granted for
 write, which the guard hook refuses in every spelling but one the shell
 computes at run time, as `docs/harness-boundaries.md`'s *Output deny and
 shell-expansion residuals* states; the dispatcher's reads never pass it.
-`Edit(artifacts/dispatch/**)` is for the question, answer, rebuild and
-report files; it also reaches the helper-owned `state.json` and
+`Edit(artifacts/dispatch/**)` is for the question, answer, rebuild, task,
+placement and report files; it also reaches the helper-owned `state.json` and
 `tasks.read.md`, which the session never edits, a gap outside the guards'
 threat model (`docs/harness-boundaries.md`, *The guards' threat model*).
 `pr-state.sh` is not granted: `verify` reads it inside the helper. Nothing

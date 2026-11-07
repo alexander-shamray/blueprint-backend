@@ -166,6 +166,38 @@ class LabelHelperBehaviour(unittest.TestCase):
         self.assertIn("cannot list", r.stderr)
         self.assertFalse([c for c in s.calls() if "label create" in c])
 
+    def test_both_listings_ask_for_the_limit_they_refuse_at(self):
+        s = self.stub(before=[], after=["low"], create_fails=True)
+        self.assertEqual(0, s.run("low").returncode)
+        listed = [c for c in s.calls() if "label list" in c]
+        self.assertEqual(2, len(listed))
+        for call in listed:
+            self.assertIn("--limit 1000", call)
+
+    def test_a_listing_that_fills_the_page_is_refused(self):
+        # gh's default is 30 rows, so a label past the page reads as absent; a listing of exactly the limit may be
+        # a prefix, so it is refused rather than read as the whole set.
+        full = [f"match-{n}" for n in range(1000)]
+        s = self.stub(before=full)
+        r = s.run("low")
+        self.assertEqual(3, r.returncode, r.stderr)
+        self.assertIn("truncated", r.stderr)
+        self.assertFalse([c for c in s.calls() if "label create" in c])
+
+    def test_one_row_short_of_the_page_is_an_answer(self):
+        # Without this the detector could refuse every listing and still pass.
+        s = self.stub(before=[f"match-{n}" for n in range(999)])
+        r = s.run("low")
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertTrue([c for c in s.calls() if "label create" in c])
+
+    def test_the_listing_after_a_failed_create_is_bounded_too(self):
+        # The re-read decides between a lost race and a real failure, so a prefix there is as wrong as at the first.
+        s = self.stub(before=[], after=[f"match-{n}" for n in range(999)] + ["low"], create_fails=True)
+        r = s.run("low")
+        self.assertEqual(3, r.returncode, r.stderr)
+        self.assertNotIn("concurrently", r.stdout)
+
     def test_every_label_in_the_vocabulary_can_actually_be_created(self):
         # The class below asserts the names appear in the case; this asserts
         # each one reaches `gh` with its own colour, so a mistyped branch cannot

@@ -163,4 +163,6 @@ now inside it** (own line; in place says why), and any dirty files carried.
 **Nothing here removes a worktree**: keeping or removing it after the PR
 lands is the user's call (`git worktree remove`). **A derived name is a
 guess, so show your work**: say no description was passed, give the diff
-reading, and that `git branch -m <better-name>` is free until `/pr` pushes.
+reading, and that the name can change until `/pr` pushes, by a second branch
+at the same commit, `bash .claude/scripts/git-branch-create.sh <better-name>
+HEAD`; name the first branch in the report rather than deleting it.

@@ -43,7 +43,20 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 # grep -x afterwards: searching for `low` also returns `slow` if one ever
 # exists, and a helper that concluded "already there" from a near miss would
 # leave the sweep filing against a label that does not exist.
-existing=$(gh label list --repo "$repo" --search "$label" --json name --jq '.[].name') ||
+
+# Each listing is bounded with --limit, and one of exactly the limit may be a
+# prefix, so it is refused: gh's default 30 rows read as the whole set would
+# take an existing label for absent.
+LABEL_LIMIT=1000
+labels_matching() {
+  local out
+  out=$(gh label list --repo "$repo" --search "$label" --limit "$LABEL_LIMIT" \
+          --json name --jq '.[].name') || return 1
+  [ "$(grep -c . <<<"$out" || true)" -lt "$LABEL_LIMIT" ] ||
+    { echo "the listing for $label in $repo holds $LABEL_LIMIT rows, so it may be truncated" >&2; exit 3; }
+  printf '%s' "$out"
+}
+existing=$(labels_matching) ||
   { echo "cannot list $repo's labels" >&2; exit 3; }
 if grep -qx -- "$label" <<<"$existing"; then
   echo "label $label already exists in $repo"
@@ -59,7 +72,7 @@ if ! gh label create "$label" \
   --repo "$repo" \
   --color "$colour" \
   --description "$description"; then
-  again=$(gh label list --repo "$repo" --search "$label" --json name --jq '.[].name') ||
+  again=$(labels_matching) ||
     { echo "cannot confirm whether $label exists in $repo after a failed create" >&2; exit 3; }
   grep -qx -- "$label" <<<"$again" ||
     { echo "could not create label $label in $repo" >&2; exit 3; }
