@@ -11,6 +11,24 @@ import test_command_grants as payload
 
 class MutationSweepDeniesEveryGhCommand(payload.TheSweepsDenyEveryGhCommand):
     SWEEPS = ("mutation-sweep.md",)
+    HELPERS = ("bash .claude/scripts/gh-issue-mutation.sh low code,test", "bash .claude/scripts/gh-issue-list.sh")
+
+
+class MutationSweepFilesUnderItsOwnRoute(unittest.TestCase):
+    """The route rule `docs/harness-boundaries.md` states, over the one sweep the payload's case does not name."""
+
+    GRANT = "Bash(bash .claude/scripts/gh-issue-mutation.sh:*)"
+    OTHERS = tuple(f"Bash(bash .claude/scripts/gh-issue-{entry}.sh:*)" for entry in ("create", "sweep", "hand"))
+
+    def test_it_holds_its_entry_point_and_denies_the_others(self):
+        text = (payload.COMMANDS / "mutation-sweep.md").read_text(encoding="utf-8")
+        allowed = payload.frontmatter_list(text, "allowed-tools")
+        denied = payload.frontmatter_list(text, "disallowed-tools")
+        self.assertIn(self.GRANT, allowed)
+        for other in self.OTHERS:
+            with self.subTest(entry=other):
+                self.assertNotIn(other, allowed)
+                self.assertIn(other, denied)
 
 
 class TheLocalShipChecksDenyNoPush(unittest.TestCase):
