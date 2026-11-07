@@ -16,7 +16,7 @@ from unittest import mock
 
 import dispatch_board as db
 import dispatch_run as dr
-from test_dispatch_board import FIXTURE, NO_BRANCH, REMAINING_ROWS, line, stub, tasks_of
+from test_dispatch_board import FIXTURE, OWNED, NO_BRANCH, REMAINING_ROWS, line, stub, tasks_of
 
 # The run half: a run directory under a scratch root the test changes into, as the dispatcher runs from the
 # main checkout.
@@ -109,9 +109,14 @@ def make_worktree(path):
 
 def run_cli(argv, **sources):
     out = io.StringIO()
+    sources.setdefault("owned_source", OWNED)
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         db.main(argv, **sources)
     return out.getvalue()
+
+
+def task_text(gid="S1", text="Narrow the grants"):
+    (state_dir() / f"{gid}.task.txt").write_text(f"{text}\n", encoding="utf-8")
 
 
 def run_fake_claude(stdout=b"{}", code=0, description="Narrow the RabbitMQ read grants"):
@@ -125,7 +130,8 @@ def run_fake_claude(stdout=b"{}", code=0, description="Narrow the RabbitMQ read 
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
     with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, str((fake / "claude.py").resolve())]), \
             contextlib.redirect_stdout(io.StringIO()):
-        assert db.main(["run", RUN, "S1", "--description", description]) == 0
+        task_text("S1", description)
+        assert db.main(["run", RUN, "S1"]) == 0
     return json.loads((state_dir() / "S1.session.json").read_text(encoding="utf-8"))
 
 
@@ -451,7 +457,7 @@ class LaunchTests(InRoot):
         def refuse_stale(*paths):
             raise db.Refusal(stale)
         with mock.patch.object(dr, "_remove_stale", refuse_stale):
-            self.assertIn(f"refused: {stale}", run_cli(["run", RUN, "S1", "--description", "Narrow the grants"]))
+            self.assertIn(f"refused: {stale}", run_cli(["run", RUN, "S1"]))
         self.assertEqual(f"S1: crashed-before-launch - run refused before launch: {stale}",
                          run_cli(["result", RUN, "S1"]).splitlines()[0])
 
@@ -491,11 +497,12 @@ class LaunchTests(InRoot):
 
     def test_run_refuses_a_group_with_no_claude_or_already_handed_back(self):
         record(RUN, "S1", status="running")
+        task_text()
         with mock.patch.object(dr, "CLAUDE_COMMAND", None), mock.patch.object(dr, "path_which", lambda _: None):
-            self.assertIn("refused: no claude on PATH", run_cli(["run", RUN, "S1", "--description", "x"]))
+            self.assertIn("refused: no claude on PATH", run_cli(["run", RUN, "S1"]))
         record(RUN, "S1", status="handed-back")
         self.assertIn("refused: S1 is handed-back, not waiting for an executor",
-                      run_cli(["run", RUN, "S1", "--description", "x"]))
+                      run_cli(["run", RUN, "S1"]))
 
 
 class ResultTests(unittest.TestCase):
@@ -875,7 +882,7 @@ class ResultCommandTests(InRoot):
         err = io.StringIO()
         with mock.patch.object(dr, "_write", refuse_marker), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
-            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+            self.assertEqual(2, db.main(["run", RUN, "S1"]))
         line = err.getvalue().strip()
         self.assertTrue(line.startswith("refused: stop file") and "S1.refused.json" in line, line)
         self.assertFalse((state_dir() / "S1.refused.json").exists())
@@ -1178,7 +1185,7 @@ class BerserkTests(InRoot):
         self.assertEqual(f"/ship #S1-1682+1683 Narrow --dispatched artifacts/dispatch/{RUN} --berserk", seen["stdin"])
         entry = {"kind": "sync", "pr": 106}
         self.assertEqual(f"/ship sync #106 --dispatched artifacts/dispatch/{RUN}",
-                         dr._prompt_for("sync-106", entry, None, RUN, True))
+                         dr._prompt_for(state_dir(), "sync-106", entry, RUN, True))
 
     def test_wake_releases_a_row_only_in_a_run_that_holds_the_flag(self):
         text = tasks_of(line(depends="OWNER"))
@@ -1347,8 +1354,9 @@ class WakeTests(InRoot):
         self.assertEqual(["running: S9", "free slots: 1", "weekly: not read, no source is set", "launch: S1"],
                          [self.wake()[i] for i in (1, 3, 4, 5)])
         self.assertIn("relaunch S9", run_cli(["resume", RUN]))
+        task_text("S9")
         with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "print('{}')"]):
-            self.assertEqual("", run_cli(["run", RUN, "S9", "--description", "Resume after the week"]))
+            self.assertEqual("", run_cli(["run", RUN, "S9"]))
         self.assertTrue((state_dir() / "S9.session.json").is_file())
         self.assertIn("S9: relaunch - no result; exit 0", run_cli(["result", RUN, "S9"]))
 
@@ -1457,7 +1465,7 @@ class WakeTests(InRoot):
             raise OSError("an executor was started")
         with mock.patch.object(dr.subprocess, "Popen", popen), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+            self.assertEqual(2, db.main(["run", RUN, "S1"]))
         self.assertEqual([], launched)
         self.assertIn("refused: stop file", err.getvalue())
         self.assertFalse((state_dir() / "S1.session.json").exists())
@@ -1478,7 +1486,7 @@ class WakeTests(InRoot):
         (state_dir() / "S1.pid").write_text(f"{finished_pid()}\n", encoding="utf-8")
         (state_dir() / "STOP").write_text("", encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+            self.assertEqual(2, db.main(["run", RUN, "S1"]))
         self.assertFalse((state_dir() / "S1.pid").exists())
 
     def test_a_run_that_launches_nothing_frees_its_slot_and_its_group_goes_back(self):
@@ -1508,8 +1516,9 @@ class WakeTests(InRoot):
                 state = dr.load_state(state_dir())
                 state["groups"]["S1"]["status"] = "running"
                 dr.save_state(state_dir(), state)
+                task_text()
                 with mock.patch.object(dr, "CLAUDE_COMMAND", claude), patch:
-                    self.assertIn(f"refused: {why}", run_cli(["run", RUN, "S1", "--description", "x"]))
+                    self.assertIn(f"refused: {why}", run_cli(["run", RUN, "S1"]))
                 self.assertIn("free slots: 0", self.wake(Path("todo.md").read_text(encoding="utf-8"), pairs=1))
                 self.assertIn(f"S1: crashed-before-launch - run refused before launch: {why}",
                               run_cli(["result", RUN, "S1"]))
@@ -1859,6 +1868,103 @@ class TranscriptTests(unittest.TestCase):
                 with mock.patch.object(dr, "_created", lambda path: created[Path(path).name]):
                     self.assertEqual(str(folder / "new.jsonl"), dr.transcript_path(worktree, None, 200.0))
                     self.assertIsNone(dr.transcript_path(worktree, None, 250.0))
+
+
+class StrangersIssues(InRoot):
+    """`wake`, `launch` and `report` over a row the repository owner did not open, each through its command line."""
+
+    def wake(self, *flags, owned=frozenset()):
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(tasks_of(line(depends="OWNER" if flags else "none")))
+        run_cli(["start", "--pairs", "2", "--tasks", "todo.md", *flags])
+        name = dr.open_run(".", "todo.md")[0]
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            return run_cli(["wake", name, "--tasks", "todo.md"], body_source=lambda n: "", open_source=set,
+                           branch_source=NO_BRANCH, owned_source=lambda: owned).splitlines()
+
+    def test_wake_launches_none_of_them_and_the_owners_as_ever(self):
+        self.assertEqual("end: drained", self.wake()[-1])
+        shutil.rmtree("artifacts")
+        self.assertEqual("launch: Z1", self.wake(owned=frozenset({1700}))[-1])
+
+    def test_wake_under_berserk_launches_none_of_them(self):
+        self.assertEqual("end: drained", self.wake("--berserk")[-1])
+        shutil.rmtree("artifacts")
+        self.assertEqual("launch: Z1", self.wake("--berserk", owned=frozenset({1700}))[-1])
+
+    def test_a_failed_read_of_the_authors_launches_nothing(self):
+        def failed():
+            raise db.Refusal("gh-issue-owned.sh exited 3")
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(tasks_of(line()))
+        run_cli(["start", "--pairs", "2", "--tasks", "todo.md"])
+        name = dr.open_run(".", "todo.md")[0]
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            printed = run_cli(["wake", name, "--tasks", "todo.md"], body_source=lambda n: "", open_source=set,
+                              branch_source=NO_BRANCH, owned_source=failed)
+        self.assertIn("refused: gh-issue-owned.sh exited 3", printed)
+        self.assertNotIn("launch:", printed)
+
+    def test_launch_refuses_a_group_wake_never_named(self):
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        make_worktree(WORKTREE)
+        porcelain = f"worktree {self.root / WORKTREE}\nHEAD {HEAD}\nbranch refs/heads/{BRANCH}\n\n"
+        argv = ["launch", RUN, "S1", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE]
+        with mock.patch.object(dr, "git", lambda root, *args: porcelain):
+            refused = run_cli(argv, owned_source=lambda: frozenset({1682}))
+            self.assertIn(f"refused: S1 is not launched: {db.NOT_OWNERS}: #1683", refused)
+            self.assertNotIn("status", dr.load_state(state_dir())["groups"]["S1"])
+            self.assertEqual("", run_cli(argv, owned_source=lambda: frozenset({1682, 1683})))
+
+    def test_the_morning_report_names_what_it_left(self):
+        dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(tasks_of(line()))
+        lines = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-01"], body_source=lambda n: "",
+                        open_source=set, owned_source=frozenset).splitlines()
+        self.assertIn(f"Z1 wave 1: {db.NOT_OWNERS}: #1700", lines)
+
+
+class TaskTextIsAFile(InRoot):
+    """The helper reads what a shell would otherwise have expanded on the command line."""
+
+    def run_group(self):
+        Path("fake").mkdir(exist_ok=True)
+        (Path("fake") / "claude.py").write_text(FAKE_CLAUDE, encoding="utf-8")
+        (Path("fake") / "reply.bin").write_bytes(b"{}")
+        (Path("fake") / "code.txt").write_text("0", encoding="utf-8")
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, str(Path("fake/claude.py").resolve())]):
+            return run_cli(["run", RUN, "S1"])
+
+    def test_a_backtick_in_the_text_arrives_as_text(self):
+        make_worktree(WORKTREE)
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        task_text("S1", "Read `guard.py` and $(id)")
+        self.assertEqual("", self.run_group())
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertIn("Read `guard.py` and $(id) --dispatched", seen["stdin"])
+
+    def test_a_group_with_no_file_starts_nothing(self):
+        make_worktree(WORKTREE)
+        self.assertIn("refused: could not read S1's task text", self.run_group())
+        self.assertFalse(Path("fake/seen.json").exists())
+
+    def test_the_text_is_held_to_what_the_flag_was(self):
+        make_worktree(WORKTREE)
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        for text, why in (("two\nlines", "line break"), ("", "is empty"), ("go --berserk", "only the dispatcher")):
+            with self.subTest(text=text):
+                task_text("S1", text)
+                self.assertIn(why, self.run_group())
+
+    def test_the_flag_is_gone(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            db.main(["run", RUN, "S1", "--description", "x"])
 
 
 if __name__ == "__main__":

@@ -19,6 +19,14 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 CBX = SCRIPTS.parent / "skills" / "codebase-index" / "scripts" / "cbx"
 CBX_PS1 = CBX.with_suffix(".ps1")
+SKILL = SCRIPTS.parent / "skills" / "codebase-index"
+
+# The bare console script `codebase-index <subcommand>`, which no wrapper pins to the interpreter or holds to the
+# allow list. At the start of a line, or after a backtick or whitespace, so the path `skills/codebase-index/` and the
+# package name in prose do not match.
+UNPINNED_CLI = re.compile(
+    r"(?:^|[`\s])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
+    r"|stats|doctor|update|index|graph|mcp|clean|init|watch)\b", re.M)
 
 
 def _bash():
@@ -68,6 +76,19 @@ def _path_without_launchers(*names):
         if not hidden:
             kept.append(part)
     return os.pathsep.join(kept)
+
+
+def _ps_in_the_callers_process(subcommand, env):
+    """cbx.ps1 run as a caller runs it, with `&`, in a session that then says
+    what the script exited with and what its environment holds. Under `-File`
+    the session ends with the script, and no restore could be seen."""
+    script = str(CBX_PS1).replace("'", "''")
+    command = (f"& '{script}' {subcommand} X; "
+               'Write-Output "code=$LASTEXITCODE safe=[$env:PYTHONSAFEPATH] '
+               'auto=[$env:CBX_NO_SKILL_AUTO_UPDATE]"')
+    return subprocess.run(
+        [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        capture_output=True, text=True, encoding="utf-8", env=env)
 
 
 _PS_HIDDEN = ("python", "python3", "py", "codebase-index")
@@ -158,6 +179,9 @@ class CbxWrapper(unittest.TestCase):
             line for line in text.splitlines()
             if not line.lstrip().startswith("#"))
 
+    def test_the_bash_wrapper_runs_in_strict_mode(self):
+        self.assertRegex(self.uncommented(CBX), r"(?m)^set -euo pipefail$")
+
     def test_both_wrappers_disable_skill_auto_update(self):
         self.assertIn(
             "export CBX_NO_SKILL_AUTO_UPDATE=1", self.uncommented(CBX))
@@ -186,6 +210,17 @@ class CbxWrapper(unittest.TestCase):
         self.assertIn("-P -c", ps1)
         self.assertIn("-P -m", ps1)
 
+    def test_powershell_restores_the_variables_in_a_finally_with_one_exit_after_it(self):
+        """The text of the structure the behavioural case above runs: an
+        exit inside the `try` would skip the restore."""
+        body = self.uncommented(CBX_PS1)
+        self.assertIn("$savedSafePath = $env:PYTHONSAFEPATH", body)
+        self.assertIn("$savedAutoUpdate = $env:CBX_NO_SKILL_AUTO_UPDATE", body)
+        self.assertIn('try {\n    $env:CBX_NO_SKILL_AUTO_UPDATE = "1"', body)
+        self.assertIn("} finally {\n    $env:PYTHONSAFEPATH = $savedSafePath\n"
+                      "    $env:CBX_NO_SKILL_AUTO_UPDATE = $savedAutoUpdate", body)
+        self.assertEqual(["exit 2", "exit $code"], re.findall(r"exit \S+", body))
+
     def test_destructive_subcommands_are_refused(self):
         for sub in ("clean", "init", "watch", "graph"):
             with self.subTest(sub=sub):
@@ -206,16 +241,18 @@ class CbxWrapper(unittest.TestCase):
             }
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
-                capture_output=True, text=True, encoding="utf-8", env=env)
+                capture_output=True, text=True, encoding="utf-8", env=env, cwd=fake)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("PATH_CLI search X", out.stdout)
 
     def test_python312_fallback_when_cli_is_absent(self):
         with tempfile.TemporaryDirectory(prefix="cbx-py-") as fake:
             py = Path(fake) / "python3"
+            # A 3.12 that passes the index gate: `test_index_gate.py` holds it.
             py.write_text(
                 "#!/bin/sh\n"
-                "if [ \"$1\" = \"-P\" ]; then shift; fi\n"
+                "while [ \"$1\" = \"-P\" ] || [ \"$1\" = \"-I\" ]; do shift; done\n"
+                "case \"$1\" in *gate-index.py) exit 0 ;; esac\n"
                 "if [ \"$1\" = \"-c\" ]; then\n"
                 "  case \"$2\" in\n"
                 "    *'version_info[:2] == (3, 12)'*) exit 0 ;;\n"
@@ -238,16 +275,90 @@ class CbxWrapper(unittest.TestCase):
             self.assertIn("MODULE search X", out.stdout)
 
     def test_python_fallback_rejects_a_non_312_interpreter(self):
+        """The index gate asks for the same 3.12 first, so a 3.11 is refused
+        there, exit 4, before any fallback could take it."""
         with tempfile.TemporaryDirectory(prefix="cbx-py311-") as fake:
             py = Path(fake) / "python3"
             py.write_text(
                 "#!/bin/sh\n"
-                "if [ \"$1\" = \"-P\" ]; then shift; fi\n"
+                "while [ \"$1\" = \"-P\" ] || [ \"$1\" = \"-I\" ]; do shift; done\n"
                 "if [ \"$1\" = \"-c\" ]; then exit 1; fi\n"
+                "if [ \"$1\" = \"-m\" ]; then echo MODULE; exit 0; fi\n"
+                "exit 0\n",
+                encoding="utf-8")
+            py.chmod(py.stat().st_mode | stat.S_IEXEC)
+            env = {**os.environ, "PATH": fake}
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, encoding="utf-8", env=env)
+            self.assertEqual(4, out.returncode, out.stderr)
+            self.assertIn("no Python 3.12", out.stderr)
+            self.assertNotIn("MODULE", out.stdout)
+
+    def test_a_fallback_whose_own_probe_fails_is_not_taken(self):
+        """The gate's probe asks for 3.12 alone and the fallback's for 3.12
+        with the package, so an interpreter passing the first and failing the
+        second is judged by the fallback's own check."""
+        with tempfile.TemporaryDirectory(prefix="cbx-py-nopkg-") as fake:
+            py = Path(fake) / "python3"
+            py.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$1\" = \"-P\" ] || [ \"$1\" = \"-I\" ]; do shift; done\n"
+                "case \"$1\" in *gate-index.py) exit 0 ;; esac\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  case \"$2\" in\n"
+                "    *codebase_index*) exit 1 ;;\n"
+                "    *'version_info[:2] == (3, 12)'*) exit 0 ;;\n"
+                "  esac\n"
+                "  exit 1\n"
+                "fi\n"
                 "if [ \"$1\" = \"-m\" ]; then echo MODULE; exit 0; fi\n"
                 "exit 1\n",
                 encoding="utf-8")
             py.chmod(py.stat().st_mode | stat.S_IEXEC)
+            env = {**os.environ, "PATH": fake}
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, encoding="utf-8", env=env)
+            self.assertEqual(127, out.returncode, out.stderr)
+            self.assertIn("not on PATH", out.stderr)
+            self.assertNotIn("MODULE", out.stdout)
+
+    def test_a_fallback_on_another_version_is_not_taken_behind_a_312_gate(self):
+        """`py -3.12` lacking the package passes the gate, and a `python3` or
+        `python` holding the package is a 3.11: only that fallback's version
+        check stops it from being run."""
+        for name in ("python3", "python"):
+            with self.subTest(name):
+                self.fallback_on_another_version(name)
+
+    def fallback_on_another_version(self, name):
+        with tempfile.TemporaryDirectory(prefix="cbx-py-mixed-") as fake:
+            launcher = Path(fake) / "py"
+            launcher.write_text(
+                "#!/bin/sh\n"
+                "[ \"$1\" = \"-3.12\" ] && shift\n"
+                "while [ \"$1\" = \"-P\" ] || [ \"$1\" = \"-I\" ]; do shift; done\n"
+                "case \"$1\" in *gate-index.py) exit 0 ;; esac\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  case \"$2\" in *codebase_index*) exit 1 ;; esac\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+                encoding="utf-8")
+            older = Path(fake) / name
+            older.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$1\" = \"-P\" ] || [ \"$1\" = \"-I\" ]; do shift; done\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  case \"$2\" in *'version_info[:2] == (3, 12)'*) exit 1 ;; esac\n"
+                "  exit 0\n"
+                "fi\n"
+                "if [ \"$1\" = \"-m\" ]; then echo MODULE; exit 0; fi\n"
+                "exit 1\n",
+                encoding="utf-8")
+            for stub in (launcher, older):
+                stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
             env = {**os.environ, "PATH": fake}
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
@@ -305,6 +416,36 @@ class CbxWrapper(unittest.TestCase):
         self.assertNotIn("cbx graph", skill)
         self.assertNotIn("cbx graph", commands)
 
+    def test_skill_markdown_does_not_teach_the_unpinned_cli(self):
+        # An agent loads SKILL.md and the references. The case above reads two files for the one subcommand the
+        # wrapper refuses; a copy-pasted `codebase-index verify` in any other file would bypass the wrapper and
+        # its allow list while that case stays green. So every markdown file the skill ships is read, for any
+        # subcommand.
+        files = sorted(SKILL.rglob("*.md"))
+        self.assertGreater(len(files), 3, "found almost no skill markdown")
+        for path in files:
+            with self.subTest(path=path.relative_to(SKILL).as_posix()):
+                found = UNPINNED_CLI.search(path.read_text(encoding="utf-8"))
+                self.assertIsNone(found, f"{path.name} teaches the unpinned CLI: {found and found.group(0)!r}")
+
+    def test_the_skill_teaches_the_wrapper_instead(self):
+        # The positive control for the case above: it passes against a skill that teaches nothing at all.
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("bash .claude/skills/codebase-index/scripts/cbx search", skill)
+        self.assertIsNone(UNPINNED_CLI.search("`bash .claude/skills/codebase-index/scripts/cbx search \"X\"`"))
+
+    def test_the_scan_sees_each_way_the_unpinned_cli_is_spelled(self):
+        # The scan's subject is the scan: a pattern that matched nothing would pass every file above.
+        for text in ("codebase-index verify --json", "Run `codebase-index search X`", "| `codebase-index impact X` |",
+                     "x codebase-index  graph", "$ codebase-index doctor", "codebase-index mcp",
+                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch"):
+            with self.subTest(text=text):
+                self.assertIsNotNone(UNPINNED_CLI.search(text))
+        for text in ("the `codebase-index` package", "pip install codebase-index", "skills/codebase-index/scripts/cbx",
+                     "codebase-index is a package"):
+            with self.subTest(text=text):
+                self.assertIsNone(UNPINNED_CLI.search(text))
+
     def test_powershell_refuses_destructive_subcommands(self):
         for sub in ("clean", "init", "watch", "graph"):
             with self.subTest(sub=sub):
@@ -332,6 +473,42 @@ class CbxWrapper(unittest.TestCase):
             self.assertIn("PATH_CLI", out.stdout)
             self.assertIn("search", out.stdout)
             self.assertIn("X", out.stdout)
+
+    def test_powershell_puts_both_variables_back_whichever_way_it_leaves(self):
+        """The script sets them for what it starts, in the process that
+        called it, and would leave them set for every later `python` or
+        `codebase-index` that session starts: `PYTHONSAFEPATH` takes the
+        script's directory off `sys.path` for all of them."""
+        def path_cli(fake):
+            if os.name == "nt":
+                stub = Path(fake) / "codebase-index.cmd"
+                stub.write_text("@echo off\r\necho PATH_CLI %*\r\n", encoding="utf-8")
+            else:
+                stub = Path(fake) / "codebase-index"
+                stub.write_text("#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
+                stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            return fake + os.pathsep + os.environ.get("PATH", ""), 0, "PATH_CLI"
+
+        def module(fake):
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
+            return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 0, "MODULE"
+
+        def nothing(fake):
+            return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 127, ""
+
+        ours = {name: value for name, value in os.environ.items()
+                if name not in ("PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE")}
+        for route in (path_cli, module, nothing):
+            for held in ({}, {"PYTHONSAFEPATH": "kept", "CBX_NO_SKILL_AUTO_UPDATE": "mine"}):
+                with self.subTest(route=route.__name__, held=held), \
+                        tempfile.TemporaryDirectory(prefix="cbx-ps-env-") as fake:
+                    path, code, said = route(fake)
+                    out = _ps_in_the_callers_process("search", {**ours, **held, "PATH": path})
+                    self.assertIn(f"code={code} ", out.stdout, out.stdout + out.stderr)
+                    self.assertIn(said, out.stdout, out.stdout + out.stderr)
+                    self.assertIn(
+                        f"safe=[{held.get('PYTHONSAFEPATH', '')}] auto=[{held.get('CBX_NO_SKILL_AUTO_UPDATE', '')}]",
+                        out.stdout)
 
     def test_powershell_py_fallback_when_cli_is_absent(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-py-") as fake:

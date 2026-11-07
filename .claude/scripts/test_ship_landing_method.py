@@ -270,6 +270,14 @@ class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
         self.assertTrue(any("baseRefName main" in w for w in windows),
                         "a stacked pull request merged elsewhere would read as landed")
 
+    def test_the_teardown_reads_mains_ahead_state_before_the_pull(self):
+        # After ExitWorktree nothing else has read main, and the pull's guard is a read of that state.
+        fenced = fenced_lines(SHIP)
+        prune = fenced.index("git worktree prune                      # registrations whose directories are gone")
+        pull = next(i for i, ln in enumerate(fenced) if i > prune and ln.startswith("git pull --ff-only"))
+        reads = [ln.split("#")[0].strip() for ln in fenced[prune:pull]]
+        self.assertIn("git status -sb", reads)
+
     def test_no_retired_content_read_is_performed_anywhere(self):
         for line in fenced_lines(SHIP):
             for retired in RETIRED_READS:

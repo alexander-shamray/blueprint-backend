@@ -36,7 +36,34 @@ repo=$(gh_read repo view --json nameWithOwner --jq .nameWithOwner) ||
 # pull request precisely when its owner cannot be established.
 [ -n "$repo" ] ||
   { echo "this checkout's repository resolved to nothing" >&2; exit 2; }
-gh_read pr list --state all --head "$branch" --json number,state,url,headRepository,headRefOid,baseRefName |
-  jq --arg repo "$repo" \
-    '[ .[] | select((.headRepository.nameWithOwner // "") == $repo)
-       | {number, state, url, headRefOid, baseRefName} ]'
+# The listing is bounded where the field set was not: gh's default page is 30
+# rows, cut before the filter below. A response of exactly the limit may be a
+# prefix, so it is refused rather than returned.
+limit=1000
+rows=$(gh_read pr list --state all --head "$branch" --limit "$limit" \
+         --json number,state,url,headRepository,headRefOid,baseRefName,mergeCommit)
+count=$(jq length <<<"$rows" | tr -d '\r') || count=""
+[[ "$count" =~ ^[0-9]+$ ]] ||
+  { echo "the listing for $branch did not arrive as a JSON array" >&2; exit 3; }
+[ "$count" -lt "$limit" ] ||
+  { echo "the listing for $branch holds $limit rows, so it may be truncated" >&2; exit 4; }
+# Only pull requests into main are this chain's: every one it opens targets main.
+mine=$(jq --arg repo "$repo" \
+  '[ .[] | select((.headRepository.nameWithOwner // "") == $repo)
+         | select(.baseRefName == "main") ]' <<<"$rows")
+# A MERGED row whose merge commit the local branch carries is an earlier
+# incarnation of a reused name, and goes. Without that branch or commit locally
+# the row stays: stopping is the answer when the drop cannot be shown.
+dropped=""
+tip=$(git rev-parse --verify --quiet "refs/heads/$branch" || true)
+if [ -n "$tip" ]; then
+  while IFS=$'\t' read -r number oid; do
+    oid="${oid%$'\r'}"
+    [ -z "$oid" ] || ! git merge-base --is-ancestor "$oid" "$tip" 2>/dev/null ||
+      dropped="$dropped${number%$'\r'},"
+  done < <(jq -r '.[] | select(.state == "MERGED")
+                  | [.number, (.mergeCommit.oid // "")] | @tsv' <<<"$mine")
+fi
+jq --argjson dropped "[${dropped%,}]" \
+  '[ .[] | select(.number as $n | $dropped | index($n) | not)
+         | {number, state, url, headRefOid, baseRefName} ]' <<<"$mine"

@@ -12,6 +12,9 @@ The wrappers need the `codebase-index` package on the interpreter
 `.harness/agent-rules.md`, *Hard rules*, pins
 (`py -3.12 -m pip install codebase-index`).
 If they exit 127, the index is unavailable this session; use Grep/Glob.
+`cbx` exits 3 when the index is one the refresh hook would refuse to open,
+and 4 when no Python 3.12 can judge it; use Grep/Glob then too, and report
+the exit 3 message, which names what a branch tracked under the cache.
 
 The operating principle is **Find → Trace → Verify → Predict**:
 
@@ -32,16 +35,21 @@ named `codebase-index`; do not invoke that console script directly.
 
 | Intent | Command |
 |---|---|
-| Where is X implemented? | `bash .claude/skills/codebase-index/scripts/cbx search "X" --session <tag> --json` |
-| How does X work? | `bash .claude/skills/codebase-index/scripts/cbx explain "X" --session <tag> --json` |
+| Where is X implemented? | `bash .claude/skills/codebase-index/scripts/cbx search 'X' --session <tag> --json` |
+| How does X work? | `bash .claude/skills/codebase-index/scripts/cbx explain 'X' --session <tag> --json` |
 | What is this codebase? | `bash .claude/skills/codebase-index/scripts/cbx architecture --json` |
-| Find a named symbol | `bash .claude/skills/codebase-index/scripts/cbx symbol "X" --json` |
-| Who calls or references X? | `bash .claude/skills/codebase-index/scripts/cbx refs "X" --json` |
-| What changes if X changes? | `bash .claude/skills/codebase-index/scripts/cbx impact "X" --json` |
+| Find a named symbol | `bash .claude/skills/codebase-index/scripts/cbx symbol 'X' --json` |
+| Who calls or references X? | `bash .claude/skills/codebase-index/scripts/cbx refs 'X' --json` |
+| What changes if X changes? | `bash .claude/skills/codebase-index/scripts/cbx impact 'X' --json` |
 | What does my current diff affect? | `bash .claude/skills/codebase-index/scripts/cbx diff-impact --json` |
-| How are X and Y connected? | `bash .claude/skills/codebase-index/scripts/cbx path "X" "Y" --json` |
-| Describe X and its neighbourhood | `bash .claude/skills/codebase-index/scripts/cbx describe "X" --json` |
+| How are X and Y connected? | `bash .claude/skills/codebase-index/scripts/cbx path 'X' 'Y' --json` |
+| Describe X and its neighbourhood | `bash .claude/skills/codebase-index/scripts/cbx describe 'X' --json` |
 | Is what I read earlier still true? | `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` |
+
+**The term goes in single quotes.** Inside double quotes bash still runs a
+`$(…)`, a backtick or a `$VAR` the term carries, and a term copied out of a
+log, an error or a branch's file can carry one; the guard refuses the first
+two and not the third. Write a single quote inside the term as `'\''`.
 
 **`search` takes `--limit 3`**, and no other subcommand takes it at all. The
 default is ten and no configuration file changes it — `cli.py` and the MCP
@@ -116,7 +124,7 @@ Verdict states and citing evidence in notes: [references/memory.md](references/m
 On `refs` and `impact`, an empty result is inconclusive whatever `coverage`
 reports. The C# graph carries call edges but not every use: a registration
 like `services.AddScoped<IFoo, Foo>()` is recorded against neither name, so
-`impact "Foo" --direction up` answers with no dependents and
+`impact 'Foo' --direction up` answers with no dependents and
 `coverage.partial: false` while four composition roots name it. Confirm with a
 targeted Grep before saying that nothing references the target, and never
 report an empty graph result as an absence.

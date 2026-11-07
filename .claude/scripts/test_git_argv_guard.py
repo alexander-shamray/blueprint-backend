@@ -4,18 +4,24 @@ The shared harness and the reason it shells out rather than
 re-implementing are `review_helpers.py`'s.
 """
 
+import fnmatch
 import importlib.util
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
     NEWLINE,
     SETTINGS,
+    run_bash,
     setUpModule,
+    temp_root,
 )
 
 
@@ -558,6 +564,7 @@ class TheGitArgvGuard(unittest.TestCase):
             f'echo "a{NEWLINE}b" && n=$((1<<4))',
             'n=$(( "$a"<<4 ))',
             'echo "a"#$((1<<4))',
+            f'echo "a{NEWLINE}b"#$((1<<4))',
             f"git commit -F - <<'A'{NEWLINE}plain{NEWLINE}A{NEWLINE}"
             'n=$(( "$a"<<4 ))',
         ):
@@ -575,13 +582,14 @@ class TheGitArgvGuard(unittest.TestCase):
             "(( n = 1<<4 ))",
             f'echo "a{NEWLINE}b" && (( n = 1<<4 ))',
             '(( n = "$a"<<4 ))',
+            f'echo "a{NEWLINE}b"#$((1<<4))',
         ):
             command = f"{sum_line}{NEWLINE}git push origin +HEAD:main{NEWLINE}4"
             with self.subTest(command=command):
                 self.assertIn("force push", self.assertRefused(command))
 
-        # A heredoc in a substitution nested in a sum is skipped with the shifts,
-        # so its body is judged as commands: the push is refused, not hidden.
+        # A shell fed from a `$(…)` in a sum reads its body as commands: where
+        # the `$(…)` holds the body, that is the only reading that shows them.
         self.assertIn(
             "force push",
             self.assertRefused(
@@ -589,15 +597,164 @@ class TheGitArgvGuard(unittest.TestCase):
                 f"git push origin +HEAD:main{NEWLINE}EOF"
             ),
         )
+        self.assertIn(
+            "handed to a shell on stdin",
+            self.assertRefused(
+                f"n=$(( $(bash <<'EOF'{NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}) + 1 ))"
+            ),
+        )
 
         # What is not a sum keeps its heredoc: these parens close on `) |`, not
         # on `))`, so bash reads subshells, and a quoted body in them is data.
         # A quoted `))` closes nothing either.
+        # A group before them is read on its own and tells them nothing.
         for opener in ("<<'EOF'", "<<'EOF' '))'"):
-            with self.subTest(opener=opener):
+            for before in ("", f"n=$((1<<1)){NEWLINE}", f"(a) ; ((1<<1)) ; n=$((1<<1)){NEWLINE}"):
+                with self.subTest(opener=opener, before=before):
+                    self.assertAdmitted(
+                        f"{before}((git commit -F - {opener}) | cat){NEWLINE}"
+                        f"git push origin +HEAD:main{NEWLINE}EOF"
+                    )
+
+    def test_a_sum_spanning_lines_opens_no_heredoc(self):
+        # Bash reads a sum to its `))`, newlines included, so the line that
+        # reads as the shift's delimiter is a command.
+        for sum_text in (f"n=$((1<<4{NEWLINE}+1))", f"(( n = 1<<4{NEWLINE}+1 ))"):
+            with self.subTest(sum_text=sum_text):
+                self.assertIn(
+                    "RAN",
+                    run_bash(f"{sum_text}{NEWLINE}echo RAN{NEWLINE}4").stdout,
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{sum_text}{NEWLINE}git push origin +HEAD:main{NEWLINE}4"
+                    ),
+                )
                 self.assertAdmitted(
-                    f"((git commit -F - {opener}) | cat){NEWLINE}"
-                    f"git push origin +HEAD:main{NEWLINE}EOF"
+                    f"{sum_text}{NEWLINE}"
+                    f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+                        f"{NEWLINE}{sum_text}{NEWLINE}"
+                        f"git push origin +HEAD:main{NEWLINE}4"
+                    ),
+                )
+
+    def test_a_heredoc_in_a_substitution_in_a_sum_is_a_heredoc(self):
+        # A `$(…)` in a sum runs commands, so a `<<` in it opens a body, and a
+        # `$(…)` closing past that body holds it in every bash.
+        self.assertAdmitted(
+            f"n=$(( $(git commit -F - <<'EOF'{NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}) + 1 ))"
+        )
+
+        # Past that `$(…)` the sum goes on, and a `$((…))` in it is a sum of its own.
+        # A body is read as a body there too, so a lone quote in it ends nothing.
+        for command in (
+            f"n=$(( $(cat <<'EOF'{NEWLINE}5{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"n=$(( $(echo $((1<<4))) + 1 )){NEWLINE}git push origin +HEAD:main{NEWLINE}4",
+            f"n=$(( $(wc -l <<'EOF'{NEWLINE}don't{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"(( n = $(wc -l <<'EOF'{NEWLINE}a){NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"n=$(( $(echo $((1<<4)); cat <<'EOF'{NEWLINE}it{NEWLINE}EOF{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("force push", self.assertRefused(command))
+
+        # A `<<` the read cannot settle leaves the group's `((` as sums, whatever
+        # a `)` past it would have made of them, so no later shift opens a body.
+        for command in (
+            f"n=$(( $( ((wc -l <<'EOF') | cat){NEWLINE}){NEWLINE}EOF{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+            f"n=$(( `cat <<'A' ` + $(wc -l <<'B'{NEWLINE}){NEWLINE}B{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4{NEWLINE}A",
+            f"n=$(( `: $((1<<4)); wc -l <<'EOF'{NEWLINE}){NEWLINE}EOF{NEWLINE}` + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("force push", self.assertRefused(command))
+        self.assertAdmitted(
+            f"n=$(( $(wc -l <<'EOF'{NEWLINE}don't{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git commit -F - <<'B'{NEWLINE}it's{NEWLINE}B"
+        )
+
+    def test_a_heredoc_closing_with_its_line_in_a_sum_opens_no_body(self):
+        # A backtick's text ends at the backtick, so its heredoc ends there and
+        # the next lines are commands. `without_substitutions` refuses these
+        # however the `<<` reads, so the scan is asked for what it found.
+        guard = self.guard_module()
+        for spelling in ("n=$(( `cat <<'EOF'` + 1 ))", "n=$(( `cat <<'EOF' ` + 1 ))"):
+            with self.subTest(spelling=spelling):
+                self.assertIn(
+                    "RAN", run_bash(f"{spelling}{NEWLINE}echo RAN{NEWLINE}EOF").stdout
+                )
+                self.assertEqual(
+                    [], guard.heredoc_spans(f"{spelling}{NEWLINE}a{NEWLINE}EOF")
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{spelling}{NEWLINE}git push origin +HEAD:main{NEWLINE}EOF"
+                    ),
+                )
+
+        # One closing on a later line, but before the delimiter, is that too,
+        # and here reading the next lines as a body would hide the push.
+        closed_early = f"n=$(( `cat <<'EOF'{NEWLINE}one{NEWLINE}` + 1 )){NEWLINE}"
+        self.assertIn("RAN", run_bash(f"{closed_early}echo RAN{NEWLINE}EOF").stdout)
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"{closed_early}git push origin +HEAD:main{NEWLINE}EOF"
+            ),
+        )
+
+        # A backtick closing past its heredoc's delimiter holds the body.
+        self.assertEqual(
+            "6",
+            run_bash(
+                f"n=$(( `cat <<'EOF'{NEWLINE}5{NEWLINE}EOF{NEWLINE}` + 1 )){NEWLINE}echo $n"
+            ).stdout.strip(),
+        )
+        self.assertAdmitted(
+            f"n=$(( `git commit -F - <<'EOF'{NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}` + 1 ))"
+        )
+
+        # A `$(…)` closing on its opener's line is that too before bash 5.2,
+        # which reads the next lines as its body. `without_substitutions`
+        # leaves them commands, an apostrophe included, so neither bash hides
+        # the push. That refuses a quoted body the newer bash would not run.
+        probe = (
+            f"n=$(cat <<'EOF'){NEWLINE}echo RAN{NEWLINE}EOF{NEWLINE}"
+            "echo ${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"
+        )
+        lines = run_bash(probe).stdout.split(NEWLINE)
+        major, minor = (int(part) for part in lines[-2].split())
+        self.assertEqual((major, minor) < (5, 2), "RAN" in lines)
+        for opener in (
+            "n=$(( $(cat <<'EOF') + 1 ))",
+            "(( n = $(cat <<'EOF') + 1 ))",
+            "n=$(( (1<<4) | $(cat <<'EOF') ))",
+        ):
+            with self.subTest(opener=opener):
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{opener}{NEWLINE}git push origin +HEAD:main{NEWLINE}EOF"
+                    ),
+                )
+                self.assertIn(
+                    "taken as empty",
+                    self.assertRefused(f"{opener}{NEWLINE}don't stop{NEWLINE}EOF"),
                 )
 
     def test_a_sum_does_not_take_a_shell_its_heredoc(self):
@@ -638,6 +795,16 @@ class TheGitArgvGuard(unittest.TestCase):
             f"{body}{NEWLINE}(( n = 1<<4 )){NEWLINE}"
             f"git commit -F - <<'B'{NEWLINE}it's{NEWLINE}B"
         )
+        # The same apostrophe in a `((` puts the read ahead out of step, so the
+        # sum after it goes unseen, and it is taken as a sum.
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"((cat <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF{NEWLINE}) | cat)"
+                f"{NEWLINE}(( n = 1<<4 )){NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}4"
+            ),
+        )
 
     def test_finding_sums_is_linear_in_the_command(self):
         # `judge` fails on a verdict that misses the timeout, and a verdict
@@ -649,6 +816,39 @@ class TheGitArgvGuard(unittest.TestCase):
                 "((a)) " * 15000 + "<<4 ; git push origin +HEAD:main"
             ),
         )
+        # The same for reading ahead: done at each `<<` in a `((` left open, or
+        # in one long sum, rather than once, these miss the timeout too.
+        for nest in (
+            f"((cat <<A{NEWLINE}A{NEWLINE}" * 8000,
+            "((" + "1<<4 " * 15000 + "))" + NEWLINE,
+        ):
+            self.assertIn(
+                "force push", self.assertRefused(f"{nest}git push origin +HEAD:main")
+            )
+
+    def test_an_unclosed_heredoc_in_a_sum_is_searched_for_once(self):
+        # Each search runs to the end of the command, so one must settle it for
+        # the rest. A count rather than a clock: at the length budget the
+        # difference is seconds a pass, which no timeout here would see.
+        guard = self.guard_module()
+        opened = guard._opened_body
+        searches = []
+
+        def counted(*args):
+            searches.append(args[1])
+            return opened(*args)
+
+        guard._opened_body = counted
+        self.addCleanup(setattr, guard, "_opened_body", opened)
+        for nest in (
+            "(( $(" + f"<<4{NEWLINE}" * 100 + ") ))",
+            "(( `" + f"<<4{NEWLINE}" * 100 + "` ))",
+            "(( `" + f"<<4{NEWLINE}" * 100 + f"` )){NEWLINE}4",
+        ):
+            with self.subTest(nest=nest[-8:]):
+                searches.clear()
+                guard.heredoc_spans(nest)
+                self.assertLess(len(searches), 5)
 
     def test_the_fallback_scan_also_treats_a_heredoc_body_as_data(self):
         # The two paths have to agree: a fallback that scans the raw command
@@ -2988,12 +3188,12 @@ class TheGitArgvGuard(unittest.TestCase):
 
     def test_a_heredoc_fed_to_a_script_names_the_file_route(self):
         reason = self.assertRefused(
-            "bash .claude/scripts/gh-issue-create.sh bug low harness hand <<'EOF'\nsee `x` here\nEOF")
+            "bash .claude/scripts/gh-issue-hand.sh bug low harness <<'EOF'\nsee `x` here\nEOF")
         self.assertIn("with `Write`", reason)
         self.assertIn("< <path>", reason)
 
     def test_a_script_fed_from_a_file_is_admitted(self):
-        self.assertAdmitted("bash .claude/scripts/gh-issue-create.sh bug low harness hand < body.md")
+        self.assertAdmitted("bash .claude/scripts/gh-issue-hand.sh bug low harness < body.md")
 
     # ---- the wiring, without which none of the above runs -------------------
 
@@ -3032,6 +3232,232 @@ class TheGitArgvGuard(unittest.TestCase):
             any(HOOK.name in c and "py -3.12" in c for c in commands),
             f"{HOOK.name} is not among the registered PowerShell hooks: {commands}")
 
+    def test_a_redirection_ampersand_does_not_end_the_run(self):
+        body = "\ngit push origin +HEAD:main\nEOF"
+        for command in (
+            "bash <&0 <<'EOF'" + body,
+            "bash 0<&0 <<'EOF'" + body,
+            "bash >&2 <<'EOF'" + body,
+            "bash 2>&1 <<'EOF'" + body,
+            "bash 2>&- <<'EOF'" + body,
+            "sh 1>&2 <<EOF" + body,
+            "bash &>/dev/null <<'EOF'" + body,
+            "bash &>>/dev/null <<'EOF'" + body,
+            "bash <&0 <<<'git push origin +HEAD:main'",
+            "cat <<'EOF' 2>&1 | bash" + body,
+            # An escaped separator is a word character: bash runs the heredoc.
+            "bash 2>\\&1 <<'EOF'" + body,
+            "bash >\\&2 <<'EOF'" + body,
+            "bash 2>\\;x <<'EOF'" + body,
+            "bash 2>\\&1 <<<'git push origin +HEAD:main'",
+            # Bash joins a backslash-newline before it tokenises.
+            "bash >\\\n&2 <<'EOF'" + body,
+            "bash 2>\\\n&1 <<'EOF'" + body,
+            "bash &\\\n>/dev/null <<'EOF'" + body,
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        # A separating `&` still separates.
+        for command in (
+            "bash <<'EOF' 2>&1" + body,
+            "sleep 1 & bash <<'EOF'" + body,
+            "sleep 1& bash <<'EOF'" + body,
+            "true &&bash <<'EOF'" + body,
+            "echo x |& bash <<'EOF'" + body,
+            "echo \\>& bash <<'EOF'" + body,
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in (
+            "git status 2>&1", "git status >&2", "git status &",
+            "git log -1 & git status", "npm test &>/dev/null",
+            "cat <<'EOF' 2>&1" + body, "cat >&2 <<'EOF'" + body,
+            "bash <<'EOF' 2>&1\ngit status\nEOF", "git status 2>\\\n&1",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_reserved_word_in_front_does_not_hide_the_printer(self):
+        for command in (
+            "if echo 'git push origin +HEAD:main' | bash; then echo ok; fi",
+            "! echo 'git push origin +HEAD:main' | bash",
+            "while echo 'git push origin +HEAD:main' | sh; do break; done",
+            "if true; then echo 'git push origin +HEAD:main' | bash; fi",
+            "for x in a; do echo 'git push origin +HEAD:main' | bash; done",
+            "if bash <<<'git push origin +HEAD:main'; then echo ok; fi",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in (
+            "if git diff --quiet; then echo same; fi",
+            "if ! git status | grep -q clean; then echo dirty; fi",
+            "if echo hello | grep -q h; then echo ok; fi",
+            "! git status | grep -q x",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_the_flags_that_run_a_command_are_refused_in_their_short_spelling(self):
+        for command in (
+            "git rebase -x ./tools/m HEAD~1",
+            "git rebase -ix ./tools/m HEAD~1",
+            "git rebase -x./tools/m HEAD~1",
+            "git rebase -s ours origin/main",
+            "git pull -s ours",
+            "git difftool -x ./tools/m",
+            "git clone -u ./tools/m ./a b",
+            "git ls-remote -u ./tools/m origin",
+            "git grep -O./tools/x foo",
+            "git grep -nO./tools/x foo",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+
+    def test_a_letter_is_read_only_where_it_is_that_flag(self):
+        # `archive -o` was typed twice and `format-patch -o` writes a named
+        # file, so neither is the flag that runs a command.
+        for command in (
+            "git clean -nx", "git rebase -i HEAD~2", "git log -s -1",
+            "git commit -s -m x", "git cherry-pick -x abc123",
+            "git rebase -X ours origin/main", "git rebase -Xours origin/main",
+            "git pull -Xtheirs", "git clone -bunstable ./a b",
+            "git grep -eOops src", "git grep -n foo",
+            "git archive -o out.zip HEAD", "git format-patch -o out HEAD~1",
+            "git ls-remote origin", "git ls-remote --heads origin",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_the_operand_forms_that_run_a_command_are_refused(self):
+        for command in (
+            "git bisect run ./tools/m",
+            "git submodule --quiet foreach ./tools/m",
+            "git submodule--helper foreach ./tools/m",
+            "git -C sub bisect run ./tools/m",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in ("git bisect start", "git bisect good", "git submodule status",
+                        "git submodule update --init", "git log --grep=foreach"):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_merge_strategy_and_a_template_are_refused(self):
+        for command in (
+            "git pull --strategy=ours", "git pull --strat=ours",
+            "git rebase --strategy ours main",
+            "git clone --template=./tools/t ./src dest",
+            "git init --template=./tools/t", "git init --templ=./tools/t",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in (
+            "git pull --ff-only", "git pull --stat", "git rebase origin/main",
+            "git rebase --strategy-option=ours origin/main",
+            "git commit --template=msg.txt", "git clone ./a b", "git init",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_the_options_that_hand_a_file_to_a_program_are_refused(self):
+        for command in (
+            "git diff --ext-diff", "git diff --ext-d", "git log --textconv",
+            "git show --textconv HEAD", "git difftool --extcmd=./tools/m",
+            "git difftool --extc=./tools/m",
+            "git grep --open-files-in-pager=./tools/x foo",
+            "git grep --open-files-in-pager ./tools/x foo",
+            "git grep --open-files=./tools/x foo",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        # `--no-index` stays out: typed 49 times, and its deny is config.
+        for command in (
+            "git diff --no-ext-diff", "git diff --no-textconv", "git diff --text",
+            "git grep --text foo", "git diff --no-index a b",
+            'git commit -m "--ext-diff is refused"',
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_subcommand_that_exists_to_run_something_is_refused_whole(self):
+        for command in (
+            "git filter-branch --msg-filter cat",
+            "git send-email --to-cmd=./tools/x a.patch",
+            "git instaweb --httpd=./tools/x", "git daemon --base-path=.",
+            "git http-backend", "git web--browse ./tools/x",
+            "git -C sub filter-branch --msg-filter cat",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        # The allow-list stays out: what it would have refused stays admitted.
+        for command in (
+            "git ls-remote origin", "git config user.name", "git stash list",
+            "git reflog -5", "git update-index --refresh", "git apply a.patch",
+            "git cherry-pick abc123", "echo git daemon", "git log -- daemon",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_xargs_cannot_supply_a_push(self):
+        for command in (
+            "echo +HEAD:main | xargs git push origin some-branch",
+            "echo +HEAD:main | xargs -n9 git push origin some-branch",
+            "echo main | xargs -I{} git -C sub push origin {}",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        # The reader allow-list stays out: `xargs` was typed 54 times.
+        for command in (
+            "git ls-files | xargs wc -l", "git log --oneline | xargs echo",
+            "git ls-files | xargs py -3.12 tools/x.py",
+            "git ls-files -z | xargs -0 rm -f", "ls | xargs git log",
+            "echo xargs git push origin +HEAD:main",
+            "grep -rn 'xargs git push' docs",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_fetch_that_discards_a_local_branch_is_refused(self):
+        for command in (
+            "git fetch -f origin main:main", "git fetch --force origin",
+            "git fetch --forc origin", "git fetch -qf origin",
+            "git fetch -u origin main:main", "git fetch --update-head-ok origin",
+            "git fetch origin +main:main",
+            "git fetch origin +refs/heads/main:refs/heads/main",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        # `/ship` fast-forwards with the plain form.
+        for command in (
+            "git fetch origin", "git fetch origin main",
+            "git fetch origin main:main", "git fetch -q origin main",
+            "git fetch --prune origin", "git fetch --all", "git fetch -p origin",
+            "git fetch --update-shallow origin",
+            # Typed by a dependabot rebase: a remote-tracking ref holds no work.
+            "git fetch -q origin +refs/heads/x:refs/remotes/origin/x",
+            'git fetch -q origin "+refs/heads/$B:refs/remotes/origin/$B"',
+            "git fetch origin +refs/tags/v1:refs/tags/v1", "git fetch origin +main",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_nothing_overrides_the_fast_forward_of_a_granted_pull(self):
+        for command in (
+            "git pull --ff-only --no-ff", "git pull --ff-only --ff",
+            "git pull --ff-only --rebase", "git pull --rebase=merges --ff-only",
+            "git pull --ff-only -r", "git pull -qr --ff-only",
+            "git pull --ff-only --reb",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in (
+            "git pull --ff-only", "git pull -q --ff-only",
+            "git pull --ff-only origin main", "git pull --ff-only -v",
+            "git pull --rebase", "git pull --no-ff",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
     def test_the_hook_directory_is_a_control_surface_and_is_denied(self):
         # It grants nothing, but it RUNS on every Bash call, so a session able
         # to rewrite it could delete its own guard and then act. `CLAUDE.md`
@@ -3044,6 +3470,374 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(prefix=prefix):
                 self.assertIn(f"Edit({prefix}.claude/hooks/**)", deny)
 
+
+
+class AWriteIntoWhatTheTargetDenies(unittest.TestCase):
+    """A redirection or a writing verb onto a path this target's denies name.
+
+    Every `Edit(...)` deny binds the editing tools alone, so the same write past
+    them is refused here, and each narrowing has a case that it is admitted.
+    """
+
+    def setUp(self):
+        self.root = temp_root(self)
+        for tree in (".git", ".claude", "docs", "notes", "payload", "staging"):
+            os.makedirs(os.path.join(self.root, tree))
+
+    def judge(self, command, cwd=None, env=None, hook=HOOK):
+        event = {"tool_name": "Bash", "tool_input": {"command": command},
+                 "cwd": self.root if cwd is None else cwd}
+        result = subprocess.run(
+            [sys.executable, str(hook)], input=json.dumps(event),
+            capture_output=True, text=True, encoding="utf-8",
+            timeout=HOOK_TIMEOUT, env={**os.environ, **(env or {})},
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        if not result.stdout.strip():
+            return None
+        return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+    def assertRefused(self, command, **kwargs):
+        reason = self.judge(command, **kwargs)
+        self.assertIsNotNone(reason, f"admitted: {command}")
+        self.assertNotIn("crashed the guard", reason)
+        return reason
+
+    def assertAdmitted(self, command, **kwargs):
+        self.assertIsNone(self.judge(command, **kwargs), f"refused: {command}")
+
+    def refused(self, *commands, **kwargs):
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertRefused(command, **kwargs)
+
+    def admitted(self, *commands, **kwargs):
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertAdmitted(command, **kwargs)
+
+    def spelled(self, *parts):
+        """An absolute path as Git Bash types it, whatever the platform."""
+        path = Path(self.root, *parts).as_posix()
+        return f"/{path[0].lower()}{path[2:]}" if os.name == "nt" else path
+
+    def link(self, target, path):
+        try:
+            os.symlink(target, path, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            from _winapi import CreateJunction
+            CreateJunction(target, path)
+
+    def hook_denying(self, *denies):
+        """A copy of this guard whose checkout's settings carry `denies`."""
+        owner = temp_root(self)
+        os.makedirs(os.path.join(owner, ".claude", "hooks"))
+        hook = shutil.copy(HOOK, os.path.join(owner, ".claude", "hooks"))
+        with open(os.path.join(owner, ".claude", "settings.json"), "w", encoding="utf-8") as handle:
+            json.dump({"permissions": {"deny": [f"Edit({rule})" for rule in denies]}}, handle)
+        return hook
+
+    def test_the_measured_redirections_are_refused(self):
+        self.refused(
+            "ls > .claude/settings.json", "ls >> .claude/hooks/guard-git-argv.py",
+            "ls >| .claude/scripts/x.sh", "ls &> .claude/agents/bug-auditor.md",
+            "ls &>> .claude/commands/ship.md", "ls >& .claude/skills/x/SKILL.md",
+            "ls <> .git/config", "ls 2> .claude/settings.local.json",
+            "ls > .remember/now.md", "ls > .mcp.json", "ls > .codeindexignore",
+            "git log --oneline > .claude/settings.json",
+            "cat > .claude/settings.json <<'EOF'\nx\nEOF",
+            "ls > ./.claude/settings.json",
+            "ls > docs/../.claude/settings.json",
+            "bash -c 'ls > .claude/settings.json'",
+        )
+        self.assertIn("Edit(.claude/settings.json)",
+                      self.assertRefused("ls > .claude/settings.json"))
+
+    def test_a_reading_redirection_is_not_a_write(self):
+        self.admitted("cat < .claude/settings.json", "wc -l < .git/config",
+                      "cat <<< '.claude/settings.json'", "ls 2>&1", "ls >&2",
+                      "ls 3>&-", "ls > /dev/null")
+
+    def test_a_protected_name_is_anchored_at_a_checkouts_root_and_folded(self):
+        self.refused("ls > .CLAUDE/Settings.JSON", "ls > .Claude/HOOKS/x.py",
+                     f"ls > {self.spelled('.claude', 'settings.json')}",
+                     f"ls > {Path(self.root, '.claude', 'hooks', 'x').as_posix()}")
+        # 113 redirections, 34 `rm` and 19 `sed -i` were typed at these.
+        self.admitted("ls > payload/.claude/hooks/x.py",
+                      "ls > staging/.claude/settings.json",
+                      "ls > .claude/worktrees/x/notes.md",
+                      "ls > .claude/cache/x", "ls > notes/settings.json",
+                      "ls > notes/.mcp.json", "ls > notes/.git/config",
+                      "ls > docs/out.md", "cat foo.txt > notes.md",
+                      "rm -rf .claude/worktrees/x", "rm -f .claude/cache/x",
+                      "sed -i s/a/b/ payload/.claude/hooks/x.py",
+                      "sed -i s/a/b/ staging/.claude/settings.json")
+
+    def test_a_tree_is_protected_only_where_a_target_denies_it(self):
+        # Asked of a copy denying nothing: the rendering target's own denies
+        # may name either, as frontend's config names `package.json`.
+        self.admitted("ls > .github/workflows/ci.yml", "ls > package.json",
+                      hook=self.hook_denying())
+        hook = self.hook_denying(".github/**", "./.github/**", "package.json")
+        self.refused("ls > .github/workflows/ci.yml", "ls > PACKAGE.JSON",
+                     "cp /tmp/a ./package.json", hook=hook)
+        self.admitted("ls > notes/package.json", "ls > .claude/settings.json",
+                      hook=hook)
+
+    def test_a_rule_is_read_in_the_permission_grammar(self):
+        # `/x` is the project root's, `//x` absolute and `~/x` the home's.
+        hook = self.hook_denying("/package.json", "/.github/**", "//notes/**", "~/notes/**")
+        self.refused("ls > package.json", "ls > .github/workflows/ci.yml", hook=hook)
+        self.admitted("ls > notes/x.md", hook=hook)
+
+    def test_a_linked_worktree_is_a_checkout_of_its_own(self):
+        worktree = os.path.join(self.root, ".claude", "worktrees", "linked")
+        os.makedirs(worktree)
+        with open(os.path.join(worktree, ".git"), "w", encoding="utf-8") as handle:
+            handle.write("gitdir: elsewhere\n")
+        self.refused("ls > .claude/settings.json", cwd=worktree)
+        self.refused(f"ls > {Path(worktree, '.claude', 'hooks', 'x').as_posix()}")
+        self.admitted("ls > docs/out.md", cwd=worktree)
+
+    def test_a_worktree_with_no_git_file_left_is_judged_as_one(self):
+        gone = os.path.join(self.root, ".claude", "worktrees", "gone")
+        self.refused("ls > .claude/settings.json", cwd=gone)
+        self.admitted("ls > docs/out.md", cwd=gone)
+
+    def test_a_scratch_checkout_the_session_is_not_in_is_not_this_targets(self):
+        # Mutation proofs copy into one and `sed -i` there, and no deny of this
+        # target is about it: 6 commands, 7 uses, in the replay did.
+        scratch = temp_root(self)
+        os.makedirs(os.path.join(scratch, ".git"))
+        place = Path(scratch, ".claude", "scripts").as_posix()
+        self.admitted(f"cp notes/x {place}/", f"ls > {place}/x.sh",
+                      f"cd {place} && sed -i s/a/b/ x.sh", f"cd {place} && cp x.sh ../../mut.sh")
+        # The checkout the session stands in is judged wherever it is.
+        self.refused("ls > .claude/scripts/x.sh", f"ls > {place}/x.sh", cwd=scratch)
+
+    def test_a_literal_cd_is_resolved_and_never_refused_for_standing_there(self):
+        self.refused("cd .claude && ls > settings.json",
+                     "cd .claude/hooks; ls > x.py", "cd notes && cd ../.claude && ls > settings.json",
+                     "if cd .claude; then ls > settings.json; fi",
+                     f"cd {self.spelled('.claude')} && ls > settings.json",
+                     "pushd .claude && ls > settings.json",
+                     "cd notes && ls > ../.claude/settings.json",
+                     "cd .claude && cp /tmp/a settings.json")
+        # `cd x && … > y` was typed 736 times.
+        self.admitted("cd notes && ls > out.md", "cd docs; cat a > settings.json",
+                      "cd .claude && cd .. && ls > settings.json",
+                      "(cd .claude && ls > x.txt); ls > settings.json",
+                      "if (cd .claude && make); then ls > settings.json; fi",
+                      "while (cd .claude/hooks); do ls > x.py; break; done",
+                      "cd .claude || exit 1", "cd notes && git status > .out")
+
+    def test_a_cd_nothing_can_read_leaves_a_relative_write_unjudged(self):
+        self.admitted('cd "$dir" && ls > .claude/settings.json',
+                      "cd $(git rev-parse --show-toplevel) && ls > .claude/settings.json",
+                      "cd - && ls > .claude/settings.json",
+                      "popd && ls > .claude/settings.json")
+        # An absolute target is judged wherever the shell stands.
+        self.refused(f'cd "$dir" && ls > {self.spelled(".claude", "settings.json")}')
+
+    def test_a_tilde_and_a_known_variable_are_judged_and_an_unknown_one_admitted(self):
+        env = {"HOME": self.root, "TMPDIR": os.path.join(self.root, "notes")}
+        self.refused("ls > ~/.claude/settings.json", "ls > $HOME/.claude/settings.json",
+                     'ls > "$HOME/.git/config"', "ls > ${HOME}/.claude/hooks/x", env=env)
+        self.admitted('ls > "$TMPDIR/out"', "ls > ${TMPDIR}/out", "ls > '~/.claude/settings.json'",
+                      env=env)
+        # `> "$var…"` was typed 523 times, and a value set here is not this
+        # process's, so neither is judged.
+        self.admitted('ls > "$out"', "ls > $1", 'ls > "$dir/.claude/settings.json"',
+                      "ls > $(make-scratch)/out", "F=.claude/settings.json; ls > $F",
+                      "HOME=/x; ls > $HOME/.claude/settings.json",
+                      "ls > ~other/.claude/settings.json",
+                      'cp "$a" "$b"', 'mv "$a" "$b"', 'rm -f "$out"', 'tee "$log"',
+                      env=env)
+
+    def test_a_redirection_through_a_link_into_a_protected_tree_is_refused(self):
+        self.link(os.path.join(self.root, ".claude"),
+                  os.path.join(self.root, "notes", "linked"))
+        self.link(os.path.join(self.root, "docs"),
+                  os.path.join(self.root, "notes", "to-docs"))
+        self.refused("ls > notes/linked/settings.json",
+                     "ls >> ./notes/linked/hooks/x.py",
+                     "cp /tmp/a notes/linked/settings.json")
+        self.admitted("ls > notes/plain.txt", "ls > notes/to-docs/out.txt",
+                      "ls > notes/linked/worktrees/x/notes.md")
+
+    def guard_module(self):
+        spec = importlib.util.spec_from_file_location("guard_git_argv", HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_every_writing_verb_reaches_the_protected_check(self):
+        module = self.guard_module()
+        shapes = {
+            "destination": "{verb} /tmp/a .claude/settings.json",
+            "every": "{verb} .claude/settings.json",
+            "in-place": "{verb} -i -e 1 .claude/settings.json",
+            "of": "{verb} if=/tmp/a of=.claude/settings.json",
+        }
+        self.assertEqual(set(shapes), set(module.WRITING_VERBS.values()))
+        self.refused(*(shapes[model].format(verb=verb)
+                       for verb, model in sorted(module.WRITING_VERBS.items())))
+        for verb in ("cp", "mv", "rm", "tee", "sed", "dd"):
+            with self.subTest(named=verb):
+                self.assertIn(verb, module.WRITING_VERBS)
+
+    def test_a_verbs_destination_is_found_through_its_options(self):
+        self.refused(
+            "cp -t .claude/hooks /tmp/x", "cp -rt.claude/hooks /tmp/x",
+            "cp --target-directory=.claude/hooks /tmp/x",
+            "cp --target .claude/hooks /tmp/x",
+            "cp /tmp/x .claude/settings.json -S .bak",
+            "mv .claude/hooks/guard-git-argv.py /tmp/x",
+            "install -m 644 /tmp/a .claude/settings.json",
+            "ln -sf /tmp/evil .claude/hooks/x.sh",
+            "sed -ie s/a/b/ .claude/settings.json",
+            "sed --in-place -e s/a/b/ .claude/settings.json",
+            "perl -pi -e s/a/b/ .claude/settings.json",
+            "perl -i.bak -pe 1 .claude/settings.json",
+            "rm -- -x .claude/settings.json",
+            "echo x | sudo tee -a .claude/settings.json",
+            "env cp /tmp/a .claude/settings.json",
+            "X=1 cp /tmp/a .claude/settings.json",
+            '"cp" /tmp/a .claude/settings.json',
+            "cp.exe /tmp/a .claude/settings.json",
+            "/usr/bin/cp /tmp/a .CLAUDE/settings.json",
+            "(cp /tmp/a .claude/settings.json)",
+            "if (cp /tmp/a .claude/settings.json); then :; fi",
+            "if true; then cp /tmp/a .claude/settings.json; fi",
+            "cp <(echo hi) .claude/settings.json",
+            "bash -c 'cp /tmp/a .claude/settings.json'",
+            "find . -name x -exec cp {} .claude/hooks \\;",
+            "find . -name x -execdir rm .claude/settings.json {} +",
+            # A hard link makes a protected source writable under another name.
+            "ln .claude/settings.json notes/alias",
+            "ln -f .mcp.json notes/alias",
+            "cp -l .claude/settings.json notes/alias",
+            "cp --link .claude/settings.json notes/alias",
+            # The `-i` backup is a second write, named by its suffix.
+            "sed -i'.json' -e s/a/b/ .claude/settings",
+            "sed -i'.claude/hooks/*' -e s/a/b/ notes/x",
+        )
+
+    def test_a_verb_that_takes_a_whole_tree_is_refused_its_parent(self):
+        # Removing, moving or copying into a directory reaches every deny
+        # below it, though no deny names the directory itself.
+        self.refused("rm -rf .claude", "rm -r ./.claude/", "mv .claude /tmp/x",
+                     "cp -r /tmp/hooks .claude/", "rmdir .claude", "shred -u .claude",
+                     "install -d /tmp/a .claude", "cp -rt .claude /tmp/hooks",
+                     "mv /tmp/hooks .CLAUDE")
+        self.admitted("rm -rf .claude/worktrees/x", "rm -rf artifacts", "rm -rf .",
+                      "rm -rf .claude/cache", "cp -r .claude /tmp/backup",
+                      "ls > .claude/notes.md", "touch .claude/notes.md",
+                      "rm -rf notes", "mv notes /tmp/x")
+
+    def test_a_file_copied_into_a_directory_is_judged_where_it_lands(self):
+        # Only the source's name lands in the directory, so `.claude/` itself
+        # is not the write unless what lands there is a protected tree.
+        self.refused("cp -r /tmp/hooks .claude/", "cp -r /tmp/hooks/ .claude",
+                     "cp x.py .claude/hooks/", "cp a.md settings.json .claude/",
+                     "cp -t .claude /tmp/hooks", "install /tmp/settings.json .claude/",
+                     "mv /tmp/hooks .CLAUDE", "mv .claude /tmp/x", "cp -r . .claude/",
+                     "cp /tmp/harness/.claude/* .claude/", "cp /tmp/h/settings.js? .claude",
+                     "cp /tmp/h/[s]ettings.json .claude/", "cp /tmp/h/{settings,x}.json .claude/",
+                     "cp -rT /tmp/evil .claude",
+                     "cp --no-target-directory -r /tmp/evil .claude", "mv -T /tmp/evil .claude",
+                     "cp -r --no-target /tmp/evil .claude/")
+        self.admitted("cp notes.md .claude/", "cp a.md b.md .claude", "mv notes.md .claude/",
+                      "cp -t .claude notes.md", "install -m 644 notes.md .claude/",
+                      "cp /tmp/h/*.md docs/", "cp /tmp/h/{a,b}.md docs/",
+                      "cp -rT /tmp/evil docs")
+        os.makedirs(os.path.join(self.root, ".github"))
+        hook = self.hook_denying(".github/workflows/**")
+        self.admitted("cp x.md .github/", "mv x.md .github", hook=hook)
+        self.refused("cp -r /tmp/workflows .github/", "cp ci.yml .github/workflows/",
+                     hook=hook)
+
+    def test_a_write_elsewhere_is_not_read_as_one(self):
+        self.admitted(
+            "cp .claude/settings.json /tmp/x", "cp -r .claude/hooks notes/",
+            "ln -s .claude/settings.json notes/alias",
+            "sed -n 1p .claude/settings.json", "sed s/a/b/ .claude/settings.json",
+            "perl -pe 1 .claude/settings.json", "grep -n tee .claude/settings.json",
+            "git rm .claude/hooks/x", "git mv .claude/hooks/x notes/x",
+            "echo rm .claude/settings.json", "cat .claude/settings.json | head",
+            "ls | tee notes/out", "git ls-files .claude | xargs rm -f",
+            "dd if=.claude/settings.json of=notes/x", "touch notes/x",
+            "sed -i.bak s/a/b/ notes/x", "rm -rf notes",
+        )
+
+
+class TheListsTheGuardReads(unittest.TestCase):
+    """What the write check and the push guard are looking at, not what they found."""
+
+    ROOT = SCRIPTS.parent.parent
+    TYPES = r"(?:docs|chore|feat|fix|refactor|ci|test)"
+    NAME = re.compile(r"(?<![\w./(-])" + TYPES + r"(?:\([^)\s]*\))?/[A-Za-z0-9._()/-]*[A-Za-z0-9]")
+
+    def guard_module(self):
+        spec = importlib.util.spec_from_file_location("guard_git_argv", HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @staticmethod
+    def command_edit_paths(text):
+        """The paths a command's `disallowed-tools` line names under `Edit(...)`."""
+        return [path for line in text.splitlines() if line.startswith("disallowed-tools:")
+                for path in re.findall(r"Edit\(([^)]*)\)", line)]
+
+    def managed_commands(self):
+        manifest = json.loads((self.ROOT / ".harness" / "manifest.json").read_text(encoding="utf-8"))
+        return [self.ROOT / name for name in manifest["files"]
+                if name.startswith(".claude/commands/")]
+
+    def test_the_protected_trees_cover_what_the_editing_commands_deny(self):
+        # A target's local read-only command denies its own trees for its own
+        # run, which no hook can see, so the managed commands are the subject.
+        module = self.guard_module()
+        self.assertEqual(["docs/**"], self.command_edit_paths("disallowed-tools: Edit, Edit(docs/**), Agent(x)\n"))
+        self.assertGreater(len(module.edit_denies()), 9, "the deny list went empty")
+        commands = self.managed_commands()
+        self.assertGreater(len(commands), 5, "the managed commands went empty")
+        denied = [rule for path in commands
+                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))]
+        for rule in [*module.edit_denies(), *denied]:
+            with self.subTest(rule=rule):
+                path = rule.removeprefix("./").removesuffix("/**")
+                self.assertIsNotNone(module.denied_path(path + "/x" if rule.endswith("/**") else path))
+
+    def test_the_protected_files_cover_every_tracked_root_file(self):
+        # The side of the boundary each root file is on is the target's config
+        # and the base, so the hook's list has to be exactly those two.
+        module = self.guard_module()
+        base = json.loads((self.ROOT / ".harness" / "settings.base.json").read_text(encoding="utf-8"))
+        config = json.loads((self.ROOT / ".harness" / "config.json").read_text(encoding="utf-8"))
+        rules = [*base["permissions"]["deny"], *config.get("settings", {}).get("deny", [])]
+        spelled = [rule[len("Edit("):-1].lower() for rule in rules if rule.startswith("Edit(")]
+        paths = [path.removeprefix("./") if path.startswith("./") else path.removeprefix("/")
+                 for path in spelled if not path.startswith(("//", "~"))]
+        self.assertEqual(sorted(set(paths)), sorted(module.edit_denies()))
+        tracked = subprocess.run(["git", "ls-files"], cwd=self.ROOT, capture_output=True,
+                                 encoding="utf-8", check=True).stdout.splitlines()
+        names = [name for name in tracked if "/" not in name]
+        self.assertGreater(len(names), 3, "the root listing went empty")
+        for name in names:
+            with self.subTest(name=name):
+                named = any(fnmatch.fnmatchcase(name.lower(), path) for path in paths)
+                self.assertEqual(named, module.denied_path(name) is not None)
+
+    def test_every_name_the_file_gives_is_one_the_push_guard_admits(self):
+        module = self.guard_module()
+        text = (SCRIPTS.parent / "commands" / "branch.md").read_text(encoding="utf-8")
+        names = sorted(set(self.NAME.findall(text)))
+        self.assertGreaterEqual(len(names), 5, names)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIsNone(module.offence(f"git push -u origin '{name}'"))
 
 
 if __name__ == "__main__":

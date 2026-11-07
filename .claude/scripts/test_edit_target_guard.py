@@ -138,7 +138,7 @@ class GuardCase(unittest.TestCase):
         return linkpath
 
     def judge(self, file_path, tool="Edit", cwd=None, key="file_path",
-              project=None, process_cwd=None):
+              project=None, process_cwd=None, hook=HOOK):
         """The hook's verdict on one call: the reason, or `None` for allowed.
 
         `cwd` is the event's, which a relative path resolves against;
@@ -151,7 +151,7 @@ class GuardCase(unittest.TestCase):
             "tool_input": {} if file_path is None else {key: file_path},
         }
         result = subprocess.run(
-            [sys.executable, str(HOOK)],
+            [sys.executable, str(hook)],
             input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
             cwd=process_cwd,
             env={**os.environ,
@@ -605,13 +605,214 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
         self.assertAdmitted(os.path.join(self.root, "DOCS", "chapter.md"))
 
 
+class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
+    """Outside every checkout only keys, profiles and control files are refused.
+
+    Spelled from the real home directory, because those are the paths a wrong
+    edit names; the hook refuses before anything is written.
+    """
+
+    HOME = os.path.expanduser("~")
+    CLAUDE = os.path.join(HOME, ".claude")
+
+    def recased(self, *spellings):
+        # A recased name is the same file only where the home's mount folds
+        # case; on ext4 it is another file, which the guard admits.
+        folds = self.guard_module().case_insensitive(self.HOME)
+        return spellings if folds else ()
+
+    def test_a_key_a_profile_or_the_git_config_is_refused(self):
+        for target in (
+            os.path.join(self.HOME, ".ssh", "authorized_keys"),
+            *self.recased(os.path.join(self.HOME, ".SSH", "config")),
+            os.path.join(self.HOME, ".bashrc"),
+            os.path.join(self.HOME, ".bash_profile"),
+            os.path.join(self.HOME, ".profile"),
+            os.path.join(self.HOME, ".zshrc"),
+            os.path.join(self.HOME, ".gitconfig"),
+        ):
+            with self.subTest(target=target):
+                self.assertIn("outside every checkout", self.assertRefused(target))
+
+    def test_a_link_into_the_keys_is_held(self):
+        for linker in linkers():
+            with self.subTest(link=linker):
+                link = os.path.join(self.outside, f"keys-{linker}")
+                real = os.path.join(self.HOME, ".ssh")
+                if not os.path.isdir(real):
+                    self.skipTest("no ~/.ssh to link to")
+                if linker == "symlink":
+                    os.symlink(real, link, target_is_directory=True)
+                else:
+                    JUNCTIONS(real, link)
+                self.assertRefused(os.path.join(link, "authorized_keys"))
+
+    def test_the_rest_of_the_outside_stays_admitted(self):
+        # What the allow-list would have refused: 22 edits to a sibling
+        # checkout's `run-locally.md`, 628 to the task list.
+        for target in (
+            os.path.join(self.outside, "loot.txt"),
+            os.path.join(self.outside, ".todo", "blueprint-backend.md"),
+            os.path.join(self.HOME, "notes.md"),
+            os.path.join(self.HOME, "projects", ".ssh-notes.md"),
+            os.path.join(self.HOME, "projects", ".bashrc"),
+        ):
+            with self.subTest(target=target):
+                self.assertAdmitted(target)
+
+    def test_the_harness_control_surface_is_refused_inside_its_own_root(self):
+        for target in (
+            os.path.join(self.CLAUDE, ".credentials.json"),
+            os.path.join(self.CLAUDE, "settings.json"),
+            *self.recased(os.path.join(self.CLAUDE, "SETTINGS.LOCAL.JSON")),
+            os.path.join(self.CLAUDE, "hooks", "anything.py"),
+            os.path.join(self.CLAUDE, "commands", "anything.md"),
+            os.path.join(self.CLAUDE, "agents", "anything.md"),
+            os.path.join(self.CLAUDE, "plugins", "p", "skills", "s", "SKILL.md"),
+        ):
+            with self.subTest(target=target):
+                self.assertIn("control surface", self.assertRefused(target))
+
+    def test_the_harness_state_stays_admitted(self):
+        # `~/.claude/CLAUDE.md` holds the owner's rules and was edited six
+        # times; a control name below `projects` is session state.
+        for target in (
+            os.path.join(self.CLAUDE, "CLAUDE.md"),
+            os.path.join(self.CLAUDE, "AGENTS.md"),
+            os.path.join(self.CLAUDE, "projects", "p", "memory", "note.md"),
+            os.path.join(self.CLAUDE, "projects", "p", "scripts", "x.py"),
+            os.path.join(self.CLAUDE, "projects", "p", "settings.json"),
+        ):
+            with self.subTest(target=target):
+                self.assertAdmitted(target)
+
+
+class AWorktreeTheSessionHasNotEntered(GuardCase):
+    """No permission rule reaches it, so the target's own denies judge it."""
+
+    def linked(self, name="linked", beside=None):
+        """A linked worktree of the fixture, in the shape the guard reads."""
+        worktree = os.path.join(beside or self.outside, name)
+        os.makedirs(os.path.join(worktree, "docs"), exist_ok=True)
+        admin = os.path.join(self.root, ".git", "worktrees", name)
+        os.makedirs(admin, exist_ok=True)
+        self.write(os.path.join(worktree, ".git"), "gitdir: " + admin + "\n")
+        self.write(os.path.join(admin, "gitdir"),
+                   os.path.join(worktree, ".git") + "\n")
+        self.write(os.path.join(admin, "commondir"), "../..\n")
+        return worktree
+
+    def hook_denying(self, *denies):
+        """A copy of both guards whose checkout's settings carry `denies`."""
+        root = os.path.join(self.outside, "owner")
+        hooks = os.path.join(root, ".claude", "hooks")
+        os.makedirs(hooks, exist_ok=True)
+        for name in ("guard-edit-target.py", "guard-git-argv.py"):
+            shutil.copy(HOOK.parent / name, hooks)
+        self.write(os.path.join(root, ".claude", "settings.json"), json.dumps(
+            {"permissions": {"deny": [f"Edit({rule})" for rule in denies]}}))
+        return os.path.join(hooks, "guard-edit-target.py")
+
+    def test_its_denied_trees_are_refused_from_outside_it(self):
+        worktree = self.linked()
+        for parts in ((".claude", "scripts", "helper.sh"),
+                      (".claude", "settings.json"),
+                      (".git", "config")):
+            with self.subTest(parts=parts):
+                reason = self.assertRefused(os.path.join(worktree, *parts))
+                self.assertIn("worktree of this repository", reason)
+
+    def test_a_nested_worktree_is_judged_the_same(self):
+        beside = os.path.join(self.root, ".claude", "worktrees")
+        os.makedirs(beside, exist_ok=True)
+        worktree = self.linked(beside=beside)
+        self.assertRefused(os.path.join(worktree, ".claude", "hooks", "x.py"))
+        self.assertAdmitted(os.path.join(worktree, "docs", "note.md"))
+
+    def test_what_no_deny_names_stays_admitted(self):
+        # 718 `.github` edits landed in worktrees where no target denies it.
+        # Those two are asked of a copy denying nothing, since the rendering
+        # target's own denies may name either.
+        worktree = self.linked()
+        for parts in (("docs", "plugins.md"),
+                      (".claude", "cache", "x"),
+                      ("payload", ".claude", "hooks", "x.py")):
+            with self.subTest(parts=parts):
+                self.assertAdmitted(os.path.join(worktree, *parts))
+        hook = self.hook_denying()
+        for parts in ((".github", "workflows", "ci.yml"), ("package.json",)):
+            with self.subTest(parts=parts):
+                self.assertAdmitted(os.path.join(worktree, *parts), hook=hook)
+
+    def test_a_target_that_denies_github_has_it_refused(self):
+        hook = self.hook_denying(".github/**", "./.github/**", "package.json")
+        worktree = self.linked()
+        for parts in ((".github", "workflows", "ci.yml"), ("PACKAGE.JSON",)):
+            with self.subTest(parts=parts):
+                self.assertRefused(os.path.join(worktree, *parts), hook=hook)
+        self.assertAdmitted(os.path.join(worktree, "src", "package.json"), hook=hook)
+
+    def test_a_sibling_is_judged_when_every_anchor_is_a_linked_worktree(self):
+        # The session stands in worktree A, so no anchor holds the main `.git`
+        # that sibling B's gitdir sits under; their common git dir does.
+        here = self.linked("here")
+        sibling = self.linked("sibling")
+        self.assertRefused(os.path.join(sibling, ".claude", "settings.json"),
+                           cwd=here, project=here)
+        self.assertAdmitted(os.path.join(sibling, "docs", "note.md"),
+                            cwd=here, project=here)
+
+    def test_the_main_checkout_is_judged_from_inside_a_worktree(self):
+        # Its `.git` is a directory, so no gitdir names it; it is the common
+        # git dir of the worktree the session stands in.
+        here = self.linked("here")
+        self.assertRefused(os.path.join(self.root, ".claude", "settings.json"),
+                           cwd=here, project=here)
+        self.assertAdmitted(os.path.join(self.root, "docs", "note.md"),
+                            cwd=here, project=here)
+
+    def test_the_worktree_the_session_stands_in_is_not_this_rule(self):
+        # There the permission rules apply, and a lifted deny is the owner's.
+        worktree = self.linked()
+        self.assertAdmitted(os.path.join(worktree, ".claude", "scripts", "x.sh"),
+                            cwd=worktree, project=worktree)
+
+    def test_a_checkout_of_another_repository_is_not_this_rule(self):
+        stranger = os.path.join(self.outside, "stranger")
+        os.makedirs(os.path.join(stranger, ".git"), exist_ok=True)
+        self.assertAdmitted(os.path.join(stranger, ".claude", "scripts", "x.sh"))
+
+    def test_a_git_file_git_did_not_write_makes_no_linked_worktree(self):
+        forged = os.path.join(self.outside, "forged")
+        os.makedirs(forged, exist_ok=True)
+        admin = os.path.join(self.root, ".git", "worktrees", "forged")
+        os.makedirs(admin, exist_ok=True)
+        self.write(os.path.join(forged, ".git"), "gitdir: " + admin + "\n")
+        self.write(os.path.join(admin, "gitdir"), "/elsewhere/.git\n")
+        self.assertAdmitted(os.path.join(forged, ".claude", "scripts", "x.sh"))
+
+    def test_a_link_inside_it_is_judged(self):
+        worktree = self.linked()
+        real = os.path.join(self.outside, "beyond")
+        os.makedirs(real, exist_ok=True)
+        for linker in linkers():
+            with self.subTest(link=linker):
+                link = os.path.join(worktree, "docs", f"through-{linker}")
+                if linker == "symlink":
+                    os.symlink(real, link, target_is_directory=True)
+                else:
+                    JUNCTIONS(real, link)
+                reason = self.assertRefused(os.path.join(link, "note.md"))
+                self.assertIn("resolves outside the checkout", reason)
+
+
 class WhatThisGuardIsNotTheSubjectOf(GuardCase):
     """The residuals, written as passing cases so nobody assumes they closed."""
 
     def test_a_path_outside_every_checkout_is_not_judged(self):
-        # The residual the hook's docstring argues: the harness writes the
-        # session's memory and scratchpad by absolute path outside the
-        # repository, and refusing those would take them with it.
+        # The harness writes the session's memory and scratchpad by absolute
+        # path outside the repository, and an allow-list would refuse sibling
+        # checkouts with them, so only named home files are refused.
         self.assertAdmitted(os.path.join(self.outside, "loot.txt"))
 
     def test_a_tool_that_does_not_write_is_not_judged(self):

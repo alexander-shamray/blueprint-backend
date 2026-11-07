@@ -13,11 +13,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "guard-sed-crlf.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
 GIT = shutil.which("git")
+EXECUTABLE = "git.exe" if os.name == "nt" else "git"
 
 
 def setUpModule():
@@ -342,10 +344,85 @@ class WhatTheHookCannotPlaceFailsOpen(ACheckout):
         self.assertAdmitted("printf '%s\\n' \"sed -i 's/one/uno/' crlf.txt\" | bash")
 
     def test_no_git_admits(self):
-        original = GUARD.shutil.which
-        GUARD.shutil.which = lambda name: None
-        self.addCleanup(setattr, GUARD.shutil, "which", original)
+        original = GUARD.git_on_path
+        GUARD.git_on_path = lambda cwd: None
+        self.addCleanup(setattr, GUARD, "git_on_path", original)
         self.assertAdmitted("sed -i 's/one/uno/' crlf.txt")
+
+
+class AGitPlantedWhereTheHookStands(ACheckout):
+    """A planted git answers 0 to everything and leaves a mark, so it would refuse the untracked `loose.txt`."""
+
+    def setUp(self):
+        super().setUp()
+        self.mark = os.path.join(self.root, "planted-git-ran")
+        # Held here so a case that stands in it is back out before it goes: Windows keeps a working directory.
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.elsewhere = holder.name
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.root)
+        # A Claude Code shell sets this, which stops Windows searching the current directory, and a hook cannot rely
+        # on that: a case that inherited it would pass over the search it is here to judge.
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("NoDefaultCurrentDirectoryInExePath", None)
+
+    def executable(self, folder, name, text="x"):
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chmod(path, 0o755)
+
+    def plant(self, folder):
+        lines = [f'@echo ran> "{self.mark}"', "@exit /b 0"] if os.name == "nt" else [
+            "#!/bin/sh", f"echo ran > '{self.mark}'"]
+        name = "git.cmd" if os.name == "nt" else "git"
+        self.executable(folder, name, "".join(line + chr(10) for line in lines))
+
+    def found(self, path, cwd=None):
+        with mock.patch.dict(os.environ, {"PATH": path}):
+            return GUARD.git_on_path(cwd or os.getcwd())
+
+    def test_it_is_not_run_and_the_git_on_path_answers(self):
+        self.plant(self.root)
+        real = os.path.dirname(GIT)
+        for path in (real, os.pathsep.join(["", ".", real])):
+            with self.subTest(path=path), mock.patch.dict(os.environ, {"PATH": path}):
+                self.assertAdmitted("sed -i 's/one/uno/' loose.txt")
+                self.assertRefused("sed -i 's/one/uno/' crlf.txt", "crlf.txt")
+                self.assertFalse(os.path.exists(self.mark), "the planted git ran")
+
+    def test_a_git_elsewhere_on_path_is_found(self):
+        self.executable(self.elsewhere, EXECUTABLE)
+        self.assertEqual(os.path.join(self.elsewhere, EXECUTABLE), self.found(self.elsewhere))
+
+    def test_a_git_at_or_below_where_the_session_stands_reads_as_no_git(self):
+        tools = os.path.join(self.root, "tools")
+        for folder in (self.root, tools):
+            self.plant(folder)
+            self.executable(folder, EXECUTABLE)
+        path = os.pathsep.join(["", ".", self.root, tools])
+        self.assertIsNone(self.found(path, cwd=self.elsewhere), "the working directory is not fenced")
+        os.chdir(self.elsewhere)
+        self.assertIsNone(self.found(path, cwd=self.root), "the event's cwd is not fenced")
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": self.root}):
+            self.assertIsNone(self.found(path), "the project directory is not fenced")
+        self.assertFalse(os.path.exists(self.mark), "the planted git ran")
+
+    def test_a_relative_path_entry_is_not_searched(self):
+        self.executable(self.elsewhere, EXECUTABLE)
+        self.assertIsNone(self.found(os.path.relpath(self.elsewhere, self.root)))
+        if os.name == "nt":
+            self.assertIsNone(self.found(os.path.splitdrive(self.elsewhere)[1]), "a rooted entry has no drive")
+
+    def test_a_batch_file_is_not_git_wherever_it_sits(self):
+        # `cmd.exe` would read an `&` in the operand as its own, which `subprocess` does not quote.
+        for name in ("git.cmd", "git.bat"):
+            self.executable(self.elsewhere, name)
+        self.assertIsNone(self.found(self.elsewhere))
 
 
 class TheHookAsTheHarnessRunsIt(ACheckout):
