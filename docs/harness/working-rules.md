@@ -57,12 +57,14 @@ cited from here, never restated.
   owner a queue step for a decision already made.
 - **A Dependabot pull request is the one exception to the trailer and to
   the class row.** It declares no class and no touch set and carries no
-  `PR:` trailer, so the gates that read them skip it, and a skipped job
-  passes a required check. Every other job runs on it, and the owner
-  merges it. The exemption is by author, so a human push to a Dependabot
-  branch rides on it; review such a push as a gate bypass. With no
-  trailer, `git-revert-pr.sh` cannot find its commit, so one is reverted
-  with `git revert` on a branch of its own.
+  `PR:` trailer, so the gates that read them skip it, and a skipped step
+  passes a required check. The owner merges it. The commit gate stands
+  down only where every commit's author and committer are Dependabot's; it
+  judges by the identities a commit records, not by who pushed it. Once it
+  judges, every commit in the range must carry the trailer and the form,
+  Dependabot's included, so the commits are rewritten or the branch
+  replaced. With no trailer, `git-revert-pr.sh` cannot find its commit, so
+  one is reverted with `git revert` on a branch of its own.
 - **The class and the touch set** a pull request declares are the change
   contract's that `docs/harness-local.md` *Documents* names; a target
   with none declares none.
@@ -174,7 +176,8 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   to a finding — `harness` for anything under `.claude/`, its prose
   included, `documentation` for prose and samples elsewhere, `code` for the
   rest — with `test` beside `harness` or `code` for a test suite.
-  `gh-issue-create.sh` takes the area as its third argument; a label
+  `gh-issue-hand.sh` and `gh-issue-sweep.sh` take the area as their third
+  argument; a label
   outside its set, `tracking`, `paused` or `flaky`, is added by
   `gh issue edit` after filing. A severity in the body and the label both
   say it. `documentation` is an issue's kind only on one that carries no
