@@ -14,6 +14,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from review_helpers import assert_launched_on_the_floor
+
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "guard-index-argv.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
@@ -247,9 +249,9 @@ class GuardIndexArgv(unittest.TestCase):
             for entry in entries if entry.get("matcher") == "Bash"
             for h in entry.get("hooks", [])
         ]
-        self.assertTrue(
-            any(HOOK.name in c for c in commands),
-            f"{HOOK.name} is not among the registered Bash hooks: {commands}")
+        mine = [c for c in commands if HOOK.name in c]
+        self.assertEqual(1, len(mine), f"{HOOK.name} is not registered once among the Bash hooks: {commands}")
+        assert_launched_on_the_floor(self, mine[0], HOOK.name)
 
 
 if __name__ == "__main__":

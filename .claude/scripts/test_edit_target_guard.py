@@ -16,6 +16,8 @@ import unicodedata
 import unittest
 from pathlib import Path
 
+from review_helpers import assert_launched_on_the_floor
+
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "guard-edit-target.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
@@ -921,8 +923,7 @@ class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):
         self.assertTrue(commands)
         for command in commands:
             with self.subTest(command=command):
-                self.assertIn("py -3.12", command)
-                self.assertIn("CLAUDE_PROJECT_DIR", command)
+                assert_launched_on_the_floor(self, command, HOOK.name)
 
     def test_the_argv_guard_is_still_registered_beside_it(self):
         # A second entry under the same event is the shape most likely to be

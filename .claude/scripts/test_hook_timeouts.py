@@ -9,8 +9,12 @@ import unittest
 
 from review_helpers import SETTINGS, setUpModule
 
-# A hint hook runs under hint-bound.sh, which launches `py` itself, so it is held to the same floor.
-LAUNCHERS = ("py ", 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh"')
+# A hint runs under hint-bound.sh and a guard under run-guard.sh, each of which launches `py`, so both share the floor.
+LAUNCHERS = ("py ", 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh"',
+             'sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh"')
+
+# The base's hooks by launcher: three `py`, the two hints and six guard commands, guard-git-argv's Bash and PowerShell.
+COUNTS = {"py ": 3, LAUNCHERS[1]: 2, LAUNCHERS[2]: 6}
 
 # The slowest `py` start measured was 2.9 s; a hook needs that and its own work, with room to spare.
 FLOOR_SECONDS = 15
@@ -25,8 +29,11 @@ class PyLauncherHooksOutliveASlowStart(unittest.TestCase):
                     yield event, hook
 
     def test_the_hooks_launched_through_py_are_found(self):
-        found = [hook for _, hook in self.hooks() if hook["command"].startswith(LAUNCHERS)]
-        self.assertGreaterEqual(len(found), 8, "the scan matched too few hooks to be looking at the settings")
+        commands = [hook["command"] for _, hook in self.hooks()]
+        for launcher, count in COUNTS.items():
+            with self.subTest(launcher=launcher):
+                found = [command for command in commands if command.startswith(launcher)]
+                self.assertGreaterEqual(len(found), count, "the scan matched too few hooks to be looking at the settings")
 
     def test_a_py_hook_with_a_timeout_allows_a_slow_launcher_start(self):
         for event, hook in self.hooks():

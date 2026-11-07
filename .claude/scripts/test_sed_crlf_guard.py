@@ -15,6 +15,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from review_helpers import assert_launched_on_the_floor
+
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "guard-sed-crlf.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
@@ -465,8 +467,7 @@ class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):
     def test_the_hook_is_registered_on_bash_on_the_312_floor(self):
         mine = [command for command in self.commands_for("Bash") if HOOK.name in command]
         self.assertEqual(1, len(mine), f"{HOOK.name} is not registered once on Bash: {self.commands_for('Bash')}")
-        self.assertIn("py -3.12", mine[0])
-        self.assertIn("CLAUDE_PROJECT_DIR", mine[0])
+        assert_launched_on_the_floor(self, mine[0], HOOK.name)
 
     def test_the_guards_beside_it_are_still_registered(self):
         # An entry added to a list is the shape most likely to be written as a replacement.

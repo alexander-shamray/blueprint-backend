@@ -75,9 +75,9 @@ when a step behaves unexpectedly.
   reads that for you: it tries `rmdir` on what is left and exits 0 when
   that empties the path, and exits 4, naming the directory, when something
   is still in it or a process still holds it. Safe: remove last, from the
-  main checkout, without `-f`, and trust the helper's exit, checking with
-  `git worktree list` and `ls` after a raw `git worktree remove`, whose
-  exit says nothing. A folder an exit 4 names is removed from a fresh
+  main checkout, through the helper, and trust its exit; the raw
+  `git worktree remove` is denied in the base, since its `-f` discards
+  work. A folder an exit 4 names is removed from a fresh
   terminal after the holder exits; a `!` line runs inside the session's
   own process tree and fails *busy*.
 

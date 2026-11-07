@@ -17,6 +17,7 @@ from review_helpers import (
     GIT,
     setUpModule,
 )
+from test_command_grants import bash_deny_matches
 
 
 class HarnessControlSurfaceIsDenied(unittest.TestCase):
@@ -86,6 +87,21 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
                 self.assertNotIn(".claude/worktrees", rule)
                 self.assertNotEqual("Edit(.claude/**)", rule)
                 self.assertNotEqual("Edit(./.claude/**)", rule)
+
+    # The raw forms `--admin` and `-f` come through, and the helpers `/ship` lands and tears down with.
+    RAW = {"git worktree remove -f .claude/worktrees/x": "bash .claude/scripts/git-worktree-remove.sh "
+                                                          ".claude/worktrees/x feature/x",
+           "gh pr merge 7 --rebase --admin": "bash .claude/scripts/gh-pr-merge.sh 7 " + "0" * 40}
+
+    def test_each_raw_form_is_denied_and_the_helper_is_not(self):
+        # A deny judges the typed command and never one a script runs, so the helper stays reachable.
+        deny = self.deny()
+        for raw, helper in self.RAW.items():
+            for command in (raw, raw.split(" -", 1)[0]):
+                with self.subTest(refused=command):
+                    self.assertTrue(any(bash_deny_matches(rule, command) for rule in deny))
+            with self.subTest(reachable=helper):
+                self.assertFalse(any(bash_deny_matches(rule, helper) for rule in deny))
 
     def test_the_deny_list_is_actually_read(self):
         # The positive control. Every assertion above would pass against a file

@@ -19,6 +19,7 @@ from review_helpers import (
     SCRIPTS,
     NEWLINE,
     SETTINGS,
+    assert_launched_on_the_floor,
     run_bash,
     setUpModule,
     temp_root,
@@ -3209,14 +3210,9 @@ class TheGitArgvGuard(unittest.TestCase):
             h.get("command", "")
             for entry in matched for h in entry.get("hooks", [])
         ]
-        self.assertTrue(
-            any(HOOK.name in c for c in commands),
-            f"{HOOK.name} is not among the registered Bash hooks: {commands}",
-        )
-        self.assertTrue(
-            any("py -3.12" in c for c in commands),
-            "the hook must run on the 3.12 floor, like every other Python here",
-        )
+        mine = [c for c in commands if HOOK.name in c]
+        self.assertEqual(1, len(mine), f"{HOOK.name} is not registered once among the Bash hooks: {commands}")
+        assert_launched_on_the_floor(self, mine[0], HOOK.name)
 
     def test_the_hook_is_registered_for_powershell_in_settings(self):
         # The Bash case's lesson again: a PowerShell verdict is silent if no
@@ -3228,9 +3224,9 @@ class TheGitArgvGuard(unittest.TestCase):
             if "PowerShell" in (entry.get("matcher") or "").split("|")
             for h in entry.get("hooks", [])
         ]
-        self.assertTrue(
-            any(HOOK.name in c and "py -3.12" in c for c in commands),
-            f"{HOOK.name} is not among the registered PowerShell hooks: {commands}")
+        mine = [c for c in commands if HOOK.name in c]
+        self.assertEqual(1, len(mine), f"{HOOK.name} is not registered once among the PowerShell hooks: {commands}")
+        assert_launched_on_the_floor(self, mine[0], HOOK.name)
 
     def test_a_redirection_ampersand_does_not_end_the_run(self):
         body = "\ngit push origin +HEAD:main\nEOF"

@@ -72,6 +72,8 @@
       "Bash(git branch --delete:*)",
       "Bash(git branch --move:*)",
       "Bash(git branch --force:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(gh pr merge:*)",
       "Bash(git *--output*)",
       "Bash(git *--upload-pack*)",
       "Bash(git *--receive-pack*)",
@@ -85,22 +87,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git-argv.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-git-argv.py",
             "statusMessage": "checking git argv"
           },
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-index-argv.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-index-argv.py",
             "statusMessage": "checking index argv"
           },
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-helper-argv.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-helper-argv.py",
             "statusMessage": "checking helper argv"
           },
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-sed-crlf.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-sed-crlf.py",
             "statusMessage": "checking sed line endings"
           }
         ]
@@ -110,7 +112,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git-argv.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-git-argv.py",
             "statusMessage": "checking git argv"
           }
         ]
@@ -120,7 +122,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-edit-target.py\"",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh\" guard-edit-target.py",
             "statusMessage": "checking edit target"
           }
         ]
