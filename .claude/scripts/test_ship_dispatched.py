@@ -31,7 +31,7 @@ GRANTS_BEFORE = (
     "Bash(gh pr checks:*)", "Bash(bash .claude/scripts/gh-pr-merge.sh:*)", "Bash(git pull --ff-only)",
     "Bash(git merge-base --is-ancestor:*)", "Bash(bash .claude/scripts/git-worktree-remove.sh:*)",
     "Bash(git worktree prune:*)", "Bash(bash .claude/scripts/pr-locality.sh:*)",
-    "Bash(bash .claude/scripts/gh-issue-create.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
+    "Bash(bash .claude/scripts/gh-issue-hand.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
 )
 DROP_GRANTS = ("Bash(bash .claude/scripts/git-branch-drop.sh:*)",)
 # The sync row's grants (test_ship_sync.py): a dispatched sync's reads and its one filing must be named by the

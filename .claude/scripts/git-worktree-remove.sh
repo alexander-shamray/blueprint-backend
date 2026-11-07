@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Remove a /branch worktree under .claude/worktrees/, without -f, once no
-# code-index refresh holds it. A prefix grant on `git worktree remove` also
-# buys the `-f` that discards what git's refusal protects; here the command is
-# fixed and its one argument shape-checked, so no flag can arrive.
+# Remove the /branch worktree at <path> holding <branch>, without -f, once no
+# code-index refresh holds it. The command is fixed and both arguments are
+# shape-checked, so no flag can arrive; docs/commands/ship.md says who passes
+# the branch and what the binding leaves open.
 set -euo pipefail
-[ "$#" -eq 1 ] || { echo "usage: git-worktree-remove.sh <path>" >&2; exit 2; }
+[ "$#" -eq 2 ] ||
+  { echo "usage: git-worktree-remove.sh <path> <branch>" >&2; exit 2; }
 path="$1"
+branch="$2"
 [[ "$path" =~ ^\.claude/worktrees/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
   { echo "path must be .claude/worktrees/<name>" >&2; exit 2; }
+# The pattern git-branch-create.sh and git-worktree-fork.sh use, which admits
+# `()` because `/branch` cuts `feat(<scope>)/` names.
+[[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] && [[ "$branch" != *..* ]] ||
+  { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
+# Folded, as git-rebase-onto-main.sh folds it: a case-insensitive host's `Main`
+# is `main`'s ref.
+[ "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" != main ] ||
+  { echo "main is never a forked branch: $branch" >&2; exit 2; }
 git rev-parse --git-dir >/dev/null 2>&1 ||
   { echo "not in a git repository" >&2; exit 2; }
 [ -z "$(git rev-parse --show-prefix)" ] ||
@@ -24,6 +34,11 @@ common_there=$(git -C "$path" rev-parse --path-format=absolute --git-common-dir)
   { echo "not a git worktree: $path" >&2; exit 3; }
 [ "$common_there" = "$common_here" ] && [ "$dir_there" != "$common_there" ] ||
   { echo "not a linked worktree of this repository: $path" >&2; exit 3; }
+# The branch is asked of the worktree itself, as git answers there, which holds
+# on Windows where a comparison of directory spellings does not. A detached
+# worktree has no symbolic HEAD and holds no branch, so it is refused too.
+[ "$(git -C "$path" symbolic-ref --quiet HEAD || :)" = "refs/heads/$branch" ] ||
+  { echo "not the worktree of this repository holding ${branch}: $path" >&2; exit 3; }
 # Every refresh worker holds this lock for its whole run, the index update
 # included, and Windows will not delete a file held open: a remove meanwhile
 # deletes part of the tree and fails. So the lock is taken first, with the
@@ -86,4 +101,26 @@ fi
 # Windows refuses a path past 260 characters unless git asks for long paths:
 # git then refuses a worktree holding files it cannot read, or, failing to
 # delete one, unregisters the worktree anyway and leaves its directory behind.
-git -c core.longpaths=true worktree remove "$path"
+# The status is captured, so the checks below run whatever git exits.
+status=0
+git -c core.longpaths=true worktree remove "$path" || status=$?
+# Git still registering the worktree is the dirty-tree refusal; one it no longer
+# registers is a failed delete. Asked by branch, so no spellings are compared.
+if [ -e "$path" ]; then
+  listed=$(git worktree list --porcelain) ||
+    { echo "cannot read the worktree list, so whether $path is still registered is unknown" >&2
+      exit "$((status == 0 ? 1 : status))"; }
+  if ! grep -Fxq "branch refs/heads/$branch" <<<"$listed"; then
+    # Git can fail after it has deleted the files and the registration, with
+    # only the directory left. `rmdir` refuses one holding anything, so an
+    # empty directory goes and the removal succeeded, and any other is named.
+    if rmdir "$path" 2>/dev/null; then
+      [ "$status" -eq 0 ] ||
+        echo "git exited $status after deleting $path; the empty directory is removed" >&2
+      exit 0
+    fi
+    echo "unregistered but not deleted: $path is still there; remove it by hand" >&2
+    exit 4
+  fi
+fi
+exit "$status"

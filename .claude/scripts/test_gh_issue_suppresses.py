@@ -229,7 +229,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api", "gh.exe:*", "GH:*", "GH_TOKEN=x gh:*"):
             with self.subTest(grant=grant):
                 self.assertIsNotNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.match(grant))
-        self.assertIsNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.match("bash .claude/scripts/gh-issue-create.sh:*"))
+        self.assertIsNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.match("bash .claude/scripts/gh-issue-sweep.sh:*"))
 
     def test_the_listing_helper_fixes_its_field_set(self):
         code = "\n".join(code_lines(ISSUE_LIST.read_text(encoding="utf-8")))

@@ -9,6 +9,7 @@ import subprocess
 import unittest
 
 from review_helpers import (
+    COMMANDS,
     SCRIPTS,
     BASH,
     setUpModule,
@@ -207,6 +208,94 @@ class StaleSweepWorktrees(unittest.TestCase):
         self.assertEqual(0, run_bash('rm -rf "$P"', P=old).returncode)
         self.made()
         self.assertNotIn(old.rsplit("/", 1)[-1], self.names())
+
+
+class ATrackedLinkIsRefusedBeforeAnythingIsMade(unittest.TestCase):
+    """A git worktree preserves tracked symbolic links, so a link in the pinned
+    commit is a path under `$work` whose target is not, and `Read`, `Grep` and
+    `Glob` follow it. The sweep's path rule is about spelling and cannot see it,
+    so the commit is asked before the worktree exists.
+    """
+
+    def setUp(self):
+        top = temp_root(self)
+        # The index records mode 120000 without any OS symlink privilege.
+        made = run_bash(
+            'mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q . '
+            '&& blob=$(printf %s ../../outside | git hash-object -w --stdin) '
+            '&& git update-index --add --cacheinfo "120000,$blob,leak" '
+            '&& git -c user.name=t -c user.email=t@example.invalid commit -q -m link '
+            '&& git rm -q --cached leak '
+            '&& git -c user.name=t -c user.email=t@example.invalid commit -q -m plain',
+            top=top,
+        )
+        self.assertEqual(0, made.returncode, made.stderr)
+        self.repo, self.root = f"{top}/repo", f"{top}/root"
+
+    def detach(self, revision):
+        return run_bash(
+            'cd "$R" && bash "$DETACH" "$(git rev-parse "$REV")"',
+            R=self.repo, DETACH=str(DETACH), TMPDIR=self.root, REV=revision,
+        )
+
+    def sweep_dirs(self):
+        return run_bash('ls "$ROOT"', ROOT=self.root).stdout.split()
+
+    def test_a_commit_carrying_a_link_is_refused_and_named(self):
+        result = self.detach("HEAD~1")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertIn("tracked symbolic links", result.stderr)
+        self.assertIn("leak", result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertEqual([], self.sweep_dirs(), "a directory was made for a commit that was refused")
+
+    def test_a_link_whose_name_holds_a_space_is_named_whole(self):
+        made = run_bash(
+            'cd "$R" && blob=$(printf %s ../../outside | git hash-object -w --stdin) '
+            '&& git update-index --add --cacheinfo "120000,$blob,my link" '
+            '&& git -c user.name=t -c user.email=t@example.invalid commit -q -m spaced',
+            R=self.repo)
+        self.assertEqual(0, made.returncode, made.stderr)
+        result = self.detach("HEAD")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertIn("my link", result.stderr)
+        self.assertEqual([], self.sweep_dirs())
+
+    def test_the_refusal_names_five_links_and_no_more(self):
+        made = run_bash(
+            'cd "$R" && blob=$(printf %s ../../outside | git hash-object -w --stdin) '
+            '&& for n in lnk1 lnk2 lnk3 lnk4 lnk5 lnk6 lnk7 lnk8; do '
+            'git update-index --add --cacheinfo "120000,$blob,$n"; done '
+            '&& git -c user.name=t -c user.email=t@example.invalid commit -q -m many',
+            R=self.repo)
+        self.assertEqual(0, made.returncode, made.stderr)
+        result = self.detach("HEAD")
+        self.assertEqual(5, result.returncode, result.stderr)
+        for named in ("lnk1", "lnk2", "lnk3", "lnk4", "lnk5"):
+            self.assertIn(named, result.stderr)
+        for past in ("lnk6", "lnk7", "lnk8"):
+            self.assertNotIn(past, result.stderr)
+
+    def test_the_same_repository_at_a_commit_without_the_link_is_detached(self):
+        # The positive control: the refusal is the commit's, not the repository's.
+        result = self.detach("HEAD")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, len(self.sweep_dirs()))
+
+    def test_a_refused_commit_drops_no_stale_worktree(self):
+        old = self.detach("HEAD").stdout.strip()
+        self.assertEqual(0, run_bash('touch -d "2 days ago" "$P"', P=old).returncode)
+        result = self.detach("HEAD~1")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertEqual("yes", run_bash('[ -d "$P" ] && echo yes', P=old).stdout.strip(),
+                         "a refused call dropped a worktree")
+
+    def test_both_sweeps_state_the_half_that_is_closed(self):
+        for name in ("security-sweep.md", "bug-sweep.md"):
+            with self.subTest(command=name):
+                text = " ".join((COMMANDS / name).read_text(encoding="utf-8").split())
+                self.assertIn("`git-worktree-detach.sh` now refuses a", text)
+                self.assertIn("tracked link", text)
 
 
 if __name__ == "__main__":

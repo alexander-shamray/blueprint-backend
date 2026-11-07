@@ -19,6 +19,14 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 CBX = SCRIPTS.parent / "skills" / "codebase-index" / "scripts" / "cbx"
 CBX_PS1 = CBX.with_suffix(".ps1")
+SKILL = SCRIPTS.parent / "skills" / "codebase-index"
+
+# The bare console script `codebase-index <subcommand>`, which no wrapper pins to the interpreter or holds to the
+# allow list. At the start of a line, or after a backtick or whitespace, so the path `skills/codebase-index/` and the
+# package name in prose do not match.
+UNPINNED_CLI = re.compile(
+    r"(?:^|[`\s])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
+    r"|stats|doctor|update|index|graph|mcp|clean|init|watch)\b", re.M)
 
 
 def _bash():
@@ -304,6 +312,36 @@ class CbxWrapper(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("cbx graph", skill)
         self.assertNotIn("cbx graph", commands)
+
+    def test_skill_markdown_does_not_teach_the_unpinned_cli(self):
+        # An agent loads SKILL.md and the references. The case above reads two files for the one subcommand the
+        # wrapper refuses; a copy-pasted `codebase-index verify` in any other file would bypass the wrapper and
+        # its allow list while that case stays green. So every markdown file the skill ships is read, for any
+        # subcommand.
+        files = sorted(SKILL.rglob("*.md"))
+        self.assertGreater(len(files), 3, "found almost no skill markdown")
+        for path in files:
+            with self.subTest(path=path.relative_to(SKILL).as_posix()):
+                found = UNPINNED_CLI.search(path.read_text(encoding="utf-8"))
+                self.assertIsNone(found, f"{path.name} teaches the unpinned CLI: {found and found.group(0)!r}")
+
+    def test_the_skill_teaches_the_wrapper_instead(self):
+        # The positive control for the case above: it passes against a skill that teaches nothing at all.
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("bash .claude/skills/codebase-index/scripts/cbx search", skill)
+        self.assertIsNone(UNPINNED_CLI.search("`bash .claude/skills/codebase-index/scripts/cbx search \"X\"`"))
+
+    def test_the_scan_sees_each_way_the_unpinned_cli_is_spelled(self):
+        # The scan's subject is the scan: a pattern that matched nothing would pass every file above.
+        for text in ("codebase-index verify --json", "Run `codebase-index search X`", "| `codebase-index impact X` |",
+                     "x codebase-index  graph", "$ codebase-index doctor", "codebase-index mcp",
+                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch"):
+            with self.subTest(text=text):
+                self.assertIsNotNone(UNPINNED_CLI.search(text))
+        for text in ("the `codebase-index` package", "pip install codebase-index", "skills/codebase-index/scripts/cbx",
+                     "codebase-index is a package"):
+            with self.subTest(text=text):
+                self.assertIsNone(UNPINNED_CLI.search(text))
 
     def test_powershell_refuses_destructive_subcommands(self):
         for sub in ("clean", "init", "watch", "graph"):

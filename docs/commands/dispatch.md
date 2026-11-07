@@ -439,7 +439,7 @@ as a shell command: the only launcher is `dispatch_board.py run`, which
 passes the settings' own permission mode and never a skip flag (spec §6.2).
 Raw `gh issue edit`, `close` and `create` are denied, because the issue
 writes are `issue_decisions.py`'s, which accepts only the decision entry's
-shape, and `gh-issue-create.sh`'s.
+shape, and `gh-issue-hand.sh`'s.
 
 The git grants that write are the fork, sync worktree, removal and
 branch-drop helpers and `git pull --ff-only`. `sync_pr.py` is granted for

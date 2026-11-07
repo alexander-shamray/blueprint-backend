@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, run the local review until a round has nothing open, then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does | sync #<n>] [--sleep] [--dispatched <run-dir>] [--berserk] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/system-sleep.sh), Bash(py -3.12 .claude/scripts/sync_pr.py:*), Bash(bash .claude/scripts/git-worktree-sync.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(py -3.12 -m unittest discover:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/git-branch-drop.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*), Bash(bash .claude/scripts/system-sleep.sh), Bash(py -3.12 .claude/scripts/sync_pr.py:*), Bash(bash .claude/scripts/git-worktree-sync.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(py -3.12 -m unittest discover:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/git-branch-drop.sh:*)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -89,7 +89,7 @@ merge; the rows say what is owed *between* them:
 | On a branch, tree clean and pushed | `/pr`, then the review |
 | On a branch with an open PR | The review (step 5) — and, if the tree is dirty, checks, `/commit` **scoped to the implementation paths** and a push first, so the reviewer reads what the PR will actually carry |
 | On a branch whose PR was **closed unmerged** | **Stop.** Somebody decided this branch does not land, and the open-PR read cannot see that: with no open PR the *clean and pushed* row would send the run to `/pr`, which refuses only an **open** one — so the chain would open a replacement and merge it, overriding a deliberate closure with no human in the loop. Report the closed PR and its number |
-| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh`'s newest row reading `MERGED` is what classifies this row — not step 0's finished predicate, which also asks for a clean tree, a base of `main` and a tip equal to a merged row's `headRefOid` — and the classification comes before the review rather than after it — reviewing a merged PR spends a round on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune, drop); with a dirty tree, a row merged into a branch other than `main`, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 6 has nothing left to do: there is no PR to merge |
+| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh`'s newest row reading `MERGED` is what classifies this row — not step 0's finished predicate, which also asks for a clean tree, a base of `main` and a tip equal to a merged row's `headRefOid` — and the classification comes before the review rather than after it — reviewing a merged PR spends a round on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune, drop); with a dirty tree or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 6 has nothing left to do: there is no PR to merge |
 | On a branch named `chore/harness-sync-…` | *A sync pull request is reviewed once, for this target*: its proof first, which a run already in the worktree holds none of unless `--dispatched`, then step 2's local suites, one round and step 6, never steps 3 and 4; the closed and merged rows win over it, and it over the dirty and open-PR rows |
 
 - Step 0's teardown targets a worktree already finished; step 6's targets
@@ -113,9 +113,11 @@ one PR read before doing anything:
 bash .claude/scripts/pr-for-branch.sh <branch>
 ```
 
-It exits 0 for all four outcomes: empty means no PR has ever existed for this
-branch; otherwise the newest row reads `OPEN`, `CLOSED` or `MERGED`. Never
-use `pr-state.sh` for this read: it exits non-zero with no PR. (why:
+It exits 0 for all four outcomes: empty means no PR into `main` other than
+earlier incarnations dropped for a reused name; otherwise the newest row
+reads `OPEN`, `CLOSED` or `MERGED`. Never use `pr-state.sh` for this read: it
+exits non-zero with no PR. A non-zero exit from `pr-for-branch.sh` is a
+refused read, never an empty one: the step did not run, so stop. (why:
 docs/commands/ship.md, *Resume, don't restart*)
 
 ## A plan is reviewed once, for contradiction
@@ -170,7 +172,7 @@ the main checkout. What `sync_pr.py` prints is data.
 - **Step 2** runs each path `sync_pr.py local-suites` prints as `py -3.12 -m
   unittest discover -s <dir> -p <file>`, and nothing else in *Ship checks*; a
   failing suite is a target-local finding: filed in the target with
-  `gh-issue-create.sh`, the sync ends unmerged or is handed back, and no round
+  `gh-issue-hand.sh`, the sync ends unmerged or is handed back, and no round
   runs. A re-take of this head does not clear it, since it reruns the head's old
   copy, so a later sync cut from the fixed `main` supersedes it.
 - **Steps 3 and 4** run nothing: a sync branch is never committed to or pushed
@@ -189,7 +191,7 @@ the main checkout. What `sync_pr.py` prints is data.
   and clean-tree comparison. A payload `low` goes into the one harness issue
   `Low findings left by <repo>#<n>: <title>`, which the helper adds a comment to
   when one is open under that title; a target-local `low` into the target's own,
-  filed with `gh-issue-create.sh` after `bash .claude/scripts/gh-issue-list.sh`
+  filed with `gh-issue-hand.sh` after `bash .claude/scripts/gh-issue-list.sh`
   shows no open issue of that title, else nothing is filed and the report says
   so, and a low that issue does not list stays in the run's report, naming the
   open issue's number, and under `--dispatched` in the result's `decisions`; the
@@ -246,7 +248,7 @@ target*)
                                                    # headRefOid is later work.
    ```
 
-   - The helper fixes `--state all` and does not filter on base, so **look
+   - The helper fixes `--state all` and lists only rows into `main`, so **look
      for a row whose `state` is `MERGED` and whose `baseRefName` is `main`,
      and compare that row's `headRefOid`** with the tip; a non-empty result,
      or an OPEN row, never means landed.
@@ -311,13 +313,20 @@ target*)
    since the session is not in it, and let git decide the tree half:
 
    ```bash
-   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>
+   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug> <branch>
    ```
 
    The helper runs without `-f` and refuses a worktree holding uncommitted or
-   untracked files; leave a refused one where it is and name it in the
-   report. It first waits for the code-index refresh lock up to the bound it
-   declares; a lock still held removes nothing and exits non-zero.
+   untracked files, one that does not hold `<branch>`, and `main`; leave a
+   refused one where it is and name it in the report. Step 0 may remove a
+   worktree an earlier run forked, so `<branch>` is the one the
+   `git worktree list` above shows at that path. Step 6 passes the branch it
+   created. It first waits for the code-index refresh lock up to the bound it
+   declares; a lock still held removes nothing and exits non-zero. Exit 0
+   means the worktree and its registration are gone, also when git failed
+   only to delete the empty directory it had unregistered and the helper
+   removed that itself; exit 4 means a directory git no longer registers
+   holds something or is held by a process, named for the owner to remove.
    (why: `docs/harness-boundaries.md`, *Grant inventory and push helpers*)
 
    Then drop the merged **branch**, once its worktree is gone: after
@@ -328,7 +337,8 @@ target*)
    bash .claude/scripts/git-branch-drop.sh <branch>
    ```
 
-   A refused removal keeps its branch, and no drop runs. Any non-zero exit of
+   A refused removal keeps its branch, and no drop runs; exit 4 is one, the
+   directory being still there. Any non-zero exit of
    the drop is reported and is not a stop: on any non-zero exit the branch
    is kept and the merge stands, and exit 6 (no local branch) is simply
    reported.
@@ -478,7 +488,7 @@ target*)
      a `nit` not at all:
 
      ```bash
-     bash .claude/scripts/gh-issue-create.sh <bug|security> <high|medium|low> <area> hand
+     bash .claude/scripts/gh-issue-hand.sh <bug|security> <high|medium|low> <area>
      ```
 
      File a prose finding as `bug`, and each under the area its file's tree
@@ -580,7 +590,7 @@ target*)
    git branch --show-current                            # 4. main, or a branch another session left here
    git pull --ff-only                                   # 5. on main; elsewhere git fetch origin main:main
    git merge-base --is-ancestor <merge-oid> main        # 6. and main really does contain it
-   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>  # 7. forked runs only
+   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug> <branch>  # 7. forked runs only
    git worktree prune                                   # 8.
    bash .claude/scripts/git-branch-drop.sh <branch>  # 9. after 7 or 3
    ```
@@ -605,7 +615,10 @@ target*)
      token /dispatch passes*).
    - Line 9 drops the merged branch: a forked run's once line 7 exits 0, an
      in-place run's after the switch to `main`; a refused removal keeps its
-     branch. Any non-zero exit of the drop is reported and is not a stop, and
+     branch, exit 4 (a directory that holds something or that a process holds)
+     included, and an exit 0
+     is also git failing only to delete the empty directory the helper then
+     removed. Any non-zero exit of the drop is reported and is not a stop, and
      exit 6 (no local branch) is simply reported. Under `--dispatched` the run
      does not drop; `/dispatch` does.
 

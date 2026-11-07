@@ -92,9 +92,10 @@ be a guess. A plan PR is no exception, and *A plan is reviewed once, for
 contradiction* says what its re-run costs.
 
 **One call to `pr-for-branch.sh`, four outcomes, and it exits 0 for every one
-of them.** Empty means no PR has ever existed for this branch; otherwise the
-newest row reads `OPEN`, `CLOSED` or `MERGED`, and those are precisely the
-four cases the runbook's resume table distinguishes.
+of them.** Empty means no PR into `main` other than earlier
+incarnations dropped for a reused name; otherwise the newest row reads
+`OPEN`, `CLOSED` or `MERGED`, and those are precisely the four cases the
+runbook's resume table distinguishes.
 
 **`pr-state.sh` cannot be that read, and the reason is an exit
 code rather than a preference.** With no PR for the current branch it exits
@@ -206,7 +207,7 @@ in the target, and this sync is taken again once that merges. The harness is not
 the checkout's repository, so a payload finding is filed with
 `gh-issue-harness.sh`, whose repository is a literal and which only `/ship`
 holds: a route or repository word to `gh-issue-create.sh` would be declared by
-the caller, and the sweeps hold that helper over a tree they cannot trust. A
+the caller, which is why no command is granted that helper. A
 `low` goes where its code is, as the user-level filing rule sends it: a payload
 one into the one harness issue, and a target-local one into the target's own
 one; the merge goes on, and a `nit` is not filed. The harness filer only creates
@@ -216,7 +217,7 @@ timeout, and comments on a match, and a failed search files nothing. Its area is
 the finding's tree, as `docs/harness/working-rules.md` maps it: `.claude/` is
 `harness`, other prose `documentation`, the rest `code`, with `test` beside
 `harness` or `code` for a suite. A target-local low goes through
-`gh-issue-create.sh`, which always creates, so a re-take reads
+`gh-issue-hand.sh`, which always creates, so a re-take reads
 `gh-issue-list.sh` first, and where an open issue already holds that title
 nothing is filed. A low that issue does not list stays in the run's report,
 naming the open issue's number, and under `--dispatched` in the result's
@@ -305,8 +306,8 @@ merge — there is no shape of post-landing work that survives this read.
 **The row's `baseRefName` must be `main`, because landed means landed
 there.** A stacked pull request merged into another branch has a `MERGED`
 row whose head is the tip, and `main` holds none of it. The helper
-publishes the base and does not filter on it, since the resume table reads
-the same rows for a question that has no base in it.
+lists only rows into `main` and still publishes the base, so the read checks
+it rather than assuming it.
 
 **No comparison of content can stand here, and the two obvious ones fail
 in opposite directions.** A range read over `origin/main..HEAD` cannot see
@@ -333,10 +334,11 @@ holds nothing the landing lacked, so keeping it is wrong — the safe way: a
 directory somebody removes by hand, named in the report. Admitting it
 takes the landed head's object in this checkout, which a deleted remote
 branch no longer serves, and a second pair of ancestry reads that are only
-sound where the helper returns exactly one row, with a stale merged row
-dropped. This repository's helper returns every row the branch name has
-ever had, so the form taken is the one read, and step 5's fast-forward is
-what keeps the state rare.
+sound where the helper returns exactly one row. This repository's helper
+returns every row of the branch name into `main` but a merged one whose
+merge commit the local branch carries, so it can return several, and the
+form taken is the one read, and step 5's fast-forward is what keeps the state
+rare.
 
 **The row count is why the read says *a* row, not *the* row.** A branch
 name used twice has two `MERGED` rows, and equality against either head is
@@ -356,7 +358,9 @@ allowed to be wrong in.
 `pr-state.sh` on a branch with no PR exits non-zero, and *forked but never
 PR'd* is what step 1 produces on every run, so it cannot be one of these
 reads (*Resume, don't restart*). `pr-for-branch.sh` answers with a row or
-with `[]`.
+with `[]`. A non-zero exit is a refused read, never an empty one: the
+helper exits 4 at the listing cap and 3 on an answer that is no array,
+and the step did not run, as the runbook's first stop row says.
 
 **It is not filtered to merged, and the runbook's step 0 read must do that
 itself.** The helper fixes `--state all`, because the runbook's resume table
@@ -529,6 +533,33 @@ rather than an inconvenience — the same refusal `/security-sweep`'s
 teardown uses. A worktree it declines to remove is left where it is and
 named in the report.
 
+**Its exit says what is left, and the directory is checked as well as git's
+status.** Git for Windows, failing to delete a file a process holds open,
+can unregister the worktree and leave its directory behind, exiting non-zero
+or, with the delete failing late, zero. A teardown read as done would leave a
+directory nobody looks at, which the next `/branch` on that slug stops on, so
+the helper asks whether git still registers the worktree, by the branch it
+holds, which needs no comparison of directory spellings under MSYS. A worktree
+still registered is the dirty-tree refusal and keeps git's own status and
+message. One no longer registered is tried with `rmdir`, which refuses a
+directory holding anything and an empty one a process holds: an emptied one is
+gone and the removal succeeded, so the helper exits 0 whatever git's status
+was, and any other is named with exit 4 for the owner to remove, the branch
+kept.
+
+**The helper takes the path and the branch forked there, and removes only
+the worktree registered at that path holding that branch.** A path alone made
+registration stand for ownership: a prefix grant with a caller-chosen path
+could remove any clean forked worktree, another run's pull request checkout
+included. `main` is refused, so is a detached worktree, which holds no branch,
+and the directory name need not echo the branch, since `/branch` cuts it to a
+word or two of the change. What remains is a caller that already knows another
+run's path and branch together. Step 6 passes the branch `/ship` created at
+step 1; step 0 may remove a worktree an earlier run forked, so it takes the
+branch from the `git worktree list` it already runs.
+The branch pattern is the one `git-branch-create.sh` and `git-worktree-fork.sh`
+use, which admits parentheses because `/branch` cuts `feat(<scope>)/` names.
+
 **The index lock and the helper in place of a grant are
 `docs/harness-boundaries.md`'s**: *Index refresh and worktree seeding* says why
 the removal waits for the refresh lock, and *Grant inventory and push helpers*
@@ -542,7 +573,9 @@ stay denied in `.claude/settings.json`; the helper is the one route, and it
 deletes only a branch a pull request merged into `main` at its tip, which
 `docs/harness-boundaries.md`, *Grant inventory and push helpers*, argues. A
 worktree whose removal was refused keeps its branch, because the branch is
-still checked out there and the helper would refuse it in any case. Leaving a
+still checked out there and the helper would refuse it in any case; an
+exit 4, a directory that holds something or that a process holds, keeps it
+too. Leaving a
 landed branch behind costs a line in `git branch` per run, which no one reads
 and no one clears; the drop is cheap and keeps the list to live work.
 
@@ -1192,7 +1225,8 @@ takes it, on the dispatcher's proof as the sync section says.
 session started inside a worktree it did not enter has no `EnterWorktree`
 to undo, so `ExitWorktree` answers with an error that it had nothing to exit,
 and `git-worktree-remove.sh` deregisters the worktree but cannot delete the
-directory the session is standing in, which Windows holds open. Lines 3 to
+directory the session is standing in, which Windows holds open, so it exits
+4 naming it. Lines 3 to
 6 go with them: the main checkout holds `main` for the whole night, so the
 switch to `main` is refused, and from a linked worktree
 `git fetch origin main:main` is refused too, git declining to move a branch

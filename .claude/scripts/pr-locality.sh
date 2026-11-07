@@ -14,9 +14,12 @@ refuse() { echo "$1" >&2; exit 3; }
 # test projects, not files whose name happens to start that way.
 to_regex() {
   local re
+  # `+` is a literal, and the placeholder is spelled with `%`, which no token
+  # may hold: BSD sed reads `\x01` as the literal `x01`.
   re=$(printf '%s' "$1" |
-    sed -e 's/[.()]/\\&/g' -e 's/\*\*/\x01/g' -e 's/\*/[^\/]*/g' \
-        -e 's/?/[^\/]/g' -e 's/\x01/.*/g' -e 's/{/(/g' -e 's/}/)/g' -e 's/,/|/g')
+    sed -e 's/[.()+]/\\&/g' -e 's/\*\*/%%GLOBSTAR%%/g' -e 's/\*/[^\/]*/g' \
+        -e 's/?/[^\/]/g' -e 's/%%GLOBSTAR%%/.*/g' \
+        -e 's/{/(/g' -e 's/}/)/g' -e 's/,/|/g')
   printf '^%s(/.*)?$' "$re"
 }
 # The body is captured before it is filtered, so a `gh` failure — no
@@ -65,7 +68,7 @@ for item in "${items[@]}"; do
     '`'*'`') t="${t:1:${#t}-2}" ;;
     *'`'*) refuse "the Touch set row has an unbalanced backtick" ;;
   esac
-  grep -Eq '^[A-Za-z0-9_./*?{},()-]+$' <<<"$t" ||
+  grep -Eq '^[A-Za-z0-9_./*?{},()@+-]+$' <<<"$t" ||
     refuse "the Touch set row is not a path list"
   case "$t" in *[/.]*) ;; *) refuse "the Touch set row is not a path list" ;; esac
   t="${t%/}"
@@ -77,6 +80,12 @@ for item in "${items[@]}"; do
   n="${n//,//}"   # every `,` becomes `/`: the replacement is the last `/`
   case "/$n/" in
     *//*|*/./*|*/../*) refuse "the Touch set row names a path outside the repository" ;;
+  esac
+  # An empty alternative is an empty ERE alternative, which GNU and BSD grep
+  # read differently; the boundary check above took the leading one.
+  case "$t" in
+    *'{}'*|*'{,'*|*',,'*|*',}'*)
+      refuse "the Touch set row has an empty brace alternative" ;;
   esac
   # A trailing `/` names the directory the same way `docs` would, and was
   # dropped above before the boundary was judged.
@@ -103,9 +112,10 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   [[ "$raw" =~ ^\ \ -\ \'([^\']+)\'[[:space:]]*$ ]] && [ -n "$member" ] ||
     refuse "classes.yml has a line outside its grammar"
   item=${BASH_REMATCH[1]}
-  # An item takes the gate's token checks, since an unchecked one widens a
-  # class here that the gate refuses: `docs/a,docs/b` would admit `docs/admin`.
-  grep -Eq '^[A-Za-z0-9_./*?{},()-]+$' <<<"$item" && [[ "$item" == *[/.]* ]] ||
+  # An item takes the touch-set token checks, since an unchecked one widens a
+  # class: `docs/a,docs/b` would admit `docs/admin`. A target's own gate may
+  # admit fewer characters than this grammar does.
+  grep -Eq '^[A-Za-z0-9_./*?{},()@+-]+$' <<<"$item" && [[ "$item" == *[/.]* ]] ||
     refuse "classes.yml has an item that is not a path token"
   depth=0
   for ((i = 0; i < ${#item}; i++)); do
@@ -120,6 +130,9 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   n="${item//[\{\}]/}"
   n="${n//,//}"
   case "/$n/" in *//*|*/./*|*/../*) refuse "classes.yml has an item outside the repository" ;; esac
+  case "$item" in
+    *'{}'*|*'{,'*|*',,'*|*',}'*) refuse "classes.yml has an item with an empty brace alternative" ;;
+  esac
   seen[$member]=$((seen[$member] + 1))
   case "+$class+" in *"+$member+"*) class_patterns+=("$(to_regex "$item")") ;; esac
 done <"$map"
@@ -134,6 +147,7 @@ done
 files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" --paginate \
   --jq '.[] | (.filename, (.previous_filename // empty)) | @json')
 verdicts=()
+list=""
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   case "$line" in
@@ -142,24 +156,44 @@ while IFS= read -r line; do
   esac
   case "$line" in *\\*) refuse "a changed path is not a plain path" ;; esac
   path="${line:1:${#line}-2}"
-  grep -Eq '^[A-Za-z0-9_./@+()-]+$' <<<"$path" || refuse "a changed path is not a plain path"
+  # The characters are spelled out, not ranged, so no locale reads them and
+  # no process is spawned per changed path.
+  case "$path" in
+    ''|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./@+\(\)-]*)
+      refuse "a changed path is not a plain path" ;;
+  esac
   case "$path" in *[/.]*) ;; *) refuse "a changed path is not a plain path" ;; esac
   case "/$path/" in *//*|*/./*|*/../*) refuse "a changed path is not a plain path" ;; esac
   verdicts+=("$path")
+  list+="$path"$'\n'
 done <<<"$files"
 printf 'class %s\n' "$class"
+# One grep per pattern over every path, and line N's hit is path N's: a
+# validated path holds no newline. A pattern grep cannot compile matches
+# nothing and leaves the other patterns' verdicts alone.
+hits=(); class_hits=()
+if [ -n "$list" ]; then
+  for re in "${patterns[@]}"; do
+    matched=$(grep -nE -e "$re" <<<"${list%$'\n'}" || true)
+    while IFS=: read -r n _; do
+      [ -z "$n" ] || hits[n - 1]=1
+    done <<<"$matched"
+  done
+  for re in "${class_patterns[@]}"; do
+    matched=$(grep -nE -e "$re" <<<"${list%$'\n'}" || true)
+    while IFS=: read -r n _; do
+      [ -z "$n" ] || class_hits[n - 1]=1
+    done <<<"$matched"
+  done
+fi
+i=0
 for path in "${verdicts[@]}"; do
   verdict=outside
-  for re in "${patterns[@]}"; do
-    if grep -Eq "$re" <<<"$path"; then verdict=inside; break; fi
-  done
+  [ -z "${hits[i]:-}" ] || verdict=inside
   # The class's verdict overrides the row's, because no row may declare a path
   # its class does not admit: `outside-class` is resolved by a narrower diff or
   # a different class, and `outside` by a narrower diff or a wider row.
-  in_class=no
-  for re in "${class_patterns[@]}"; do
-    if grep -Eq "$re" <<<"$path"; then in_class=yes; break; fi
-  done
-  [ "$in_class" = yes ] || verdict=outside-class
+  [ -n "${class_hits[i]:-}" ] || verdict=outside-class
   printf '%s %s\n' "$verdict" "$path"
+  i=$((i + 1))
 done
