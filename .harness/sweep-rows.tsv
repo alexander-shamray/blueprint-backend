@@ -1,15 +1,15 @@
 # The rows /bug-sweep and /security-sweep cut this checkout into, read by
-# .claude/scripts/sweep-slices.sh. Tab-separated: kind (bug, security or * for
-# both), a POSIX extended regular expression over the whole path, anchored here,
-# the row, and what the row holds, which the sweeps read for each row. The first
-# matching line wins; row - owns nothing, so a path it matches refuses the run.
-# The samples row is read for its fenced code alone.
+# .claude/scripts/sweep-slices.sh. Tab-separated: kind (bug, security or *),
+# a POSIX extended regular expression over the whole path, anchored here, the
+# row, and what it holds, which the sweeps read. The first matching line wins;
+# row - owns nothing, so a path it matches refuses the run.
 bug	^src/BuildingBlocks/	building-blocks	the dispatcher and its behaviours, the outbox, the Redis helpers, the web middleware
 bug	^src/	services	the rest of `src/`: the services, and §4.1's gateway, BFF and AppHost as they land
 bug	^tests/	suites	where the cannot-fail class lives, and the only area whose defects are all of one kind
 security	^(src|tests)/	source	the services, the building blocks and the suites that stand up their hosts
 *	^(tools|\.github|\.claude|\.harness)/	tooling	Python, shell, CI, the command and agent definitions, and the harness's `.harness/`
 *	^(deploy|\.config)/	deploy	deployment and configuration
-*	^docs/	samples	fenced code in `docs/`, audited as code but excerpt-aware: a credential or an unsafe default an adopter copies; the closed records are owned and not read
+bug	^docs/	samples	fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read
+security	^docs/	samples	fenced code in `docs/`: a credential or an unsafe default an adopter copies; the closed records are owned and not read
 *	^.*/.*$	-	a directory no line above names: the run refuses until one owns it
 *	^[^/]+$	deploy	every tracked file at the repository root: the build files, the dotfiles, `CLAUDE.md` and `README.md` alike
