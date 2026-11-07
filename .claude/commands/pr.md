@@ -47,6 +47,15 @@ say one thing, and only the first two are enumerated. What actually keeps this
 safe is the rule above: push the **current branch, by name**, and nothing else.
 A push whose destination is not the branch you are on is not this step.
 
+**The allow rules do not guarantee the push runs.** A refused push comes back
+with the harness's "has been denied" text and no hook reason. It is a
+**stop**, not a retry: report that the push did not happen and no PR was
+opened, give the line for the caller — `! git push -u origin <branch>`, or
+the tracking form — and name the remedy, which is user-level: this
+repository and its `origin` named as trusted source control in
+`autoMode.environment`. Never reach the remote by another spelling or a
+wrapper that hides it; that is routing around a refusal.
+
 ## Title
 
 One line, semantic prefix, the same form as the commits. It names the change,
@@ -158,7 +167,8 @@ result instead, and report it as it actually came out.
 ## Before opening
 
 - `bash .claude/scripts/pr-for-branch.sh` — an OPEN row means you are
-  updating, not creating. Say so and stop.
+  updating, not creating. Say so and stop. It lists only pull requests into
+  `main`, so one into another base does not stop you.
 - Confirm the checks `docs/harness-local.md` *Ship checks* names have run
   over the change, or say plainly that they have not.
 
@@ -168,8 +178,12 @@ Write the body to a scratchpad file and pass it with `--body-file`; heredocs
 through `gh` mangle the wrapping. Then:
 
 ```bash
-gh pr create --base main --title "<title>" --body-file <path>
+gh pr create --base main --title '<title>' --body-file <path>
 ```
+
+The title goes in single quotes, each one inside it written `'\''`: a house
+title often holds a backticked name, which double quotes hand to the shell
+to run (`docs/harness-boundaries.md`, *Prefix grants and wildcard denies*).
 
 Then stamp the number `gh pr create` printed on the branch's commits,
 before anything reviews them:

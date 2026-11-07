@@ -15,6 +15,7 @@ from review_helpers import (
     SCRIPTS,
     NEWLINE,
     SETTINGS,
+    run_bash,
     setUpModule,
 )
 
@@ -558,6 +559,7 @@ class TheGitArgvGuard(unittest.TestCase):
             f'echo "a{NEWLINE}b" && n=$((1<<4))',
             'n=$(( "$a"<<4 ))',
             'echo "a"#$((1<<4))',
+            f'echo "a{NEWLINE}b"#$((1<<4))',
             f"git commit -F - <<'A'{NEWLINE}plain{NEWLINE}A{NEWLINE}"
             'n=$(( "$a"<<4 ))',
         ):
@@ -575,13 +577,14 @@ class TheGitArgvGuard(unittest.TestCase):
             "(( n = 1<<4 ))",
             f'echo "a{NEWLINE}b" && (( n = 1<<4 ))',
             '(( n = "$a"<<4 ))',
+            f'echo "a{NEWLINE}b"#$((1<<4))',
         ):
             command = f"{sum_line}{NEWLINE}git push origin +HEAD:main{NEWLINE}4"
             with self.subTest(command=command):
                 self.assertIn("force push", self.assertRefused(command))
 
-        # A heredoc in a substitution nested in a sum is skipped with the shifts,
-        # so its body is judged as commands: the push is refused, not hidden.
+        # A shell fed from a `$(…)` in a sum reads its body as commands: where
+        # the `$(…)` holds the body, that is the only reading that shows them.
         self.assertIn(
             "force push",
             self.assertRefused(
@@ -589,15 +592,164 @@ class TheGitArgvGuard(unittest.TestCase):
                 f"git push origin +HEAD:main{NEWLINE}EOF"
             ),
         )
+        self.assertIn(
+            "handed to a shell on stdin",
+            self.assertRefused(
+                f"n=$(( $(bash <<'EOF'{NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}) + 1 ))"
+            ),
+        )
 
         # What is not a sum keeps its heredoc: these parens close on `) |`, not
         # on `))`, so bash reads subshells, and a quoted body in them is data.
         # A quoted `))` closes nothing either.
+        # A group before them is read on its own and tells them nothing.
         for opener in ("<<'EOF'", "<<'EOF' '))'"):
-            with self.subTest(opener=opener):
+            for before in ("", f"n=$((1<<1)){NEWLINE}", f"(a) ; ((1<<1)) ; n=$((1<<1)){NEWLINE}"):
+                with self.subTest(opener=opener, before=before):
+                    self.assertAdmitted(
+                        f"{before}((git commit -F - {opener}) | cat){NEWLINE}"
+                        f"git push origin +HEAD:main{NEWLINE}EOF"
+                    )
+
+    def test_a_sum_spanning_lines_opens_no_heredoc(self):
+        # Bash reads a sum to its `))`, newlines included, so the line that
+        # reads as the shift's delimiter is a command.
+        for sum_text in (f"n=$((1<<4{NEWLINE}+1))", f"(( n = 1<<4{NEWLINE}+1 ))"):
+            with self.subTest(sum_text=sum_text):
+                self.assertIn(
+                    "RAN",
+                    run_bash(f"{sum_text}{NEWLINE}echo RAN{NEWLINE}4").stdout,
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{sum_text}{NEWLINE}git push origin +HEAD:main{NEWLINE}4"
+                    ),
+                )
                 self.assertAdmitted(
-                    f"((git commit -F - {opener}) | cat){NEWLINE}"
-                    f"git push origin +HEAD:main{NEWLINE}EOF"
+                    f"{sum_text}{NEWLINE}"
+                    f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"git commit -F - <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF"
+                        f"{NEWLINE}{sum_text}{NEWLINE}"
+                        f"git push origin +HEAD:main{NEWLINE}4"
+                    ),
+                )
+
+    def test_a_heredoc_in_a_substitution_in_a_sum_is_a_heredoc(self):
+        # A `$(…)` in a sum runs commands, so a `<<` in it opens a body, and a
+        # `$(…)` closing past that body holds it in every bash.
+        self.assertAdmitted(
+            f"n=$(( $(git commit -F - <<'EOF'{NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}) + 1 ))"
+        )
+
+        # Past that `$(…)` the sum goes on, and a `$((…))` in it is a sum of its own.
+        # A body is read as a body there too, so a lone quote in it ends nothing.
+        for command in (
+            f"n=$(( $(cat <<'EOF'{NEWLINE}5{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"n=$(( $(echo $((1<<4))) + 1 )){NEWLINE}git push origin +HEAD:main{NEWLINE}4",
+            f"n=$(( $(wc -l <<'EOF'{NEWLINE}don't{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"(( n = $(wc -l <<'EOF'{NEWLINE}a){NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}2",
+            f"n=$(( $(echo $((1<<4)); cat <<'EOF'{NEWLINE}it{NEWLINE}EOF{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("force push", self.assertRefused(command))
+
+        # A `<<` the read cannot settle leaves the group's `((` as sums, whatever
+        # a `)` past it would have made of them, so no later shift opens a body.
+        for command in (
+            f"n=$(( $( ((wc -l <<'EOF') | cat){NEWLINE}){NEWLINE}EOF{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+            f"n=$(( `cat <<'A' ` + $(wc -l <<'B'{NEWLINE}){NEWLINE}B{NEWLINE}) + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4{NEWLINE}A",
+            f"n=$(( `: $((1<<4)); wc -l <<'EOF'{NEWLINE}){NEWLINE}EOF{NEWLINE}` + (1<<4) )){NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}4",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("force push", self.assertRefused(command))
+        self.assertAdmitted(
+            f"n=$(( $(wc -l <<'EOF'{NEWLINE}don't{NEWLINE}EOF{NEWLINE}) + (1<<2) )){NEWLINE}"
+            f"git commit -F - <<'B'{NEWLINE}it's{NEWLINE}B"
+        )
+
+    def test_a_heredoc_closing_with_its_line_in_a_sum_opens_no_body(self):
+        # A backtick's text ends at the backtick, so its heredoc ends there and
+        # the next lines are commands. `without_substitutions` refuses these
+        # however the `<<` reads, so the scan is asked for what it found.
+        guard = self.guard_module()
+        for spelling in ("n=$(( `cat <<'EOF'` + 1 ))", "n=$(( `cat <<'EOF' ` + 1 ))"):
+            with self.subTest(spelling=spelling):
+                self.assertIn(
+                    "RAN", run_bash(f"{spelling}{NEWLINE}echo RAN{NEWLINE}EOF").stdout
+                )
+                self.assertEqual(
+                    [], guard.heredoc_spans(f"{spelling}{NEWLINE}a{NEWLINE}EOF")
+                )
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{spelling}{NEWLINE}git push origin +HEAD:main{NEWLINE}EOF"
+                    ),
+                )
+
+        # One closing on a later line, but before the delimiter, is that too,
+        # and here reading the next lines as a body would hide the push.
+        closed_early = f"n=$(( `cat <<'EOF'{NEWLINE}one{NEWLINE}` + 1 )){NEWLINE}"
+        self.assertIn("RAN", run_bash(f"{closed_early}echo RAN{NEWLINE}EOF").stdout)
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"{closed_early}git push origin +HEAD:main{NEWLINE}EOF"
+            ),
+        )
+
+        # A backtick closing past its heredoc's delimiter holds the body.
+        self.assertEqual(
+            "6",
+            run_bash(
+                f"n=$(( `cat <<'EOF'{NEWLINE}5{NEWLINE}EOF{NEWLINE}` + 1 )){NEWLINE}echo $n"
+            ).stdout.strip(),
+        )
+        self.assertAdmitted(
+            f"n=$(( `git commit -F - <<'EOF'{NEWLINE}"
+            f"git push origin +HEAD:main{NEWLINE}EOF{NEWLINE}` + 1 ))"
+        )
+
+        # A `$(…)` closing on its opener's line is that too before bash 5.2,
+        # which reads the next lines as its body. `without_substitutions`
+        # leaves them commands, an apostrophe included, so neither bash hides
+        # the push. That refuses a quoted body the newer bash would not run.
+        probe = (
+            f"n=$(cat <<'EOF'){NEWLINE}echo RAN{NEWLINE}EOF{NEWLINE}"
+            "echo ${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"
+        )
+        lines = run_bash(probe).stdout.split(NEWLINE)
+        major, minor = (int(part) for part in lines[-2].split())
+        self.assertEqual((major, minor) < (5, 2), "RAN" in lines)
+        for opener in (
+            "n=$(( $(cat <<'EOF') + 1 ))",
+            "(( n = $(cat <<'EOF') + 1 ))",
+            "n=$(( (1<<4) | $(cat <<'EOF') ))",
+        ):
+            with self.subTest(opener=opener):
+                self.assertIn(
+                    "force push",
+                    self.assertRefused(
+                        f"{opener}{NEWLINE}git push origin +HEAD:main{NEWLINE}EOF"
+                    ),
+                )
+                self.assertIn(
+                    "taken as empty",
+                    self.assertRefused(f"{opener}{NEWLINE}don't stop{NEWLINE}EOF"),
                 )
 
     def test_a_sum_does_not_take_a_shell_its_heredoc(self):
@@ -638,6 +790,16 @@ class TheGitArgvGuard(unittest.TestCase):
             f"{body}{NEWLINE}(( n = 1<<4 )){NEWLINE}"
             f"git commit -F - <<'B'{NEWLINE}it's{NEWLINE}B"
         )
+        # The same apostrophe in a `((` puts the read ahead out of step, so the
+        # sum after it goes unseen, and it is taken as a sum.
+        self.assertIn(
+            "force push",
+            self.assertRefused(
+                f"((cat <<'EOF'{NEWLINE}don't stop{NEWLINE}EOF{NEWLINE}) | cat)"
+                f"{NEWLINE}(( n = 1<<4 )){NEWLINE}"
+                f"git push origin +HEAD:main{NEWLINE}4"
+            ),
+        )
 
     def test_finding_sums_is_linear_in_the_command(self):
         # `judge` fails on a verdict that misses the timeout, and a verdict
@@ -649,6 +811,39 @@ class TheGitArgvGuard(unittest.TestCase):
                 "((a)) " * 15000 + "<<4 ; git push origin +HEAD:main"
             ),
         )
+        # The same for reading ahead: done at each `<<` in a `((` left open, or
+        # in one long sum, rather than once, these miss the timeout too.
+        for nest in (
+            f"((cat <<A{NEWLINE}A{NEWLINE}" * 8000,
+            "((" + "1<<4 " * 15000 + "))" + NEWLINE,
+        ):
+            self.assertIn(
+                "force push", self.assertRefused(f"{nest}git push origin +HEAD:main")
+            )
+
+    def test_an_unclosed_heredoc_in_a_sum_is_searched_for_once(self):
+        # Each search runs to the end of the command, so one must settle it for
+        # the rest. A count rather than a clock: at the length budget the
+        # difference is seconds a pass, which no timeout here would see.
+        guard = self.guard_module()
+        opened = guard._opened_body
+        searches = []
+
+        def counted(*args):
+            searches.append(args[1])
+            return opened(*args)
+
+        guard._opened_body = counted
+        self.addCleanup(setattr, guard, "_opened_body", opened)
+        for nest in (
+            "(( $(" + f"<<4{NEWLINE}" * 100 + ") ))",
+            "(( `" + f"<<4{NEWLINE}" * 100 + "` ))",
+            "(( `" + f"<<4{NEWLINE}" * 100 + f"` )){NEWLINE}4",
+        ):
+            with self.subTest(nest=nest[-8:]):
+                searches.clear()
+                guard.heredoc_spans(nest)
+                self.assertLess(len(searches), 5)
 
     def test_the_fallback_scan_also_treats_a_heredoc_body_as_data(self):
         # The two paths have to agree: a fallback that scans the raw command
@@ -2988,12 +3183,12 @@ class TheGitArgvGuard(unittest.TestCase):
 
     def test_a_heredoc_fed_to_a_script_names_the_file_route(self):
         reason = self.assertRefused(
-            "bash .claude/scripts/gh-issue-create.sh bug low harness hand <<'EOF'\nsee `x` here\nEOF")
+            "bash .claude/scripts/gh-issue-hand.sh bug low harness <<'EOF'\nsee `x` here\nEOF")
         self.assertIn("with `Write`", reason)
         self.assertIn("< <path>", reason)
 
     def test_a_script_fed_from_a_file_is_admitted(self):
-        self.assertAdmitted("bash .claude/scripts/gh-issue-create.sh bug low harness hand < body.md")
+        self.assertAdmitted("bash .claude/scripts/gh-issue-hand.sh bug low harness < body.md")
 
     # ---- the wiring, without which none of the above runs -------------------
 

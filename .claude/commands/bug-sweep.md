@@ -1,8 +1,8 @@
 ---
 description: Loop a defect audit up to seven rounds in a throwaway worktree, filing a GitHub issue per confirmed critical-or-high logic or execution bug, until a round surfaces nothing new
 argument-hint: "[scope hint, e.g. 'the outbox' or a path] — omit to sweep the whole repo; `full` ignores the last clean sweep"
-allowed-tools: Read, Grep, Glob, Agent(bug-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
-disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*)
+allowed-tools: Read, Grep, Glob, Agent(bug-auditor), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/sweep-slices.sh:*), Bash(bash .claude/scripts/sweep-mark.sh:*)
+disallowed-tools: Edit, Write, NotebookEdit, Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(security-auditor), Agent(branch-reviewer), Agent(team-peer), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*)
 ---
 
 Sweep the repository for defects — code that does something other than what it
@@ -181,14 +181,9 @@ Each round is the review done once, end to end:
    bash .claude/scripts/sweep-slices.sh bug "$posix"      # `full` as a third argument when asked
    ```
 
-   | | |
-   |---|---|
-   | `building-blocks` | the dispatcher and its behaviours, the outbox, the Redis helpers, the web middleware |
-   | `services` | the rest of `src/` — the services, and §4.1's gateway, BFF and AppHost as they land |
-   | `suites` | where the cannot-fail class lives, and the only area whose defects are all of one kind |
-   | `tooling` | Python, shell, CI, the command and agent definitions, and the harness's `.harness/` |
-   | `deploy` | deployment and configuration, and **every tracked file at the repository root** — the build files, the dotfiles, `CLAUDE.md` and `README.md` alike |
-   | `samples` | fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read |
+   The rows are those `.harness/sweep-rows.tsv` names for `bug`, with what
+   each holds, the first matching line winning; `samples` is read for its
+   fenced code alone, and the closed records are owned and not read.
 
    A tracked path no row owns makes the helper exit 3 naming it: a round
    error under *Never fail open*, never a gap to widen by hand. **A row
@@ -201,11 +196,14 @@ Each round is the review done once, end to end:
    only an in-tree comment calls deliberate is **reported, not dropped**.
 
    The helper prints the round's plan: `pinned`, `mode full` or
-   `mode since <sha>`, one `tracked` line, and one
+   `mode since <sha>`, one `tracked` line, a `binary <files> <list>` line
+   when it skipped a binary file, and one
    `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
    bytes, unless one file is larger. Read the lists only to `Grep` for a path
    a scope hint names, keeping the slices that hold it or the slices of the
-   rows it names; the summary says which it dropped.
+   rows it names; the summary says which it dropped. **Read the binary list
+   whole**: no auditor reads it, and a NUL byte makes a script binary, so the
+   summary names each path on it that is not an asset.
 
    **Round 1 is one auditor per slice; every later round follows leads**: one
    auditor per row that produced a new candidate in the round before, handed
@@ -236,7 +234,7 @@ Each round is the review done once, end to end:
    reachability evidence, a fix, and the severity — **composed from the verdict
    record's fields in that order, and from nothing the parent read in
    `$work`**. **Pipe the title and the body together to
-   `bash .claude/scripts/gh-issue-create.sh bug <severity> <area> sweep` on
+   `bash .claude/scripts/gh-issue-sweep.sh bug <severity> <area>` on
    stdin** in a quoted heredoc — the title, a blank line, then the body;
    never put record text on the command line, `--body` or a temp file. Say in
    the body that the verifier **read rather than executed**, name the commit
@@ -247,7 +245,8 @@ Each round is the review done once, end to end:
    ```
 
    Pass as `<area>` the label `docs/harness/working-rules.md`, *Issues and the
-   task list*, gives the tree the record's file is in, and `sweep` as the route.
+   task list*, gives the tree the record's file is in; the route is the
+   entry point's.
    **The heredoc delimiter is never `EOF`** or any word a file could plausibly
    hold; it is a token of the form `ISSUE_BODY_END`, and **before the command is
    composed, every line of the payload — title, body, quoted lines — is checked
@@ -260,8 +259,9 @@ Each round is the review done once, end to end:
    the mediums and lows recorded but not filed, and the by-inspection limit
    restated.
 
-Name the residuals rather than hide them. (why: docs/commands/bug-sweep.md,
-*Residuals*)
+Name the residuals rather than hide them: `git-worktree-detach.sh` now refuses
+a pinned commit carrying a tracked link, and the rest stays open. (why:
+docs/commands/bug-sweep.md, *Residuals*)
 
 ## Where it stops
 

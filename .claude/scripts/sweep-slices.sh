@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cut a sweep's worktree into slices of at most BUDGET bytes, one list per slice
-# beside the worktree, and print a summary; /bug-sweep and /security-sweep.
-# The row partition is the sweeps' and lives here, so a tracked path no row owns
-# refuses the run rather than going unswept.
+# beside it, by the rows of this checkout's .harness/sweep-rows.tsv; a tracked
+# path no row owns refuses the run. Bash 3.2, /bin/bash on macOS, has no
+# `mapfile` and no associative array, so the rows are one awk pass over lists.
 set -euo pipefail
 usage="usage: sweep-slices.sh <bug|security> <worktree> [full]"
 [ "$#" -ge 2 ] && [ "$#" -le 3 ] || { echo "$usage" >&2; exit 2; }
@@ -27,6 +27,27 @@ esac
 out="$resolved.slices"
 [ ! -e "$out" ] || { echo "slices already cut: $out" >&2; exit 3; }
 
+# The rows are this checkout's, as the helper is, and trusted as it is: a line
+# moving a script into samples, where a file with no fence is not read, changes
+# what a sweep reads, and is reviewed as a change to the helper would be.
+rows="$(dirname "${BASH_SOURCE[0]}")/../../.harness/sweep-rows.tsv"
+[ -r "$rows" ] || { echo "the row file cannot be read: .harness/sweep-rows.tsv" >&2; exit 3; }
+# Tab-separated `kind pattern row holds`, `#` opening a comment line; a line of
+# any other shape is refused naming it, so a typo never moves a path silently.
+LC_ALL=C awk -F'\t' '
+  { sub(/\r$/, "") }
+  $0 == "" || /^#/ { next }
+  NF != 4 { bad("not four tab-separated fields") }
+  $1 != "bug" && $1 != "security" && $1 != "*" { bad("kind is not bug, security or *") }
+  $2 == "" { bad("an empty pattern") }
+  $3 != "-" && $3 !~ /^[a-z][a-z-]*$/ { bad("row is not - or a lower-case word") }
+  $4 == "" { bad("an empty holds") }
+  # A pattern awk cannot compile stops awk here, which the caller refuses too.
+  { if ("" ~ $2) n++ }
+  function bad(why) { printf "sweep-rows.tsv line %d: %s: %s\n", NR, why, $0 > "/dev/stderr"; failed = 1; exit 3 }
+  END { if (failed) exit 3 }
+' "$rows" || { echo "the row file is malformed: .harness/sweep-rows.tsv" >&2; exit 3; }
+
 g() { git -C "$resolved" "$@"; }
 pinned=$(g rev-parse --verify HEAD)
 since=""
@@ -35,22 +56,10 @@ if [ "$mode" != full ] && last=$(g rev-parse --verify --quiet "refs/sweeps/$kind
   # the diff from it would skip files this commit never had swept.
   if g merge-base --is-ancestor "$last" "$pinned"; then since="$last"; fi
 fi
-
-# Sets row rather than printing it: a command substitution per tracked file is
-# a fork per file, and under MSYS a fork is most of the run's time.
-row_of() {
-  case "$kind:$1" in
-    bug:src/BuildingBlocks/*) row=building-blocks ;;
-    bug:src/*) row=services ;;
-    bug:tests/*) row=suites ;;
-    security:src/*|security:tests/*) row=source ;;
-    *:tools/*|*:.github/*|*:.claude/*|*:.harness/*) row=tooling ;;
-    *:deploy/*|*:.config/*) row=deploy ;;
-    *:docs/*) row=samples ;;
-    */*) return 1 ;;
-    *) row=deploy ;;
-  esac
-}
+# The swept tree's .gitattributes would decide what `grep -I` calls binary, so
+# they are read from the empty tree instead; a git older than 2.41 refuses the
+# option, and the run fails rather than trusting them.
+empty=$(g hash-object -t tree --stdin </dev/null)
 
 # The bytes inside fences, the only part of a sample the sweeps audit, one line
 # per blob of a `git cat-file --batch` stream. A fence closes only on its own
@@ -78,88 +87,125 @@ fenced_bytes() {
     END { if (bad || state) { print "unreadable cat-file stream" > "/dev/stderr"; exit 1 } }'
 }
 
+# A NUL-separated list as one name a line. A name holding a line break cannot
+# be a line of a list, and refusing it is the only answer that does not drop it
+# unsaid: the NULs counted before must equal the lines counted after.
+lines_of() {
+  local nuls lines
+  nuls=$(tr -cd '\0' < "$1" | wc -c)
+  tr '\0' '\n' < "$1" > "$2"
+  lines=$(wc -l < "$2")
+  [ $((lines)) -eq $((nuls)) ] ||
+    { echo "a tracked name with a line break" >&2; exit 3; }
+}
+
 # Each git read lands in a file with its status checked, NUL-separated, so a
 # failing git fails the run and a name holding a newline stays one name.
 mkdir "$out"
 # Any exit before the plan is printed takes the half-cut lists with it.
 trap 'rm -rf "$out"' EXIT
-g ls-tree -r -l -z --full-tree "$pinned" > "$out/.tree"
-g grep -I -l -z -e '' "$pinned" -- . > "$out/.text" || [ "$?" -eq 1 ]
-: > "$out/.changed"
-[ -z "$since" ] || g diff --name-only --no-renames -z "$since" "$pinned" > "$out/.changed"
-mapfile -d '' tree < "$out/.tree"
-mapfile -d '' texts < "$out/.text"
-mapfile -d '' changes < "$out/.changed"
-rm -f "$out/.tree" "$out/.text" "$out/.changed"
-[ "${#tree[@]}" -gt 0 ] || { echo "no tracked files at $pinned" >&2; exit 3; }
+g ls-tree -r -l -z --full-tree "$pinned" > "$out/tree.z"
+g --attr-source="$empty" grep -I -l -z -e '' "$pinned" -- . > "$out/text.z" || [ "$?" -eq 1 ]
+: > "$out/changed.z"
+[ -z "$since" ] || g diff --name-only --no-renames -z "$since" "$pinned" > "$out/changed.z"
+lines_of "$out/tree.z" "$out/tree.txt"
+lines_of "$out/text.z" "$out/text.raw"
+lines_of "$out/changed.z" "$out/changed.txt"
+sed "s/^[0-9a-f]*://" "$out/text.raw" > "$out/text.txt"
+[ -s "$out/tree.txt" ] || { echo "no tracked files at $pinned" >&2; exit 3; }
+# A tab or a carriage return in a name would split or trim a list line, and
+# `git ls-tree` puts exactly one tab between the metadata and the name.
+[ $(($(tr -cd '\r' < "$out/tree.txt" | wc -c))) -eq 0 ] &&
+  awk -F'\t' 'NF != 2 { bad = 1 } END { exit bad }' "$out/tree.txt" ||
+  { echo "a tracked name with a tab or a carriage return" >&2; exit 3; }
 
-declare -A text=() changed=() rowfiles=()
-samples=()
-for f in "${texts[@]}"; do text[${f#"$pinned:"}]=1; done
-for f in "${changes[@]}"; do changed[$f]=1; done
+# The rows of this kind in file order, the first match winning; row `-` and no
+# match alike leave a path unowned, printed on stderr and counted, and the run
+# refuses below. The other lines are `L row size file` for what the sweep reads
+# and `B file` for a binary one it does not.
+awk -F'\t' -v kind="$kind" -v since="$since" '
+  function row_of(f,   i) {
+    for (i = 1; i <= nrows; i++) if (f ~ pattern[i]) return row[i] == "-" ? "" : row[i]
+    return ""
+  }
+  FILENAME == ARGV[1] {
+    sub(/\r$/, "")
+    if ($0 == "" || $0 ~ /^#/) next
+    if ($1 == kind || $1 == "*") { nrows++; pattern[nrows] = $2; row[nrows] = $3 }
+    next
+  }
+  FILENAME == ARGV[2] { text[$0] = 1; next }
+  FILENAME == ARGV[3] { changed[$0] = 1; next }
+  {
+    tracked++
+    file = $2; n = split($1, meta, " "); size = meta[n]
+    if (size !~ /^[0-9]+$/) size = 0
+    r = row_of(file)
+    if (r == "") { print "no row owns: " file > "/dev/stderr"; unowned++; next }
+    if (since != "" && !(file in changed)) { unchanged++; next }
+    if (size == 0) { empty++; next }
+    if (!(file in text)) { binary++; printf "B\t%s\n", file; next }
+    # Closed records are never edited to match the code, so a defect in their
+    # samples has no fix to file; owned by the row, counted, not read.
+    if (file ~ /^docs\/superpowers\// || file == "docs/pr-decision-log.md" || file == "docs/lessons.md") {
+      record++; next
+    }
+    printf "L\t%s\t%s\t%s\n", r, size, file
+  }
+  END { printf "T\t%d\t%d\t%d\t%d\t%d\t%d\n", tracked, unowned, unchanged, empty, binary, record }
+' "$rows" "$out/text.txt" "$out/changed.txt" "$out/tree.txt" > "$out/plan.raw"
 
-tracked=0 unowned=0 unchanged=0 empty=0 binary=0 record=0 fenceless=0 listed=0
-for rec in "${tree[@]}"; do
-  meta=${rec%%$'\t'*} file=${rec#*$'\t'}
-  # A slice list is one name a line, so a name holding a line break cannot be
-  # listed; refusing it is the only answer that does not drop it unsaid.
-  case "$file" in *$'\n'*|*$'\r'*) echo "a tracked name with a line break" >&2; exit 3 ;; esac
-  tracked=$((tracked + 1))
-  size=${meta##* }
-  row_of "$file" || { echo "no row owns: $file" >&2; unowned=$((unowned + 1)); continue; }
-  [ -z "$since" ] || [ -n "${changed[$file]:-}" ] || { unchanged=$((unchanged + 1)); continue; }
-  [ "$size" != 0 ] || { empty=$((empty + 1)); continue; }
-  [ -n "${text[$file]:-}" ] || { binary=$((binary + 1)); continue; }
-  # Closed records are never edited to match the code (CLAUDE.md), so a defect
-  # in their samples has no fix to file; owned by the row, counted, not read.
-  case "$file" in
-    docs/superpowers/*|docs/pr-decision-log.md|docs/lessons.md) record=$((record + 1)); continue ;;
-  esac
-  [ "$row" != samples ] || { samples+=("$file"); continue; }
-  listed=$((listed + 1))
-  rowfiles[$row]+="$size $file"$'\n'
-done
+totals=$(grep '^T' "$out/plan.raw")
+IFS=$'\t' read -r _ tracked unowned unchanged empty binary record <<<"$totals"
 [ "$unowned" -eq 0 ] || { echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
+# No auditor reads a binary file, so each is named in a list the plan points at:
+# a NUL byte is all it takes to make a script one.
+awk -F'\t' '$1 == "B" { print $2 }' "$out/plan.raw" > "$out/binary.txt"
 
-# Every sample through one cat-file and one awk, in tree order, rather than a
-# pipeline per file; the answer count is checked so a short stream fails.
-if [ "${#samples[@]}" -gt 0 ]; then
-  printf '%s\n' "${samples[@]/#/$pinned:}" > "$out/.samples"
-  g cat-file --batch < "$out/.samples" | fenced_bytes > "$out/.fenced"
-  mapfile -t fenced < "$out/.fenced"
-  rm -f "$out/.samples" "$out/.fenced"
-  [ "${#fenced[@]}" -eq "${#samples[@]}" ] ||
-    { echo "fences read for ${#fenced[@]} of ${#samples[@]} samples" >&2; exit 3; }
-  for i in "${!samples[@]}"; do
-    size=${fenced[i]}
-    [ "$size" -gt 0 ] || { fenceless=$((fenceless + 1)); continue; }
-    listed=$((listed + 1))
-    rowfiles[samples]+="$size ${samples[i]}"$'\n'
-  done
+# A sample counts only its fenced lines; one with none is counted, not listed.
+# Every sample goes through one cat-file and one awk, in tree order, rather than
+# a pipeline per file, which under MSYS is a fork per file and most of a run;
+# the answers are counted, so a short stream fails rather than mislists.
+awk -F'\t' '$1 == "L" && $2 != "samples" { print $2 "\t" $3 "\t" $4 }' \
+  "$out/plan.raw" > "$out/plan.rows"
+awk -F'\t' '$1 == "L" && $2 == "samples" { print $4 }' "$out/plan.raw" > "$out/samples.txt"
+fenceless=0
+if [ -s "$out/samples.txt" ]; then
+  awk -v pinned="$pinned" '{ print pinned ":" $0 }' "$out/samples.txt" |
+    g cat-file --batch | fenced_bytes > "$out/samples.fenced"
+  want=$(($(wc -l < "$out/samples.txt"))) got=$(($(wc -l < "$out/samples.fenced")))
+  [ "$got" -eq "$want" ] || { echo "fences read for $got of $want samples" >&2; exit 3; }
+  fenceless=$(awk '$1 == 0 { n++ } END { print n + 0 }' "$out/samples.fenced")
+  paste "$out/samples.fenced" "$out/samples.txt" |
+    awk -F'\t' '$1 > 0 { print "samples\t" $1 "\t" $2 }' >> "$out/plan.rows"
 fi
+listed=$(($(wc -l < "$out/plan.rows")))
 if [ -z "$since" ] && [ "$listed" -eq 0 ]; then
   echo "a full run that lists nothing has read nothing" >&2; exit 3
 fi
+# A stable sort by row keeps each row's files in tree order.
+LC_ALL=C sort -t$'\t' -k1,1 -s "$out/plan.rows" > "$out/plan.sorted"
 
 echo "pinned $pinned"
 if [ -n "$since" ]; then echo "mode since $since"; else echo "mode full"; fi
 echo "tracked $tracked listed $listed unchanged $unchanged empty $empty binary $binary record $record fenceless $fenceless"
-n=0
-for row in $(printf '%s\n' "${!rowfiles[@]}" | sort); do
+if [ "$binary" -gt 0 ]; then echo "binary $binary $out/binary.txt"; else rm -f "$out/binary.txt"; fi
+
+n=0 bytes=0 files=0 current="" list=""
+flush() {
+  [ "$files" -gt 0 ] || return 0
+  n=$((n + 1))
+  printf '%s' "$list" > "$out/$n.txt"
+  echo "slice $n $current $files $bytes $out/$n.txt"
   bytes=0 files=0 list=""
-  flush() {
-    [ "$files" -gt 0 ] || return 0
-    n=$((n + 1))
-    printf '%s' "$list" > "$out/$n.txt"
-    echo "slice $n $row $files $bytes $out/$n.txt"
-    bytes=0 files=0 list=""
-  }
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    size=${line%% *} file=${line#* }
-    [ $((bytes + size)) -le "$BUDGET" ] || flush
-    bytes=$((bytes + size)) files=$((files + 1)) list+="$file"$'\n'
-  done <<<"${rowfiles[$row]}"
-  flush
-done
+}
+while IFS=$'\t' read -r row size file; do
+  [ "$row" = "$current" ] || { flush; current="$row"; }
+  [ $((bytes + size)) -le "$BUDGET" ] || flush
+  bytes=$((bytes + size)) files=$((files + 1)) list="$list$file"$'\n'
+done < "$out/plan.sorted"
+flush
+# Only the lists stay beside the worktree.
+rm -f "$out"/*.z "$out"/*.raw "$out"/tree.txt "$out"/text.txt "$out"/changed.txt \
+  "$out"/plan.rows "$out"/plan.sorted "$out"/samples.txt "$out"/samples.fenced
 trap - EXIT
