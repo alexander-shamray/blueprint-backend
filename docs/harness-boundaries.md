@@ -13,7 +13,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
 | Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
-| Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards and the quoting bypass. |
+| Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards, the quoting bypass and the helper argv guard. |
 | The guards' threat model | What the guard hooks are written against, which guard findings are filed, and which are recorded as out of scope. |
 | Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
@@ -589,14 +589,31 @@ the earlier probe was refused by the classifier layer — a second net worth
 noting and not evidence. It is evidence now, and it says the deny was genuinely
 defeatable rather than theoretically so.
 
+**The helper grants have the index grants' gap, and a guard of their own.**
+`Bash(py -3.12 .claude/scripts/dispatch_board.py:*)` and `Bash(gh pr create:*)`
+match the typed string too, and both take text a model composes from issue
+titles, where a backticked name is the house style. So the text stays off the
+command line, in the files `/dispatch` *Issue text stays off the command line*
+names, and a pull request's title goes in single quotes.
+`.claude/hooks/guard-helper-argv.py` is what holds when a session spells it
+otherwise: it refuses a command substitution anywhere in a command that runs a
+`.py` under `.claude/scripts/` or `gh pr create`, as `guard-index-argv.py` does
+for its own. So `oid=$(git rev-parse HEAD)` and a helper line beneath it are
+refused though that line is clean: a heredoc's substitution runs for the
+helper's stdin on no helper line, so the whole command is what is judged, and
+such a value is read in a call of its own. It leaves the `.sh` helpers, whose
+arguments are numbers and names, and it judges substitutions alone: a second
+command is the grant's own matching.
+
 ## The guards' threat model
 
 **The guard hooks catch an agent's honest mistakes; they are not a sandbox
 against a session that sets out to defeat them.** `guard-git-argv.py`,
-`guard-edit-target.py`, `guard-index-argv.py` and `guard-sed-crlf.py` are
-written against a session that types a dangerous command by accident or by
-a plausible shortcut — a forced push, a write into a denied tree, a removal
-of a parent of the checkout, a `sed -i` over a CRLF file — in any spelling
+`guard-edit-target.py`, `guard-index-argv.py`, `guard-helper-argv.py` and
+`guard-sed-crlf.py` are written against a session that types a dangerous
+command by accident or by a plausible shortcut — a forced push, a write
+into a denied tree, a removal of a parent of the checkout, a `sed -i` over
+a CRLF file — in any spelling
 a shell user writes in ordinary work: quoting, `-C` and `--work-tree`,
 environment prefixes, `cd` chains, the launchers and wrappers, heredocs,
 pipes into a shell. A guard that judges a file the command names, as
@@ -976,13 +993,15 @@ Two are `/ship`'s, and both are closed:
 failing checks. Both are withdrawn. `gh-pr-merge.sh` takes a number and a
 head oid, spells `--rebase --match-head-commit` itself, and refuses a pull
 request that is not the checked-out branch's own, from this repository, into
-`main`. `git-worktree-remove.sh` takes one `.claude/worktrees/<name>` path,
-run from the main checkout, refuses a directory that is not a linked worktree
-of this repository, and spells `git worktree remove` with no flag, under
-`core.longpaths` so that a file past Windows' 260 characters is deleted too
-rather than left in a directory git has already unregistered; it first
-waits, to a bound it declares, for the worktree's code-index refresh lock,
-because Windows will not delete a file a running refresh holds (#516).
+`main`. `git-worktree-remove.sh` takes a `.claude/worktrees/<name>` path and
+the branch forked there, run from the main checkout. It refuses `main` as that
+branch, a directory that is not a linked worktree of this repository, and one
+that does not hold the branch, a detached one included. It spells
+`git worktree remove` with no flag, under `core.longpaths` so that a file past
+Windows' 260 characters is deleted too rather than left in a directory git has
+already unregistered; it first waits, to a bound it declares, for the
+worktree's code-index refresh lock, because Windows will not delete a file a
+running refresh holds (#516).
 
 **Two more sat in the sweep command files rather than in this paragraph, and
 both are now closed — which is worth recording because they were closed the
@@ -1009,7 +1028,15 @@ the client's policy and the deny list does not move. What lets the client
 relax at all is the `main` ruleset on the server, read back green for every
 target, so a helper that got its guards wrong still cannot rewrite or delete
 `main` (*Destructive classes*). `git-rebase-onto-main.sh` carries the flags
-itself, takes one branch name that has to equal the one checked out, refuses
+itself, runs none of the target's hooks (`core.hooksPath` is an empty
+directory for the run, as in `git-trailer-pr.sh`), spells over every
+`rebase.*` key that changes a replay (`--no-rebase-merges` and
+`--no-update-refs` answer settings that act today; `--no-autosquash`,
+`--no-fork-point` and `--no-autostash` are defensive, since git limits
+`rebase.autoSquash` to interactive mode, takes no fork point when an upstream
+is named and the start refuses a dirty tree; `--merge` keeps the apply backend
+out, which leaves a commit it never applied looking like one a resolution
+emptied), takes one branch name that has to equal the one checked out, refuses
 `main` by name before it reads the checkout at all, refuses a remote holding
 commits this checkout lacks, and leases the push against the commit the same
 run read. **A rule could have bought none of that**: a permission pattern
@@ -1155,7 +1182,7 @@ it.** `<bug|test-gap|enhancement> <critical|high|medium|low>
 request route's), for the sync row, which finds payload defects from a target
 whose checkout is another repository. The repository is a literal in the helper
 and no word selects it: a word `gh-issue-create.sh` took would be the caller's
-to declare, and the sweeps hold that helper over a tree they cannot trust. So
+to declare, which is why no command is granted that helper. So
 the grant is the boundary: `/ship`'s frontmatter names the helper, the settings
 do not allow it, and both sweeps deny it by the same key as the force-push
 helpers, for the day someone allows it globally. It first searches the open
@@ -1164,6 +1191,30 @@ issues for that exact title and comments on a match instead of creating, every
 sibling, which resolves the checkout's repository, so a label the harness lacks
 fails the create rather than being made. Residual: `/ship` can file any text in
 the harness with it, which is its whole use.
+
+**The issue route is the entry point a command is granted, never an argument.**
+`gh-issue-create.sh` takes the route as its fourth word and so lets whoever
+holds a prefix grant on it claim any route's last line, among them the sweep
+route's sentence that a second read-only auditor verified the finding. So no
+command is granted it. `gh-issue-sweep.sh <kind> <severity> <area>` fixes the
+`sweep` route and is the sweeps' only filing grant; `gh-issue-hand.sh` fixes
+`hand` and is `/ship`'s, `/team`'s and `/dispatch`'s;
+`gh-issue-mutation.sh <severity> <area>` fixes `mutation` and the kind
+`test-gap`, the one its sentence is true of, and is for a target's local
+mutation sweep, so no payload command holds it. Each execs
+`gh-issue-create.sh` with the route spelled, so the kind, severity, area, stdin
+and trailer checks stay in one place. A grant on one entry point withholds
+nothing from another, so each command denies the entries it does not hold by
+name, and `gh-issue-create.sh` besides; `/ship` states no deny list, because a
+deny on a command it chains outlasts the step. `test_command_grants.py` walks
+every command in the tree it runs in, a target's local ones too, so whether a
+route needs an entry point is a question about every target, not the payload.
+The `request` route has none, since no command in any target files under it; it
+stays reachable by calling `gh-issue-create.sh` directly, and a command that
+comes to need it gets its own entry point of the same shape. Residual: a prefix
+grant on a helper lets its holder choose that helper's own arguments, which here
+are the severity, the area and, on every entry but the mutation one, the kind,
+all in closed sets.
 
 **Some of the rebase helper's edges are accepted rather than guarded.** A replay
 amended after a failed push no longer descends from the commit `publish`
@@ -1201,6 +1252,22 @@ because a caller that chooses fields can choose `reviews`. **`gh pr list`
 was the door found last**: `--json reviews,comments` returns every pull
 request's review bodies at once, and three commands kept it for the
 harmless job of finding a branch's PR.
+
+**`pr-for-branch.sh` answers three questions before its caller reads a row.**
+Its listing asks `gh` for `--limit 1000`, because the default page of 30 is cut
+before the fork filter and the landed row can vanish; a response of exactly the
+limit may be a prefix and is refused with exit 4. Only rows into `main` are
+listed, since every pull request this chain opens targets `main`, and a newer
+one into another base would otherwise mask it. A `MERGED` row is dropped when
+the row's merge commit is an ancestor of the local branch: that branch was
+recreated from a `main` holding the merge, so the row is an earlier
+incarnation of a reused name. A branch with commits added after its merge does
+not carry the merge commit, and keeps the row. With no local branch, or a merge
+commit not fetched, the row stays, since stopping is the answer when the drop
+cannot be shown. The merge commit is requested and not published. Residual: a
+landing that leaves the branch on the merge commit itself, such as a
+fast-forward, loses its row, which keeps a workspace standing rather than
+removing one.
 
 **The gate that pins this is an ALLOW-list of `gh` subcommands, and it is the
 second one in this repository to be rewritten that way.** Its first version
@@ -1278,16 +1345,29 @@ class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
 in balanced backticks, of path and glob characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
-alternatives included. A row that fails its grammar exits 3 naming the row
+alternatives included. A token may hold `@` and `+` as a changed path may,
+the `+` read as a character and not as a quantifier, in the class map's items
+as in a row; an empty brace alternative is refused, because GNU and BSD `grep`
+read an empty alternative differently and one set would judge a path `inside`
+on one machine and `outside` on another. The verdicts come from one `grep`
+per pattern over every changed path, and a path is checked by `case`, so no
+process is spawned per path: on Windows a spawn per path and pattern made
+the helper look hung. A row that fails its grammar exits 3 naming the row
 and not its content, and so does a class map that is absent, names a class
 twice, leaves one without items, or holds a line or a token outside its
-grammar: the gate refuses that map, so a verdict half-read from it is an
-answer CI never gives. **The verdict narrows
+grammar: a verdict half-read from a map the helper refuses would be one no
+gate gives. **The verdict narrows
 and grants nothing**: the caller's deny list and the class's tree set hold
 authority, an `outside` or `outside-class` line is a finding, and an
 `inside` line is not a licence for anything the caller's grant refuses.
-`test_pr_helpers.py` pins all of it, and runs the CI gate beside the helper
-to hold the two to one answer.
+`test_pr_helpers.py` pins all of it.
+
+**Residual: the helper's token grammar is the wider one a frontend-style
+tree needs.** It admits `@` and `+`, as a changed path may. A target's own
+locality gate is that target's file and must be widened in step, and a gate
+that is not refuses them: until it is, a row naming `@` or `+` reads `inside`
+here and is refused in CI. Backend's gate is such a one today. A token both
+admit is held to one answer by the target's own suite, not by this one.
 
 **Every `gh` read these helpers make is bounded, because one that stalls
 holds every step chained behind it.** #603 was `pr-locality.sh` printing
@@ -1770,6 +1850,20 @@ directory, whose checkout may be foreign: the call switches
 hostile config names, and sets `GIT_OPTIONAL_LOCKS=0` so the read writes no
 index. Each git call is bounded at 5 seconds, and a command at 200 files.
 
+**Which git it runs.** The first on `PATH` by the hook's own search, the
+rule *Index refresh and worktree seeding* gives its console script but for
+the main checkout, which it does not fence, and never
+`shutil.which`: on Windows that looks in the current directory first, where
+a merged change could plant a `git.cmd` to run inside this hook, and only
+`NoDefaultCurrentDirectoryInExePath`, which a hook cannot rely on, turns
+that off. Only absolute entries count, and nothing at or below the hook's
+working directory, the event's `cwd` or `CLAUDE_PROJECT_DIR`. On Windows
+only an `.exe` or a `.com` counts, never a `.cmd` or a `.bat`: those run
+through `cmd.exe`, which reads an `&` in the file name the command gave as
+its own. So a git installed under one of those directories, as under a
+session started in the home directory or at a drive root, and a git that is
+only a `.cmd`, read as no git on `PATH`.
+
 **Where it fails open, by design rather than by crash.** An operand holding
 an expansion (`"$FILE"`, `$(git ls-files)`), a `cd` it cannot follow, a file
 that does not exist or cannot be read, a command `shlex` cannot tokenise, no
@@ -1831,8 +1925,19 @@ After `verify`, the dispatcher pulls with `--ff-only`, checks
 containment with `git merge-base --is-ancestor`, runs `tasks done` and
 removes the worktree with `git-worktree-remove.sh`.
 
-**What an executor reports is not trusted.** A prompt-injected issue body
-reaches an executor as it reaches any `/ship`. Its result file is checked
+**An issue is a work order only from the repository owner.** The repositories
+are public, so anyone can open an issue, and a row the night launches merges
+with nobody watching. `dispatch_board.py` takes `gh-issue-owned.sh`'s numbers in
+code, never from the session: `board`, `wake` and `report` hold back a row whose
+issue is not among them, `launch` refuses one, `--berserk` lifts neither, and a
+failed read refuses rather than reading as empty. The test is authorship, as
+`gh-issue-suppresses.sh`'s is, and not a label: a label stays on an issue its
+author then rewrites. Work the owner wants from such an issue is filed as their
+own, in their words, which the interview offers.
+
+**What an executor reports is not trusted.** A prompt-injected body, which is
+now text an owner's issue quotes, reaches an executor as it reaches any
+`/ship`. Its result file is checked
 against `dispatch_run.py`'s schema by `result`, and a claimed merge is read
 from GitHub by `verify` before it counts; a missing or mis-shaped file is a
 crash, never a success.
@@ -1851,6 +1956,10 @@ crash, never a success.
   `state.json`. No step edits it, so an honest mistake does not reach it,
   and a session setting out to defeat the helper's checks is what *The
   guards' threat model* puts outside what the guards defend.
+- A stranger's issue still reaches the dispatcher as data: its row is added
+  and held, and the rebuild and the interview read its text. A collaborator's
+  is held like a stranger's, and under a repository an organisation owns every
+  row is, since no author is the organisation's login: the cautious side.
 
 ## Managed files
 
