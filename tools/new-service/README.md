@@ -252,11 +252,11 @@ names, what this rule would have refused; a commit after the rule adds no
 line to it. The check reads history, so a shallow clone refuses it.
 
 Running the parent's scaffold runs that tree's Python, so `--verify` holds
-it to a rule modelled on `load_scan_gate`'s, which `vouch` in
-[`scaffold/reproduce.py`](scaffold/reproduce.py) owns: the parent must be
-in the history of
-`origin/main` as the repository this script shipped with fetched it, never
-as `--repo-root`'s did, whose `origin/main` its owner names, or carry
+it to a rule modelled on `load_scan_gate`'s, which `render` and `vouch` in
+[`scaffold/reproduce.py`](scaffold/reproduce.py) own: the parent must be
+in the history of `origin/main` as the repository this script shipped with
+fetched it, never as `--repo-root`'s did, whose `origin/main` its owner
+names, and its tree is then read from that repository; or carry
 `tools/new-service/` and the secret scan as this script's own copy has
 them, byte for byte once line endings are set aside, with no link on the
 way to either. Anything else is refused before it runs: a commit on a pull

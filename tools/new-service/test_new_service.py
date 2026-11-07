@@ -2937,13 +2937,16 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
                     ScaffoldError, "tools/new-service/new_service.py is not the one this script shipped with"):
                 self.render(root, parent)
 
-    def test_a_parent_landed_on_the_script_s_repository_runs_from_another_repository(self):
+    def test_a_parent_landed_on_the_script_s_repository_renders_that_repository_s_tree(self):
+        # The replace ref makes the verified repository answer for the landed id with another tree.
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
             root, tool_root = Path(first), Path(second)
             parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
             scaffold.reproduce.git(tool_root, "init", "--quiet")
             scaffold.reproduce.git(tool_root, "fetch", "--quiet", str(root), parent)
             scaffold.reproduce.git(tool_root, "update-ref", scaffold.reproduce.LANDED, parent)
+            replacement = self.parent_carrying(root, {"tools/new-service/new_service.py": "raise SystemExit(1)\n"})
+            scaffold.reproduce.git(root, "update-ref", f"refs/replace/{parent}", replacement)
 
             rendered, _ = self.render(root, parent, tool_root)
 

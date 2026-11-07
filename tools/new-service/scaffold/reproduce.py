@@ -136,13 +136,10 @@ def landed(tool_root: Path, commit: str) -> bool:
 
 
 def vouch(parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
-    """Refuse to run a parent's scaffold that neither landed nor is the shipped one.
+    """Refuse to run a parent's scaffold that is not the shipped one.
 
     Modelled on `load_scan_gate`'s rule, made before the tree runs, where that check compares
-    the tree with itself. A landed parent ran through review, so it stands as it is. Landed is
-    asked of `tool_root`, because the repository under verification names its own origin/main."""
-    if landed(tool_root, parent):
-        return
+    the tree with itself."""
     entries = [directory / SCAN_GATE]
     for top, folders, files in os.walk(directory / SCAFFOLD):
         entries += [Path(top) / name for name in folders + files]
@@ -166,8 +163,13 @@ def vouch(parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
 
 def render(
         repo_root: Path, scaffolded: Scaffolded, directory: Path, tool_root: Path = TOOL_ROOT) -> dict[str, bytes]:
-    """Every file the parent's scaffold writes, rendered into the parent's own tree."""
-    archive = git(repo_root, "archive", "--format=tar", scaffolded.parent)
+    """Every file the parent's scaffold writes, rendered into the parent's own tree.
+
+    A landed parent ran through review, so it stands as it is. Landed is asked of `tool_root` and
+    its tree read from there, because the repository under verification names its own origin/main
+    and a replace ref there answers for a landed commit with another tree."""
+    reviewed = landed(tool_root, scaffolded.parent)
+    archive = git(tool_root if reviewed else repo_root, "archive", "--format=tar", scaffolded.parent)
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(directory, filter="data")
         # Extraction stamps the parent's commit time, so a file the render writes is one whose time moved.
@@ -175,7 +177,8 @@ def render(
     script = directory / "tools" / "new-service" / "new_service.py"
     if not script.is_file():
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
-    vouch(scaffolded.parent, directory, tool_root)
+    if not reviewed:
+        vouch(scaffolded.parent, directory, tool_root)
     kept = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
     # -B stops writing bytecode, not reading it; an empty prefix means no __pycache__ in the tree is read.
     with tempfile.TemporaryDirectory(prefix="scaffold-bytecode-") as bytecode:
