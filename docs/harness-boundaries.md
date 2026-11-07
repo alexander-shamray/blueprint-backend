@@ -15,6 +15,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
 | Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards, the quoting bypass and the helper argv guard. |
 | The guards' threat model | What the guard hooks are written against, which guard findings are filed, and which are recorded as out of scope. |
+| The guard launcher | run-guard.sh starting the five guards on any host's Python 3.12, exit 2 on every failure, the mark that skips the probe, run-guard.py's proof, and the residuals. |
 | Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
 | The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
@@ -577,13 +578,14 @@ preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
 and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
 first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
-redirect and reports nothing. So each hook here is `py -3.12` and its
-arguments, with no env-var prefix and no bare `bash`, as the `PreToolUse`
-guards beside it are. **The two hint hooks are the exception**, started as
-`bash …/hint-bound.sh`: Claude Code passes a hook's command to Git Bash on
-Windows, so the `bash` inside it is Git's own and never the WSL launcher.
-A machine without Git Bash falls back to PowerShell, where the wrapper does
-not run and the hint is dropped, as it was before the wrapper existed. The
+redirect and reports nothing. So each index hook here is `py -3.12` and
+its arguments, with no env-var prefix and no bare `bash`. **The two hint
+hooks and the guards are the exceptions**, started as
+`bash …/hint-bound.sh` and `sh …/run-guard.sh`: Claude Code passes a hook's
+command to Git Bash on Windows, so the `bash` and `sh` inside it are Git's
+own and never the WSL launcher. A machine without Git Bash falls back to
+PowerShell, where neither wrapper runs: the hint is dropped, as it was before
+the wrapper existed, and the guards' residual is *The guard launcher*'s. The
 index hooks are
 started through `runpy` from `-c` rather than as a file argument, because
 Python exits 2 on a file it cannot open, as when a worktree is emptied under
@@ -821,6 +823,64 @@ open for one is closed as not planned, with a link to this section. This
 section is the owner for all three repositories; blueprint-admin and
 blueprint-frontend cite it rather than restate it.
 
+## The guard launcher
+
+**Each guard's hook command is
+`sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh" <guard>.py`, and the
+launcher leaves with 2 on every way it can fail.** A `PreToolUse` hook blocks
+on exit 2 alone; any other status is a non-blocking error, and the tool runs
+unguarded. A raw `py -3.12 <guard>` that cannot start exits 127, and `py` is
+the Windows launcher, absent from a standard macOS or Linux Python, so there
+every call ran with no guard at all. The launcher came from
+blueprint-frontend, where that happened, and is in the payload because
+`render_settings` only adds hooks: a target cannot replace a base hook
+command through its config. It runs the five guards and nothing else.
+
+- **A closed set**, as every helper's: `guard-git-argv.py`,
+  `guard-index-argv.py`, `guard-helper-argv.py`, `guard-sed-crlf.py` and
+  `guard-edit-target.py`. Any other argument, a path included, exits 2, so
+  the hook wiring cannot run an arbitrary script, and a guard name missing
+  from the set refuses every call rather than passing it unguarded.
+- **Each candidate is run before it is chosen**, `py -3.12`, `py -3`,
+  `python3` and `python` in that order, with a probe that exits non-zero
+  below 3.12: a name on PATH is not a working interpreter, and on Windows
+  `python3` is the Store alias, which is why `py` comes first. One `exec`
+  then runs the guard. A `||` chain would run it twice whenever the first
+  refused, judging the event a second time. No candidate passing exits 2.
+- **The probe is paid once per checkout.** The first call that finds the
+  first candidate working leaves an empty directory,
+  `.claude/cache/run-guard.<candidate>`, beside the launcher of the checkout
+  `CLAUDE_PROJECT_DIR` names, and a later call that finds it skips the probe;
+  a session started in a new worktree pays its own first probe. The mark is
+  never opened: a session can make one, so it holds nothing that could name
+  a program, and a forged one buys a skipped probe of
+  the program the probe would have run. Only the candidate probed first is
+  remembered, so a host whose first candidate fails pays the probe every call.
+- **A remembered candidate runs `run-guard.py`, as a child, and is believed
+  on three statuses only.** An `exec` cannot notice an interpreter
+  uninstalled or repointed below the floor since the mark was made; it exits
+  49, 103 or 127 and the tool runs. `run-guard.py` checks the floor in the
+  interpreter about to judge, runs the guard as `__main__` from its source,
+  and answers 91, 92 or 93 for the guard's 0, 2 and anything else, which the
+  launcher turns back into 0, 2 and 1. Every other status, 0 included, is the
+  call refused and the mark removed, so the next call probes again. A mark
+  something was put inside cannot be removed, and refuses every call until
+  somebody removes it, saying so.
+
+The hints keep `hint-bound.sh`, which bounds them and leaves with 0, and the
+index hooks keep `runpy`, which leaves with 1 on a file it cannot open
+(*Index hint hooks and hook wiring*): neither guards anything, and the
+launcher's exit 2 would erase a prompt or block every call.
+
+**Residuals.** A machine without Git Bash runs a hook command under
+PowerShell, which has no `sh`: the command fails with a status that is not
+2, and the guards do not run. Claude Code wants Git Bash on Windows and the
+owner's machines have it, so this is accepted rather than closed. A host
+changing under a mark costs one refused call. A signal sent to the launcher
+from outside ends it as it would end the guard. `test_run_guard.py` holds
+the launcher, its mark and its proof; each guard's suite holds its wiring to
+the launcher, and the launcher and `run-guard.py` to the 3.12 floor.
+
 ## Destructive classes
 
 **One table of what the harness refuses, the layer that refuses it, and a
@@ -925,6 +985,8 @@ row is therefore a spelling the deny list does not match.
 | Rename a branch, forced | `git branch -M feature other` | `deny` | `test_destructive_classes.py` |
 | Rename a branch, long option | `git branch --move feature other` | `deny` | `test_destructive_classes.py` |
 | Move a branch over another | `git branch --force feature HEAD~1` | `deny` | `test_destructive_classes.py` |
+| Remove a worktree, discarding its work | `git worktree remove -f .claude/worktrees/x` | `deny` | `test_destructive_classes.py` |
+| Merge a pull request past its checks | `gh pr merge 7 --rebase --admin` | `deny` | `test_destructive_classes.py` |
 | Write a file through a read-only command | `git log --output=out.txt` | `deny` | `test_destructive_classes.py` |
 | Run a program through `--upload-pack` | `git fetch --upload-pack=prog origin` | `deny` | `test_destructive_classes.py` |
 | Run a program through `--receive-pack` | `git push --receive-pack=prog origin feature` | `deny` | `test_destructive_classes.py` |
@@ -1206,7 +1268,11 @@ not count them here.
 Two are `/ship`'s, and both are closed:
 `Bash(git worktree remove:*)` admitted the `-f` that discards work, and
 `Bash(gh pr merge --rebase:*)` admitted a trailing `--admin` that merges past
-failing checks. Both are withdrawn. `gh-pr-merge.sh` takes a number and a
+failing checks. Both are withdrawn, and the base denies both raw forms,
+`Bash(git worktree remove:*)` and `Bash(gh pr merge:*)`, so no target's
+config or session grant brings the flag back: a deny judges the typed
+command and never one a script runs, so the helpers are untouched by it.
+`gh-pr-merge.sh` takes a number and a
 head oid, spells `--rebase --match-head-commit` itself, and refuses a pull
 request that is not the checked-out branch's own, from this repository, into
 `main`. `git-worktree-remove.sh` takes a `.claude/worktrees/<name>` path and

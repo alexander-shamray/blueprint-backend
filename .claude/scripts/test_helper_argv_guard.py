@@ -7,6 +7,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from review_helpers import assert_launched_on_the_floor
+
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "guard-helper-argv.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
@@ -79,7 +81,9 @@ class GuardHelperArgv(unittest.TestCase):
         settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
         commands = [hook.get("command", "") for entry in settings["hooks"]["PreToolUse"]
                     if entry.get("matcher") == "Bash" for hook in entry.get("hooks", [])]
-        self.assertTrue(any(HOOK.name in command for command in commands), commands)
+        mine = [command for command in commands if HOOK.name in command]
+        self.assertEqual(1, len(mine), commands)
+        assert_launched_on_the_floor(self, mine[0], HOOK.name)
 
 
 class TheRunbooksKeepIssueTextFromTheShell(unittest.TestCase):
