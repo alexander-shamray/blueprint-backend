@@ -158,7 +158,8 @@ result instead, and report it as it actually came out.
 ## Before opening
 
 - `bash .claude/scripts/pr-for-branch.sh` — an OPEN row means you are
-  updating, not creating. Say so and stop.
+  updating, not creating. Say so and stop. It lists only pull requests into
+  `main`, so one into another base does not stop you.
 - Confirm the checks `docs/harness-local.md` *Ship checks* names have run
   over the change, or say plainly that they have not.
 
@@ -168,8 +169,12 @@ Write the body to a scratchpad file and pass it with `--body-file`; heredocs
 through `gh` mangle the wrapping. Then:
 
 ```bash
-gh pr create --base main --title "<title>" --body-file <path>
+gh pr create --base main --title '<title>' --body-file <path>
 ```
+
+The title goes in single quotes, each one inside it written `'\''`: a house
+title often holds a backticked name, which double quotes hand to the shell
+to run (`docs/harness-boundaries.md`, *Prefix grants and wildcard denies*).
 
 Then stamp the number `gh pr create` printed on the branch's commits,
 before anything reviews them:

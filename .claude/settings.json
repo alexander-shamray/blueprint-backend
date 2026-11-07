@@ -87,6 +87,11 @@
           },
           {
             "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-helper-argv.py\"",
+            "statusMessage": "checking helper argv"
+          },
+          {
+            "type": "command",
             "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-sed-crlf.py\"",
             "statusMessage": "checking sed line endings"
           }

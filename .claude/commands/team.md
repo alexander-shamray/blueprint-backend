@@ -1,8 +1,8 @@
 ---
 description: Run up to four read-only peers on one goal, in rounds over a shared board, until a round adds nothing and moves nothing; the user picks the count and each peer's model
 argument-hint: "\"<goal>\" --agents <1-4> [--models opus,sonnet,...] [--rounds <1-7>] [--issue <n>] [--name <run>]"
-allowed-tools: Read, Grep, Glob, Agent(team-peer), Edit(artifacts/team/**), Edit(./artifacts/team/**), Bash(py -3.12 .claude/scripts/team_board.py:*), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-create.sh:*)
-disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(branch-reviewer), Agent(bug-auditor), Agent(security-auditor), Bash(gh issue create:*)
+allowed-tools: Read, Grep, Glob, Agent(team-peer), Edit(artifacts/team/**), Edit(./artifacts/team/**), Bash(py -3.12 .claude/scripts/team_board.py:*), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-hand.sh:*)
+disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(branch-reviewer), Agent(bug-auditor), Agent(security-auditor), Bash(gh issue create:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*)
 ---
 
 Run a team on: $ARGUMENTS
@@ -87,7 +87,7 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    does not fix is filed. Search `bash .claude/scripts/gh-issue-list.sh`
    first, read a candidate through `gh-issue-text.sh`, and comment rather
    than duplicate; otherwise
-   `bash .claude/scripts/gh-issue-create.sh <bug|security> <severity> hand`,
+   `bash .claude/scripts/gh-issue-hand.sh <bug|security> <severity> <area>`,
    with the kind and severity `docs/harness/working-rules.md`, *Issues and
    the task list*, names, grouped as
    `/ship` step 5 files a ceiling's open findings: one issue per cause, the

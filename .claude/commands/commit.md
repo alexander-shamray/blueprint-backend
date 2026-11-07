@@ -72,7 +72,9 @@ British spelling in prose, identifiers left alone.>
 - Keep the `Co-Authored-By:` and `Claude-Session:` trailers.
 - **A branch with an open pull request commits with `--trailer "PR: #<n>"`.**
   Read the number from `bash .claude/scripts/pr-for-branch.sh`, its `OPEN`
-  row. Before the PR exists there is nothing to name, and `/pr` adds the
+  row. The helper lists only pull requests into `main`: a branch whose PR
+  targets another base is outside this chain and takes its number from the
+  PR itself. Before the PR exists there is nothing to name, and `/pr` adds the
   trailer to those commits once there is. The commit gate refuses a pushed
   commit without it (`docs/harness/working-rules.md`, *Commits*).
 

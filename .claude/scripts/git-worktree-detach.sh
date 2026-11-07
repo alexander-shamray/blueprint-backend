@@ -28,6 +28,16 @@ commit="$1"
 git rev-parse --verify --quiet "$commit^{commit}" >/dev/null ||
   { echo "no such commit: $commit" >&2; exit 3; }
 
+# A commit carrying a tracked symbolic link is refused before any worktree is
+# dropped or made, since an auditor's reads follow it out of the worktree
+# (docs/commands/bug-sweep.md, *Residuals*). awk reads the listing whole and
+# stops at five names: a closing `head` can kill the producer under pipefail.
+links=$(git ls-tree -r "$commit" | awk -F'\t' 'index($1, "120000 ") == 1 && n < 5 { n++; print $2 }')
+[ -z "$links" ] ||
+  { echo "$commit carries tracked symbolic links, and a sweep's reads follow them out of the worktree:" >&2
+    printf '%s\n' "$links" >&2
+    exit 5; }
+
 # A sweep stopped before its teardown leaves its worktree registered, and no
 # later run's name meets it again. A day old marks one no sweep still runs in;
 # every candidate goes through git-worktree-drop.sh, whose shape checks and

@@ -155,10 +155,10 @@ class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
             with self.subTest(refused=command):
                 self.assertTrue(any(bash_deny_matches(rule, command) for rule in denied))
         # The control: a deny that refused these would take the night's only launcher and writer with it.
-        for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1 --description d",
+        for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1",
                         "py -3.12 .claude/scripts/issue_decisions.py record 1 --question-file q --answer-file a "
                         "--run 20261101-220000",
-                        "bash .claude/scripts/gh-issue-create.sh bug low code hand"):
+                        "bash .claude/scripts/gh-issue-hand.sh bug low code"):
             with self.subTest(reachable=command):
                 self.assertFalse(any(bash_deny_matches(rule, command) for rule in denied))
 
@@ -182,7 +182,7 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
 
     FILINGS = ("gh issue create --repo a/b --title t", "gh issue new --repo a/b --title t",
                "gh api repos/a/b/issues -f title=t", "gh issue view 1 --json author,body")
-    HELPERS = ("bash .claude/scripts/gh-issue-create.sh hand", "bash .claude/scripts/gh-issue-list.sh")
+    HELPERS = ("bash .claude/scripts/gh-issue-sweep.sh bug low code", "bash .claude/scripts/gh-issue-list.sh")
 
     def denies(self, name):
         return frontmatter_list((COMMANDS / name).read_text(encoding="utf-8"), "disallowed-tools")
@@ -214,6 +214,61 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
                   if any("gh-issue-harness.sh" in e
                          for e in frontmatter_list(p.read_text(encoding="utf-8"), "allowed-tools"))}
         self.assertEqual({"ship.md"}, grants)
+
+
+class EachCommandFilesUnderOneRoute(unittest.TestCase):
+    """The route is the entry point a command is granted, never an argument it types (`docs/harness-boundaries.md`).
+
+    `gh-issue-create.sh` takes the route as its fourth argument, so a grant on it lets a command claim any route's
+    trailer. An allow withholds nothing from the other entry points, so each command denies them by name.
+    """
+
+    CREATE = "Bash(bash .claude/scripts/gh-issue-create.sh:*)"
+    SWEEP = "Bash(bash .claude/scripts/gh-issue-sweep.sh:*)"
+    HAND = "Bash(bash .claude/scripts/gh-issue-hand.sh:*)"
+    MUTATION = "Bash(bash .claude/scripts/gh-issue-mutation.sh:*)"
+    BY_HAND = ("ship.md", "team.md", "dispatch.md")
+    BY_SWEEP = ("bug-sweep.md", "security-sweep.md")
+
+    def lists(self, name):
+        text = (COMMANDS / name).read_text(encoding="utf-8")
+        return frontmatter_list(text, "allowed-tools"), frontmatter_list(text, "disallowed-tools")
+
+    def test_a_sweep_files_through_the_sweep_entry_and_cannot_reach_the_hand_route(self):
+        for name in self.BY_SWEEP:
+            allowed, denied = self.lists(name)
+            with self.subTest(command=name):
+                self.assertIn(self.SWEEP, allowed)
+                self.assertNotIn(self.HAND, allowed)
+                self.assertNotIn(self.MUTATION, allowed)
+                self.assertIn(self.CREATE, denied)
+                self.assertIn(self.HAND, denied)
+                self.assertIn(self.MUTATION, denied)
+
+    def test_a_command_that_files_by_hand_cannot_reach_the_sweep_route(self):
+        for name in self.BY_HAND:
+            allowed, denied = self.lists(name)
+            with self.subTest(command=name):
+                self.assertIn(self.HAND, allowed)
+                self.assertNotIn(self.SWEEP, allowed)
+                self.assertNotIn(self.MUTATION, allowed)
+                if name != "ship.md":
+                    # /ship states no deny list: a deny on a command it chains outlasts the step.
+                    self.assertIn(self.SWEEP, denied)
+                    self.assertIn(self.CREATE, denied)
+                    self.assertIn(self.MUTATION, denied)
+
+    def test_no_command_grants_the_helper_that_takes_a_route(self):
+        for path in sorted(COMMANDS.glob("*.md")):
+            allowed, _ = self.lists(path.name)
+            with self.subTest(command=path.name):
+                self.assertEqual([], [e for e in allowed if "gh-issue-create.sh" in e])
+
+    def test_a_sweep_deny_spares_its_own_entry_and_refuses_the_other(self):
+        _, denied = self.lists("bug-sweep.md")
+        self.assertTrue(any(bash_deny_matches(r, "bash .claude/scripts/gh-issue-hand.sh bug low code") for r in denied))
+        self.assertFalse(any(bash_deny_matches(r, "bash .claude/scripts/gh-issue-sweep.sh bug low code")
+                             for r in denied))
 
 
 class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):

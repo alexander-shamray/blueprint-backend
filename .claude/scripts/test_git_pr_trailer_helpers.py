@@ -103,12 +103,14 @@ class TrailerHelper(Fixture):
 
     def test_a_rerun_after_a_failed_push_publishes_the_rewrite(self):
         self.two_commit_branch()
-        hook = '$ROOT/remote.git/hooks/pre-receive'
-        self.assertEqual(0, sh(f'printf "#!/bin/sh\\nexit 1\\n" > "{hook}" && chmod +x "{hook}"', ROOT=self.root).returncode)
+        # The remote refuses a non-fast-forward, as a setting of its own: a `pre-receive` hook there would be
+        # ignored, since the helper's empty hooks path is inherited by the receiving git on a local remote.
+        deny = 'git --git-dir="$ROOT/remote.git" config receive.denyNonFastForwards true'
+        self.assertEqual(0, sh(deny, ROOT=self.root).returncode)
         failed = self.run_helper(TRAILER)
         self.assertEqual(7, failed.returncode, failed.stderr)
         self.assertNotEqual(self.git('rev-parse', 'HEAD'), self.git('rev-parse', 'origin/feat/x'))
-        self.assertEqual(0, sh(f'rm "{hook}"', ROOT=self.root).returncode)
+        self.assertEqual(0, sh(deny.replace(" true", " false"), ROOT=self.root).returncode)
         again = self.run_helper(TRAILER)
         self.assertEqual(0, again.returncode, again.stderr)
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('ls-remote', 'origin', 'feat/x').split()[0])
@@ -198,6 +200,33 @@ class TrailerHelper(Fixture):
             with self.subTest(pr=bad):
                 self.assertEqual(2, self.run_helper(TRAILER, pr=bad).returncode)
 
+    def test_the_repositorys_own_hooks_do_not_run_inside_the_rewrite(self):
+        # A `post-rewrite` hook in the repository runs after an amend or a rebase, and this helper rewrites published
+        # history, so it points `core.hooksPath` at an empty directory for the run. The positive control comes first:
+        # the same hook does fire on a plain amend in this fixture, so its silence afterwards is the helper's doing.
+        self.two_commit_branch()
+        hook = '"$WORK/.git/hooks/post-rewrite"'
+        marker = '"$ROOT/hook-ran"'
+        made = sh(f'printf "#!/bin/sh\\ntouch {marker}\\n" > {hook} && chmod +x {hook}', WORK=self.work, ROOT=self.root)
+        self.assertEqual(0, made.returncode, made.stderr)
+        self.git("commit", "-q", "--amend", "--no-edit")
+        self.assertEqual(0, sh(f'test -e {marker}', ROOT=self.root).returncode, "the control hook never fired")
+        self.assertEqual(0, sh(f'rm {marker}', ROOT=self.root).returncode)
+        self.git("push", "-q", "--force", "origin", "HEAD")
+        out = self.run_helper(TRAILER)
+        self.assertEqual(0, out.returncode, out.stderr)
+        self.assertEqual(1, sh(f'test -e {marker}', ROOT=self.root).returncode, "the host's hook ran inside the helper")
+
+    def test_the_hooks_path_is_set_before_the_first_command_that_can_run_a_hook(self):
+        code = chr(10).join(code_lines(TRAILER.read_text(encoding="utf-8")))
+        export = code.find("GIT_CONFIG_KEY_")
+        self.assertGreaterEqual(export, 0, "the hooks path is not set")
+        self.assertIn("core.hooksPath", code)
+        self.assertRegex(code, r"mktemp\s+-d", "the path is an empty directory made for the run")
+        for command in ("git status", "git fetch", "git rebase", "git push"):
+            with self.subTest(command=command):
+                self.assertLess(export, code.find(command))
+
     @staticmethod
     def unleased(source):
         """Why each `git push` in the script is not a leased update, whatever else sits between its words."""
@@ -219,6 +248,17 @@ class TrailerHelper(Fixture):
         pushes = [c for c in git_commands("\n".join(code_lines(source))) if c.startswith("git push")]
         self.assertEqual(1, len(pushes), "one push, and it names its lease on the branch and the remote")
         self.assertIn('--force-with-lease="refs/heads/$branch:$remote"', pushes[0])
+
+    def test_every_replay_spells_the_flags_that_decide_what_is_replayed(self):
+        # Each `rebase.*` key behind these flags changes which commits are replayed, and the result is
+        # force-pushed, so an inherited one is a rewrite nobody asked for.
+        code = chr(10).join(code_lines(TRAILER.read_text(encoding="utf-8")))
+        replays = [c for c in git_commands(code) if c.startswith("git rebase") and "--abort" not in c]
+        self.assertEqual(1, len(replays), replays)
+        for flag in ("--no-rebase-merges", "--no-update-refs", "--no-autosquash", "--no-fork-point",
+                     "--no-autostash"):
+            with self.subTest(flag=flag):
+                self.assertIn(flag, replays[0])
 
     def test_the_scan_sees_an_unleased_force_in_the_helpers_own_shape(self):
         # A flag between `push` and `--force` must not hide the force, with a lease beside it or without.

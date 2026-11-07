@@ -71,11 +71,15 @@ when a step behaves unexpectedly.
 - **A worktree removal on Windows can unregister and fail to delete.**
   `git worktree remove` exits non-zero with *Permission denied* when a
   process, the session's own included, holds the directory; git has
-  already deleted the files and the registration. Safe: remove last, from
-  the main checkout, without `-f`; verify with `git worktree list` and
-  `ls`, not the exit code. An empty folder the session holds is removed
-  from a fresh terminal after it exits; a `!` line runs inside the
-  session's own process tree and fails *busy*.
+  already deleted the files and the registration. `git-worktree-remove.sh`
+  reads that for you: it tries `rmdir` on what is left and exits 0 when
+  that empties the path, and exits 4, naming the directory, when something
+  is still in it or a process still holds it. Safe: remove last, from the
+  main checkout, without `-f`, and trust the helper's exit, checking with
+  `git worktree list` and `ls` after a raw `git worktree remove`, whose
+  exit says nothing. A folder an exit 4 names is removed from a fresh
+  terminal after the holder exits; a `!` line runs inside the session's
+  own process tree and fails *busy*.
 
 ## Machine and network
 

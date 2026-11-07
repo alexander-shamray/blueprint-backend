@@ -47,6 +47,17 @@ case "$lowered" in
     echo "refusing to rebase or force-push main, spelled $branch" >&2; exit 3 ;;
 esac
 
+# A target's hooks never run inside this helper: its `pre-rebase`, `post-rewrite`
+# or `pre-push` hook could veto or alter a replay of published history. An empty
+# `core.hooksPath` is exported before any git runs, so the sequencer inherits
+# it; the caller's own entries are kept.
+no_hooks=$(mktemp -d)
+trap 'rmdir "$no_hooks" 2>/dev/null || :' EXIT
+hook_entry="${GIT_CONFIG_COUNT:-0}"
+export "GIT_CONFIG_KEY_$hook_entry=core.hooksPath" \
+  "GIT_CONFIG_VALUE_$hook_entry=$no_hooks" \
+  "GIT_CONFIG_COUNT=$((hook_entry + 1))"
+
 # Both state directories, although `start` only ever makes rebase-merge: a
 # rebase this helper did not start may be either, and it has to be seen to be
 # refused. A function, because the answer moves: a replay that stops leaves
@@ -350,6 +361,20 @@ case "$mode" in
     dirty=$(git status --porcelain)
     [ -z "$dirty" ] ||
       { echo "the tree is dirty; a rebase would carry or refuse it, and neither is this helper's call" >&2; exit 5; }
+    # A skip-worktree file reads clean in `git status` and is still local state
+    # the replay's checkout will not overwrite, so the replay would stop with
+    # git's "local changes would be overwritten" and name no file. It is
+    # refused here, by name, under the dirty tree's own exit. A sparse checkout
+    # sets the same flag on purpose, so one that says so is not read as a lift.
+    sparse=$(git config --type=bool core.sparseCheckout || :)
+    if [ "$sparse" != "true" ]; then
+      flagged=$(git ls-files -v | sed -n 's/^[Ss] //p')
+      [ -z "$flagged" ] ||
+        { echo "these tracked files carry skip-worktree, which git status does not show and a replay will not overwrite:" >&2
+          printf '%s\n' "$flagged" >&2
+          echo "clear the flag with 'git update-index --no-skip-worktree <file>', or restore the file, then start again" >&2
+          exit 5; }
+    fi
 
     git fetch origin
     git show-ref --verify --quiet refs/remotes/origin/main ||
@@ -359,14 +384,12 @@ case "$mode" in
     require_no_merge_invented_anything
     remember_lease
 
-    # The flags are spelled rather than inherited. `rebase.rebaseMerges` would
-    # keep the merge commits this helper exists to be rid of, and
-    # `rebase.updateRefs` would force-update other local branches' refs as a
-    # side effect — both from configuration this script does not own. The
-    # apply backend, `rebase.backend`'s other choice, leaves a commit it never
-    # applied looking exactly like one a resolution emptied.
+    # Every `rebase.*` key that changes the replay is spelled over, three of
+    # them defensively (docs/harness-boundaries.md, *Grant inventory and push
+    # helpers*); `--merge` keeps the apply backend out.
     before=$(git rev-parse HEAD)
-    git rebase --merge --no-rebase-merges --no-update-refs "refs/remotes/origin/main" || stopped
+    git rebase --merge --no-rebase-merges --no-update-refs --no-autosquash \
+      --no-fork-point --no-autostash "refs/remotes/origin/main" || stopped
     remember_replay "$(git rev-parse HEAD)" "$before"
     publish
     ;;
