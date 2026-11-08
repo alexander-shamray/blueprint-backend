@@ -2394,7 +2394,13 @@ STDIN_DATA_ROUTE = (
     "as an issue body for `gh-issue-hand.sh` is, write the text to a file "
     "with `Write` and pass it as `< <path>`: this guard reads a shell's stdin "
     "as a script, quoted delimiter or not, since it cannot see what the "
-    "script does with it."
+    "script does with it. Where `Write` is denied, as in a sweep filing "
+    "through `gh-issue-sweep.sh`, the quoted heredoc stays the route and the "
+    "text is reworded to read as a script: no backtick or `$(`, an even "
+    "count of apostrophes outside double quotes, and a push or any other "
+    "command this guard refuses described in prose rather than spelled; "
+    "`docs/harness/pitfalls.md`, *Shell and encoding*, lists the shapes "
+    "another check refuses there too."
 )
 CACHEINFO_MODE = re.compile(r"^[0-7]{6}(?:,|$)")
 REMOTE_TRACKING = re.compile(r"^(?:refs/remotes/)?origin/")

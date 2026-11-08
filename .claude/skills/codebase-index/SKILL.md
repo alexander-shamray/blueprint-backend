@@ -63,8 +63,16 @@ grep the product specification `docs/harness-local.md` *Documents* names
 instead of widening.
 
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
-error messages, and the default `hybrid` mode for mixed questions. Use pure
-`vector` mode only when embeddings are enabled and exact vocabulary is unknown.
+error messages, and the default `hybrid` mode for mixed questions. The
+embeddings backend is the package's default, `noop`, and stays there, so pure
+`vector` mode has nothing to search: local embeddings were measured on
+2026-09-21 and rejected. On a
+fourteen-question benchmark they lowered code retrieval from 8/8 to 6/8 at
+`--limit 3`, gained nothing on rule ownership that the grep above does not,
+and cost about 3 GB of packages, a 326-second vector build and a model load
+per query; and `codebase-index` 2.0.0 cannot build their table as shipped,
+since it sizes the vector column from a `dim` set only inside `embed()`. Do
+not turn them on again without a new reason.
 
 Read [references/commands.md](references/commands.md) only when command options
 or routing remain unclear.
