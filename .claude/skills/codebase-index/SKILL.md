@@ -35,7 +35,7 @@ named `codebase-index`; do not invoke that console script directly.
 
 | Intent | Command |
 |---|---|
-| Where is X implemented? | `bash .claude/skills/codebase-index/scripts/cbx search 'X' --session <tag> --json` |
+| Where is X implemented? | `bash .claude/skills/codebase-index/scripts/cbx search 'X' --limit 3 --session <tag> --json` |
 | How does X work? | `bash .claude/skills/codebase-index/scripts/cbx explain 'X' --session <tag> --json` |
 | What is this codebase? | `bash .claude/skills/codebase-index/scripts/cbx architecture --json` |
 | Find a named symbol | `bash .claude/skills/codebase-index/scripts/cbx symbol 'X' --json` |
@@ -55,7 +55,8 @@ two and not the third. Write a single quote inside the term as `'\''`.
 default is ten and no configuration file changes it — `cli.py` and the MCP
 server each hardcode the number — so the seven results past the third arrive
 whether or not they are read, and on this corpus they find the implementation
-no more often than the first three do.
+no more often than the first three do. `test_index_skill_examples.py` holds
+every `search` line under this skill to that value.
 
 Which section owns a rule is not a question for this index: half those
 answers are absent from ten results and the rest rank below the fifth, so

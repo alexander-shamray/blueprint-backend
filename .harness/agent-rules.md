@@ -39,7 +39,8 @@ is* hold their reasons and detail and cite this file for the rule.
   Managed means named in `.harness/manifest.json`; the drift gate refuses
   a managed file that differs from the payload, and the next sync
   overwrites it.
-- **A `local` path under `.claude/` is Edit-denied as a managed one is**:
+- **A `local` path under `.claude/`, and all of `.harness/`, is
+  Edit-denied as a managed one is**:
   editing it takes the owner's lift, and a deny lifted mid-session can
   still refuse until Claude Code is relaunched from the worktree
   (`docs/harness-boundaries.md`, *Settings self-lock and permission
