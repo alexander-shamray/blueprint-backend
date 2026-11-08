@@ -1,5 +1,4 @@
-"""This repository's own commands held to the payload's grant cases: `/mutation-sweep` under the mutation route,
-and each that writes to the memory and output-style denies.
+"""This repository's own commands' grants: `/mutation-sweep`'s mutation route, and the writers' memory denies.
 
 `test_command_grants.py` holds the payload's commands and the chained ones `local_commands.py` declares; its classes
 are reached through the module, never bound to a name here, or unittest would run the payload's class a second time.
