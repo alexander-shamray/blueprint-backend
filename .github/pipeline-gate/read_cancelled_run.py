@@ -1,8 +1,6 @@
 """Why a cancelled push run on main is red, or nothing where a newer run replaced it (ADR-196).
 
-Usage: read_cancelled_run.py <owner/repo> <run-id>, with `gh` signed in. A read
-that fails exits non-zero, which `main-red.yml` files rather than reading as
-replaced.
+Usage: read_cancelled_run.py <owner/repo> <run-id>, with `gh` signed in. A failed read exits non-zero.
 """
 
 from __future__ import annotations
