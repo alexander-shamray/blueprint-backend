@@ -686,6 +686,7 @@ class GrantTests(unittest.TestCase):
             "github.event_name != 'push'",
             "github.ref != 'refs/heads/main'",
             "(always()) || (vars.x == 'y' && github.ref == 'refs/heads/main')",
+            "always() || vars.x == 'y' && github.ref == 'refs/heads/main'",
         ):
             with self.subTest(condition=condition):
                 self.write(GRANTED.replace(
