@@ -9,13 +9,13 @@ on:
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
-  # The backfill of ADR-109: the `images` job is path-filtered, so a service no
+  # The backfill of ADR-109: `publish-images` is path-filtered, so a service no
   # push has touched since signing began has no signed image for deploy.yml to
   # verify. A dispatch from main builds, pushes and signs every image once.
   workflow_dispatch:
 
-# Read-only by default. A job needing more says so: the integration job posts a
-# sighting on its issue, and the images job pushes and signs on main.
+# Read-only by default. A job needing more says so, and none holds a write grant
+# beside a pull request's code (ADR-196).
 permissions:
   contents: read
 
@@ -230,6 +230,9 @@ jobs:
 
       - name: Every third-party action is pinned to a commit
         run: python .github/pipeline-gate/pipeline_gate.py actions
+
+      - name: No job a pull request reaches holds a write grant beside a checkout
+        run: python .github/pipeline-gate/pipeline_gate.py grants
 
       - name: Every workflow pushed on main is watched by the red-main alert
         run: python .github/pipeline-gate/pipeline_gate.py alerts
@@ -506,7 +509,7 @@ jobs:
       bff: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.bff }}
       deploy: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.deploy }}
       # Empty on a dispatch, which has no change to read: they gate only the
-      # packages job's pull-request check and its push to main (ADR-149, ADR-150).
+      # packages job's pull-request check and the push to main (ADR-149, ADR-150).
       assistant: ${{ steps.changes.outputs.assistant }}
       anthropic: ${{ steps.changes.outputs.anthropic }}
       # Empty on a dispatch, which builds images and has no guard to test.
@@ -528,7 +531,7 @@ jobs:
               - 'Directory.Build.props'
               - 'Directory.Packages.props'
               - 'global.json'
-              # An input to every `docker build .` in the images job, and to
+              # An input to every `docker build .` in the image jobs, and to
               # nothing the solution build can check: excluding a copied
               # project here is a broken image, and un-excluding a local secret
               # is one with credentials in it. Neither is visible to
@@ -820,10 +823,6 @@ jobs:
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
-    # The one job that comments: it posts a sighting, or a warm-up retry, on its issue.
-    permissions:
-      contents: read
-      issues: write
     strategy:
       # Each shard's failures are its own to report, so one red shard cancels none.
       fail-fast: false
@@ -847,6 +846,8 @@ jobs:
               FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.&FullyQualifiedName!~Platform.IntegrationTests.
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -924,22 +925,59 @@ jobs:
           name: sightings-${{ matrix.shard }}
           path: TestResults/sightings
 
-      # A sighting is a flake that did not fail, so it goes where flakes are counted,
-      # the flaky tests tracker (docs/harness/working-rules.md, CI), named by its file. A
-      # fork's token cannot comment, and a missed comment must not fail a shard that
-      # passed. The artifact above is the record.
-      - name: "Post the sightings on #1406"
-        if: always() && hashFiles('TestResults/sightings/*.txt') != ''
-        continue-on-error: true
+      # A retry hides the failure it recovered from, so integration-report posts
+      # it where that failure is tracked, which counts each recurrence.
+      - name: Note the warm-up retry
+        if: always() && steps.stage.outputs.retried == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SHARD: ${{ matrix.shard }}
-          REF_NAME: ${{ github.ref_name }}
+          OUTCOME: ${{ steps.stage.outcome }}
+        run: echo "$OUTCOME" > warm-up-retry.txt
+
+      - name: Keep the warm-up retry
+        if: always() && steps.stage.outputs.retried == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: warm-up-retry-${{ matrix.shard }}
+          path: warm-up-retry.txt
+
+  # The grant to comment, in a job with no checkout: the shards run the branch's
+  # tests and hold none (ADR-196). The artifacts are the record, so a fork's token,
+  # which cannot comment, or a missed comment fails no run the shards passed. A red
+  # shard's sighting is still a sighting, and a shard the gates skipped wrote nothing.
+  integration-report:
+    needs: integration
+    if: ${{ !cancelled() && needs.integration.result != 'skipped' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: sightings-*
+          path: sightings
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: warm-up-retry-*
+          path: retries
+
+      # A sighting is a flake that did not fail, so it goes where flakes are counted,
+      # the flaky tests tracker (docs/harness/working-rules.md, CI), named by its file.
+      - name: "Post the sightings on #1406"
         run: |
-          for f in TestResults/sightings/*.txt; do
+          shopt -s nullglob
+          for f in sightings/sightings-*/*.txt; do
+            shard=$(basename "$(dirname "$f")")
             {
-              echo "A passing run saw $(basename "$f" .txt). Run $RUN_URL, shard $SHARD, ref $REF_NAME."
+              echo "A passing run saw $(basename "$f" .txt). Run $RUN_URL, shard ${shard#sightings-}, ref $REF_NAME."
               echo
               echo '```'
               head -c 60000 "$f"
@@ -949,21 +987,15 @@ jobs:
             gh issue comment 1406 --body-file body.md
           done
 
-      # A retry hides the failure it recovered from, so the run is posted where
-      # that failure is tracked, which counts each recurrence.
-      - name: "Post the warm-up retry on #960"
-        if: always() && steps.stage.outputs.retried == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SHARD: ${{ matrix.shard }}
-          REF_NAME: ${{ github.ref_name }}
-          OUTCOME: ${{ steps.stage.outcome }}
-        run: >
-          gh issue comment 960 --body
-          "TestcontainersWarmUp's named failure, and the shard ran again in a new process.
-          Run $RUN_URL, shard $SHARD, ref $REF_NAME; the retry's outcome was $OUTCOME."
+      - name: "Post the warm-up retries on #960"
+        run: |
+          shopt -s nullglob
+          for f in retries/warm-up-retry-*/warm-up-retry.txt; do
+            shard=$(basename "$(dirname "$f")")
+            gh issue comment 960 --body \
+              "TestcontainersWarmUp's named failure, and the shard ran again in a new process.
+              Run $RUN_URL, shard ${shard#warm-up-retry-}, ref $REF_NAME; the retry's outcome was $(cat "$f")."
+          done
 
   # Every stage's results in one place, the only place both readers below can
   # judge the run whole. Not `if: always()`: after a failed stage there is
@@ -1023,27 +1055,19 @@ jobs:
   # broke would surface on the next compose pull request. Here it surfaces on
   # the offending one, after the test stages, in the order §15.1 draws.
 
-  # Built with an SBOM on every run; on main, also pushed, signed keyless and
-  # attested, each by digest (ADR-109, which amends ADR-071). `pipeline-gate
-  # images` asserts every Dockerfile under src/ appears below and every build
-  # has its SBOM, push, signature and two attestations.
+  # Built with an SBOM on a pull request, holding no grant while the branch's
+  # Dockerfiles run; publish-images does the same on main and pushes, signs and
+  # attests too, each by digest (ADR-109, ADR-196). `pipeline-gate images` asserts
+  # every Dockerfile under src/ appears below and every build has its SBOM.
   images:
-    # No job-level `if:`: a job it skips is never expanded, so its one check
-    # would be named with the expression below unevaluated.
+    # Skipped on main alone: a skipped job is never expanded, so its one check is
+    # named with the expression below unevaluated, and no pull request reads that.
+    if: ${{ github.ref != 'refs/heads/main' }}
     name: images (${{ matrix.image }})
     needs: [changes, stage-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Granted to the job and used by no pull request: every step that spends
-    # one carries the main-push condition, and a token minted for a
-    # refs/pull ref cannot satisfy deploy.yml's verifier, which pins main
-    # (ADR-109).
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    strategy:
+    strategy: &image-legs
       # One red image should not cancel the others: which Dockerfile broke is
       # the useful signal, and fail-fast reports the first alphabetically.
       fail-fast: false
@@ -1118,17 +1142,15 @@ jobs:
             *) echo "::error::needs.changes.outputs[${{ matrix.filter }}] is not true/false. The images matrix names a filter the changes job does not output, so this image would never be built."; exit 1 ;;
           esac
 
-      # The whole history, because the main tag moves only forward in it
-      # (ADR-134) and the step that decides needs `git merge-base`.
       - uses: actions/checkout@v7
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       # The build context is the repository root, exactly as §14.1's Compose
       # file sets it — these Dockerfiles copy csproj files from across the
       # solution, so a narrower context breaks the restore layer. The second
-      # tag is the registry's, used only by a push on main; the label links the
+      # tag is the registry's, pushed only by publish-images; the label links the
       # package to this repository, so it inherits the repository's access.
       - name: Build ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
@@ -1142,9 +1164,8 @@ jobs:
           .
 
       # ADR-071: an SBOM from the built image, as SPDX JSON in a workflow
-      # artefact, and as the file the attestation below reads, so the two
-      # cannot differ. A third party's action reads the image, so it is pinned
-      # to a commit and not a tag.
+      # artefact. A third party's action reads the image, so it is pinned to a
+      # commit and not a tag.
       - name: SBOM for ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
@@ -1154,9 +1175,61 @@ jobs:
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
 
-      # From here every step is main's alone (ADR-109): a pull request builds
-      # and inventories, and pushes nothing. Each carries the filter too, so a
-      # leg that built nothing signs nothing.
+  # What main alone does (ADR-109). The job's own condition is what keeps its
+  # grants off a pull request, since a job holds them from its first step and
+  # `permissions:` takes no expression (ADR-196), and `pipeline-gate images` holds
+  # its build to the line above and asserts its push, signature and two
+  # attestations. Unnamed, so the check a pull request sees skip names no expression.
+  publish-images:
+    if: ${{ contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
+    needs: [changes, stage-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy: *image-legs
+    steps:
+      - name: The filter this leg reads resolves to a decision
+        run: |
+          case "${{ needs.changes.outputs[matrix.filter] }}" in
+            true|false) echo "${{ matrix.filter }}=${{ needs.changes.outputs[matrix.filter] }}" ;;
+            *) echo "::error::needs.changes.outputs[${{ matrix.filter }}] is not true/false. The images matrix names a filter the changes job does not output, so this image would never be built."; exit 1 ;;
+          esac
+
+      # The whole history, because the main tag moves only forward in it
+      # (ADR-134) and the step that decides needs `git merge-base`.
+      - uses: actions/checkout@v7
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        run: >
+          docker build
+          --file ${{ matrix.dockerfile }}
+          --tag ${{ matrix.image }}:${{ github.sha }}
+          --tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"
+          --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          .
+
+      # The artefact is also the file the attestation below reads, so the two
+      # cannot differ (ADR-071).
+      - name: SBOM for ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.image }}.spdx.json
+          artifact-name: sbom-${{ matrix.image }}.spdx.json
+
+      # Each carries the filter too, so a leg that built nothing signs nothing.
       - name: Sign in to the registry
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -1249,22 +1322,25 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
 
   # ADR-149's two packages. Packed on every run once the test stages pass, so a
-  # project that cannot pack fails its own pull request; pushed only from main,
-  # and only the package whose project changed. There is no --skip-duplicate:
-  # a changed project that kept its Version and got past the pull request's
-  # check is refused by the feed here, instead of leaving a stale package.
+  # project that cannot pack fails its own pull request. The pack runs the
+  # branch's MSBuild files, so this job holds no grant (ADR-196).
   packages:
     needs: [changes, stage-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: write
-    env:
-      FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # A second checkout and not a fetch, which needs the token this job does
+      # not persist.
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+          persist-credentials: false
 
       # The pull request's half of the version rule; the feed's refusal is main's
       # backstop (ADR-150). A project absent at the base is new and has no
@@ -1273,7 +1349,6 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "$BASE"
           version() { sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p'; }
           failed=0
           for pair in "Common.Assistant:$ASSISTANT" "Common.Assistant.Anthropic:$ANTHROPIC"; do
@@ -1285,15 +1360,14 @@ jobs:
               echo "::error::No <Version> read from $path, so the version rule cannot be checked."
               exit 1
             fi
-            git cat-file -e "$BASE:$path" 2>/dev/null || continue
-            if [ "$(git show "$BASE:$path" | version)" = "$head" ]; then
+            [ -f ".base/$path" ] || continue
+            if [ "$(version < ".base/$path")" = "$head" ]; then
               echo "::error file=$path::$project changed and keeps the base's Version $head; a changed package ships under a new one (ADR-149)."
               failed=1
             fi
           done
           exit "$failed"
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
           ASSISTANT: ${{ needs.changes.outputs.assistant }}
           ANTHROPIC: ${{ needs.changes.outputs.anthropic }}
 
@@ -1302,7 +1376,7 @@ jobs:
           global-json-file: global.json
 
       # RepositoryUrl links each package to this repository on GitHub
-      # Packages, which is what lets this job's own token push it.
+      # Packages, which is what lets publish-packages' own token push it.
       - name: Pack both packages
         run: |
           for project in Common.Assistant Common.Assistant.Anthropic; do
@@ -1310,14 +1384,52 @@ jobs:
               "-p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}"
           done
 
+      - name: Hand the packages to the push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.changes.outputs.assistant == 'true' || needs.changes.outputs.anthropic == 'true')
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: artifacts/package/release/*.nupkg
+          if-no-files-found: error
+
+  # Pushes what the packages job packed, and only the package whose project
+  # changed; nothing here builds, so the grant runs no MSBuild file (ADR-196).
+  # There is no --skip-duplicate: a changed project that kept its
+  # Version and got past the pull request's check is refused by the feed here,
+  # instead of leaving a stale package.
+  publish-packages:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.changes.outputs.assistant == 'true' || needs.changes.outputs.anthropic == 'true') }}
+    needs: [changes, packages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+    steps:
+      # For global.json alone: the SDK pin decides which `dotnet` pushes.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: packed
+
       - name: Push Common.Assistant
-        if: env.PUSH == 'true' && needs.changes.outputs.assistant == 'true'
-        run: dotnet nuget push artifacts/package/release/Common.Assistant.[0-9]*.nupkg --source "$FEED" --api-key "$TOKEN"
+        if: needs.changes.outputs.assistant == 'true'
+        run: dotnet nuget push packed/Common.Assistant.[0-9]*.nupkg --source "$FEED" --api-key "$TOKEN"
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Common.Assistant.Anthropic
-        if: env.PUSH == 'true' && needs.changes.outputs.anthropic == 'true'
-        run: dotnet nuget push artifacts/package/release/Common.Assistant.Anthropic.*.nupkg --source "$FEED" --api-key "$TOKEN"
+        if: needs.changes.outputs.anthropic == 'true'
+        run: dotnet nuget push packed/Common.Assistant.Anthropic.*.nupkg --source "$FEED" --api-key "$TOKEN"
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -254,22 +254,30 @@ def check_images(root: Path = ROOT) -> list[str]:
                 "guard step"
             )
 
-    # ...and the job has no `if:` of its own. GitHub expands a matrix only
-    # after the job's condition passes, so a skipped job is one check whose
-    # name shows `${{ matrix.image }}` verbatim; each step tests its own filter.
+    # ...and the job's `if:` is the split from publish-images and nothing else.
+    # GitHub expands a matrix only after the job's condition passes, so a skipped
+    # job is one check whose name shows `${{ matrix.image }}` verbatim: this one
+    # is skipped only on main, and each step tests its own filter.
     condition = read_job_condition(text, "images")
     if condition is None:
         problems.append(
             "found no `images:` job in ci.yml: the check below would pass "
             "vacuously, so the parser or the job's key is what is broken"
         )
-    elif condition:
+    elif not condition:
+        problems.append(
+            f"the images job carries no job-level `if: {IMAGES_CONDITION}`, so it "
+            f"builds every image twice on main, beside {PUBLISH_JOB}"
+        )
+    elif condition != IMAGES_CONDITION:
         problems.append(
             f"the images job carries a job-level `if: {condition}`. A matrix "
             "job that condition skips is never expanded, so the check is named "
             "with its expression unevaluated; leave the decision to each "
             "step's `if:` on needs.changes.outputs[matrix.filter]"
         )
+
+    problems.extend(_check_publish_job(text))
 
     # ...and it has to be the right one. An entry pairing the gateway's
     # Dockerfile with `filter: catalog` passes both directions of the inventory
@@ -298,6 +306,46 @@ def check_images(root: Path = ROOT) -> list[str]:
 
 
 SBOM_ACTION = "anchore/sbom-action@"
+IMAGES_CONDITION = "${{ github.ref != 'refs/heads/main' }}"
+PUBLISH_JOB = "publish-images"
+# Both image jobs take one matrix, so neither inventory can drift from the other.
+IMAGE_LEGS_ALIAS = re.compile(r"^ {4}strategy: \*image-legs\s*$", flags=re.MULTILINE)
+
+
+def _check_publish_job(workflow_text: str) -> list[str]:
+    """publish-images holds what signs and pushes, so a pull request never reaches it (ADR-196)."""
+    condition = read_job_condition(workflow_text, PUBLISH_JOB)
+    if condition is None:
+        return [
+            f"found no `{PUBLISH_JOB}:` job in ci.yml: the checks on it would pass "
+            "vacuously, so the parser or the job's key is what is broken"
+        ]
+
+    problems: list[str] = []
+    if MAIN_REF not in condition or "pull_request" in condition or not re.search(r"[\"']push[\"']", condition):
+        problems.append(
+            f"the {PUBLISH_JOB} job's own condition is {condition!r}, which does not keep it to "
+            "a push or dispatch on main. Its grants are held from the job's first step, whatever "
+            "each step's own `if:` says, so a pull request's Dockerfiles build beside them (ADR-196)"
+        )
+
+    jobs = read_jobs(workflow_text)
+    if not IMAGE_LEGS_ALIAS.search("\n".join(jobs.get(PUBLISH_JOB, []))):
+        problems.append(
+            f"the {PUBLISH_JOB} job does not take the images job's matrix as `strategy: *image-legs`, "
+            "so a second list decides what main builds, and the inventory reads pairs from either"
+        )
+
+    builds = {
+        job: [step["run"] for step in read_job_steps(workflow_text, job) if DOCKER_BUILD.search(step.get("run", ""))]
+        for job in ("images", PUBLISH_JOB)
+    }
+    if builds["images"] and builds[PUBLISH_JOB] and builds["images"] != builds[PUBLISH_JOB]:
+        problems.append(
+            f"the {PUBLISH_JOB} job's `docker build` is not the line the images job runs, so a "
+            "green pull request says nothing about the build main signs"
+        )
+    return problems
 
 
 def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
@@ -340,40 +388,42 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
 
 
 def check_sboms(workflow_text: str) -> list[str]:
-    """Every image the `images` job builds has an SBOM made from it (ADR-071).
+    """Every image either image job builds has an SBOM made from it (ADR-071).
 
     Per build step, because the inventory above holds the matrix to the
     Dockerfiles, so one read of the reference a build tags covers every leg.
     """
-    steps = read_job_steps(workflow_text, "images")
-    builds = [(index, step) for index, step in enumerate(steps) if DOCKER_BUILD.search(step.get("run", ""))]
-    if not builds:
-        return [
-            "found no `docker build` step in the images job: the SBOM check "
-            "would pass vacuously, so the parser or the job is what is broken"
-        ]
-
     problems: list[str] = []
-    for index, build in builds:
-        tag = re.search(r"--tag\s+((?:\$\{\{[^}]*\}\}|[^\s$])+)", build["run"])
-        if tag is None:
+    for job in ("images", PUBLISH_JOB):
+        steps = read_job_steps(workflow_text, job)
+        builds = [(index, step) for index, step in enumerate(steps) if DOCKER_BUILD.search(step.get("run", ""))]
+        if not builds:
             problems.append(
-                "an images job build step names no --tag, so no SBOM step can be "
-                "shown to read the image it builds"
+                f"found no `docker build` step in the {job} job: the SBOM check "
+                "would pass vacuously, so the parser or the job is what is broken"
             )
             continue
-        if not any(
-            re.fullmatch(rf"{re.escape(SBOM_ACTION)}[0-9a-f]{{40}}(?:\s+#.*)?", step.get("uses", "").strip())
-            and step.get("image", "").strip() == tag.group(1)
-            and step.get("if", "").strip() == build.get("if", "").strip()
-            for step in steps[index + 1:]
-        ):
-            problems.append(
-                f"the images job builds {tag.group(1)} and no {SBOM_ACTION} step "
-                "pinned to a commit reads that reference after it under the same "
-                "`if:`. ADR-071 gives every image the pipeline builds an SBOM, and "
-                "a leg without one ships an image nothing has inventoried"
-            )
+
+        for index, build in builds:
+            tag = re.search(r"--tag\s+((?:\$\{\{[^}]*\}\}|[^\s$])+)", build["run"])
+            if tag is None:
+                problems.append(
+                    f"a {job} job build step names no --tag, so no SBOM step can be "
+                    "shown to read the image it builds"
+                )
+                continue
+            if not any(
+                re.fullmatch(rf"{re.escape(SBOM_ACTION)}[0-9a-f]{{40}}(?:\s+#.*)?", step.get("uses", "").strip())
+                and step.get("image", "").strip() == tag.group(1)
+                and step.get("if", "").strip() == build.get("if", "").strip()
+                for step in steps[index + 1:]
+            ):
+                problems.append(
+                    f"the {job} job builds {tag.group(1)} and no {SBOM_ACTION} step "
+                    "pinned to a commit reads that reference after it under the same "
+                    "`if:`. ADR-071 gives every image the pipeline builds an SBOM, and "
+                    "a leg without one ships an image nothing has inventoried"
+                )
     return problems
 
 
@@ -457,16 +507,16 @@ def read_helm_upgrades(workflow_text: str) -> list[str]:
 
 
 def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
-    """Every build in the `images` job is pushed, signed and attested on main by
-    digest, and the rollout verifies it before Helm runs (ADR-109).
+    """Every build in the `publish-images` job is pushed, signed and attested on
+    main by digest, and the rollout verifies it before Helm runs (ADR-109).
 
     Coverage rather than findings: a job that stops signing is red.
     """
-    steps = read_job_steps(workflow_text, "images")
+    steps = read_job_steps(workflow_text, PUBLISH_JOB)
     builds = [(index, step) for index, step in enumerate(steps) if DOCKER_BUILD.search(step.get("run", ""))]
     if not builds:
         return [
-            "found no `docker build` step in the images job: the supply-chain check "
+            f"found no `docker build` step in the {PUBLISH_JOB} job: the supply-chain check "
             "would pass vacuously, so the parser or the job is what is broken"
         ]
 
@@ -474,7 +524,7 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
     for position, (index, build) in enumerate(builds):
         end = builds[position + 1][0] if position + 1 < len(builds) else len(steps)
         window = range(index + 1, end)
-        subject = f"the images job's build at step {index + 1}"
+        subject = f"the {PUBLISH_JOB} job's build at step {index + 1}"
         found = {
             "registry sign-in": _located(steps, window, uses=LOGIN_ACTION),
             "`docker push`": _located(steps, window, run=r"\bdocker push\b"),
@@ -703,6 +753,155 @@ def check_actions(root: Path = ROOT) -> list[str]:
                 "commit. A tag can be moved to other code; pin the full SHA and "
                 "keep the version as a comment"
             )
+    return problems
+
+
+# --------------------------------------------------------------------------
+# grants
+# --------------------------------------------------------------------------
+
+CHECKOUT = re.compile(r"^\s*(?:-\s+)?uses:\s*['\"]?actions/checkout@", flags=re.MULTILINE)
+PULL_REQUEST_TRIGGER = re.compile(
+    r"^on:.*\bpull_request|^  (?:-\s+)?['\"]?pull_request(?:_target)?\b", flags=re.MULTILINE)
+
+
+def read_jobs(workflow_text: str) -> dict[str, list[str]]:
+    """Each job's own lines under `jobs:`, by its key."""
+    jobs: dict[str, list[str]] = {}
+    current: list[str] | None = None
+    inside = False
+    for line in workflow_text.splitlines():
+        if re.match(r"^jobs:\s*$", line):
+            inside = True
+        elif not inside:
+            continue
+        elif re.match(r"^[^\s#]", line):
+            break
+        elif found := re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line):
+            current = jobs.setdefault(found.group(1), [])
+        elif current is not None:
+            current.append(line)
+    return jobs
+
+
+def read_grants(lines: list[str], indent: int) -> list[str] | None:
+    """The write grants of the `permissions:` at one indentation, or None for no block."""
+    found = _key(lines, "permissions", indent)
+    if found is None:
+        return None
+    value, nested = found
+    if value.strip() == "write-all":
+        return ["write-all"]
+    # The inline value as well as the nested lines, for `permissions: { packages: write }`.
+    return [
+        f"{name}: write"
+        for text in (value, *nested)
+        if not text.lstrip().startswith("#")
+        for name in re.findall(r"([a-z-]+):\s*write\b", text)
+    ]
+
+
+def _split_outside_parentheses(expression: str, operator: str) -> list[str]:
+    """One expression's terms at the top level, quotes and parentheses kept whole."""
+    terms: list[str] = []
+    start = depth = index = 0
+    quoted = False
+    while index < len(expression):
+        character = expression[index]
+        if character == "'":
+            quoted = not quoted
+        elif not quoted and character == "(":
+            depth += 1
+        elif not quoted and character == ")":
+            depth -= 1
+        elif not quoted and depth == 0 and expression.startswith(operator, index):
+            terms.append(expression[start:index])
+            index += len(operator)
+            start = index
+            continue
+        index += 1
+    terms.append(expression[start:])
+    return [term.strip() for term in terms]
+
+
+def _unwrapped(term: str) -> str:
+    """A term without the parentheses that enclose the whole of it."""
+    while term.startswith("(") and term.endswith(")") and len(_split_outside_parentheses(term[1:-1], ")")) == 1:
+        term = term[1:-1].strip()
+    return term
+
+
+def _term_names_an_event_or_main(term: str) -> bool:
+    """One test that is false on a pull request's run, whatever else is true."""
+    if "pull_request" in term:
+        return False
+    return (
+        term == MAIN_REF
+        or re.fullmatch(r"github\.event_name == '[a-z_]+'", term) is not None
+        or re.fullmatch(r"contains\(fromJSON\('\[[^]]*\]'\), github\.event_name\)", term) is not None
+    )
+
+
+def _keeps_pull_requests_out(condition: str) -> bool:
+    """Whether a job's own condition is false on every pull request's run.
+
+    True when some `&&` term is, which a `||` term only is when each of its sides
+    is. A condition this cannot read is refused, because a gate that passes what
+    it did not understand is the one that stops looking.
+    """
+    expression = re.sub(r"^[>|][-+]?\s*", "", condition.strip())
+    expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", expression)
+    return any(
+        all(
+            _term_names_an_event_or_main(side)
+            for side in _split_outside_parentheses(_unwrapped(term), "||")
+        )
+        for term in _split_outside_parentheses(_unwrapped(expression), "&&")
+    )
+
+
+def check_grants(root: Path = ROOT) -> list[str]:
+    """No job a pull request reaches holds a write grant beside the branch's code (ADR-196).
+
+    The checkout is what brings the branch in: a job with none runs only the
+    workflow's own text, which is why it may hold what it posts with. Read over
+    every workflow, because the next one to need a grant is not this one's job
+    to know about. The head's copy of a workflow is what a pull request runs, so
+    this holds the shape on what lands and stops nobody who edits it on a branch.
+    """
+    workflows = sorted(
+        path for path in (root / ".github" / "workflows").glob("*")
+        if path.suffix in (".yml", ".yaml")
+    )
+    if not workflows:
+        return ["found no workflow under .github/workflows: the grant check would pass vacuously"]
+
+    held = 0
+    problems: list[str] = []
+    for path in workflows:
+        text = path.read_text(encoding="utf-8")
+        inherited = read_grants(text.splitlines(), 0) or []
+        for job, lines in read_jobs(text).items():
+            own = read_grants(lines, 4)
+            grants = inherited if own is None else own
+            if not grants:
+                continue
+            held += 1
+            if not PULL_REQUEST_TRIGGER.search(text) or not CHECKOUT.search("\n".join(lines)):
+                continue
+            condition = read_job_condition(text, job) or ""
+            if not _keeps_pull_requests_out(condition):
+                problems.append(
+                    f"{path.name}'s job `{job}` holds {', '.join(grants)} and checks out the branch, and "
+                    "its own `if:` does not keep a pull request out, so whatever that branch runs in the "
+                    "job holds the grant. Move what spends the grant to a job that runs only on main, or "
+                    "to one with no checkout (ADR-196)"
+                )
+    if not held:
+        return [
+            "found no job holding a write grant under .github/workflows: the grant check would "
+            "pass vacuously, so the parser or the directory is what is broken"
+        ]
     return problems
 
 
@@ -1264,7 +1463,8 @@ def main(argv: list[str]) -> int:
              "and two attestations, and the rollout verifies before Helm")
     sub.add_parser("shards", help="the integration shards partition the stage")
     sub.add_parser("actions", help="every third-party action is pinned to a commit")
-    sub.add_parser("alerts", help="every workflow pushed on main is watched by the red-main alert")
+    sub.add_parser("grants", help="no job a pull request reaches holds a write grant beside a checkout")
+    sub.add_parser("alerts",help="every workflow pushed on main is watched by the red-main alert")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
@@ -1300,6 +1500,13 @@ def main(argv: list[str]) -> int:
         if code := fail(problems, "the actions .github/workflows runs"):
             return code
         print("pipeline-gate: every third-party action in .github/workflows is pinned to a commit.")
+        return 0
+
+    if args.command == "grants":
+        problems = check_grants()
+        if code := fail(problems, "the write grants .github/workflows holds"):
+            return code
+        print("pipeline-gate: no job a pull request reaches holds a write grant beside a checkout.")
         return 0
 
     if args.command == "alerts":
