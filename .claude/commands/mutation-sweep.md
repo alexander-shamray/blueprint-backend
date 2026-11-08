@@ -1,8 +1,8 @@
 ---
 description: Run Stryker over every domain project in a throwaway worktree and file one test-gap issue per project whose suite lets a mutant through
 argument-hint: "(no arguments) — every *.Domain project, every run"
-allowed-tools: Bash(git rev-parse:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/mutation-run.sh:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*)
-disallowed-tools: Edit, Write, NotebookEdit, Agent, Bash(dotnet:*), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*)
+allowed-tools: Bash(git rev-parse:*), Bash(git worktree list:*), Bash(bash .claude/scripts/git-worktree-detach.sh:*), Bash(bash .claude/scripts/git-worktree-drop.sh:*), Bash(bash .claude/scripts/mutation-run.sh:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-label-ensure.sh:*), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*)
+disallowed-tools: Edit, Write, NotebookEdit, Agent, Bash(dotnet:*), Bash(gh issue create:*), Bash(gh:*), Bash(git push origin:*), Bash(git push -u origin:*), Bash(bash .claude/scripts/git-push-force.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*)
 ---
 
 Mutate every `*.Domain` project at the committed `HEAD`, run its suite against
@@ -94,7 +94,7 @@ severity*)
 ## Filing
 
 **Pipe the title, a blank line and the body to
-`bash .claude/scripts/gh-issue-create.sh test-gap low code,test mutation`**
+`bash .claude/scripts/gh-issue-mutation.sh low code,test`**
 on stdin in a quoted heredoc, composed from the helper's stdout and nothing
 else:
 
