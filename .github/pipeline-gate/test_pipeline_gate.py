@@ -437,8 +437,8 @@ class ImageTests(Fixture):
         self.assertIn("twice on main", problems[0])
 
     def test_a_renamed_images_job_fails_rather_than_passing_empty(self) -> None:
-        """The condition check passes on no `if:`, so a key the parser cannot
-        find has to fail on its own."""
+        """A key the parser cannot find reads as None rather than as no `if:`,
+        which fails with a message of its own, so it has to fail by itself."""
         self.write(WORKFLOW.replace("  images:\n", "  build-images:\n"))
 
         problems = pipeline_gate.check_images(self.root)
