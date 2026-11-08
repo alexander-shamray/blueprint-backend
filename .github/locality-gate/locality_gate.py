@@ -20,7 +20,7 @@ CLASSES = "ABCDE"
 
 # A touch-set token: path and glob characters, and nothing that is not one.
 # `@` and `+` are path characters (frontend's `src/app/@types/**`), as
-# pr-locality.sh admits them; `matcher()` escapes both.
+# pr-locality.sh admits them; `matcher()` reads both literally.
 _TOKEN = re.compile(r"^[A-Za-z0-9_./*?{},()@+-]+$")
 # A changed path, as the diff names it: a token's set without the glob
 # characters; the same set pr-locality.sh admits.
