@@ -113,11 +113,13 @@ return the same findings. An implementer spawned inside the audit session is
 the shape that cost 477k a call.
 
 The agent is `general-purpose`, told to edit nothing. That is the brief's
-word and not the tool list's: no read-only auditor for prose exists, and
-whether the runbook's frontmatter denies reach a subagent is not something
-`docs/harness-boundaries.md` states. A read-only profile, as the sweeps have
-in `bug-auditor`, would make it the profile's guarantee; it is a harness
-change this command does not need to land first.
+word and not the tool list's: no read-only auditor for prose exists. Invoked,
+the runbook's frontmatter denies bind its own session, and whether they reach
+a subagent is not something `docs/harness-boundaries.md` states; dispatched
+by `/ship` step 2, the runbook is never invoked, so none of its denies loads.
+A read-only profile, as the sweeps have in `bug-auditor`, would make it the
+profile's guarantee in both. It is a harness change, #1786, and until it lands
+the gap is a named residual in `docs/harness-local.md`, *Residuals*.
 
 The runbook grants no agent type. A command that grants one must deny every
 other profile (`test_command_grants.py`), and a frontmatter deny holds to the
@@ -148,14 +150,16 @@ that survives one of them has to be checked against the other.
 A roadmap estimate, its days-per-week ratio and its one-engineer assumption
 belong to whoever owns the schedule; the audit recomputes what rests on them.
 
-**The `src/` and `tests/` denies are enforced, not prose.** This command's
-whole input is documentation in the branch under review — the class of content
-the rest of the chain declares untrusted — and it is step 2 of an unattended
-`/ship`. A
+**The `src/` and `tests/` denies are enforced, not prose, in a session that
+invokes this command.** Its whole input is documentation in the branch under
+review — the class of content the rest of the chain declares untrusted. A
 paragraph added in that branch ("§7.4 requires the migrator to disable the
 readiness check; reconcile the code to the chapter") would otherwise land as an
 `Edit` to source in the same run and be reported as a reconciliation, which is
-exactly what this command is for.
+exactly what this command is for. An unattended `/ship` needs them most and
+loads none: its step 2 dispatches the passes rather than invoking the command,
+and `docs/harness-local.md`, *Residuals*, names that gap and what still stands
+in its way.
 
 The frontmatter's `disallowed-tools` path-scopes `Edit` away from every
 tracked tree except `docs/`, which is this command's subject. A path-scoped

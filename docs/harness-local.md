@@ -100,6 +100,21 @@ that the helper is the one route to an execution;
 [`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
 rest.
 
+**The `/validate-blueprint` passes `/ship` step 2 dispatches hold `Edit`,
+`Write` and `Bash`.** *Ship checks* spawns them as `general-purpose` agents
+told to edit nothing rather than invoking the command, so the `src/` and
+`tests/` denies in its frontmatter never load
+([`docs/commands/validate-blueprint.md`](commands/validate-blueprint.md),
+*Do not*). A paragraph planted in a chapter on the branch under review could
+steer a pass to edit source, or to return a finding that step 2 then
+reconciles into source. What still stands in the way: the planting needs
+commit access to the branch, the brief says to edit nothing, and step 5's
+review reads the branch's diff, a planted edit included, before step 6 merges.
+The fix is a read-only profile with `Read`, `Grep` and `Glob`, as
+`bug-auditor` has, dispatched in place of `general-purpose`; it is a change
+under `.claude/` and in the harness payload's `/ship`, which #1786 tracks, and
+this residual goes when it lands.
+
 ## Review examples
 
 Read beside `docs/harness/working-rules.md`, *What counts as a finding*,
