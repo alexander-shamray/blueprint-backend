@@ -52,14 +52,16 @@ The required checks, which `/ship` step 6's wait holds the list to, as the
 
 ## Residuals
 
-Two passages the managed `docs/harness-boundaries.md` no longer carries
+Three passages the managed `docs/harness-boundaries.md` no longer carries
 live here, because only this repository's own commands make them true.
 Their arguments are verbatim; the references that pointed at the file they
 sat in were rebased so they still land here. In the callout, "This file"
 and "this file" in its first and third paragraphs now name the boundaries
 file, and "this one" and "this file" in its first paragraph's last two
 sentences read "it"; in the mutation sweep's paragraph, "both its helpers"
-now names the two its earlier paragraph listed.
+now names the two its earlier paragraph listed; in the build tool's
+passage, "The ninth" now names the boundaries file's entry that hands it
+here, and "backend's" reads "this repository's".
 
 > **`docs/harness-boundaries.md` is outside the blueprint tree, so nothing
 > structural catches its drift.** `/check-links` checks
@@ -99,6 +101,36 @@ holds no `Edit`, `Write` or agent there, and the raw `dotnet` is denied so
 that the helper is the one route to an execution;
 [`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
 rest.
+
+**The ninth entry of `docs/harness-boundaries.md`, *Agent-type and push
+entries*, is this repository's branch-review command's pair of `dotnet`
+grants, and what makes it worth its own entry is that the enumeration
+guarding it could never have worked.** That command holds `Write` and held
+`Bash(dotnet build:*)` and `Bash(dotnet test:*)`; its `disallowed-tools`
+denies every tracked root file, read from `git ls-files` by a test so a new
+one is a red build. But MSBuild imports `Directory.Build.targets` into every
+build of every project beneath it, and that file **does not exist in this
+repository** — so it is on no list read from what exists, and no care about
+that test could have put it there. Write it, run the build the command
+already had, and an `Exec` in it runs. Measured, in a scratch tree: the
+target fires and `dotnet build` reports success. Raised in review.
+
+`dotnet build` was a grant the command never used — its body names
+`dotnet test` alone — and `dotnet test:*` bought two things beyond the run it
+was added for: any project path, and `/p:CustomBeforeMicrosoftCommonTargets=`,
+which imports whatever file it names, `suggestions.md` among them. Both are
+gone, replaced by `dotnet-test.sh`, whose only variable is one word out of two.
+**The helper closes the executor and not the import**, so the auto-imported
+names are denied as well — in **both** commands that state editing boundaries,
+because the artefact outlives the command that writes it and only one of the
+two had an executor. A `Directory.Build.targets` written by this repository's
+blueprint audit is executed by the next thing that builds.
+
+**Which half is measured is recorded rather than rounded up.** The exact
+filenames are the spelling both files already used and the suite reads. The
+`**/*.targets`-style globs beside them are the documented gitignore syntax and
+are **not** measured in a `disallowed-tools` value — belt to the names' braces,
+and not the control.
 
 **The `/validate-blueprint` passes `/ship` step 2 dispatches hold `Edit`,
 `Write` and `Bash`.** *Ship checks* spawns them as `general-purpose` agents

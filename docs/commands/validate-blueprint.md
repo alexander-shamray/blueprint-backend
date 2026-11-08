@@ -199,4 +199,4 @@ denied here even though this command runs no build: the artefact outlives the
 command that wrote it. `docs/harness-boundaries.md`, *Agent-type and push
 entries*, states that a deny enumerated from the tree cannot cover such a
 file; which half — the exact filenames, not the `**/` globs beside them — is
-the measured control has no owner there now.
+the measured control is argued in `docs/harness-local.md`, *Residuals*.
