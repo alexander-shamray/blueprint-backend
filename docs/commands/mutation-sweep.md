@@ -98,7 +98,11 @@ behaviour is a defect too, and the fixing session files that under
 **The kind is `test-gap`**, a label of its own, because `bug` would claim a
 defect the run did not establish. **The route is `mutation`**, because the
 sweeps' sentence claims a second auditor's reading, which this run never had;
-its evidence is an execution, and the trailer says so.
+its evidence is an execution, and the trailer says so. Both are spelled by
+`gh-issue-mutation.sh`, the one filing helper the command is granted, and the
+other entry points are denied by name, because a grant on the helper that takes
+the route as an argument could claim any route's trailer
+(`docs/harness-boundaries.md`, *Grant inventory and push helpers*).
 
 Only an open issue the owner opened blocks a re-file, on the other sweeps'
 rule and through the same helper. A closed one does not, because a project
