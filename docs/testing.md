@@ -91,13 +91,13 @@ nothing flags.
 | `test_dispatch_board.py` | 1.5 | `test_ship_dispatched.py` | 0.1 |
 | `test_python_hygiene.py` | 0.9 | `test_git_branch_drop.py` | 36.6 |
 | `test_pr_helpers_backend.py` | 47.3 | `test_git_push_force.py` | 20.9 |
-| `test_sweep_slices_backend.py` | 12.1 | `test_sed_crlf_guard.py` | 3.7 |
+| `test_git_trailer_pr.py` | 5.7 | `test_sed_crlf_guard.py` | 3.7 |
 | `test_destructive_classes.py` | 1.3 | `test_harness_denies_backend.py` | 0.5 |
 | `test_command_grants_backend.py` | 0.3 | `test_command_runbooks_backend.py` | 0.1 |
 | `test_dispatch_run_backend.py` | 0.1 | `test_gh_issue_suppresses_backend.py` | 0.1 |
 | `test_sync_pr.py` | 93.1 | `test_git_worktree_sync.py` | 12.8 |
 | `test_dispatch_sync.py` | 6.9 | `test_gh_issue_harness.py` | 6.6 |
-| `test_ship_sync.py` | 0.1 | `test_git_trailer_pr.py` | 5.7 |
+| `test_ship_sync.py` | 0.1 | | |
 
 `test_team_board.py` arrived after that measurement and was timed the same
 way on its own branch, #1578's; so were the five `/dispatch` modules, on
