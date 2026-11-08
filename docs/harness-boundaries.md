@@ -8,7 +8,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Section | What it covers |
 |---|---|
 | Purpose and provenance of this file | Why the section left backend's CLAUDE.md, the four edits made in the move, and the three passages since moved to backend's residuals. |
-| Edit denies and agent self-protection | Edit-only file rules, the denied .claude trees, and why the skill and index-wrapper grants need guarding. |
+| Edit denies and agent self-protection | Edit-only file rules, the denied .claude and .harness trees, and why the skill and index-wrapper grants need guarding. |
 | Index refresh and worktree seeding | The PostToolUse refresh hook, seeding worktree indexes, carrying MCP approval into forks, and the SessionStart refresh. |
 | Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
 | Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
@@ -149,6 +149,19 @@ in the code can reach a second peer as a claim. The residual is that
 supports the claim; the owner's decision at the end, made with the shell
 the peers were denied, is the only check of that
 ([`docs/commands/team.md`](commands/team.md)).
+
+**`.harness/**` is the same argument one level further up.** Its
+`config.json` is what the next sync adds to the base settings to render
+`.claude/settings.json`, and its `sweep-rows.tsv` decides what the sweeps
+read; the rest is managed or written by `apply`. A session that could edit
+the config could not unlock itself, since the config cannot remove a base
+deny, the change shows in its pull request's diff and it takes a render to
+apply, but it could widen `allow` or drop a target's own denies, and would
+hand every reviewer a settings file to re-read for what changed. So a change
+to anything under `.harness/` is the owner's, as one to
+`.claude/settings.json` is; the deny names the whole directory rather than
+the config alone, because a sweep able to narrow its own rows has audited
+less than it reports.
 
 **`.claude/skills/**` is the same argument one directory over.** A skill's
 `allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
@@ -504,15 +517,19 @@ its profile may hold neither the MCP tools nor a shell.
 starts with `--root .` in the directory the session started in, and
 `EnterWorktree` does not restart it, so after the move its answers describe
 the main checkout's index and not the branch's edits (#563); `cbx`, run from
-the worktree, reads the worktree's own seeded index. So in a `/branch`
-worktree the reason names the skill and the CLI alone, each command alone on
-its line because `guard-index-argv.py` refuses a shared one, and elsewhere
-the MCP tools alone, with the ToolSearch spelling that loads them. A server
-that follows the session is not something `.mcp.json` can say.
-`test_index_search_hint.py` holds the wiring, what is refused and when, and
-the commands it emits to prefixes the skill approves;
-`test_index_query_hint.py` holds the two hooks to one map from question to
-tool.
+the worktree, reads the worktree's own seeded index. So where the session
+stands in another checkout than the one `CLAUDE_PROJECT_DIR` names, the reason
+names the skill and the CLI alone, each command alone on its line because
+`guard-index-argv.py` refuses a shared one, and elsewhere the MCP tools alone,
+with the ToolSearch spelling that loads them. That is the comparison
+`index-mcp-root.py` below refuses a call on, so a session started in a worktree
+is sent to the MCP tools there, and one that moved back to the main checkout
+to the CLI. With no such variable, or no checkout at either end, a linked
+worktree is taken to be off the server. A server that follows the session is
+not something `.mcp.json` can say. `test_index_search_hint.py` holds the wiring,
+what is refused and when, the route against that hook's refusal, and the
+commands it emits to prefixes the skill approves; `test_index_query_hint.py`
+holds the two hooks to one map from question to tool.
 
 **`PreToolUse` runs `.claude/hooks/index-mcp-root.py` before every
 `codebase-index` MCP tool, because naming the CLI did not stop the MCP
@@ -1023,6 +1040,7 @@ row is therefore a spelling the deny list does not match.
 | Edit the git directory itself | `Edit(.git)` | `deny` | `test_destructive_classes.py` |
 | Edit the MCP server definitions | `Edit(.mcp.json)` | `deny` | `test_destructive_classes.py` |
 | Edit the index's ignore list | `Edit(.codeindexignore)` | `deny` | `test_destructive_classes.py` |
+| Edit the harness config | `Edit(.harness/config.json)` | `deny` | `test_destructive_classes.py` |
 | Edit a hook through a link | `Edit(linked/hooks/guard-git-argv.py)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the settings through a link | `Edit(linked/claude/settings.json)` | `guard-edit-target` | `test_destructive_classes.py` |
 | Edit the agent notes through a link | `Edit(linked/remember/notes.md)` | `guard-edit-target` | `test_destructive_classes.py` |
@@ -2407,7 +2425,19 @@ repository's own file and never in the manifest. That is the one change a
 target makes to a managed path itself: a pull request that changes the
 config carries the re-rendered `.claude/settings.json` and
 `.harness/manifest.json`, rendered at the commit the manifest already names
-(the drift gate's README, *Changing this repository's config*).
+(the drift gate's README, *Changing this repository's config*). The config
+is Edit-denied with the rest of `.harness/` (*Edit denies and agent
+self-protection*), so that change is the owner's to make or lift.
+
+**A target's stack grant goes in the config's `allow` too**, such as the
+check runner its *Ship checks* names. It is granted to every turn of every
+session there, not only to the commands that run it, and that is accepted:
+the runner is a script under `.claude/scripts/`, Edit-denied, so the grant
+admits one fixed endpoint a session cannot rewrite. A per-command route was
+rejected: it would make every managed command a rendered file, differing
+from the payload by each target's lines, and the drift gate and `sync_pr.py
+verify`, which hold a managed file to the payload's content, would each need
+a second renderer to judge it.
 
 **A path the config lists under `local` is the repository's own**, even
 inside a managed directory: a sync neither writes nor deletes it.
