@@ -1654,7 +1654,10 @@ prints nothing, and the caller skips its touch-set check and says so; one
 row without the other is refused, because each caller reads the pair. A
 class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
-in balanced backticks, of path and glob characters, each carrying a `/` or a
+in balanced backticks, a backticked one optionally followed by a space and its
+reason in parentheses (no backtick, no nested parenthesis; dropped unread,
+never printed, and its commas and braces its own), of path and glob
+characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
 alternatives included. A token may hold `@` and `+` as a changed path may,
 the `+` read as a character and not as a quantifier, in the class map's items
