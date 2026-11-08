@@ -114,9 +114,10 @@ the shape that cost 477k a call.
 
 The agent is `general-purpose`, told to edit nothing. That is the brief's
 word and not the tool list's: no read-only auditor for prose exists. Invoked,
-the runbook's frontmatter denies bind its own session, and whether they reach
-a subagent is not something `docs/harness-boundaries.md` states; dispatched
-by `/ship` step 2, the runbook is never invoked, so none of its denies loads.
+the runbook's frontmatter denies bind its own session and propagate to the
+passes it spawns (`docs/harness-boundaries.md`, *Agent-type and push
+entries*); dispatched by `/ship` step 2, the runbook is never invoked, so none
+of its denies loads.
 A read-only profile, as the sweeps have in `bug-auditor`, would make it the
 profile's guarantee in both. It is a harness change, #1786, and until it lands
 the gap is a named residual in `docs/harness-local.md`, *Residuals*.
