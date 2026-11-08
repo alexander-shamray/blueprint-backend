@@ -5,7 +5,7 @@ Load this reference only when the intent table in `SKILL.md` is insufficient.
 ## Retrieval
 
 ```bash
-bash .claude/skills/codebase-index/scripts/cbx search '<query>' --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search '<query>' --limit 3 --session <tag> --json
 bash .claude/skills/codebase-index/scripts/cbx explain '<topic or flow>' --session <tag> --json
 ```
 
@@ -75,9 +75,9 @@ Low symbol counts or partial graph coverage can explain weak results.
 ## Query examples
 
 ```bash
-bash .claude/skills/codebase-index/scripts/cbx search 'auth token refresh' --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx search 'AuthService class' --mode symbol --session <tag> --json
-bash .claude/skills/codebase-index/scripts/cbx search 'connection reset by peer' --mode fts --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search 'auth token refresh' --limit 3 --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search 'AuthService class' --mode symbol --limit 3 --session <tag> --json
+bash .claude/skills/codebase-index/scripts/cbx search 'connection reset by peer' --mode fts --limit 3 --session <tag> --json
 bash .claude/skills/codebase-index/scripts/cbx explain 'checkout flow' --session <tag> --json
 bash .claude/skills/codebase-index/scripts/cbx impact 'User' --direction up --depth 2 --json
 bash .claude/skills/codebase-index/scripts/cbx path 'ApiController' 'Database' --json

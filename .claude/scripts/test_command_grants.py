@@ -6,6 +6,7 @@ deny lasts the rest of the turn (`docs/harness-boundaries.md`).
 
 import importlib
 import inspect
+import json
 import re
 import sys
 import tempfile
@@ -472,6 +473,47 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
         self.assertEqual([], frontmatter_list(text, "disallowed-tools"))
         self.assertEqual(["x"], frontmatter_list(text, "name"))
         self.assertEqual([], frontmatter_list("name: x\n", "name"))
+
+
+class AWritingCommandDeniesTheUsersMemoryAndOutputStyles(unittest.TestCase):
+    """Auto-memory and output styles are instructions to every later session, and these commands read a branch's text.
+
+    The managed commands are the subject: a target's own are its to hold (`docs/harness-boundaries.md`).
+    """
+
+    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)")
+    MANIFEST = COMMANDS.parent.parent / ".harness" / "manifest.json"
+
+    @staticmethod
+    def writes(tool):
+        return re.match(r"(Write|Edit)(\(|$)", tool) is not None
+
+    def writers(self):
+        manifest = json.loads(self.MANIFEST.read_text(encoding="utf-8"))
+        paths = [COMMANDS.parent.parent / name for name in manifest["files"] if name.startswith(".claude/commands/")]
+        return [path for path in paths
+                if any(self.writes(tool) for tool in frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"))]
+
+    def test_the_writing_commands_are_found(self):
+        # The positive control: a list that found none would pass the case below.
+        names = {path.name for path in self.writers()}
+        self.assertLessEqual({"ship.md", "pr.md", "style-pass.md", "dispatch.md", "team.md"}, names)
+        self.assertNotIn("branch.md", names)
+
+    def test_a_grant_is_read_as_writing_only_when_it_is_one(self):
+        for tool in ("Write", "Edit", "Edit(artifacts/team/**)"):
+            with self.subTest(tool=tool):
+                self.assertTrue(self.writes(tool))
+        for tool in ("Read", "WriteNothing", "Bash(git status:*)"):
+            with self.subTest(tool=tool):
+                self.assertFalse(self.writes(tool))
+
+    def test_every_command_granting_write_or_edit_denies_both_paths(self):
+        for path in self.writers():
+            rules = frontmatter_list(path.read_text(encoding="utf-8"), "disallowed-tools")
+            for required in self.REQUIRED:
+                with self.subTest(command=path.name, rule=required):
+                    self.assertIn(required, rules)
 
 
 class ATargetDeclaresItsOwnCommandsInOneModule(unittest.TestCase):

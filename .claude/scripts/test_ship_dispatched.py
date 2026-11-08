@@ -35,6 +35,12 @@ GRANTS_BEFORE = (
     "Bash(bash .claude/scripts/gh-issue-hand.sh:*)", "Bash(bash .claude/scripts/system-sleep.sh)",
 )
 DROP_GRANTS = ("Bash(bash .claude/scripts/git-branch-drop.sh:*)",)
+# Steps 1 and 5's index reads (test_index_query_hint.py), which a dispatched run needs its own grants to name too.
+INDEX_GRANTS = ("Bash(git merge-base origin/main HEAD)",
+                "Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)",
+                "Bash(bash .claude/skills/codebase-index/scripts/cbx refs:*)",
+                "Bash(bash .claude/skills/codebase-index/scripts/cbx impact:*)",
+                "Bash(bash .claude/skills/codebase-index/scripts/cbx diff-impact:*)")
 # The sync row's grants (test_ship_sync.py): a dispatched sync's reads and its one filing must be named by the
 # run's own grants, since an ungranted command is the auto classifier's to refuse.
 SYNC_GRANTS = ("Bash(py -3.12 .claude/scripts/sync_pr.py:*)", "Bash(bash .claude/scripts/git-worktree-sync.sh:*)",
@@ -113,7 +119,7 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
     def test_both_task_list_writes_are_skipped(self):
         # The skip follows the write it names, so it cannot be read as about another line.
         for name, text, write in (
-                ("ship.md step 6", flat(ship_step_6()), "delete this change's row from *In progress*"),
+                ("ship.md step 6", flat(ship_step_6()), "re-derive this change's rows by state"),
                 ("branch.md step 5", flat(branch_step_5()), "add the change to *In progress*")):
             with self.subTest(where=name):
                 self.assertIn(SKIP_WRITE, text)
@@ -242,16 +248,34 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
         self.assertEqual(len(rows), 7)
 
     def test_the_grants_did_not_change(self):
-        self.assertEqual(grants(SHIP), GRANTS_BEFORE + SYNC_GRANTS + DROP_GRANTS)
+        self.assertEqual(grants(SHIP), GRANTS_BEFORE + SYNC_GRANTS + DROP_GRANTS + INDEX_GRANTS)
         self.assertEqual(grants(BRANCH), BRANCH_GRANTS_BEFORE)
         self.assertIn("Write", GRANTS_BEFORE, "the result is written with a tool the command already holds")
 
     def test_the_in_progress_row_carries_its_group(self):
         step = flat(branch_step_5())
-        self.assertIn("(the issue's group from *Remaining*, or — where none held it, #n, what, branch and "
-                      "worktree, started)", step)
+        self.assertIn("the issue's group from *Remaining* or —; #n, or owed (not filed) with no issue; what; "
+                      "branch, then worktree, in one cell, each in backticks; started", step)
         self.assertEqual(dispatch_board.HEADERS["In progress"][:2], ("Group", "#"),
                          "the row's description follows the table's column order")
+
+    def test_the_in_progress_row_is_the_one_the_board_parses(self):
+        # A session writes what this step says and /dispatch never rebuilds the section, so a row the board refuses
+        # stops the next run on the list until a human repairs it.
+        step = flat(branch_step_5())
+        self.assertIn(" | ".join(dispatch_board.HEADERS["In progress"]), step)
+        self.assertIn(dispatch_board.OWED, step)
+        row = dispatch_board._row("In progress",
+                                  f"| — | {dispatch_board.OWED} | x | `fix/x`, `.claude/worktrees/x` | started |")
+        self.assertEqual(dispatch_board.row_branch(row), "fix/x", "the one cell names the branch first")
+        # These two parse and name no branch, so the claim loses the branch's paths with nothing refused: hence
+        # the step's "each in backticks".
+        for cell in ("fix/x, .claude/worktrees/x", "`fix/x, .claude/worktrees/x`"):
+            with self.subTest(cell=cell):
+                self.assertIsNone(dispatch_board.row_branch(
+                    dispatch_board._row("In progress", f"| — | 1 | x | {cell} | started |")))
+        with self.assertRaisesRegex(dispatch_board.Refusal, "names no issue number and is not owed"):
+            dispatch_board._row("In progress", "| — | — | x | `fix/x` | started |")
 
 
 class Berserk(unittest.TestCase):

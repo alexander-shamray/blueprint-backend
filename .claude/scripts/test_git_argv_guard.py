@@ -3816,8 +3816,10 @@ class TheListsTheGuardReads(unittest.TestCase):
         self.assertGreater(len(module.edit_denies()), 9, "the deny list went empty")
         commands = self.managed_commands()
         self.assertGreater(len(commands), 5, "the managed commands went empty")
+        # A home-relative rule names no checkout path, and the guard reads none under the home directory.
         denied = [rule for path in commands
-                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))]
+                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))
+                  if not rule.startswith("~/")]
         for rule in [*module.edit_denies(), *denied]:
             with self.subTest(rule=rule):
                 path = rule.removeprefix("./").removesuffix("/**")

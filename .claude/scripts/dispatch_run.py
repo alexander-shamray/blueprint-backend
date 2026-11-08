@@ -18,14 +18,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dispatch_board import (BRANCH_NAME, MODEL, NOT_OWNERS, Group, Refusal, _blocker, _bodies, _held, _number, _read,
-                            _row, _write, git, group_claim, groups, helper, one_line, parse_tasks, path_which, pick,
-                            released, row_branch, runnable, strangers)
+from dispatch_board import (BRANCH_NAME, MODEL, MODELS, NOT_OWNERS, Group, Refusal, _blocker, _bodies, _held, _number,
+                            _read, _row, _write, git, group_claim, groups, helper, model_problem, one_line,
+                            parse_tasks, path_which, pick, released, row_branch, runnable, strangers)
 from sync_pr import SYNC_HEAD
 
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
-MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
 # The four counts of a `claude -p` envelope, as its `usage` names them and as `modelUsage` names them per model.
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 MODEL_KEYS = ("inputTokens", "cacheCreationInputTokens", "cacheReadInputTokens", "outputTokens")
@@ -271,8 +270,9 @@ def _entry_group(gid, entry):
 # Launch
 
 def model_flag(model):
-    if model not in MODELS:
-        raise Refusal(f"model {model!r} is not one of {', '.join(MODELS)}")
+    problem = model_problem(model)
+    if problem:
+        raise Refusal(problem)
     return MODELS[model]
 
 
@@ -408,14 +408,17 @@ def launch(root, run, gid, tasks_path, branch, worktree, owned_source):
     save_state(directory, state)
 
 
-def sync_launch(root, run, pr, branch, worktree, oid):
-    """Record a proved sync as its group, first and alone: it holds no task-list row, so no list is read or written."""
+def sync_ready(root, run, pr):
+    """Refuse a sync `sync-launch` would refuse whatever its tree holds, before there is a tree: a sync that only waits
+    may be superseded before its turn, and the worktree and branch made for it would have no launch to end them."""
     directory = run_dir(root, run)
     state = load_state(directory)
     if not _number(pr):
         raise Refusal(f"{pr!r} is not a pull request number")
-    gid = f"sync-{pr}"
-    entries = state.setdefault("groups", {})
+    _sync_may_launch(directory, state.get("groups", {}), f"sync-{pr}")
+
+
+def _sync_may_launch(directory, entries, gid):
     if gid in entries:
         raise Refusal(f"{gid} is already in this run; a new take is a new group")
     if (directory / "STOP").exists():
@@ -431,6 +434,17 @@ def sync_launch(root, run, pr, branch, worktree, oid):
     claimed = _claimed(entries)
     if claimed:
         raise Refusal(f"{claimed[0]}'s merge is claimed and not verified; a sync is launched alone")
+
+
+def sync_launch(root, run, pr, branch, worktree, oid):
+    """Record a proved sync as its group, first and alone: it holds no task-list row, so no list is read or written."""
+    directory = run_dir(root, run)
+    state = load_state(directory)
+    if not _number(pr):
+        raise Refusal(f"{pr!r} is not a pull request number")
+    gid = f"sync-{pr}"
+    entries = state.setdefault("groups", {})
+    _sync_may_launch(directory, entries, gid)
     if not SYNC_HEAD.fullmatch(branch):
         raise Refusal(f"{branch!r} is not a sync head")
     if not _oid(oid):
@@ -474,6 +488,7 @@ def run_session(root, run, gid):
         out, err = child.communicate(text.encode("utf-8"))
     finally:
         _remove_temp(scratch)
+        _prune_worktrees(root)
     ended = now()
     record = {"exit": child.returncode, "started": started.isoformat(), "ended": ended.isoformat(),
               "seconds": round((ended - started).total_seconds()),
@@ -544,6 +559,15 @@ def _remove_temp(scratch):
     a file in it is the system's to clear later, and must not stop `run` writing the session record or the refusal
     that follows."""
     shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _prune_worktrees(root):
+    """A worktree the executor registered under its temp directory has just lost its target. Best effort, as the
+    removal is: only a registration whose directory is gone goes, and a failure must not stop the session record."""
+    try:
+        git(root, "worktree", "prune")
+    except Refusal:
+        pass
 
 
 def _remove_stale(*paths):
@@ -635,7 +659,7 @@ def _result_problem(data, group, issues):
 
 
 def validate_result(data, group, issues):
-    """The executor's result checked as untrusted data: any doubt is Invalid, which the run treats as a crash."""
+    """The executor's result checked as untrusted data: any doubt is Invalid, a crash unless GitHub shows the merge."""
     why = _result_problem(data, group, issues)
     if why:
         return Invalid(why)
@@ -1024,6 +1048,39 @@ def _unrecorded(directory, state, gid, entry, line):
     return [f"{gid}: {status} - {reason}", "transcript: not found"]
 
 
+NO_RESULT_MERGED = "the executor left no valid result: its merge was read from GitHub"
+
+
+def _merged_unreported(root, gid, entry, worktree, issues):
+    """The Result of an executor that merged and left none, or None: /ship step 0's finished predicate, asked here
+    because all a relaunch could do is read the same merge. `verify` still holds it to GitHub; a read that fails or
+    answers out of shape claims nothing, so the crash stands."""
+    branch = entry.get("branch")
+    if not isinstance(branch, str) or not BRANCH_NAME.fullmatch(branch):
+        return None
+    tree = Path(root) / worktree
+    try:
+        if git(tree, "status", "--porcelain").strip():
+            return None
+        tip = git(tree, "rev-parse", "HEAD").strip()
+        # A sync's proof binds one head: a tree elsewhere stays `run`'s refusal, which the report's Syncs line names.
+        if entry.get("kind") == "sync" and tip != entry.get("oid"):
+            return None
+        rows = json.loads(helper(root, "pr-for-branch.sh", branch))
+        row = next((r for r in rows if isinstance(r, dict) and r.get("state") == "MERGED"
+                    and r.get("baseRefName") == "main" and r.get("headRefOid") == tip), None)
+        if row is None or not _number(row.get("number")):
+            return None
+        view = json.loads(helper(root, "pr-state.sh", str(row["number"])))
+        merged = view.get("mergeCommit", {}).get("oid") if view.get("state") == "MERGED" else None
+    except (Refusal, ValueError, TypeError, AttributeError):
+        return None
+    if not _oid(merged):
+        return None
+    return Result(gid, tuple(issues), "merged", row["number"], None, merged, (), None, (), None,
+                  {"worktree": worktree, "removed": False}, (NO_RESULT_MERGED,))
+
+
 def absorb(root, run, gid, run_refused=None):
     """Copy, validate and classify one executor's result and session, record them, and say what happened.
 
@@ -1068,7 +1125,10 @@ def absorb(root, run, gid, run_refused=None):
             copy.unlink(missing_ok=True)
     except OSError as error:
         raise Refusal(f"could not copy {source}: {error}") from None
-    result = load_result(copy, gid, _field(entry, gid, "issues", _numbers_list))
+    issues = _field(entry, gid, "issues", _numbers_list)
+    result = load_result(copy, gid, issues)
+    if not isinstance(result, Result):
+        result = _merged_unreported(root, gid, entry, worktree, issues) or result
     end = session_end(raw)
     crashes = _field(entry, gid, "crashes", _count, 0)
     decision = classify(end, result, crashes, now())
@@ -1174,6 +1234,20 @@ SYNC_ENDED = ("verified", "window", *HANDED)
 def _worktree_kept(root, entry):
     worktree = entry.get("worktree")
     return _path_text(worktree) and (Path(root) / worktree).is_dir()
+
+
+def sync_drop(root):
+    """One line for each local sync head offered to git-branch-drop.sh, which alone decides whether it goes."""
+    lines = []
+    for ref in git(root, "for-each-ref", "--format=%(refname)", "refs/heads/chore/harness-sync-*").splitlines():
+        branch = ref.removeprefix("refs/heads/")
+        if not SYNC_HEAD.fullmatch(branch):
+            continue
+        try:
+            lines.append(one_line(helper(root, "git-branch-drop.sh", branch)))
+        except Refusal as kept:
+            lines.append(f"kept {branch}: {kept}")
+    return lines or ["no sync branch"]
 
 
 def sync_close(root, run, gid):
@@ -1640,6 +1714,10 @@ def add_commands(sub):
     s.add_argument("pr", type=int)
     for option in ("branch", "worktree", "oid"):
         s.add_argument(f"--{option}", required=True)
+    s = sub.add_parser("sync-ready")
+    s.add_argument("run")
+    s.add_argument("pr", type=int)
+    sub.add_parser("sync-drop")
     w = sub.add_parser("wake")
     w.add_argument("run")
     w.add_argument("--tasks", required=True)
@@ -1680,6 +1758,10 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
         launch(root, args.run, args.group, args.tasks, args.branch, args.worktree, owned_from)
     elif args.command == "sync-launch":
         sync_launch(root, args.run, args.pr, args.branch, args.worktree, args.oid)
+    elif args.command == "sync-ready":
+        sync_ready(root, args.run, args.pr)
+    elif args.command == "sync-drop":
+        print("\n".join(sync_drop(root)))
     elif args.command == "sync-close":
         sync_close(root, args.run, args.group)
     elif args.command == "run":
