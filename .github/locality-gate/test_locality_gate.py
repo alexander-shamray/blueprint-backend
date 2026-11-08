@@ -196,7 +196,7 @@ class TouchSetGrammar(unittest.TestCase):
             read_map(MAP.replace("'docs/**'", "'docs//'"))
 
     def test_a_reason_after_the_closing_backtick_is_dropped_unread(self) -> None:
-        # The form `/pr` prescribes for a widened token (#1832); the reason's
+        # The form `/pr` prescribes for a widened token; the reason's
         # comma and braces are its own, not a split or a glob.
         _, tokens = read_rows(body("D", "`docs/x.md` (added: a cite, {and} more), `docs/y.md`, docs/z.md"))
         self.assertEqual(tokens, ["docs/x.md", "docs/y.md", "docs/z.md"])
@@ -220,7 +220,7 @@ class TouchSetGrammar(unittest.TestCase):
         self.assertEqual(tokens, ["docs/(draft)/x.md", "docs/a(b).md"])
 
     def test_an_at_sign_and_a_plus_are_path_characters(self) -> None:
-        # pr-locality.sh admits both (#1801); frontend's tree has `src/app/@types/**`.
+        # pr-locality.sh admits both; frontend's tree has `src/app/@types/**`.
         _, tokens = read_rows(body("A", "`src/app/@types/**`, docs/a+b.md"))
         self.assertEqual(tokens, ["src/app/@types/**", "docs/a+b.md"])
         self.assertIn("src/app/@types/**", read_map(MAP.replace("'tests/**'", "'src/app/@types/**'"))["A"])
