@@ -27,7 +27,8 @@ _TOKEN = re.compile(r"^[A-Za-z0-9_./*?{},()@+-]+$")
 _PLAIN_PATH = re.compile(r"^[A-Za-z0-9_./@+()-]+$")
 # A widened token's reason, the form `/pr` prescribes: a backticked token, a
 # space and one parenthesis holding no backtick and no nested parenthesis.
-# The pattern is pr-locality.sh's, and the reason is dropped unread.
+# The pattern is the payload's pr-locality.sh's, which reaches this checkout
+# with the next harness sync, and the reason is dropped unread.
 _REASONED = re.compile(r"(`[^`]+`)[ \t\n\r\f\v]+\([^`()]*\)")
 _REASON_OPENED = re.compile(r"`[^`]+`[ \t\n\r\f\v]+\(.*", re.DOTALL)
 
@@ -155,7 +156,8 @@ def _read_touch_set(rest: str) -> list[str]:
 
 def _split_outside_braces(cell: str) -> list[str]:
     # A `(` outside backticks and after whitespace opens a reason, whose
-    # commas and braces are its own; pr-locality.sh splits the same way.
+    # commas and braces are its own; the payload's pr-locality.sh splits the
+    # same way.
     items, current, depth = [], "", 0
     in_backticks, reason_depth, previous = False, 0, ""
     for character in cell:
