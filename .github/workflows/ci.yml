@@ -947,7 +947,6 @@ jobs:
   integration-report:
     needs: integration
     if: ${{ !cancelled() && needs.integration.result != 'skipped' }}
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -991,6 +990,7 @@ jobs:
           done
 
       - name: "Post the warm-up retries on #960"
+        continue-on-error: true
         run: |
           shopt -s nullglob
           for f in retries/warm-up-retry-*/warm-up-retry.txt; do
