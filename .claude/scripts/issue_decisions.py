@@ -159,13 +159,14 @@ def path_which(name):
     else:
         names = [name]
     for directory in os.environ.get("PATH", "").split(os.pathsep):
-        if directory in ("", ".") or os.path.normcase(os.path.realpath(directory)) == here:
+        # A relative entry resolves against the working directory, which the checkout controls.
+        if not os.path.isabs(directory) or os.path.normcase(os.path.realpath(directory)) == here:
             continue
         for candidate in names:
             path = os.path.join(directory, candidate)
             if os.path.isfile(path) and os.access(path, os.X_OK):
                 real = os.path.normcase(os.path.realpath(path))
-                if real != here and not real.startswith(here + os.sep):
+                if real != here and not real.startswith(os.path.join(here, "")):
                     return path
     return None
 

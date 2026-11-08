@@ -423,6 +423,37 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertNotIn("Ignore", r.stderr)
                 self.assertNotIn("rm -rf", r.stderr)
 
+    def test_a_backticked_token_takes_its_reason_beside_it(self):
+        # `/pr` tells an author to widen a row "with its reason beside it", so
+        # `` `path` (why) `` is the form the row takes. The reason, commas and
+        # braces included, is dropped unread and the token is judged alone; a
+        # reason on a token that is not backticked, or one left open, is not
+        # the form and is refused.
+        body = (
+            "| Class | D |\n"
+            "| Touch set | `docs/x.md` (added: the rule moved, see #65), "
+            "`docs/{a,b}.md` (both, {braced}), docs/y.md |\n"
+        )
+        files = "docs/x.md\ndocs/a.md\ndocs/b.md\ndocs/y.md\ndocs/z.md\n"
+        r = self._run_locality_with_gh(self._gh_printing(body, files))
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(
+            ["class D", "inside docs/x.md", "inside docs/a.md", "inside docs/b.md",
+             "inside docs/y.md", "outside docs/z.md"],
+            r.stdout.splitlines())
+        for cell, message in (
+            ("docs/x.md (the reason)", "the Touch set row is not a path list"),
+            ("`docs/x.md` (open reason", "the Touch set row has an unbalanced parenthesis"),
+            ("`docs/x.md` (a (nested) reason)", "the Touch set row has a reason outside its grammar"),
+            ("`docs/x.md` (a `quoted` reason)", "the Touch set row has a reason outside its grammar"),
+            ("`docs/x.md` (why) and also everything else", "the Touch set row has a reason outside its grammar"),
+        ):
+            with self.subTest(cell=cell):
+                r = self._run_locality_with_gh(self._gh_printing(f"| Class | D |\n| Touch set | {cell} |\n"))
+                self.assertEqual(3, r.returncode, r.stderr)
+                self.assertEqual("", r.stdout)
+                self.assertEqual(message + "\n", r.stderr)
+
     def test_a_second_row_is_refused_before_either_is_read(self):
         # With two Class rows, `grep -q` passes on the valid first and a print
         # emits both, so a second row is a route past the grammar. Two of
