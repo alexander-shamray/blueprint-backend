@@ -345,6 +345,15 @@ py -3.12 .github/sql-style-gate/sql_style_gate.py
 
 What it reads and claims is [its README](../.github/sql-style-gate/README.md)'s.
 
+**The path-length gate** reads the tracked tree and needs no base:
+
+```bash
+py -3.12 -m unittest discover -s .github/path-length-gate
+py -3.12 .github/path-length-gate/path_length_gate.py
+```
+
+What it reads and claims is [its README](../.github/path-length-gate/README.md)'s.
+
 **The issue-form gate needs the repository's labels**, which a `gh` session
 reads and pipes in:
 
