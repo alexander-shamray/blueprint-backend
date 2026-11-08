@@ -179,6 +179,12 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "outside the repository"):
             read_map(MAP.replace("'docs/**'", "'docs//'"))
 
+    def test_an_at_sign_and_a_plus_are_path_characters(self) -> None:
+        # pr-locality.sh admits both (#1801); frontend's tree has `src/app/@types/**`.
+        _, tokens = read_rows(body("A", "`src/app/@types/**`, docs/a+b.md"))
+        self.assertEqual(tokens, ["src/app/@types/**", "docs/a+b.md"])
+        self.assertIn("src/app/@types/**", read_map(MAP.replace("'tests/**'", "'src/app/@types/**'"))["A"])
+
     def test_a_token_ending_in_a_newline_is_refused(self) -> None:
         # Neither the row nor the map can deliver one, since both are read
         # line by line and the map's grammar refuses the broken line first,
@@ -232,6 +238,11 @@ class Matching(unittest.TestCase):
         self.assertTrue(match("src/Services/Catalog/Catalog.Api/Catalog.Api.csproj"))
         self.assertFalse(match("Root.csproj"))
         self.assertFalse(match("src/Services/Catalog/Catalog.Api/Program.cs"))
+
+    def test_a_plus_is_literal_not_a_repeat(self) -> None:
+        self.assertTrue(matcher("docs/a+b.md")("docs/a+b.md"))
+        self.assertFalse(matcher("docs/a+b.md")("docs/aab.md"))
+        self.assertTrue(matcher("src/app/@types/**")("src/app/@types/x.d.ts"))
 
     def test_a_prefix_is_not_a_match(self) -> None:
         self.assertFalse(matcher("src/Services/Catalog")("src/Services/CatalogTwo/x.cs"))

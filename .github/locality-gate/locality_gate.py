@@ -19,9 +19,11 @@ DEFAULT_MAP = Path(__file__).resolve().parent / "classes.yml"
 CLASSES = "ABCDE"
 
 # A touch-set token: path and glob characters, and nothing that is not one.
-_TOKEN = re.compile(r"^[A-Za-z0-9_./*?{},()-]+$")
-# A changed path, as the diff names it. Wider than a token by `@` and `+`,
-# narrower by every glob character; the same set pr-locality.sh admits.
+# `@` and `+` are path characters (frontend's `src/app/@types/**`), as
+# pr-locality.sh admits them; `matcher()` escapes both.
+_TOKEN = re.compile(r"^[A-Za-z0-9_./*?{},()@+-]+$")
+# A changed path, as the diff names it: a token's set without the glob
+# characters; the same set pr-locality.sh admits.
 _PLAIN_PATH = re.compile(r"^[A-Za-z0-9_./@+()-]+$")
 
 _CLASS_ROW = re.compile(r"^\| *Class *\|(.*)$")
