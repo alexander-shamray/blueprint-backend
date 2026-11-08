@@ -72,7 +72,7 @@ the assistant to signed-in customers, off by default. This record is otherwise
 unchanged.
 
 **Amended by
-[ADR-196](ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)**:
+[ADR-197](ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)**:
 the `packages` job packs and holds no grant, and a `publish-packages` job that
 no pull request reaches pushes what it packed. This record is otherwise
 unchanged.

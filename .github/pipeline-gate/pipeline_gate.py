@@ -317,7 +317,7 @@ IMAGE_LEGS_ALIAS = re.compile(r"^ {4}strategy: \*image-legs\s*$", flags=re.MULTI
 
 
 def _check_publish_job(workflow_text: str) -> list[str]:
-    """publish-images holds what signs and pushes, so a pull request never reaches it (ADR-196)."""
+    """publish-images holds what signs and pushes, so a pull request never reaches it (ADR-197)."""
     condition = read_job_condition(workflow_text, PUBLISH_JOB)
     if condition is None:
         return [
@@ -330,7 +330,7 @@ def _check_publish_job(workflow_text: str) -> list[str]:
         problems.append(
             f"the {PUBLISH_JOB} job's own condition is {condition!r}, not {PUBLISH_CONDITION!r}, so it "
             "is not kept to a push or dispatch on main. Its grants are held from the job's first step, whatever "
-            "each step's own `if:` says, so a pull request's Dockerfiles build beside them (ADR-196)"
+            "each step's own `if:` says, so a pull request's Dockerfiles build beside them (ADR-197)"
         )
 
     jobs = read_jobs(workflow_text)
@@ -885,7 +885,7 @@ def _false_on_a_pull_request(expression: str, ref_decides: bool) -> bool:
 
 
 def check_grants(root: Path = ROOT) -> list[str]:
-    """No job a pull request reaches holds a write grant beside the branch's code (ADR-196).
+    """No job a pull request reaches holds a write grant beside the branch's code (ADR-197).
 
     The checkout is what brings the branch in: a job with none runs only the
     workflow's own text. It holds the shape on what lands, not on a branch's edit.
@@ -916,7 +916,7 @@ def check_grants(root: Path = ROOT) -> list[str]:
                     f"{path.name}'s job `{job}` holds {', '.join(grants)} and checks out the branch, and "
                     "its own `if:` does not keep a pull request out, so whatever that branch runs in the "
                     "job holds the grant. Move what spends the grant to a job that runs only on main, or "
-                    "to one with no checkout (ADR-196)"
+                    "to one with no checkout (ADR-197)"
                 )
     if not held:
         return [

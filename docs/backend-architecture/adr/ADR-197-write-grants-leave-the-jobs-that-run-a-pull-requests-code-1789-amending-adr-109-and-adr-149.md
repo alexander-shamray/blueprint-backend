@@ -1,4 +1,4 @@
-# ADR-196 — Write grants leave the jobs that run a pull request's code (#1789), amending ADR-109 and ADR-149
+# ADR-197 — Write grants leave the jobs that run a pull request's code (#1789), amending ADR-109 and ADR-149
 
 **Decision.** No job a pull request reaches holds a write grant beside a
 checkout of its branch, and `pipeline-gate grants` refuses one in any workflow.

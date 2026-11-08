@@ -69,7 +69,7 @@ the registry they waited on exists, and the push, the signature, the two
 attestations and the admission check are the steps they described.
 
 **Amended by
-[ADR-196](ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)**:
+[ADR-197](ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)**:
 the push, the signature and the attestations move to a `publish-images` job that
 no pull request reaches, so the grants this record calls harmless on one are no
 longer held on one. This record is otherwise unchanged.
