@@ -116,8 +116,7 @@ widening.
 
 That a deny enumerated from the tree cannot see a file the build imports by
 name that does not exist yet, `Directory.Build.targets` being one, is stated
-by `docs/harness-boundaries.md`, *Agent-type and push entries*, which gives
-the build tool's grants to `docs/harness-local.md` *Residuals*. Why the
+by `docs/harness-boundaries.md`, *Agent-type and push entries*. Why the
 executor is `dotnet-test.sh` rather than a raw `dotnet test:*` grant, and why
 the exact names rather than the `**/` globs are the control, have no owner
-there now.
+now.
