@@ -1,5 +1,5 @@
 {
-  "harness_commit": "68fcd83b615611de06d1fb4cf25609b3d49b6bde",
+  "harness_commit": "2937815e03f4183c4d36a7b84cd6ab07218d061f",
   "files": {
     ".claude/agents/branch-reviewer.md": "a930476f4481dfa1e5bb25f162f3b944eb1a13ecd2a7ec909d36825285394c4d",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -95,7 +95,7 @@
     ".claude/scripts/test_hint_bound.py": "99960aaec1b00702cdf5881bc7c2295daf3b0de092198ead47f30ffc5c1430fa",
     ".claude/scripts/test_hook_timeouts.py": "f1adc9e6cfd3546b954e10b94a48b81b8a79252e80fdfb72b33ad46b32d065c6",
     ".claude/scripts/test_index_argv_guard.py": "f37daba2b5be1c1ebb893c49b1bfdd9a798026c18d881da5bd6135a71555765b",
-    ".claude/scripts/test_index_gate.py": "578039c8f544830f99894d89373922f62e696dbb50e68687b4b2d83e7e550bcb",
+    ".claude/scripts/test_index_gate.py": "b78e69c0d8b33aee3023064e4e82edaf2cab5d22d58e6dd6111e53530ad1323e",
     ".claude/scripts/test_index_mcp_root.py": "9c05713099fb3945cb0bbce03bbe7f03d6b18d772ff51036c9d4a48448e238d2",
     ".claude/scripts/test_index_query_hint.py": "bd6ea6422c898ab82a6b1a3af3888a5b9a0b3d95a62a3b1ed999235aaa7b284c",
     ".claude/scripts/test_index_search_hint.py": "688764dfda462705536a86259aa9ee1bd395db5d867c6334ac5a1de13bc5a62a",
