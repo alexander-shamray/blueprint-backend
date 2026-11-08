@@ -132,6 +132,57 @@ class TheGrantAndTheInvocationAgree(unittest.TestCase):
         self.assertIn("--is-ancestor <merge-oid> main ", block)
 
 
+class ARefusedMergeIsAStop(unittest.TestCase):
+    """The classifier can refuse the helper with no exit code, so the row that reads exit codes never sees it."""
+
+    LINE = "`! bash .claude/scripts/gh-pr-merge.sh <n> <oid>`"
+
+    def setUp(self):
+        self.ship = SHIP.read_text(encoding="utf-8")
+        self.argument = (ROOT / "docs" / "commands" / "ship.md").read_text(encoding="utf-8")
+
+    def flat(self, text):
+        return " ".join(text.split())
+
+    def test_the_stop_list_hands_over_the_line(self):
+        stops = self.ship[self.ship.index("**A refused push stops"):self.ship.index("## Resume, don't restart")]
+        bullet = stops[stops.index("**A refused merge"):]
+        self.assertIn(self.LINE, self.flat(bullet))
+
+    def test_a_branch_update_is_for_github_refusing_and_not_for_this(self):
+        # GitHub's refusal exits non-zero and takes the rebase; answering the classifier with one rewrites a reviewed head.
+        gate = self.flat(self.ship[self.ship.index("A rebase landing refused"):self.ship.index("git-rebase-onto-main.sh <branch> start")])
+        self.assertIn("exits non-zero", gate)
+        self.assertIn("refused-merge stop", gate)
+
+    def test_the_argument_keeps_the_resume_and_refuses_a_branch_update(self):
+        section = self.flat(self.argument[self.argument.index("**A refused merge"):self.argument.index("**The review hitting its ceiling")])
+        for phrase in (self.LINE, "*already merged* row", "never answered with a branch update"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+    def test_the_task_list_row_is_named_on_the_resume(self):
+        # Step 6's teardown deletes it, and a merge the owner ran never reaches that teardown.
+        bullet = self.ship[self.ship.index("**A refused merge"):]
+        self.assertIn("task list", self.flat(bullet[:bullet.index("\n- **")]))
+
+
+class TheCiWaitIsCheap(unittest.TestCase):
+    """Off a terminal `--watch` reprints the table every ten seconds by default, all of it read at the wake."""
+
+    def test_every_spelling_of_the_wait_names_the_interval(self):
+        text = SHIP.read_text(encoding="utf-8")
+        waits = re.findall(r"^\s*gh pr checks .*$", text, re.M)
+        self.assertTrue(waits, "the runbook's wait went away")
+        for wait in waits:
+            with self.subTest(wait=wait):
+                self.assertIn("--watch --fail-fast --interval 60", wait)
+
+    def test_the_argument_says_why(self):
+        argument = (ROOT / "docs" / "commands" / "ship.md").read_text(encoding="utf-8")
+        self.assertIn("**`--interval 60`", argument)
+
+
 class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
     """The helper is run against a stubbed `gh`, and the stub records the merge.
 
