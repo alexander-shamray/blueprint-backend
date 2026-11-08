@@ -36,19 +36,19 @@ packing again in the publishing job is what leaves no build beside its token.
 runs the head's copy of `ci.yml`, so whoever may write a branch can add a grant
 to a job in that branch, and neither this rule nor its gate, which the same head
 carries, stops that run. What the change buys is that a write to a project file
-or a Dockerfile alone no longer reaches a token: taking one now takes a workflow
-edit, in the diff a reviewer reads first. The real control is who may write a
-branch, on 2026-11-08 the owner alone. **Revisit trigger:** a second person who
-may write one is when a ruleset limiting branches, and a protected environment
-on the publishing jobs, are owed; neither is taken now, because with one writer
-each adds a setting that guards nothing. The build line and the filter guard are
-now written twice, and the gate holds the build line to its copy and not the
-guard. `integration-report` bills a short job on every run the shards ran. On a
-push to `main`, `images` is one skipped check whose name shows its expression,
-and `publish-images`' legs are named with every matrix value.
-`publish-packages`, like the rest of ADR-109's signing, cannot run on the pull
-request that changes it, so the first push to `main` that changes a package is
-where a wrong path shows. The comment steps run on one but post only what a
+or a Dockerfile alone no longer reaches a token that can write: taking one now
+takes a workflow edit, in the diff a reviewer reads first. The real control is
+who may write a branch, on 2026-11-08 the owner alone. **Revisit trigger:** a
+second person who may write one is when a ruleset limiting branches, and a
+protected environment on the publishing jobs, are owed; neither is taken now,
+because with one writer each adds a setting that guards nothing. The build line
+and the filter guard are now written twice, and the gate holds the build line to
+its copy and not the guard. `integration-report` bills a short job on every run
+the shards ran. On a push to `main`, `images` is one skipped check whose name
+shows its expression, and `publish-images`' legs are named with every matrix
+value. `publish-packages`, like the rest of ADR-109's signing, cannot run on the
+pull request that changes it, so the first push to `main` that changes a package
+is where a wrong path shows. The comment steps run on one but post only what a
 shard left, so the first sighting is where theirs shows, and a comment that
 fails leaves its artefact and fails no run. A cancelled run posts nothing.
 
