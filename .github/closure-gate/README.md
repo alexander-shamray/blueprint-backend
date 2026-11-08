@@ -69,6 +69,8 @@ with no path filter, and on `edited` as well as pushes, because a
 description edit with no push behind it can break the claim. **The gate that
 judges is read out of the base commit**, while the suite runs the branch's
 copy, so a pull request cannot supply its own judge; a base carrying no gate
-fails rather than falling back. The workflow file itself is still the
+fails rather than falling back. The suite runs only after the gate has judged,
+so head test code cannot alter the run ahead of it, and a red gate leaves the
+suite unrun. The workflow file itself is still the
 branch's copy, because `pull_request` runs the head definition, and closing
 that needs a required status check on `main`.

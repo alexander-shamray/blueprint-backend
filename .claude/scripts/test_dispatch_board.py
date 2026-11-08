@@ -165,6 +165,21 @@ class ReadyTests(unittest.TestCase):
         ok = db.groups(db.parse_tasks(tasks_of(line(number=1, gid="A1"), line(number=2, gid="A1"))))[0]
         self.assertEqual((True, ""), db.ready(ok, set(), TODAY))
 
+    def test_a_model_launch_would_refuse_holds_the_group_before_its_fork(self):
+        # `launch` runs after `git-worktree-fork.sh` and `tasks move`, so a refusal there leaves an empty worktree.
+        for model in ("Haiku", "opus", "—", ""):
+            with self.subTest(model=model):
+                row = line().replace("| Opus |", f"| {model} |")
+                self.assertEqual((False, f"model {model!r} is not one of Opus, Sonnet"), self.ready(row))
+        self.assertEqual((True, ""), self.ready(line().replace("| Opus |", "| Sonnet |")))
+        # What a human owes is the first thing to say, as the row cannot run either way.
+        self.assertEqual((False, "waits on a human"), self.ready(line(depends="OWNER").replace("| Opus |", "| Haiku |")))
+
+    def test_the_berserk_flag_does_not_lift_a_model_launch_would_refuse(self):
+        group = group_of(line().replace("| Opus |", "| Haiku |"))
+        self.assertEqual((False, "model 'Haiku' is not one of Opus, Sonnet"),
+                         db.ready(group, set(), TODAY, berserk=True))
+
     def test_owner_in_depends_on_waits_on_a_human(self):
         self.assertEqual((False, "waits on a human"), self.ready(line(depends="OWNER")))
         self.assertEqual((False, "waits on a human"), self.ready(line(depends="OWNER; after 1440"), {1440}))

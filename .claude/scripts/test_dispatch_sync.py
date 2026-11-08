@@ -17,7 +17,7 @@ from unittest import mock
 
 import dispatch_board as db
 import dispatch_run as dr
-from test_dispatch_board import FIXTURE, NO_BRANCH, line, tasks_of
+from test_dispatch_board import FIXTURE, NO_BRANCH, line, stub, tasks_of
 from test_dispatch_run import (FAKE_CLAUDE, NOW, OID, RUN, SUCCESS, InRoot, finished_pid, group_state, record,
                                run_cli, state_dir)
 
@@ -241,6 +241,164 @@ class SyncLaunch(Bound):
     def test_a_sync_this_run_holds_is_never_launched_again(self):
         record_sync(status="closed", closed_from="handed-back", worktree=WORKTREE)
         self.refused(f"{GID} is already in this run; a new take is a new group")
+
+
+class SyncReady(Bound):
+    """What refuses a launch whatever the tree holds, asked before the worktree exists, so a wait leaves none."""
+
+    def ready(self, pr=PR):
+        return run_cli(["sync-ready", RUN, str(pr)])
+
+    def test_nothing_in_the_way_says_nothing_and_records_nothing(self):
+        before = dr.load_state(state_dir())
+        self.assertEqual("", self.ready())
+        self.assertEqual(before, dr.load_state(state_dir()))
+
+    def test_it_refuses_what_sync_launch_refuses_before_the_tree(self):
+        record(RUN, "S1", status="running")
+        self.assertIn("refused: S1 is running; a sync is launched alone", self.ready())
+        self.assertIn("refused: S1 is running; a sync is launched alone", self.sync_launch())
+        record(RUN, "S1", status="done")
+        record_sync(pr=6, status="merged-claimed", branch="chore/harness-sync-1234567")
+        self.assertIn("refused: sync-6's merge is claimed and not verified", self.ready())
+        record_sync(pr=6, status="closed")
+        self.assertIn("refused: sync-6 is already in this run", self.ready(6))
+        (state_dir() / "STOP").write_text("", encoding="utf-8")
+        self.assertIn("refused: stop file", self.ready())
+
+    def test_it_reads_no_tree(self):
+        # The worktree does not exist yet when it runs, so a gone head or a dirty tree is sync-launch's alone.
+        (self.tree / "dirty").write_text("x\n", encoding="utf-8")
+        self.assertEqual("", self.ready())
+        self.assertIn("is not clean", self.sync_launch())
+
+
+class SyncDrop(Bound):
+    """Every local sync branch offered to the drop helper, which alone decides, and nothing else offered."""
+
+    def setUp(self):
+        super().setUp()
+        for name in ("chore/harness-sync-1234567", "chore/harness-sync-workflow", "feat/other"):
+            git_in(".", "branch", name)
+        stub(".", "git-branch-drop.sh",
+             'if [ "$1" = chore/harness-sync-1234567 ]; then echo "dropped $1, superseded"; exit 0; fi\n'
+             'echo "$1 is in use, and kept" >&2; exit 4\n')
+
+    def test_each_sync_head_is_offered_and_each_answer_is_a_line(self):
+        self.assertEqual([f"kept {BRANCH}: git-branch-drop.sh {BRANCH} exited 4: {BRANCH} is in use, and kept",
+                          "dropped chore/harness-sync-1234567, superseded"],
+                         sorted(run_cli(["sync-drop"]).splitlines(), reverse=True))
+
+    def test_no_sync_branch_is_said_so(self):
+        for name in ("chore/harness-sync-1234567", "chore/harness-sync-workflow", "feat/other"):
+            git_in(".", "branch", "-D", name)
+        git_in(".", "worktree", "remove", "--force", WORKTREE)
+        git_in(".", "branch", "-D", BRANCH)
+        self.assertEqual("no sync branch\n", run_cli(["sync-drop"]))
+
+
+class ATemporaryWorktree(Bound):
+    def test_one_the_executor_added_under_its_temp_directory_leaves_no_registration(self):
+        record_sync(oid=self.oid)
+        fake = Path("fake")
+        fake.mkdir()
+        (fake / "claude.py").write_text(
+            "import os, subprocess, sys\n"
+            "sys.stdin.buffer.read()\n"
+            'subprocess.run(["git", "worktree", "add", "-q", "--detach", os.path.join(os.environ["TMP"], "rendered")],'
+            " check=True)\n"
+            "print('{}')\n", encoding="utf-8")
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, str((fake / "claude.py").resolve())]):
+            run_cli(["run", RUN, GID])
+        self.assertEqual([], list((self.root / "system-temp").iterdir()))
+        self.assertNotIn("rendered", git_in(".", "worktree", "list", "--porcelain"))
+
+    def test_a_refused_prune_still_writes_the_session_record(self):
+        record_sync(oid=self.oid)
+        real = dr.git
+
+        def refuse(root, *args):
+            if args[:2] == ("worktree", "prune"):
+                raise db.Refusal("prune refused")
+            return real(root, *args)
+
+        with self.fake(), mock.patch.object(dr, "git", refuse):
+            run_cli(["run", RUN, GID])
+        self.assertTrue((state_dir() / f"{GID}.session.json").is_file())
+
+
+class AMergeWithNoResult(Bound):
+    """An executor that merged and wrote nothing, or nothing valid: `result` asks /ship step 0's own predicate."""
+
+    def github(self, state="MERGED", head=None, base="main", merge_oid=OID, number=1690):
+        row = {"number": number, "state": state, "url": "https://example.invalid/pr", "headRefOid": head or self.oid,
+               "baseRefName": base}
+        view = {"state": state, "mergeable": "UNKNOWN", "mergeStateStatus": "UNKNOWN", "headRefOid": head or self.oid,
+                "mergeCommit": {"oid": merge_oid} if merge_oid else None}
+        stub(".", "pr-for-branch.sh", f"echo '{json.dumps([row])}'\n")
+        stub(".", "pr-state.sh", f"echo '{json.dumps(view)}'\n")
+
+    def ended(self, result=None, gid="S1"):
+        if gid == "S1":
+            record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+            (state_dir() / "S1.task.txt").write_text("Narrow the grants\n", encoding="utf-8")
+        self.run_group(gid=gid)
+        if result is not None:
+            self.write_result(result, gid=gid)
+        return run_cli(["result", RUN, gid]).splitlines()[0]
+
+    def test_a_merge_at_the_tip_is_claimed_and_verifies(self):
+        self.github()
+        self.assertEqual("S1: merged-claimed pr #1690 - merged with no review round", self.ended())
+        entry = group_state(RUN, "S1")
+        self.assertEqual(("merged-claimed", 1690, OID, 0), (entry["status"], entry["pr"], entry["merge_oid"],
+                                                            entry["crashes"]))
+        self.assertEqual([dr.NO_RESULT_MERGED], entry["decisions"])
+        self.assertEqual(f"verified {OID}\n", run_cli(["verify", RUN, "S1"]))
+
+    def test_an_invalid_result_beside_a_merge_is_claimed_too(self):
+        self.github()
+        self.assertTrue(self.ended({"group": "S1"}).startswith("S1: merged-claimed pr #1690"))
+
+    def test_a_sync_keeps_its_own_pull_request(self):
+        self.github(number=PR)
+        record_sync(oid=self.oid)
+        self.assertTrue(self.ended(gid=GID).startswith(f"{GID}: merged-claimed pr #{PR}"))
+        self.assertEqual(PR, group_state(RUN, GID)["pr"])
+
+    def test_a_sync_away_from_its_proved_head_is_still_the_crash(self):
+        # The proof binds one head, so the merge at another tip is `run`'s refusal to name, as *The proof binds* says.
+        self.github(number=PR)
+        record_sync(oid=OID)
+        directory = state_dir()
+        (directory / f"{GID}.session.json").write_text(json.dumps(
+            {"exit": 0, "started": NOW.isoformat(), "ended": NOW.isoformat(), "seconds": 1,
+             "stdout": json.dumps(SUCCESS), "stderr": ""}), encoding="utf-8")
+        self.assertEqual(f"{GID}: relaunch - no result; exit 0", run_cli(["result", RUN, GID]).splitlines()[0])
+
+    def test_anything_short_of_the_predicate_is_still_the_crash(self):
+        cases = {"open": {"state": "OPEN"}, "closed": {"state": "CLOSED"}, "another base": {"base": "release"},
+                 "later work": {"head": OID}, "no merge oid": {"merge_oid": None}}
+        for name, fields in cases.items():
+            with self.subTest(case=name):
+                self.github(**fields)
+                self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
+
+    def test_a_dirty_tree_is_still_the_crash(self):
+        self.github()
+        (self.tree / "dirty").write_text("x\n", encoding="utf-8")
+        self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
+
+    def test_a_read_that_fails_or_answers_out_of_shape_is_still_the_crash(self):
+        self.github()
+        for script, body in (("pr-for-branch.sh", "exit 1\n"), ("pr-for-branch.sh", "echo not-json\n"),
+                             ("pr-for-branch.sh", "echo '{}'\n")):
+            with self.subTest(script=script, body=body):
+                stub(".", script, body)
+                self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
+        self.github()
+        stub(".", "pr-state.sh", "exit 1\n")
+        self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
 
 
 class RunningASync(Bound):
@@ -656,6 +814,9 @@ class Runbook(unittest.TestCase):
                       loop)
         self.assertIn("a sync opening mid-night, or found by a resumed run with a group active, waits for the running "
                       "groups, new launches can overtake it, and the morning's list shows it", loop)
+        self.assertLess(loop.index("dispatch_board.py sync-ready <run> <n>"),
+                        loop.index("git-worktree-sync.sh .claude/worktrees/sync-<sha7> <head>"),
+                        "a sync that only waits would leave a worktree nothing removes")
         self.assertLess(loop.index("git-worktree-sync.sh .claude/worktrees/sync-<sha7> <head>"),
                         loop.index("sync-launch <run> <n> --branch <head> --worktree .claude/worktrees/sync-<sha7> "
                                    "--oid <oid>"))
@@ -671,6 +832,12 @@ class Runbook(unittest.TestCase):
                       "the removal and the drop on a merge", part)
         self.assertIn("A failed pull or containment read runs none of tasks done, the removal, the drop and sync-close",
                       part)
+
+    def test_the_morning_drops_what_each_sync_left_and_says_so(self):
+        text = self.text()
+        morning = text[text.index("3. **The morning report.**"):text.index("## Resume")]
+        self.assertLess(morning.index("dispatch_board.py sync-drop"), morning.index("dispatch_board.py report <run>"))
+        self.assertIn("sync-drop's lines", morning)
 
     def test_the_report_has_seven_sections(self):
         text = self.text()
