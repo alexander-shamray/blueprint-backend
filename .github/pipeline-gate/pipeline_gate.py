@@ -794,14 +794,14 @@ def read_grants(lines: list[str], indent: int) -> list[str] | None:
     if found is None:
         return None
     value, nested = found
-    if value.strip() == "write-all":
+    if value.strip().strip("'\"") == "write-all":
         return ["write-all"]
     # The inline value as well as the nested lines, for `permissions: { packages: write }`.
     return [
         f"{name}: write"
         for text in (value, *nested)
         if not text.lstrip().startswith("#")
-        for name in re.findall(r"([a-z-]+):\s*write\b", text)
+        for name in re.findall(r"([a-z-]+):\s*['\"]?write\b", text)
     ]
 
 

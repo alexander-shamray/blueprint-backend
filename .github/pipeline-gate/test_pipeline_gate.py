@@ -748,6 +748,22 @@ class GrantTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("packages: write", problems[0])
 
+    def test_a_quoted_grant_is_a_grant(self) -> None:
+        """Valid YAML either way, and the same grant."""
+        for permissions in (
+            "    permissions:\n      packages: 'write'\n",
+            '    permissions:\n      packages: "write"\n',
+            '    permissions: "write-all"\n',
+            "    permissions: 'write-all'\n",
+        ):
+            with self.subTest(permissions=permissions):
+                self.write(GRANTED.replace("  build:\n    steps:", f"  build:\n{permissions}    steps:"))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("job `build`", problems[0])
+
     def test_a_commented_grant_is_not_a_grant(self) -> None:
         self.write(GRANTED.replace(
             "  build:\n    steps:",
