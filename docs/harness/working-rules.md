@@ -68,6 +68,14 @@ cited from here, never restated.
   Dependabot's included, so the commits are rewritten or the branch
   replaced. With no trailer, `git-revert-pr.sh` cannot find its commit, so
   one is reverted with `git revert` on a branch of its own.
+- **Landing a Dependabot pull request is the owner's, and has three
+  catches.** `gh-pr-merge.sh` binds to the checked-out branch, so a
+  session cannot land one from elsewhere; the owner's merge is `gh pr
+  merge <n> --rebase --match-head-commit <oid>`; and where GitHub reports
+  the branch conflicting, the update is a rebase request
+  (`@dependabot rebase`), not a push to its branch, which can wait tens of
+  minutes for its run, so a session asks, does other work and reads the
+  head again, rather than polling.
 - **The class and the touch set** a pull request declares are the change
   contract's that `docs/harness-local.md` *Documents* names; a target
   with none declares none.

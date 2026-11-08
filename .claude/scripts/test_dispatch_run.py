@@ -510,11 +510,42 @@ class LaunchTests(InRoot):
         seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
         own = Path(seen["temp"]["TMP"])
         self.assertEqual({name: str(own) for name in parent}, seen["temp"])
-        self.assertTrue(own.is_dir())
         self.assertEqual((self.root / "system-temp").resolve(), own.parent)
         self.assertTrue(own.name.startswith(f"dispatch-{self.root.resolve().name}-{RUN}-S1-"), own.name)
         # Each launch makes a new one, so no path is fixed in advance for someone else to plant.
-        self.assertNotEqual(dr.executor_temp(".", RUN, "S1"), dr.executor_temp(".", RUN, "S1"))
+        first, second = dr.executor_temp(".", RUN, "S1"), dr.executor_temp(".", RUN, "S1")
+        self.addCleanup(shutil.rmtree, first, True)
+        self.addCleanup(shutil.rmtree, second, True)
+        self.assertNotEqual(first, second)
+
+    def test_run_removes_the_executors_temp_directory_once_it_exits(self):
+        # Each launch's mkdtemp directory outlived its executor and piled up under the system temp root.
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"))
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertFalse(Path(seen["temp"]["TMP"]).exists())
+        self.assertEqual([], list((self.root / "system-temp").iterdir()))
+
+    def test_run_removes_the_temp_directory_of_an_executor_that_fails_or_cannot_start(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        run_fake_claude(stdout=b"", code=1)
+        self.assertEqual([], list((self.root / "system-temp").iterdir()))
+        task_text()
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [str(self.root / "no-such-claude")]):
+            self.assertIn("refused: could not start claude", run_cli(["run", RUN, "S1"]))
+        self.assertEqual([], list((self.root / "system-temp").iterdir()))
+
+    def test_run_removes_the_temp_directory_when_the_pid_file_cannot_be_written(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        task_text()
+
+        def refuse(path, text):
+            raise dr.Refusal("pid file refused")
+
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "pass"]), \
+                mock.patch.object(dr, "_write", refuse):
+            self.assertIn("refused: pid file refused", run_cli(["run", RUN, "S1"]))
+        self.assertEqual([], list((self.root / "system-temp").iterdir()))
 
     def test_the_executor_temp_root_is_the_systems_and_outside_the_checkout_and_its_worktrees(self):
         # refresh-index.py's worker runs from it, and guard-git-argv.py's scratch checkouts are judged under it.
