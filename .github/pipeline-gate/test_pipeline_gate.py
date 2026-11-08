@@ -447,7 +447,7 @@ class ImageTests(Fixture):
 
     def test_a_publish_job_a_pull_request_can_reach_is_caught(self) -> None:
         """The job holds what signs and pushes, so its own condition keeps it
-        off a pull request whatever each step's says (ADR-196)."""
+        off a pull request whatever each step's says (ADR-197)."""
         self.write(WORKFLOW.replace(
             "    if: ${{ contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
             "&& github.ref == 'refs/heads/main' }}\n",
@@ -627,7 +627,7 @@ jobs:
 
 
 class GrantTests(unittest.TestCase):
-    """ADR-196: nothing a pull request's branch can run holds a write grant."""
+    """ADR-197: nothing a pull request's branch can run holds a write grant."""
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -645,7 +645,7 @@ class GrantTests(unittest.TestCase):
         self.assertEqual(pipeline_gate.check_grants(self.root), [])
 
     def test_a_grant_beside_a_checkout_on_a_pull_request_is_caught(self) -> None:
-        """ADR-196's shape: the branch's MSBuild files run beside the job's token."""
+        """ADR-197's shape: the branch's MSBuild files run beside the job's token."""
         self.write(GRANTED.replace(
             "  build:\n    steps:",
             "  build:\n    permissions:\n      contents: read\n      packages: write\n    steps:"))

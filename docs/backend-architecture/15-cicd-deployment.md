@@ -60,7 +60,7 @@ before the first push to `main`. What `actionlint` reads and claims is
 > [ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
 > a pull request builds and inventories and pushes nothing, holding no write
 > grant while its branch's code runs
-> ([ADR-196](adr/ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
+> ([ADR-197](adr/ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
 > and the rollout verifies the signature before Helm runs. The only other thing
 > `main` publishes is a node the diagram does not draw: the `publish-packages`
 > job, after the test stages and the `packages` job's pack, pushes each of the
@@ -669,7 +669,7 @@ the exact failure the migration hook exists to prevent.
 
 **What is built is inventoried, and what is pushed is signed.** On `main` the
 `publish-images` job takes that matrix and builds that line
-([ADR-196](adr/ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
+([ADR-197](adr/ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
 pushes each image to GHCR as `$REGISTRY/<image>:<sha>`, `REGISTRY` being the
 one workflow-level value in `ci.yml` that owns the address, reads the digest
 back, and by that digest signs it keyless, attests its provenance and attests

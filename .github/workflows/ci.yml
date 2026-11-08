@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 # Read-only by default. A job needing more says so, and none holds a write grant
-# beside a pull request's code (ADR-196).
+# beside a pull request's code (ADR-197).
 permissions:
   contents: read
 
@@ -941,7 +941,7 @@ jobs:
           path: warm-up-retry.txt
 
   # The grant to comment, in a job with no checkout: the shards run the branch's
-  # tests and hold none (ADR-196). The artifacts are the record, so a fork's token,
+  # tests and hold none (ADR-197). The artifacts are the record, so a fork's token,
   # which cannot comment, or a missed comment fails no run the shards passed. A red
   # shard's sighting is still a sighting, and a shard the gates skipped wrote nothing.
   integration-report:
@@ -1060,7 +1060,7 @@ jobs:
 
   # Built with an SBOM on a pull request, holding no grant while the branch's
   # Dockerfiles run; publish-images does the same on main and pushes, signs and
-  # attests too, each by digest (ADR-109, ADR-196). `pipeline-gate images` asserts
+  # attests too, each by digest (ADR-109, ADR-197). `pipeline-gate images` asserts
   # every Dockerfile under src/ appears below and every build has its SBOM.
   images:
     # Skipped on main alone: a skipped job is never expanded, so its one check is
@@ -1180,7 +1180,7 @@ jobs:
 
   # What main alone does (ADR-109). The job's own condition is what keeps its
   # grants off a pull request, since a job holds them from its first step and
-  # `permissions:` takes no expression (ADR-196), and `pipeline-gate images` holds
+  # `permissions:` takes no expression (ADR-197), and `pipeline-gate images` holds
   # its build to the line above and asserts its push, signature and two
   # attestations. Unnamed, so the check a pull request sees skip names no expression.
   publish-images:
@@ -1326,7 +1326,7 @@ jobs:
 
   # ADR-149's two packages. Packed on every run once the test stages pass, so a
   # project that cannot pack fails its own pull request. The pack runs the
-  # branch's MSBuild files, so this job holds no grant (ADR-196).
+  # branch's MSBuild files, so this job holds no grant (ADR-197).
   packages:
     needs: [changes, stage-gate]
     runs-on: ubuntu-latest
@@ -1396,7 +1396,7 @@ jobs:
           if-no-files-found: error
 
   # Pushes what the packages job packed, and only the package whose project
-  # changed; nothing here builds, so the grant runs no MSBuild file (ADR-196).
+  # changed; nothing here builds, so the grant runs no MSBuild file (ADR-197).
   # There is no --skip-duplicate: a changed project that kept its
   # Version and got past the pull request's check is refused by the feed here,
   # instead of leaving a stale package.
