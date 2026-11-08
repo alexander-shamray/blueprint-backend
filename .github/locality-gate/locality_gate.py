@@ -25,6 +25,11 @@ _TOKEN = re.compile(r"^[A-Za-z0-9_./*?{},()@+-]+$")
 # A changed path, as the diff names it: a token's set without the glob
 # characters; the same set pr-locality.sh admits.
 _PLAIN_PATH = re.compile(r"^[A-Za-z0-9_./@+()-]+$")
+# A widened token's reason, the form `/pr` prescribes: a backticked token, a
+# space and one parenthesis holding no backtick and no nested parenthesis.
+# The pattern is pr-locality.sh's, and the reason is dropped unread.
+_REASONED = re.compile(r"(`[^`]+`)[ \t\n\r\f\v]+\([^`()]*\)")
+_REASON_OPENED = re.compile(r"`[^`]+`[ \t\n\r\f\v]+\(.*", re.DOTALL)
 
 _CLASS_ROW = re.compile(r"^\| *Class *\|(.*)$")
 _TOUCH_ROW = re.compile(r"^\| *Touch set *\|(.*)$")
@@ -134,6 +139,12 @@ def _read_touch_set(rest: str) -> list[str]:
     tokens = []
     for item in _split_outside_braces(cell):
         token = item.strip()
+        reasoned = _REASONED.fullmatch(token)
+        if reasoned:
+            token = reasoned.group(1)
+        elif _REASON_OPENED.fullmatch(token):
+            # Named as a reason, not as the backtick it would otherwise read as.
+            raise InputRefused("the Touch set row has a reason outside its grammar")
         if token.startswith("`") and token.endswith("`") and len(token) >= 2:
             token = token[1:-1]
         elif "`" in token:
@@ -143,9 +154,24 @@ def _read_touch_set(rest: str) -> list[str]:
 
 
 def _split_outside_braces(cell: str) -> list[str]:
+    # A `(` outside backticks and after whitespace opens a reason, whose
+    # commas and braces are its own; pr-locality.sh splits the same way.
     items, current, depth = [], "", 0
+    in_backticks, reason_depth, previous = False, 0, ""
     for character in cell:
-        if character == "{":
+        if reason_depth:
+            if character == "(":
+                reason_depth += 1
+            elif character == ")":
+                reason_depth -= 1
+            current += character
+            previous = character
+            continue
+        if character == "`":
+            in_backticks = not in_backticks
+        elif character == "(" and not in_backticks and previous and previous in " \t\n\r\f\v":
+            reason_depth = 1
+        elif character == "{":
             depth += 1
         elif character == "}":
             depth -= 1
@@ -153,9 +179,12 @@ def _split_outside_braces(cell: str) -> list[str]:
                 raise InputRefused("the Touch set row has an unbalanced brace")
         elif character == "," and depth == 0:
             items.append(current)
-            current = ""
+            current, previous = "", ""
             continue
         current += character
+        previous = character
+    if reason_depth:
+        raise InputRefused("the Touch set row has an unbalanced parenthesis")
     if depth != 0:
         raise InputRefused("the Touch set row has an unbalanced brace")
     items.append(current)
