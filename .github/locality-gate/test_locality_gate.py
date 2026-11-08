@@ -179,6 +179,29 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "outside the repository"):
             read_map(MAP.replace("'docs/**'", "'docs//'"))
 
+    def test_a_reason_after_the_closing_backtick_is_dropped_unread(self) -> None:
+        # The form `/pr` prescribes for a widened token (#1832); the reason's
+        # comma and braces are its own, not a split or a glob.
+        _, tokens = read_rows(body("D", "`docs/x.md` (added: a cite, {and} more), `docs/y.md`, docs/z.md"))
+        self.assertEqual(tokens, ["docs/x.md", "docs/y.md", "docs/z.md"])
+
+    def test_a_reason_holding_a_backtick_or_a_nested_parenthesis_is_refused(self) -> None:
+        for cell in ("`docs/x.md` (added `why`)", "`docs/x.md` (added (why))", "`docs/x.md` (added) trailing"):
+            with self.subTest(cell=cell), self.assertRaisesRegex(InputRefused, "reason outside its grammar"):
+                read_rows(body("D", cell))
+
+    def test_an_unclosed_reason_is_refused(self) -> None:
+        with self.assertRaisesRegex(InputRefused, "unbalanced parenthesis"):
+            read_rows(body("D", "`docs/x.md` (added: why, `docs/y.md`"))
+
+    def test_a_bare_token_takes_no_reason(self) -> None:
+        with self.assertRaisesRegex(InputRefused, "not a path list"):
+            read_rows(body("D", "docs/x.md (added: why)"))
+
+    def test_a_parenthesis_inside_a_token_is_still_a_path_character(self) -> None:
+        _, tokens = read_rows(body("D", "`docs/(draft)/x.md`, docs/a(b).md"))
+        self.assertEqual(tokens, ["docs/(draft)/x.md", "docs/a(b).md"])
+
     def test_an_at_sign_and_a_plus_are_path_characters(self) -> None:
         # pr-locality.sh admits both (#1801); frontend's tree has `src/app/@types/**`.
         _, tokens = read_rows(body("A", "`src/app/@types/**`, docs/a+b.md"))
