@@ -201,7 +201,8 @@ class TouchSetGrammar(unittest.TestCase):
         _, tokens = read_rows(body("D", "`docs/x.md` (added: a cite, {and} more), `docs/y.md`, docs/z.md"))
         self.assertEqual(tokens, ["docs/x.md", "docs/y.md", "docs/z.md"])
 
-    def test_a_reason_holding_a_backtick_or_a_nested_parenthesis_is_refused(self) -> None:
+    def test_a_reason_outside_its_grammar_is_refused(self) -> None:
+        # A backtick in it, a nested parenthesis, or text after it.
         for cell in ("`docs/x.md` (added `why`)", "`docs/x.md` (added (why))", "`docs/x.md` (added) trailing"):
             with self.subTest(cell=cell), self.assertRaisesRegex(InputRefused, "reason outside its grammar"):
                 read_rows(body("D", cell))
