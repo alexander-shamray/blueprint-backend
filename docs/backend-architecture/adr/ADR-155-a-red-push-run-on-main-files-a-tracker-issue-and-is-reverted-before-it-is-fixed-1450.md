@@ -52,6 +52,12 @@ the ruleset requires six status checks, so auto-merge is not kept off
 for want of one; it stays off on ADR-194's own argument. This record is
 otherwise unchanged.
 
+**Amended by
+[ADR-196](ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md)**:
+a `cancelled` push run is filed too, unless a newer run replaced it or it has
+no job, and one cancelled by hand owes no revert. This record is otherwise
+unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

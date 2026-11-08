@@ -711,6 +711,7 @@ def check_actions(root: Path = ROOT) -> list[str]:
 # --------------------------------------------------------------------------
 
 ALERT_WORKFLOW = "main-red.yml"
+ALERT_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
 
 
 def _key(lines: list[str], key: str, indent: int) -> tuple[str, list[str]] | None:
@@ -774,6 +775,34 @@ def read_watched(alert_text: str) -> list[str]:
     return _list(*workflows) if workflows else []
 
 
+def check_alert_conclusions(alert_text: str) -> list[str]:
+    """The alert still hears every conclusion a red run ends on (ADR-155, ADR-196)."""
+    filing = read_job_condition(alert_text, "file") or ""
+
+    # Read list by list: the run's conclusion and the need's result share a word.
+    def listed_beside(subject: str) -> str:
+        found = re.search(rf"fromJSON\('\[([^']*)\]'\),\s*{re.escape(subject)}", filing)
+        return found.group(1) if found else ""
+
+    conclusions = listed_beside("github.event.workflow_run.conclusion")
+    problems = [
+        f"{ALERT_WORKFLOW}'s `file` job does not file on `{conclusion}`, so a run ending so alerts nobody"
+        for conclusion in ALERT_CONCLUSIONS
+        if f'"{conclusion}"' not in conclusions
+    ]
+    results = listed_beside("needs.read-cancelled.result")
+    if ("== 'cancelled'" not in (read_job_condition(alert_text, "read-cancelled") or "")
+            or "always()" not in filing
+            or "needs.read-cancelled.outputs.reason" not in filing
+            or '"failure"' not in results
+            or '"cancelled"' not in results):
+        problems.append(
+            f"{ALERT_WORKFLOW} does not read a `cancelled` run through `read-cancelled` into its `file` job, "
+            "so a job past its time limit alerts nobody"
+        )
+    return problems
+
+
 def check_alerts(root: Path = ROOT) -> list[str]:
     """Every workflow a push to `main` runs is one the red-main alert watches (ADR-155).
 
@@ -784,7 +813,8 @@ def check_alerts(root: Path = ROOT) -> list[str]:
     alert = directory / ALERT_WORKFLOW
     if not alert.is_file():
         return [f"found no {ALERT_WORKFLOW}: a red run on main would file nothing"]
-    watched = read_watched(alert.read_text(encoding="utf-8"))
+    alert_text = alert.read_text(encoding="utf-8")
+    watched = read_watched(alert_text)
     if not watched:
         return [
             f"{ALERT_WORKFLOW} lists no `workflow_run` workflows: the check would pass "
@@ -792,7 +822,7 @@ def check_alerts(root: Path = ROOT) -> list[str]:
         ]
 
     pushed_by_name: dict[str, bool] = {}
-    problems: list[str] = []
+    problems: list[str] = check_alert_conclusions(alert_text)
     for path in sorted(directory.glob("*")):
         if path.suffix not in (".yml", ".yaml") or path.name == ALERT_WORKFLOW:
             continue

@@ -24,13 +24,47 @@ on:
 permissions: {}
 
 jobs:
-  file:
-    # Push runs alone: realm.yml and object-store.yml file their own issue for
-    # a red scheduled run. Cancelled is not red: most watched workflows cancel a
-    # push run when the next push lands, and that next run is the one heard.
+  # A cancelled run may be replaced by the next push, whose run is the one heard,
+  # or red, a job past its `timeout-minutes` ending its run cancelled too
+  # (ADR-196). Its own job, so a replaced run never enters `file`'s group, where
+  # it would displace a red run waiting there.
+  read-cancelled:
     if: >-
       github.event.workflow_run.event == 'push' &&
-      contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
+      github.event.workflow_run.conclusion == 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    outputs:
+      reason: ${{ steps.read.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: read
+        name: Read why the run was cancelled
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          REASON=$(python3 .github/pipeline-gate/read_cancelled_run.py "$REPO" "$RUN_ID")
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+
+  file:
+    needs: read-cancelled
+    # Push runs alone: realm.yml and object-store.yml file their own issue for
+    # a red scheduled run. `always()` because a skipped need skips this job
+    # otherwise, and a read that did not finish files rather than stays silent.
+    if: >-
+      always() &&
+      github.event.workflow_run.event == 'push' &&
+      (contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion) ||
+      contains(fromJSON('["failure", "cancelled"]'), needs.read-cancelled.result) ||
+      needs.read-cancelled.outputs.reason != '')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # One group per watched workflow, so two red runs never both see no open
@@ -53,6 +87,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
           WORKFLOW: ${{ github.event.workflow_run.name }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WHY: >-
+            ${{ needs.read-cancelled.outputs.reason ||
+            (needs.read-cancelled.result != 'skipped' && 'Its jobs could not be read.' || '') }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
@@ -64,13 +101,15 @@ jobs:
           [ "$(jq length <<<"$LIST")" -lt 1000 ] || { echo "::error::the issue list reached its limit and may be cut"; exit 1; }
           EXISTING=$(jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty' <<<"$LIST")
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "Still red ($CONCLUSION) at $HEAD_SHA: $RUN_URL"
+            gh issue comment "$EXISTING" --body "Still red ($CONCLUSION) at $HEAD_SHA: $RUN_URL $WHY"
           else
             gh issue create --title "$TITLE" --label bug --label high --label code --body "$(cat <<EOF
           ## What happened
 
           The \`$WORKFLOW\` workflow ended \`$CONCLUSION\` on a push to main, at
           $HEAD_SHA: $RUN_URL
+
+          $WHY
 
           ## What to do
 
