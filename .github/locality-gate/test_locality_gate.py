@@ -730,5 +730,57 @@ class TheShippedMap(unittest.TestCase):
         self.assertIn(".github/locality-gate/classes.yml", contract)
 
 
+def steps(workflow: str) -> list[str]:
+    """A workflow's steps in order, comments dropped so that one naming a command cannot stand in for it."""
+    found: list[str] = []
+    for line in workflow.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        if line.startswith("      - "):
+            found.append(line)
+        elif found:
+            found[-1] += "\n" + line
+    return found
+
+
+def suite_follows_gate(workflow: str) -> bool:
+    """Whether every step running the head's suite comes after every step running the base's gate."""
+    listed = steps(workflow)
+    suites = [index for index, step in enumerate(listed) if "-m unittest" in step]
+    gates = [index for index, step in enumerate(listed) if "$RUNNER_TEMP/locality-gate/locality_gate.py" in step]
+    if not suites or not gates:
+        raise ValueError(f"found {len(suites)} suite and {len(gates)} gate steps in {len(listed)} steps")
+    return min(suites) > max(gates)
+
+
+class TheShippedWorkflow(unittest.TestCase):
+    """The order of the head's code and the verdict, in the workflow CI runs."""
+
+    SUITE = "      - name: suite\n        run: python -m unittest\n"
+    GATE = '      - name: gate\n        run: python "$RUNNER_TEMP/locality-gate/locality_gate.py"\n'
+
+    def test_the_head_suite_runs_after_the_enforcing_gate(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "locality-gate.yml").read_text(encoding="utf-8")
+        self.assertTrue(suite_follows_gate(workflow))
+
+    def test_a_suite_ahead_of_the_gate_is_caught(self) -> None:
+        self.assertFalse(suite_follows_gate(self.SUITE + self.GATE))
+
+    def test_a_suite_after_the_gate_is_accepted(self) -> None:
+        self.assertTrue(suite_follows_gate(self.GATE + self.SUITE))
+
+    def test_a_second_suite_ahead_of_the_gate_is_caught(self) -> None:
+        self.assertFalse(suite_follows_gate(self.SUITE + self.GATE + self.SUITE))
+
+    def test_a_workflow_without_either_step_is_refused_rather_than_passed(self) -> None:
+        for workflow in (self.SUITE, self.GATE, ""):
+            with self.assertRaises(ValueError):
+                suite_follows_gate(workflow)
+
+    def test_a_comment_naming_the_suite_is_not_a_step(self) -> None:
+        with self.assertRaises(ValueError):
+            suite_follows_gate(self.GATE + "      # python -m unittest\n")
+
+
 if __name__ == "__main__":
     unittest.main()
