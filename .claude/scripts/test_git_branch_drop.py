@@ -5,7 +5,6 @@ Each refusal is paired with the drop succeeding, so it failed for its reason.
 """
 
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -92,11 +91,14 @@ class Fixture(unittest.TestCase):
     def helper(self, branch="feat/x", rows=None, exit_code="0", move="", take=""):
         if rows is None:
             rows = [self.row(oid=self.tip())]
+        # The stubs go first inside the shell, not through its environment: Git for Windows' `bin\bash.exe`, which
+        # a runner's PATH can name before `usr\bin\bash.exe`, puts its own `git` and `tr` ahead of what it inherits,
+        # and a stub behind them never runs. `pwd` gives the directory in the shell's own spelling.
         return run_bash(
-            f'cd "$W"\nbash "$H" "$B"',
-            W=self.work, R=self.root, H=str(HELPER), B=branch,
+            'cd "$W"\nPATH="$(cd "$STUB_BIN" && pwd):$PATH"\nbash "$H" "$B"',
+            W=self.work, R=self.root, H=str(HELPER), B=branch, STUB_BIN=self.bin,
             STUB_OWNER=OWNER, STUB_ROWS=json.dumps(rows), STUB_EXIT=exit_code,
-            STUB_MOVE=move, STUB_TAKE=take, PATH=self.bin + os.pathsep + os.environ["PATH"])
+            STUB_MOVE=move, STUB_TAKE=take)
 
     def stub_git(self):
         """A `git` first on PATH that runs STUB_TAKE as the delete starts, after every read of the state.

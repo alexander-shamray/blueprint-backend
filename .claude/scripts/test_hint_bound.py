@@ -21,6 +21,9 @@ HINTS = (("UserPromptSubmit", "index-query-hint.py"), ("PreToolUse", "index-sear
 
 
 class HintBound(unittest.TestCase):
+    # The program gh-read-bound.sh's `bounded` looks for; None leaves GNU `timeout` to answer where it is installed.
+    TIMEOUT = None
+
     def run_wrapper(self, event, hook, py_body, stdin="", bound="10"):
         # A `py` shim on PATH, the shape every stubbed helper test here uses.
         d = tempfile.mkdtemp()
@@ -32,6 +35,8 @@ class HintBound(unittest.TestCase):
         env["PATH"] = d + os.pathsep + env["PATH"]
         env["HINT_BOUND_SECONDS"] = bound
         env["CLAUDE_PROJECT_DIR"] = str(SCRIPTS.parent.parent)
+        if self.TIMEOUT is not None:
+            env["GH_READ_TIMEOUT"] = self.TIMEOUT
         start = time.monotonic()
         r = subprocess.run(
             [BASH, str(WRAPPER), event, hook],
@@ -67,6 +72,12 @@ class HintBound(unittest.TestCase):
     def test_a_hook_that_answers_with_nothing_leaves_nothing(self):
         r, _ = self.run_wrapper("PreToolUse", "index-search-hint.py", "exit 0\n")
         self.assertEqual((0, ""), (r.returncode, r.stdout))
+
+
+class HintBoundUnderTheWatchdog(HintBound):
+    """Every case above where no `timeout` is installed, as on macOS, so the bound is the watchdog's."""
+
+    TIMEOUT = "no-such-timeout"
 
 
 class HintHooksAreWired(unittest.TestCase):
