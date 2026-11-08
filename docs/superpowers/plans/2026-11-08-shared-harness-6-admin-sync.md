@@ -121,7 +121,7 @@ Task 1.
 | `test_root_ignore_coverage.py` | Local | It reads admin's generated trees |
 | `test_harness_helpers.py` | Split by cluster; stack cases to `test_harness_helpers_admin.py` | Its cases for payload files are audited with their files; the cases for the four local scripts and `pin-gate` stay |
 | `commands/review-branch.md`, `docs/commands/review-branch.md` | Local | As backend and frontend |
-| `.github/output-gate/**` | Payload, not excluded | Admin builds into `artifacts/`; its invocation goes into admin's `ci.yml` by Task 8 |
+| `.github/output-gate/**` | Payload, not excluded | Admin builds into `artifacts/`; its invocation goes into admin's `ci.yml` by Task 7 Step 4 |
 
 Two builder's calls on the settings:
 
