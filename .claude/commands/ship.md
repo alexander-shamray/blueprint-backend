@@ -649,8 +649,8 @@ target*)
      its history.
    - **A usage exit after line 5's pull on `main` is not a stop**: rerun from
      the exiting line as the pulled `ship.md` spells it, and report it.
-   - Once the merge is verified, delete this change's row from *In
-     progress* in the task list named by `.harness/config.json`
+   - When these lines end, re-derive this change's rows by state in
+     the task list named by `.harness/config.json`
      `task_list`, in the main checkout's parent directory, by that path (why:
      docs/commands/ship.md, *Step 6: the teardown*).
    - Under `--dispatched`, skip this write, and only lines 1 and 8 run: no

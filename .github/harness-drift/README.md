@@ -137,7 +137,10 @@ A pull request that changes `.harness/config.json`, whether its `settings`,
 re-rendered `.claude/settings.json` and `.harness/manifest.json` with it.
 They are rendered at the commit the manifest already names, never a newer
 one. The gate fetches that commit's payload and judges the tree against it,
-and moving to a newer commit is a sync's job. From a harness checkout:
+and moving to a newer commit is a sync's job. The config is Edit-denied
+with the rest of `.harness/`, so the edit is the owner's to make or lift
+(`docs/harness-boundaries.md`, *Edit denies and agent self-protection*).
+From a harness checkout:
 
 ```bash
 commit="$(py -3.12 -I -c 'import json, sys; print(json.load(sys.stdin)["harness_commit"])' < <target>/.harness/manifest.json)"

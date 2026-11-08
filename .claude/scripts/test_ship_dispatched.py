@@ -113,7 +113,7 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
     def test_both_task_list_writes_are_skipped(self):
         # The skip follows the write it names, so it cannot be read as about another line.
         for name, text, write in (
-                ("ship.md step 6", flat(ship_step_6()), "delete this change's row from *In progress*"),
+                ("ship.md step 6", flat(ship_step_6()), "re-derive this change's rows by state"),
                 ("branch.md step 5", flat(branch_step_5()), "add the change to *In progress*")):
             with self.subTest(where=name):
                 self.assertIn(SKIP_WRITE, text)
