@@ -63,16 +63,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The head copy, deliberately: this step's subject is the gate this pull
-      # request proposes, so a proposal that fails its own suite belongs red
-      # here. Running it at all is the licence gate's terms — a gate observed
-      # only against a well-formed input says nothing about what it would
-      # catch — and that suite is negative cases with positive controls
-      # beside them.
-      - name: Test the proposed gate
-        working-directory: .github/closure-gate
-        run: python -m unittest
-
       # The base copy, deliberately, for the reason at the top of this file.
       #
       # A base that carries no gate fails rather than falling back to the head
@@ -131,3 +121,11 @@ jobs:
             --repo "${{ github.repository }}" \
             --json number,url,body,commits,closingIssuesReferences,headRefOid,author |
             python "$RUNNER_TEMP/closure-gate/closure_gate.py"
+
+      # The head copy, deliberately: a proposal that fails its own suite belongs
+      # red here. Last, so head test code cannot alter $GITHUB_ENV, a tool or
+      # the checkout ahead of the gate above. The cost: a red gate leaves this
+      # step unrun, so a pull request can read one failure and then a second.
+      - name: Test the proposed gate
+        working-directory: .github/closure-gate
+        run: python -m unittest

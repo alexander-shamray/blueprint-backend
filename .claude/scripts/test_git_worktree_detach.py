@@ -7,6 +7,7 @@ re-implementing are `review_helpers.py`'s.
 
 import subprocess
 import unittest
+from pathlib import Path
 
 from review_helpers import (
     COMMANDS,
@@ -211,6 +212,125 @@ class StaleSweepWorktrees(unittest.TestCase):
         self.assertEqual(0, run_bash('rm -rf "$P"', P=old).returncode)
         self.made()
         self.assertNotIn(old.rsplit("/", 1)[-1], self.names())
+
+
+GIT_LEAVING_A_DIRECTORY = """\
+git() {
+  if [ "$1" = worktree ] && [ "$2" = remove ]; then
+    command git worktree remove "$3" || return
+    case "$SHIM_LEAVES" in
+      directory) mkdir -p "$3" ;;
+      file) mkdir -p "$3" && : > "$3/held" ;;
+    esac
+    return "$SHIM_EXIT"
+  fi
+  command git "$@"
+}
+"""
+
+
+class ARemovalGitLeftHalfDone(unittest.TestCase):
+    """On Windows a process holding the tree fails git's delete of it, and git then drops the registration anyway.
+    The helper's `set -e` then ended it before the lists beside the tree were reached, and nothing named the
+    directory. A `git` function through BASH_ENV removes for real and then does that, since a shim first on PATH loses
+    to the directories Git's bash launcher puts there.
+    """
+
+    def setUp(self):
+        top = temp_root(self)
+        made = run_bash(
+            'mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q .'
+            ' && git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m t',
+            top=top,
+        )
+        self.assertEqual(0, made.returncode, made.stderr)
+        self.repo, self.root = f"{top}/repo", f"{top}/root"
+        shim = Path(top, "git-shim.sh")
+        shim.write_text(GIT_LEAVING_A_DIRECTORY, encoding="utf-8", newline="\n")
+        self.shim = shim.as_posix()
+
+    def sweep(self):
+        """A sweep worktree with its slice list and mutation report beside it."""
+        made = run_bash(
+            'cd "$R" && bash "$DETACH" "$(git rev-parse HEAD)"', R=self.repo, DETACH=str(DETACH), TMPDIR=self.root)
+        self.assertEqual(0, made.returncode, made.stderr)
+        path = made.stdout.strip()
+        beside = run_bash('mkdir "$P.slices" "$P.mutation" && : > "$P.slices/list" && : > "$P.mutation/report"', P=path)
+        self.assertEqual(0, beside.returncode, beside.stderr)
+        return path
+
+    def drop(self, path, leaves, git_exit):
+        return run_bash(
+            'cd "$R" && bash "$DROP" "$P"', R=self.repo, DROP=str(DROP), P=path, TMPDIR=self.root,
+            BASH_ENV=self.shim, SHIM_LEAVES=leaves, SHIM_EXIT=str(git_exit))
+
+    def exists(self, path):
+        return run_bash('[ -e "$P" ]', P=path).returncode == 0
+
+    def registered(self, path):
+        listed = run_bash('cd "$R" && git worktree list --porcelain', R=self.repo)
+        self.assertEqual(0, listed.returncode, listed.stderr)
+        return path.rsplit("/", 1)[-1] in listed.stdout
+
+    def assert_the_lists_are_gone(self, path):
+        self.assertFalse(self.exists(f"{path}.slices"), "the slice lists stayed")
+        self.assertFalse(self.exists(f"{path}.mutation"), "the mutation report stayed")
+
+    def test_an_empty_directory_git_left_goes_and_the_lists_go_with_it(self):
+        # Whether git then exits non-zero, as a failed delete does, or zero.
+        for git_exit in (255, 0):
+            with self.subTest(git_exit=git_exit):
+                path = self.sweep()
+                result = self.drop(path, "directory", git_exit)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertFalse(self.exists(path), "the empty directory is still there")
+                self.assert_the_lists_are_gone(path)
+                self.assertFalse(self.registered(path))
+
+    def test_a_directory_git_left_holding_something_is_named_and_the_lists_go(self):
+        # Git has already unregistered it, so no later sweep's start can find it, and `rmdir` is all this helper will
+        # delete it with: what a held tree still holds is left for the owner, by name.
+        for git_exit in (255, 0):
+            with self.subTest(git_exit=git_exit):
+                path = self.sweep()
+                self.addCleanup(run_bash, 'rm -rf "$P"', P=path)
+                result = self.drop(path, "file", git_exit)
+                self.assertEqual(4, result.returncode, result.stderr)
+                self.assertIn("unregistered but not deleted", result.stderr)
+                self.assertIn(path.rsplit("/", 1)[-1], result.stderr)
+                self.assertTrue(self.exists(f"{path}/held"), "what the directory held was removed")
+                self.assert_the_lists_are_gone(path)
+                self.assertFalse(self.registered(path))
+
+    def test_a_leftover_under_a_temp_root_inside_another_repository_is_still_a_leftover(self):
+        # With no `.git` of its own the directory answers with whatever repository holds the temp root, by walking
+        # up. That is not the worktree it was, so it is not git's refusal.
+        self.assertEqual(0, run_bash('git init -q "$R"', R=self.root).returncode)
+        path = self.sweep()
+        self.addCleanup(run_bash, 'rm -rf "$P"', P=path)
+        result = self.drop(path, "file", 255)
+        self.assertEqual(4, result.returncode, result.stderr)
+        self.assertIn("unregistered but not deleted", result.stderr)
+        self.assert_the_lists_are_gone(path)
+
+    def test_a_tree_git_deleted_before_it_failed_is_done_and_the_lists_go(self):
+        path = self.sweep()
+        result = self.drop(path, "nothing", 255)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.exists(path))
+        self.assert_the_lists_are_gone(path)
+
+    def test_a_tree_git_refused_keeps_its_work_and_its_lists_and_git_says_why(self):
+        # Untracked work is git's refusal: still registered, so nothing here deletes anything.
+        path = self.sweep()
+        self.assertEqual(0, run_bash(': > "$P/untracked.txt"', P=path).returncode)
+        result = self.drop(path, "nothing", 0)
+        self.assertNotEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(4, result.returncode, result.stderr)
+        self.assertIn("modified or untracked", result.stderr)
+        for kept in ("/untracked.txt", ".slices/list", ".mutation/report"):
+            self.assertTrue(self.exists(path + kept), kept)
+        self.assertTrue(self.registered(path))
 
 
 class ATrackedLinkIsRefusedBeforeAnythingIsMade(unittest.TestCase):
