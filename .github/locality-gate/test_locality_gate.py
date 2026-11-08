@@ -774,11 +774,11 @@ class TheShippedWorkflow(unittest.TestCase):
 
     def test_a_workflow_without_either_step_is_refused_rather_than_passed(self) -> None:
         for workflow in (self.SUITE, self.GATE, ""):
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "suite and .* gate steps"):
                 suite_follows_gate(workflow)
 
     def test_a_comment_naming_the_suite_is_not_a_step(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "found 0 suite and 1 gate steps"):
             suite_follows_gate(self.GATE + "      # python -m unittest\n")
 
 
