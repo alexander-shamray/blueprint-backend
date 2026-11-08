@@ -182,8 +182,9 @@ Each round is the review done once, end to end:
    ```
 
    The rows are those `.harness/sweep-rows.tsv` names for `bug`, with what
-   each holds, the first matching line winning; `samples` is read for its
-   fenced code alone, and the closed records are owned and not read.
+   each holds, the first matching line winning, bar a mirror row passing a
+   path on; `samples` is read for its fenced code alone, and the closed
+   records are owned and not read.
 
    A tracked path no row owns makes the helper exit 3 naming it: a round
    error under *Never fail open*, never a gap to widen by hand. **A row
