@@ -384,34 +384,8 @@ def quote_states(command, quotes=True):
 
 
 def _quoting(command, quotes=True, data=(), start=0):
-    """Walk `command`, yielding `(index, state, escaped)` per character.
-
-    `data` is spans this scanner must read as data rather than as shell text —
-    heredoc bodies, and only `heredoc_spans` passes any. Inside one, a quote
-    opens nothing and a `#` starts nothing: the characters are yielded as
-    quoted, which is what every consumer of this scanner means by "not a
-    command line".
-
-    One scanner for heredoc openers and substitution parens alike: a regex
-    search for `<<` finds an opener inside a comment, so `git status # <<EOF`
-    would swallow the command on the next line, and a paren counter that
-    ignores quotes closes `git log "$(printf ')'; git push origin +HEAD:main)"`
-    early, hiding the push in the outer token.
-
-    `state` is `"single"` inside `'…'`, `"double"` inside `"…"`, `"comment"`
-    in a comment, `"data"` inside one of `data`'s spans and `""` elsewhere.
-    Comments start at an unquoted `#` that begins a word and end at the
-    newline — which is bash's rule, and the reason `git log --grep=#x` is not
-    a comment.
-
-    An ANSI-C word takes a backslash and an ordinary single-quoted one does
-    not, so `$'…'` is read by its own rule. Read by the ordinary one, an
-    escaped quote closes the word, the next quote opens one that never closes,
-    and the rest of the line — `2>&1 push origin +HEAD:main`, say — reads as
-    quoted to every consumer of this scanner. `$"…"` needs nothing, because a
-    locale-quoted word already follows the double-quoted rule this scanner
-    applies to it.
-    """
+    """Yield `(index, state, escaped)` per character of `command`.
+    `data` is spans read as data: `heredoc_spans`, `_sums_in_group` pass it."""
     # Not copied and not sorted: `heredoc_spans` appends to this list
     # while consuming the generator, and every span it appends starts ahead of
     # the cursor, so the order holds by construction.
@@ -2394,7 +2368,13 @@ STDIN_DATA_ROUTE = (
     "as an issue body for `gh-issue-hand.sh` is, write the text to a file "
     "with `Write` and pass it as `< <path>`: this guard reads a shell's stdin "
     "as a script, quoted delimiter or not, since it cannot see what the "
-    "script does with it."
+    "script does with it. Where `Write` is denied, as in a sweep filing "
+    "through `gh-issue-sweep.sh`, the quoted heredoc stays the route and the "
+    "text is reworded to read as a script: no backtick or `$(`, an even "
+    "count of apostrophes outside double quotes, and a push or any other "
+    "command this guard refuses described in prose rather than spelled; "
+    "`docs/harness/pitfalls.md`, *Shell and encoding*, lists the shapes "
+    "another check refuses there too."
 )
 CACHEINFO_MODE = re.compile(r"^[0-7]{6}(?:,|$)")
 REMOTE_TRACKING = re.compile(r"^(?:refs/remotes/)?origin/")

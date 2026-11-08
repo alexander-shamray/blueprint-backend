@@ -92,6 +92,15 @@ def _ps_in_the_callers_process(subcommand, env):
 
 
 _PS_HIDDEN = ("python", "python3", "py", "codebase-index")
+# The index gate: the launcher and the interpreter stub both answer the wrapper's
+# `-I .../gate-index.py` call with the exit CBX_STUB_GATE_EXIT names (0 when unset),
+# so a case can make the gate pass or refuse without a real index.
+_PY_GATE = (
+    "import os\n"
+    "if any(a.endswith('gate-index.py') for a in args):\n"
+    "    print('GATE')\n"
+    "    raise SystemExit(int(os.environ.get('CBX_STUB_GATE_EXIT', '0')))\n"
+)
 _PY_MODULE = (
     "if '-m' in args:\n"
     "    i = args.index('-m')\n"
@@ -105,6 +114,7 @@ _PY_MODULE = (
 _PY_LAUNCHER_STUB = (
     "import sys\n"
     "args = sys.argv[1:]\n"
+    + _PY_GATE +
     "if '-c' in args[:3]:\n"
     "    raise SystemExit(0)\n"
     + _PY_MODULE
@@ -114,6 +124,7 @@ _PY_LAUNCHER_STUB = (
 _PY_INTERPRETER_STUB = (
     "import sys\n"
     "args = sys.argv[1:]\n"
+    + _PY_GATE +
     "if '-c' in args[:3]:\n"
     "    i = args.index('-c')\n"
     "    payload = args[i + 1] if i + 1 < len(args) else ''\n"
@@ -121,11 +132,37 @@ _PY_INTERPRETER_STUB = (
     "        0 if 'version_info[:2] == (3, 12)' in payload else 1)\n"
     + _PY_MODULE
 )
+# A 3.12 interpreter, so the gate runs, that cannot import `codebase_index`.
+_PY_NO_MODULE_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    + _PY_GATE +
+    "if '-c' in args[:3]:\n"
+    "    i = args.index('-c')\n"
+    "    payload = args[i + 1] if i + 1 < len(args) else ''\n"
+    "    raise SystemExit(1 if 'codebase_index' in payload else 0)\n"
+    "raise SystemExit(1)\n"
+)
 _PY_WRONG_VERSION_STUB = (
     "import sys\n"
     "args = sys.argv[1:]\n"
+    + _PY_GATE +
     "if '-c' in args[:3]:\n"
     "    raise SystemExit(1)\n"
+    "if '-m' in args:\n"
+    "    print('MODULE')\n"
+    "    raise SystemExit(0)\n"
+    "raise SystemExit(1)\n"
+)
+# A 3.11 that holds `codebase_index`: every -c asking for 3.12 fails, any
+# other succeeds, and `-m` would run the module.
+_PY_311_WITH_MODULE_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    "if '-c' in args[:3]:\n"
+    "    i = args.index('-c')\n"
+    "    payload = args[i + 1] if i + 1 < len(args) else ''\n"
+    "    raise SystemExit(1 if 'version_info[:2] == (3, 12)' in payload else 0)\n"
     "if '-m' in args:\n"
     "    print('MODULE')\n"
     "    raise SystemExit(0)\n"
@@ -464,11 +501,14 @@ class CbxWrapper(unittest.TestCase):
                 stub.write_text(
                     "#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
                 stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            # A passing gate stub first on PATH, so the host's own Python and the
+            # working directory's index are not what the case depends on.
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
             env = {
                 **os.environ,
                 "PATH": fake + os.pathsep + os.environ.get("PATH", ""),
             }
-            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env, cwd=fake)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("PATH_CLI", out.stdout)
             self.assertIn("search", out.stdout)
@@ -487,6 +527,7 @@ class CbxWrapper(unittest.TestCase):
                 stub = Path(fake) / "codebase-index"
                 stub.write_text("#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
                 stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
             return fake + os.pathsep + os.environ.get("PATH", ""), 0, "PATH_CLI"
 
         def module(fake):
@@ -494,7 +535,7 @@ class CbxWrapper(unittest.TestCase):
             return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 0, "MODULE"
 
         def nothing(fake):
-            return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 127, ""
+            return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 4, ""
 
         ours = {name: value for name, value in os.environ.items()
                 if name not in ("PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE")}
@@ -533,6 +574,8 @@ class CbxWrapper(unittest.TestCase):
             self.assertIn("MODULE search X", out.stdout)
 
     def test_powershell_python_fallback_rejects_a_non_312_interpreter(self):
+        """The index gate asks for the same 3.12 first, so a 3.11 is refused
+        there, exit 4, before any fallback could take it."""
         with tempfile.TemporaryDirectory(prefix="cbx-ps-py311-") as fake:
             _write_ps_stub(fake, "python", _PY_WRONG_VERSION_STUB)
             env = {
@@ -540,6 +583,23 @@ class CbxWrapper(unittest.TestCase):
                 "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
             }
             out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(4, out.returncode, out.stderr)
+            self.assertIn("no Python 3.12", out.stderr)
+            self.assertNotIn("MODULE", out.stdout)
+
+    def test_powershell_fallback_on_another_version_is_not_taken_behind_a_312_gate(self):
+        """`py -3.12` lacking the package passes the gate, and a `python`
+        holding the package is a 3.11: only that fallback's version check
+        stops it from being run."""
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-py-mixed-") as fake:
+            _write_ps_stub(fake, "py", _PY_NO_MODULE_STUB)
+            _write_ps_stub(fake, "python", _PY_311_WITH_MODULE_STUB)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertIn("GATE", out.stdout, out.stdout + out.stderr)
             self.assertEqual(127, out.returncode, out.stderr)
             self.assertIn("not on PATH", out.stderr)
             self.assertNotIn("MODULE", out.stdout)
@@ -576,8 +636,19 @@ class CbxWrapper(unittest.TestCase):
             self.assertNotIn("CHECKOUT", out.stdout)
             self.assertNotIn("CHECKOUT", out.stderr)
 
-    def test_powershell_exits_127_when_nothing_can_run_it(self):
+    def test_powershell_exits_4_when_no_python_can_judge_the_index(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-empty-") as fake:
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(4, out.returncode, out.stderr)
+            self.assertIn("no Python 3.12", out.stderr)
+
+    def test_powershell_exits_127_when_the_gate_passes_and_nothing_can_run_the_cli(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-nocli-") as fake:
+            _write_ps_stub(fake, "python", _PY_NO_MODULE_STUB)
             env = {
                 **os.environ,
                 "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
@@ -585,6 +656,33 @@ class CbxWrapper(unittest.TestCase):
             out = _ps_invoke(CBX_PS1, "search", "X", env=env)
             self.assertEqual(127, out.returncode, out.stderr)
             self.assertIn("not on PATH", out.stderr)
+
+    def test_powershell_runs_the_index_gate_before_any_cli_and_honours_its_refusal(self):
+        """The gate's own exit is the script's, and neither the PATH CLI nor a
+        Python fallback starts after a refusal."""
+        for launcher, stub in (("py", _PY_LAUNCHER_STUB), ("python", _PY_INTERPRETER_STUB)):
+            for gate_exit in (0, 3):
+                with self.subTest(launcher=launcher, gate_exit=gate_exit), \
+                        tempfile.TemporaryDirectory(prefix="cbx-ps-gate-") as fake:
+                    _write_ps_stub(fake, launcher, stub)
+                    _write_ps_stub(fake, "codebase-index", "print('PATH_CLI', *__import__('sys').argv[1:])\n")
+                    env = {**os.environ, "CBX_STUB_GATE_EXIT": str(gate_exit),
+                           "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN)}
+                    out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+                    self.assertIn("GATE", out.stdout, out.stdout + out.stderr)
+                    self.assertEqual(gate_exit, out.returncode, out.stderr)
+                    self.assertEqual(gate_exit == 0, "PATH_CLI search X" in out.stdout, out.stdout)
+                    self.assertNotIn("MODULE", out.stdout)
+
+    def test_powershell_puts_both_variables_back_when_the_gate_refuses(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-gate-env-") as fake:
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
+            env = {name: value for name, value in os.environ.items()
+                   if name not in ("PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE")}
+            env["CBX_STUB_GATE_EXIT"] = "3"
+            env["PATH"] = fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN)
+            out = _ps_in_the_callers_process("search", env)
+            self.assertIn("code=3 safe=[] auto=[]", out.stdout, out.stdout + out.stderr)
 
 
 if __name__ == "__main__":

@@ -835,6 +835,20 @@ class ResultCommandTests(InRoot):
         entry = group_state(RUN, "S1")
         self.assertEqual(({"input_tokens": 100}, ["modelUsage"]), (entry["usage"], entry["usage_sources"]))
         self.assertEqual(({"m": {"input_tokens": 100}}, 0.5), (entry["usage_models"], entry["cost_usd"]))
+        # Its spend is unknown, so the group's row must not read as the whole cost.
+        self.assertEqual(1, entry["usage_uncounted"])
+        self.assertEqual(["S1: 100 tokens (input 100, cache write 0, cache read 0, output 0), $0.50, from modelUsage, "
+                          "1 session left no usage, not counted"], dr._usage_lines("S1", entry))
+        self.absorb(MERGED_S1, envelope="not an envelope", status="relaunch", absorbed="2026-11-01T20:00:00+00:00",
+                    usage_uncounted=1)
+        entry = group_state(RUN, "S1")
+        self.assertEqual(2, entry["usage_uncounted"])
+        self.assertEqual(["S1: 2 sessions left no usage, not counted"],
+                         dr._usage_lines("S1", entry))
+        self.assertEqual(["S1: $0.25, 1 session left no usage, not counted"],
+                         dr._usage_lines("S1", {"usage": {}, "cost_usd": 0.25, "usage_uncounted": 1}))
+        self.absorb(MERGED_S1)
+        self.assertEqual(0, group_state(RUN, "S1")["usage_uncounted"])
 
     def test_result_copies_validates_classifies_records_and_names_the_transcript(self):
         self.assertEqual("transcript: not found", self.absorb(MERGED_S1)[1])

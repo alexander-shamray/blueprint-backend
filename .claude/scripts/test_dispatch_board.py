@@ -89,6 +89,15 @@ def section(text, name):
 
 
 class ParseTests(unittest.TestCase):
+    def test_a_remaining_group_cell_is_a_group_id_or_a_dash(self):
+        for bad in ("x1", "ZZ1", "sync-5", "Z1 Z2", "Z"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(db.Refusal, "has Group .*, not a group id or a dash"):
+                db.parse_tasks(tasks_of(line(gid=bad)))
+        self.assertEqual("Z1", db.parse_tasks(tasks_of(line(gid="Z1"))).remaining[0].group)
+        # A dash still parses and `groups` says it has none.
+        with self.assertRaisesRegex(db.Refusal, "is in Remaining with no group"):
+            db.groups(db.parse_tasks(tasks_of(line(gid="—"))))
+
     def test_the_four_sections_parse_in_order(self):
         tasks = db.parse_tasks(FIXTURE)
         self.assertEqual([1682, 1683, 1681, 1685, 1686, 1440], [r.number for r in tasks.remaining])
@@ -192,6 +201,17 @@ class ReadyTests(unittest.TestCase):
         for body in ("edit .claude/commands/ship.md frontmatter", "the .claude/hooks tree", r"under .Claude\skills"):
             self.assertEqual((False, "edits .claude/"), self.ready(line(number=7), bodies={7: body}), body)
         self.assertEqual((True, ""), self.ready(line(number=7), bodies={7: "see claude and my.claudex"}))
+
+    def test_a_body_that_only_mentions_the_claude_tree_names_no_file_there(self):
+        # A real night's body: its change was a harness_sync test, its prose named the tree names are checked under.
+        prose = "bare names could be checked against the payload's files under `.claude/` and `.github/`"
+        for task, body in (("Fix `harness_sync/tests/x.py`", prose), ("Say what the .claude/ tree holds", ""),
+                           ("Fix `x.py`", "the .claude tree, and .claude\\ on Windows")):
+            with self.subTest(task=task, body=body):
+                self.assertEqual((True, ""), self.ready(line(task=task, number=7), bodies={7: body}))
+        named = prose + "; fix `payload/.claude/scripts/dispatch_board.py`"
+        self.assertEqual((False, "edits .claude/"), self.ready(line(number=7), bodies={7: named}))
+        self.assertEqual((False, "edits .claude/"), self.ready(line(conflicts="`.claude/`")))
 
     def test_a_bare_number_in_depends_on_is_not_an_issue(self):
         self.assertFalse(self.ready(line(depends="14 days after 1440 closes"), {1440})[0])
@@ -853,6 +873,17 @@ class WriteTests(unittest.TestCase):
         rebuilt = FIXTURE.replace("| 2026-11-09 | Opus |", "| OWNER; 2026-11-09 | Opus |")
         self.assertEqual((0, ""), self.rebuild(rebuilt))
         self.assertEqual(rebuilt.replace("\n", "\r\n"), self.read())
+
+    def test_a_list_board_refuses_keeps_its_read_copy_so_a_rewrite_can_repair_it(self):
+        # Run 20261106-202828 stopped at step 0 on a group spanning two waves, with no copy to rebuild from.
+        spanning = FIXTURE.replace("| 1 | S1 | 1683 |", "| 2 | S1 | 1683 |", 1)
+        self.start()
+        self.write(spanning)
+        self.assertEqual(2, self.board())
+        self.assertEqual(spanning, (self.run_dir / "tasks.read.md").read_text(encoding="utf-8"))
+        self.assertEqual((0, ""), self.rebuild(FIXTURE))
+        self.assertEqual(FIXTURE, self.read())
+        self.assertEqual(0, self.board())
 
     def test_a_rewrite_refuses_a_list_changed_since_board_read_it(self):
         self.start()

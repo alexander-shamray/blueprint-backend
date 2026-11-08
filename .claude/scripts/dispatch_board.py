@@ -33,6 +33,8 @@ EXTENSIONS = "cs|csproj|py|sh|md|json|ya?ml|sql|ps1|props|slnx|toml"
 BARE_PATH = re.compile(rf"(?<![\w./\\-])([\w.\\/-]+\.(?:{EXTENSIONS}))(?!\w)", re.IGNORECASE)
 KNOWN_FILE = re.compile(rf"\.(?:{EXTENSIONS})$", re.IGNORECASE)
 CLAUDE_TREE = re.compile(r"(^|[^\w])\.claude([/\\]|\b)", re.IGNORECASE)
+# What the Task cell and the body name beneath .claude/: a bare `.claude/` in prose names no file to change.
+CLAUDE_PATH = re.compile(r"(^|[^\w])\.claude/[\w.-]", re.IGNORECASE)
 # An issue in Depends on is written #n, after n, waits on n or n's; a bare number is a count, not an issue.
 ISSUE_REF = re.compile(
     r"(?:#|\b(?:after|waits on|wait on|waiting on|blocked by)\s+#?)(\d{2,6})\b(?!\s*(?:day|week|hour|month|min))"
@@ -185,6 +187,9 @@ def _row(section, line):
         if not re.fullmatch(r"\d+", cells[WAVE]):
             raise Refusal(f"{key} has wave {cells[WAVE]!r}, not a number")
         wave, group = int(cells[WAVE]), cells[GROUP]
+        # A dash or an empty cell is no group, which `groups` reports for Remaining; anything else is a group id.
+        if group not in ("", "—", "-") and not re.fullmatch(ROW_GROUP.pattern, group):
+            raise Refusal(f"{key} has Group {group!r}, not a group id or a dash")
     elif section == "In progress":
         # The group it carried in Remaining, kept so a conflicts cell naming it still sees it; a dash is none.
         if cells[0] != "—" and not re.fullmatch(ROW_GROUP.pattern, cells[0]):
@@ -380,8 +385,9 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
                 return f"depends on an impossible date {text}"
             if due > today:
                 return f"waits until {text}"
-    reach = f"{row.cells[TASK]} {row.cells[CONFLICTS]} {bodies.get(row.number, '')}"
-    if not berserk and CLAUDE_TREE.search(reach.replace("\\", "/")):
+    # The conflicts cell is a list of paths, so any .claude there is a claim; elsewhere only a path beneath it is.
+    prose = f"{row.cells[TASK]} {bodies.get(row.number, '')}".replace("\\", "/")
+    if not berserk and (CLAUDE_TREE.search(row.cells[CONFLICTS].replace("\\", "/")) or CLAUDE_PATH.search(prose)):
         return "edits .claude/"
     return None
 
@@ -783,13 +789,14 @@ def path_which(name):
     else:
         names = [name]
     for directory in os.environ.get("PATH", "").split(os.pathsep):
-        if directory in ("", ".") or os.path.normcase(os.path.realpath(directory)) == here:
+        # A relative entry resolves against the working directory, which the checkout controls.
+        if not os.path.isabs(directory) or os.path.normcase(os.path.realpath(directory)) == here:
             continue
         for candidate in names:
             path = os.path.join(directory, candidate)
             if os.path.isfile(path) and os.access(path, os.X_OK):
                 real = os.path.normcase(os.path.realpath(path))
-                if real != here and not real.startswith(here + os.sep):
+                if real != here and not real.startswith(os.path.join(here, "")):
                     return path
     return None
 
@@ -931,11 +938,12 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
                     raise Refusal("--berserk is a dry run's: a run holds its own in state.json")
                 flag = dispatch_run.berserk(dispatch_run.load_state(directory))
             text = _read(args.tasks)
+            if directory is not None:
+                # What this board read is the only base `tasks rewrite` accepts a rebuild from, so it is kept
+                # before anything below can refuse: a list the board refuses is the one a rebuild must repair.
+                _write(directory / READ_COPY, text)
             bodies = _bodies(parse_tasks(text), directory, bodies_from)
             print("\n".join(board(text, today, bodies, set(open_from()), branch_from, *flag, owned=owned_from())))
-            if directory is not None:
-                # What this board read is the only base `tasks rewrite` accepts a rebuild from.
-                _write(directory / READ_COPY, text)
         elif args.command == "tasks":
             _tasks_command(args, today)
         else:
