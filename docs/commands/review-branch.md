@@ -114,9 +114,10 @@ added later is editable until someone adds it.
 top-level tree, which is what makes that a red build instead of a quiet
 widening.
 
-The rest of this argument — that the deny-list cannot see a file that does
-not exist yet, that MSBuild auto-imports `Directory.Build.targets`, why the
-executor is `dotnet-test.sh` rather than a raw `dotnet test:*` grant, why the
-auto-imported names are denied, and why the exact names rather than the `**/`
-globs are the control — is owned by `docs/harness-boundaries.md`, *Agent-type,
-push and dotnet entries*.
+That a deny enumerated from the tree cannot see a file the build imports by
+name that does not exist yet, `Directory.Build.targets` being one, is stated
+by `docs/harness-boundaries.md`, *Agent-type and push entries*, which gives
+the build tool's grants to `docs/harness-local.md` *Residuals*. Why the
+executor is `dotnet-test.sh` rather than a raw `dotnet test:*` grant, and why
+the exact names rather than the `**/` globs are the control, have no owner
+there now.
