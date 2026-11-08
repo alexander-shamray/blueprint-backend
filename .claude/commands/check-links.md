@@ -1,6 +1,7 @@
 ---
 description: Verify links, section cross-references and nav footers across the blueprint
 allowed-tools: Read, Grep, Glob, Edit, Bash(ls:*), Bash(wc:*), Bash(comm:*)
+disallowed-tools: Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
 ---
 
 Check navigational integrity across `docs/backend-architecture/`, including

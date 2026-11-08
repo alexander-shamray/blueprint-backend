@@ -1,9 +1,12 @@
-"""This repository's `/mutation-sweep` held to the payload's grant cases, under the mutation route.
+"""This repository's own commands held to the payload's grant cases: `/mutation-sweep` under the mutation route,
+and each that writes to the memory and output-style denies.
 
 `test_command_grants.py` holds the payload's commands and the chained ones `local_commands.py` declares; its classes
 are reached through the module, never bound to a name here, or unittest would run the payload's class a second time.
 """
 
+import json
+import re
 import unittest
 
 import test_command_grants as payload
@@ -34,6 +37,45 @@ class MutationSweepFilesUnderTheMutationRoute(unittest.TestCase):
         body = self.TEXT.split("---", 2)[2]
         self.assertIn("bash .claude/scripts/gh-issue-mutation.sh low code,test", body)
         self.assertNotIn("gh-issue-create.sh", body)
+
+
+class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase):
+    """The rule the payload holds its managed commands to, on the local ones no payload suite may require it of.
+
+    A memory file or an output style instructs every later session, and these commands read a branch's text
+    (`docs/harness-boundaries.md`, *A command that holds `Write` or `Edit`*). The set is read from the tree, so a new
+    local command that writes is a red build rather than a quiet widening.
+    """
+
+    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)")
+    MANIFEST = payload.COMMANDS.parent.parent / ".harness" / "manifest.json"
+
+    @staticmethod
+    def writes(tool):
+        return re.match(r"(Write|Edit)(\(|$)", tool) is not None
+
+    def writers(self):
+        managed = json.loads(self.MANIFEST.read_text(encoding="utf-8"))["files"]
+        paths = [path for path in payload.COMMANDS.glob("*.md") if f".claude/commands/{path.name}" not in managed]
+        return [path for path in paths
+                if any(self.writes(tool)
+                       for tool in payload.frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"))]
+
+    def test_the_local_writing_commands_are_found(self):
+        # The positive control: a set that found none would pass the case below. `/mutation-sweep` is local and holds
+        # neither tool, and `/ship` writes and is the payload's, so each side of the filter is held.
+        names = {path.name for path in self.writers()}
+        self.assertLessEqual(
+            {"review-branch.md", "check-links.md", "new-adr.md", "new-chapter.md", "validate-blueprint.md"}, names)
+        self.assertNotIn("mutation-sweep.md", names)
+        self.assertNotIn("ship.md", names)
+
+    def test_every_local_command_granting_write_or_edit_denies_both_paths(self):
+        for path in self.writers():
+            rules = payload.frontmatter_list(path.read_text(encoding="utf-8"), "disallowed-tools")
+            for required in self.REQUIRED:
+                with self.subTest(command=path.name, rule=required):
+                    self.assertIn(required, rules)
 
 
 if __name__ == "__main__":
