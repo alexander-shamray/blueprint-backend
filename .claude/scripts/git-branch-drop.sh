@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Delete one local branch once it has landed: `/ship` step 0's finished
-# predicate, made the only route to deleting a branch, whose raw `git branch`
-# spellings stay denied. Its guards, its compare-and-swap and its exit codes
-# are `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
+# Delete a local branch once it has landed, by `/ship` step 0's predicate, or
+# is a superseded sync's: the only route, as raw `git branch` deletes stay
+# denied. Its guards, its compare-and-swap and its exit codes are
+# `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { echo "usage: git-branch-drop.sh <branch>" >&2; exit 2; }
@@ -46,9 +46,28 @@ landed=$(printf '%s' "$rows" | jq --arg tip "$tip" \
   { echo "cannot read pr-for-branch.sh's answer for $branch, so whether it landed is unknown; it is kept" >&2
     exit 12; }
 landed=${landed%$'\r'}
-[[ "$landed" =~ ^[0-9]+$ ]] && [ "$landed" -gt 0 ] ||
-  { echo "$branch has not landed: no pull request merged it into main at its tip $tip; it is kept" >&2
-    exit 7; }
+ended="merged into main"
+if ! { [[ "$landed" =~ ^[0-9]+$ ]] && [ "$landed" -gt 0 ]; }; then
+  # A sync head and no other name: harness_sync closes a superseded sync with
+  # --delete-branch, so no merge can land it and nobody can reopen it. A row
+  # that is not closed, or a tip no closed row holds, is work this cannot weigh.
+  [[ "$branch" =~ ^chore/harness-sync-[0-9a-f]{7}$ ]] ||
+    { echo "$branch has not landed: no pull request merged it into main at its tip $tip; it is kept" >&2
+      exit 7; }
+  closed=$(printf '%s' "$rows" | jq --arg tip "$tip" \
+    'all(.[]; .state == "CLOSED") and any(.[]; .baseRefName == "main" and .headRefOid == $tip)') ||
+    { echo "cannot read pr-for-branch.sh's answer for $branch, so whether it was superseded is unknown; it is kept" >&2
+      exit 12; }
+  [ "${closed%$'\r'}" = true ] ||
+    { echo "$branch has not landed, nor is every pull request for it closed with one at its tip $tip; it is kept" >&2
+      exit 7; }
+  # Read from origin: a remote-tracking ref outlives the branch until a prune.
+  held=$(git ls-remote --heads origin "refs/heads/$branch") ||
+    { echo "cannot ask origin whether it still has $branch; it is kept" >&2; exit 12; }
+  [ -z "$held" ] ||
+    { echo "$branch is still on origin, so its pull request can be reopened; it is kept" >&2; exit 7; }
+  ended="superseded: its pull request closed and origin's branch gone,"
+fi
 
 named() {
   tr -d '\r' < "$1" | tr '[:upper:]' '[:lower:]'
@@ -124,4 +143,4 @@ if [ "$code" -ne 0 ] || [ -n "$why" ]; then
   echo "$branch is $why: it is in use, and kept" >&2; exit 4
 fi
 git config --remove-section "branch.$branch" 2>/dev/null || true
-echo "dropped $branch, merged into main at $tip"
+echo "dropped $branch, $ended at $tip"

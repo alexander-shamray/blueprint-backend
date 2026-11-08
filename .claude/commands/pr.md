@@ -2,6 +2,7 @@
 description: Open a pull request with a body in the house form
 argument-hint: "[title — omit to derive it from the commits]"
 allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(bash .claude/scripts/gh-pr-create.sh:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh)
+disallowed-tools: Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
 ---
 
 Open a PR for the current branch. Title: $ARGUMENTS — if empty, derive it

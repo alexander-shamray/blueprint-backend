@@ -32,20 +32,22 @@ when a step behaves unexpectedly.
   chain with `set -o pipefail`; and compare
   `git ls-remote origin refs/heads/<branch>` with `git rev-parse HEAD`
   before acting on a push.
-- **A quoted heredoc body is still read as a command.**
-  `guard-git-argv.py` reads what a shell running a script gets on stdin
-  as that script, so an issue body piped to `gh-issue-sweep.sh` is refused
-  for a backtick, a `$(`, a `${` followed by a space, an odd count of
-  apostrophes outside double quotes (a possessive) or a spelled-out push.
+- **A quoted heredoc body is read as a command, unless an issue helper
+  takes it.** `guard-git-argv.py` reads what a shell running a script gets
+  on stdin as that script, and a body fails for a backtick, a `$(`, an odd
+  count of apostrophes outside double quotes (a possessive) or a spelled-out
+  push. The five issue helpers (`gh-issue-create.sh`, `gh-issue-hand.sh`,
+  `gh-issue-harness.sh`, `gh-issue-mutation.sh`, `gh-issue-sweep.sh`) take it
+  as data, but only as
+  the command's first run, `bash .claude/scripts/<helper> <args> <<'DELIM'`:
+  an assignment, a wrapper or a `cd` before it and it is a script again.
   A 2026-10-18 sweep also had bodies refused for an exclamation mark, a
   parenthesised group such as a SQL `TOP (10)`, a bare asterisk or a
   `${NAME}`, by a check outside these guards, which refuse none of the
-  four. Where `Write` is granted, put the
-  text in a file and pass it as `< <path>`. Safe in a sweep, which denies
-  `Write`: code as plain quoted text, an asterisk or an exclamation mark
-  spelled as a word, a push or a flag described in prose, possessives
-  reworded, and the payload checked against these shapes along with the
-  delimiter.
+  four. Elsewhere, where `Write` is granted, put the text in a file and pass
+  it as `< <path>`. Safe in a sweep, which denies `Write`: the literal
+  spelling above, an asterisk or an exclamation mark spelled as a word, and
+  the payload checked against these shapes along with the delimiter.
 - **Python's `subprocess` on Windows decodes with cp1252**, in a
   scratchpad script too, which `test_python_hygiene.py` never reads.
   `text=True` with no `encoding=` met an em dash in a `gh api` response,
@@ -137,8 +139,9 @@ when a step behaves unexpectedly.
   on anything that spawns runs, list the leftover `bash` and native
   processes and kill them before starting anything new.
 - **A queued runner is not a hung one.** A per-user harness runner queues
-  behind other runs; CI's own jobs are then the practical check, and the
-  PR says the local run was not completed.
+  behind other runs (`docs/harness-boundaries.md`, *The suite's shard
+  runner*); CI's own jobs are then the practical check, and the PR says the
+  local run was not completed.
 
 ## Auto mode and probes
 
