@@ -36,5 +36,5 @@ anything.
 `docs/testing.md` has the stage invocations `stages` needs in front of it.
 
 `read_cancelled_run.py` lives beside the gate and is not one of its
-subcommands: `main-red.yml` runs it, and the suite here covers it with the
-`alerts` check that holds the workflow to it.
+subcommands: `main-red.yml` runs it, and the suite here covers it and pins the
+path the workflow runs it by.
