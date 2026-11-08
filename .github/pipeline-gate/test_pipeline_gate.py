@@ -790,6 +790,25 @@ class GrantTests(unittest.TestCase):
 
         self.assertEqual(len(pipeline_gate.check_grants(self.root)), 1)
 
+    def test_a_main_ref_test_excludes_nothing_on_pull_request_target(self) -> None:
+        """That run's github.ref is the base branch, so the test holds for every
+        pull request into main."""
+        only_the_ref = "    if: ${{ github.ref == 'refs/heads/main' }}\n"
+        condition = "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n"
+        self.write(GRANTED.replace(condition, only_the_ref))
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+        self.write(GRANTED.replace(condition, only_the_ref).replace("  pull_request:\n", "  pull_request_target:\n"))
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `publish`", problems[0])
+
+    def test_an_event_test_still_excludes_on_pull_request_target(self) -> None:
+        self.write(GRANTED.replace("  pull_request:\n", "  pull_request_target:\n"))
+
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
     def test_every_workflow_is_read(self) -> None:
         self.write(GRANTED.replace(
             "  build:\n    steps:",
