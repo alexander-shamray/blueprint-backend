@@ -278,8 +278,11 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
   ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)).
 - **`main-red.yml` files `main is red: <workflow>`** for a red push run,
   or comments on the open one.
-- **The commit and locality gates skip a Dependabot pull request by its
-  author**, as their READMEs say;
+- **The commit gate stands down for a Dependabot pull request only when
+  every commit's author and committer are Dependabot's**
+  ([`commit-gate`](../.github/commit-gate/README.md)), and the locality gate
+  skips one by its author alone
+  ([`locality-gate`](../.github/locality-gate/README.md));
   [`.github/dependabot.yml`](../.github/dependabot.yml) configures its
   updates.
 - **The issue vocabulary is wider than the label helper**: kind is
