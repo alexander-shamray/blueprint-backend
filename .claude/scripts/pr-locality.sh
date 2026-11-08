@@ -40,7 +40,9 @@ if [ -z "$class_row" ] && [ -z "$touch_row" ]; then exit 0; fi
 [ -n "$class_row" ] && [ -n "$touch_row" ] || refuse "one row without the other"
 # The class cell: the text between the second `|` and the closing one.
 class=$(sed -E 's/^\| *Class *\| *//; s/ *\| *$//' <<<"$class_row")
-grep -Eq '^([A-E](\+[A-E])?|A\+D\+E)$' <<<"$class" || refuse "the Class row is not a class"
+# Spelled out, here and in the map's grammar below: a regex library that collates by locale reads a range as taking
+# lower case too, which the gate refuses.
+grep -Eq '^([ABCDE](\+[ABCDE])?|A\+D\+E)$' <<<"$class" || refuse "the Class row is not a class"
 [ "${class:0:1}" != "${class:2:1}" ] || refuse "the Class row repeats a class"
 # The touch-set cell, then each comma-separated token on its own.
 cells=$(sed -E 's/^\| *Touch set *\| *//; s/ *\| *$//' <<<"$touch_row")
@@ -123,7 +125,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   raw=${raw%$'\r'}
   t="${raw#"${raw%%[! ]*}"}"
   case "$t" in ''|'#'*) continue ;; esac
-  if [[ "$raw" =~ ^([A-E]):[[:space:]]*$ ]]; then
+  if [[ "$raw" =~ ^([ABCDE]):[[:space:]]*$ ]]; then
     member=${BASH_REMATCH[1]}
     case "$named" in *" $member "*) refuse "classes.yml names class $member twice" ;; esac
     named="$named$member "
@@ -159,17 +161,23 @@ done <"$map"
 for member in A B C D E; do
   case "$stocked" in *" $member "*) : ;; *) refuse "classes.yml gives class $member no tree set" ;; esac
 done
-# The changed paths are the diff's own, and each gets the one word this
-# script chooses for it: `filename`, and a rename's `previous_filename`, since a
-# move out of a tree changes that tree, as the CI gate judges it. Each is read
-# as a JSON string so that a newline inside a name cannot be a second line: a
-# name that needed an escape is refused rather than decoded.
+# The changed paths are the diff's own, each with the one word this script chooses: `filename`, and a rename's
+# `previous_filename`, since a move out of a tree changes that tree, as the CI gate judges it. Each is a JSON string, so
+# a newline inside a name cannot be a second line and a name needing an escape is refused. A source is tagged because
+# `changedFiles` counts a rename as one file, and the one read judged is the one counted.
+changed=$(gh_read pr view "$pr" --json changedFiles --jq .changedFiles)
+case "$changed" in ''|*[!0123456789]*) refuse "changedFiles is not a count" ;; esac
 files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" --paginate \
-  --jq '.[] | (.filename, (.previous_filename // empty)) | @json')
+  --jq '.[] | (.filename | @json), (.previous_filename // empty | "from " + @json)')
 verdicts=()
 list=""
+names=0
 while IFS= read -r line; do
   [ -n "$line" ] || continue
+  case "$line" in
+    'from '*) line=${line#from } ;;
+    *) names=$((names + 1)) ;;
+  esac
   case "$line" in
     '"'*'"') ;;
     *) refuse "a changed path did not arrive as a JSON string" ;;
@@ -187,6 +195,8 @@ while IFS= read -r line; do
   verdicts+=("$path")
   list+="$path"$'\n'
 done <<<"$files"
+# The endpoint stops short of a very large pull request, and a short list would read as the whole diff.
+[ "$names" -eq "$changed" ] || refuse "the files endpoint returned $names names against changedFiles $changed"
 printf 'class %s\n' "$class"
 # One grep per pattern over every path, and line N's hit is path N's: a
 # validated path holds no newline. A pattern grep cannot compile matches
@@ -207,7 +217,8 @@ if [ -n "$list" ]; then
   done
 fi
 i=0
-for path in "${verdicts[@]}"; do
+# bash 3.2 calls an empty array unbound under `set -u`, and a pull request can have no changed file.
+for path in ${verdicts[@]+"${verdicts[@]}"}; do
   verdict=outside
   [ -z "${hits[i]:-}" ] || verdict=inside
   # The class's verdict overrides the row's, because no row may declare a path

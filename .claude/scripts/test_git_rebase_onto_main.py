@@ -56,8 +56,8 @@ git push -q origin main
 git checkout -q feat/x
 '''
 
-# Each test's own copy of that state, built once per module: about twenty git
-# processes a test become three, which is most of this suite's time on Windows.
+# Each test's own copy of that state, built once until a module cleanup removes it, which under the shard runner is
+# per class: about twenty git processes a test become three, which is most of this suite's time on Windows.
 FIXTURE = '''
 set -eu
 : "${TEMPLATE:?}"
@@ -71,6 +71,7 @@ def template():
     if not _template:
         holder = tempfile.TemporaryDirectory()
         unittest.addModuleCleanup(holder.cleanup)
+        unittest.addModuleCleanup(_template.clear)
         root = Path(holder.name).as_posix()
         built = run_bash(BUILD, root=root)
         if built.returncode != 0:
@@ -442,6 +443,28 @@ class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
                 result = self.refuse(branch)
                 self.assertEqual(2, result.returncode, result.stderr)
                 self.assertIn("not a branch name this helper will take", result.stderr)
+
+    def test_every_helper_that_takes_a_branch_takes_the_same_names(self):
+        # One class, read from every helper that tests `"$branch"`: a name `/branch` can make and one helper refuses
+        # is a branch stranded at that helper's step. The helpers are found by the test they carry rather than named,
+        # so a further copy is held the day it is written, and the makers must be among them or the scan has stopped
+        # seeing what it exists for. `git-worktree-sync.sh` is narrower on purpose: it takes only a sync's head, so
+        # its pattern is pinned and has to stay inside the class.
+        patterns = {}
+        for path in sorted(SCRIPTS.glob("*.sh")):
+            found = re.findall(r'\[\[ "\$branch" =~ (\S+) \]\]', path.read_text(encoding="utf-8"))
+            if found:
+                self.assertEqual(1, len(found), f"{path.name}: one branch-name pattern")
+                patterns[path.name] = found[0]
+        for named in ("git-branch-create.sh", "git-worktree-fork.sh", HELPER.name, "git-switch-existing.sh",
+                      "git-worktree-remove.sh", "git-branch-drop.sh", "pr-for-branch.sh"):
+            self.assertIn(named, patterns)
+        sync = patterns.pop("git-worktree-sync.sh")
+        self.assertEqual(r"^chore/harness-sync-[0-9a-f]{7}$", sync)
+        self.assertRegex("chore/harness-sync-0123abc", patterns[HELPER.name])
+        for name, pattern in patterns.items():
+            with self.subTest(helper=name):
+                self.assertEqual(patterns[HELPER.name], pattern)
 
 
 class TheHostsHooksNeverRunInAReplay(unittest.TestCase):
@@ -921,6 +944,77 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual("", self.at("git log --oneline HEAD..origin/main").stdout,
                          "and the branch now holds everything main does")
 
+    def test_a_configured_push_redirect_is_refused_before_anything_is_forced(self):
+        # Spelling the refspec pins the ref and not the URL, so a `pushurl` or a `pushInsteadOf` that sends the force
+        # to another repository refuses the run.
+        same_path_other_host = (
+            '"https://evil.example/$(basename "$(dirname "$(git config --get remote.origin.url)")")/remote.git"')
+        for key, value in (("remote.origin.pushurl", '"https://example.invalid/x.git"'),
+                           ("remote.origin.pushurl", same_path_other_host),
+                           ("url.https://example.invalid/evil.git.pushinsteadof",
+                            '"$(git config --get remote.origin.url)"')):
+            with self.subTest(key=key, value=value):
+                self.at(f'git config --local "{key}" {value}')
+                before = self.remote_tip()
+
+                result = self.helper()
+
+                self.assertEqual(7, result.returncode, result.stderr)
+                self.assertIn("a redirected force is not published", result.stderr)
+                self.assertEqual(before, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0])
+                self.at(f'git config --local --unset-all "{key}"')
+                self.at('rm -f "$(git rev-parse --git-path claude-rebase-pending)"')
+                self.at("git reset -q --hard refs/remotes/origin/feat/x")
+
+    def test_a_push_url_spelling_the_same_repository_differently_is_published(self):
+        # The control for the refusal above: the comparison is of the repository named, not of two strings, which is
+        # what lets a protocol rewrite on one host through.
+        self.at('git config --local remote.origin.pushurl "$(git config --get remote.origin.url)/"')
+        result = self.helper()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.split(),
+                         self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[:1])
+
+    def test_repo_key_agrees_across_protocols_on_one_host_and_nowhere_else(self):
+        # `repo_key` is lifted out of the helper and run alone, so the spellings are exact. One URL per call, through
+        # the environment: a subject on stdin arrives with CRLF on Windows, and a trailing CR is part of the URL.
+        script = 'eval "$(sed -n \'/^repo_key() {/,/^}/p\' "$H")"; repo_key "$U" || echo "(none)"'
+        urls = [
+            "https://github.com/o/r.git", "git@github.com:o/r.git", "ssh://git@github.com:22/o/r",
+            "https://GitHub.com/o/r/", "https://evil.example/o/r", "https://github.com/r",
+            "ext::sh -c evil", "C:/x/o/r.git", "/tmp/x/o/r.git",
+            "https://github.com/x/y#/o/r", "https://github.com/x/y?/o/r", "ssh://github.com:o/r",
+            "git@github.com:/o/r", "https://[::1]/o/r", "file:///o/r", "ext::sh -c evil/o/r",
+            "https://github.com/evil/o/r", "https://github.com/x/../o/r", "https://github.com/o//r",
+            "/evil/o/r",
+        ]
+        got = {u: run_bash(script, H=str(HELPER), U=u).stdout.strip() for u in urls}
+        for same in urls[:4]:
+            self.assertEqual("github.com|o/r", got[same], same)
+        self.assertEqual("evil.example|o/r", got["https://evil.example/o/r"])
+        for refused in ("https://github.com/r", "ext::sh -c evil", "https://github.com/x/y#/o/r",
+                        "https://github.com/x/y?/o/r", "ssh://github.com:o/r", "git@github.com:/o/r",
+                        "https://[::1]/o/r", "file:///o/r", "ext::sh -c evil/o/r",
+                        "https://github.com/x/../o/r", "https://github.com/o//r"):
+            self.assertEqual("(none)", got[refused], refused)
+        # The whole path counts: a deeper path with the same last two components is another key.
+        self.assertEqual("github.com|evil/o/r", got["https://github.com/evil/o/r"])
+        self.assertEqual("|C:/x/o/r", got["C:/x/o/r.git"])
+        self.assertEqual("|/tmp/x/o/r", got["/tmp/x/o/r.git"])
+        self.assertNotEqual(got["/evil/o/r"], got["/tmp/x/o/r.git"])
+
+    def test_a_remote_with_two_urls_is_refused_before_anything_is_forced(self):
+        # A remote with several `url` values pushes to each: the force would reach a second repository the lease was
+        # never read from.
+        self.at('git config --local --add remote.origin.url "$(git config --get remote.origin.url)-second"')
+        before = self.remote_tip()
+
+        result = self.helper()
+
+        self.assertEqual(7, result.returncode, result.stderr)
+        self.assertIn("origin has 2 push URLs", result.stderr)
+        self.assertEqual(before, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0])
+
     def test_configuration_cannot_change_what_the_replay_does(self):
         # `rebase.rebaseMerges` would keep the merge commits this helper
         # exists to be rid of.
@@ -1352,6 +1446,18 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
         self.assertEqual("mine\n", self.at("cat a.txt").stdout)
         self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(),
                          self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
+
+
+class TheTemplateOutlivesAModuleCleanup(unittest.TestCase):
+    """`shard-harness-suite.py` runs each class as its own suite, so module cleanups run between two classes of one
+    worker, and the next class must not be handed a template they removed."""
+
+    def test_a_removed_template_is_built_again(self):
+        first = template()
+        self.assertTrue(Path(first, "work").is_dir(), "the control: the template holds its checkout")
+        unittest.doModuleCleanups()
+        self.assertFalse(Path(first).exists(), "the cleanup this case is about did not run")
+        self.assertTrue(Path(template(), "work").is_dir())
 
 
 class EveryFixtureSaysItWasBuilt(unittest.TestCase):

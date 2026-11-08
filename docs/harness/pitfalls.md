@@ -137,8 +137,9 @@ when a step behaves unexpectedly.
   on anything that spawns runs, list the leftover `bash` and native
   processes and kill them before starting anything new.
 - **A queued runner is not a hung one.** A per-user harness runner queues
-  behind other runs; CI's own jobs are then the practical check, and the
-  PR says the local run was not completed.
+  behind other runs (`docs/harness-boundaries.md`, *The suite's shard
+  runner*); CI's own jobs are then the practical check, and the PR says the
+  local run was not completed.
 
 ## Auto mode and probes
 
