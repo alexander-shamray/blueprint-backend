@@ -308,6 +308,10 @@ def check_images(root: Path = ROOT) -> list[str]:
 SBOM_ACTION = "anchore/sbom-action@"
 IMAGES_CONDITION = "${{ github.ref != 'refs/heads/main' }}"
 PUBLISH_JOB = "publish-images"
+PUBLISH_CONDITION = (
+    "${{ contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
+    "&& github.ref == 'refs/heads/main' }}"
+)
 # Both image jobs take one matrix, so neither inventory can drift from the other.
 IMAGE_LEGS_ALIAS = re.compile(r"^ {4}strategy: \*image-legs\s*$", flags=re.MULTILINE)
 
@@ -322,10 +326,10 @@ def _check_publish_job(workflow_text: str) -> list[str]:
         ]
 
     problems: list[str] = []
-    if MAIN_REF not in condition or "pull_request" in condition or not re.search(r"[\"']push[\"']", condition):
+    if condition != PUBLISH_CONDITION:
         problems.append(
-            f"the {PUBLISH_JOB} job's own condition is {condition!r}, which does not keep it to "
-            "a push or dispatch on main. Its grants are held from the job's first step, whatever "
+            f"the {PUBLISH_JOB} job's own condition is {condition!r}, not {PUBLISH_CONDITION!r}, so it "
+            "is not kept to a push or dispatch on main. Its grants are held from the job's first step, whatever "
             "each step's own `if:` says, so a pull request's Dockerfiles build beside them (ADR-196)"
         )
 
