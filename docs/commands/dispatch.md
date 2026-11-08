@@ -63,6 +63,17 @@ refused rather than merged, and is made again from a fresh `board`. The
 interview's answers change the list by the same route, in the same step
 (spec §5).
 
+**An exit 2 promises no more than that the helper refused.** The runbook says
+only that, because a refusal can follow a write and no one sentence about
+"nothing written" holds for every helper. `board --run` writes `tasks.read.md`
+as soon as it has read the list, and the `bodies/` cache beside it, since the
+list a board refuses is the one a rebuild must repair; `run` removes the
+earlier session's files it would replace before its launch checks, then leaves
+`<group>.refused.json`, which `result` reads; `wake` saves its usage reading to
+`state.json` before it parses the list; and a `tasks` write refused after the
+list changed leaves the list changed. What a refusal left is read from the
+files, never assumed from the exit.
+
 **In progress is never rebuilt.** At step 0 the run has moved nothing, so a
 guard keyed to this run's groups would hold no row, and a rebuild could drop
 or edit another session's, which the spec's §4 leaves alone. So the whole
@@ -438,11 +449,15 @@ session, one entry per model and its subagents included. The envelope's
 1662280, and it looks just as plausible, so it is read only for an envelope
 with no model counts and the row says which of the two it came from. The row
 carries `total_cost_usd`, and a session on more than one model has a line per
-model, since a Sonnet executor's reviewer runs on Opus. A session that left
-no envelope, none of the three, spent an amount nothing records, so the row
-ends with how many sessions it did not count, and a group whose every
-session left none still gets a row saying so: a relaunched group's figure
-would otherwise read as its whole cost.
+model, since a Sonnet executor's reviewer runs on Opus. A session whose
+record was read but left no envelope, none of the three, spent an amount
+nothing records, so the row ends with how many sessions it did not count, and
+a group whose every such session left none still gets a row saying so: a
+relaunched group's figure would otherwise read as its whole cost. A session
+with no record at all (`absorb`'s `_unrecorded`, a `run` that exited refused)
+is not counted: `result` prints `transcript: not found` for it, and the
+report lists the group under *Needs a human* as a crash hand-back or a
+pre-launch refusal, adding nothing to the row.
 
 The report is `report`'s English facts written up in `--lang`, in seven
 sections, the spec's §10's and *Syncs*, eight on a `--berserk` run (*The
