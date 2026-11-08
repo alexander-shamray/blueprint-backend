@@ -847,39 +847,40 @@ def _unwrapped(term: str) -> str:
     return term
 
 
-def _term_names_an_event_or_main(term: str) -> bool:
+def _term_names_an_event_or_main(term: str, ref_decides: bool) -> bool:
     """One test that is false on a pull request's run, whatever else is true."""
     if "pull_request" in term:
         return False
     return (
-        term == MAIN_REF
+        (ref_decides and term == MAIN_REF)
         or re.fullmatch(r"github\.event_name == '[a-z_]+'", term) is not None
         or re.fullmatch(r"contains\(fromJSON\('\[[^]]*\]'\), github\.event_name\)", term) is not None
     )
 
 
-def _keeps_pull_requests_out(condition: str) -> bool:
+def _keeps_pull_requests_out(condition: str, ref_decides: bool = True) -> bool:
     """Whether a job's own condition is false on every pull request's run.
 
     `&&` binds tighter than `||`, so every `||` side has to be false on one, and
     an `&&` is when any of its terms is. A condition this cannot read is refused,
     because a gate that passes what it did not understand is the one that stops
-    looking.
+    looking. A `pull_request_target` run's ref is the base branch, so a workflow
+    on that trigger passes `ref_decides=False` and only an event test counts.
     """
     expression = re.sub(r"^[>|][-+]?\s*", "", condition.strip())
     expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", expression)
-    return _false_on_a_pull_request(expression)
+    return _false_on_a_pull_request(expression, ref_decides)
 
 
-def _false_on_a_pull_request(expression: str) -> bool:
+def _false_on_a_pull_request(expression: str, ref_decides: bool) -> bool:
     expression = _unwrapped(expression)
     sides = _split_outside_parentheses(expression, "||")
     if len(sides) > 1:
-        return all(_false_on_a_pull_request(side) for side in sides)
+        return all(_false_on_a_pull_request(side, ref_decides) for side in sides)
     terms = _split_outside_parentheses(expression, "&&")
     if len(terms) > 1:
-        return any(_false_on_a_pull_request(term) for term in terms)
-    return _term_names_an_event_or_main(expression)
+        return any(_false_on_a_pull_request(term, ref_decides) for term in terms)
+    return _term_names_an_event_or_main(expression, ref_decides)
 
 
 def check_grants(root: Path = ROOT) -> list[str]:
@@ -912,7 +913,7 @@ def check_grants(root: Path = ROOT) -> list[str]:
             if not PULL_REQUEST_TRIGGER.search(text) or not CHECKOUT.search("\n".join(lines)):
                 continue
             condition = read_job_condition(text, job) or ""
-            if not _keeps_pull_requests_out(condition):
+            if not _keeps_pull_requests_out(condition, ref_decides="pull_request_target" not in text):
                 problems.append(
                     f"{path.name}'s job `{job}` holds {', '.join(grants)} and checks out the branch, and "
                     "its own `if:` does not keep a pull request out, so whatever that branch runs in the "
