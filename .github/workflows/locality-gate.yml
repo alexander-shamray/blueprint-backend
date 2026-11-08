@@ -59,15 +59,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The head copy, deliberately: this step's subject is the gate this pull
-      # request proposes. The suite is negative cases with the positive
-      # controls beside them — a clean diff that must pass, a matcher that must
-      # match — plus reads of the shipped map, so a proposal that fails its own
-      # suite belongs red here.
-      - name: Test the proposed gate
-        working-directory: .github/locality-gate
-        run: python -m unittest
-
       # The base copy — gate and map together — for the reason above, with the
       # one bootstrap branch argued there.
       - name: Take the enforcing gate and map from the base commit
@@ -136,3 +127,11 @@ jobs:
           gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
             jq -s --argjson pr "$pr_json" '$pr + {files: .}' |
             python "$RUNNER_TEMP/locality-gate/locality_gate.py" --map "$RUNNER_TEMP/locality-gate/classes.yml"
+
+      # The head copy, deliberately, since this step's subject is the gate this
+      # pull request proposes, so a proposal that fails its own suite belongs
+      # red here. Last, because this is the job's only run of the head's code:
+      # .github/locality-gate/README.md, How it runs.
+      - name: Test the proposed gate
+        working-directory: .github/locality-gate
+        run: python -m unittest

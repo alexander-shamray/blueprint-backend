@@ -69,4 +69,11 @@ widen its own class. A base
 with no gate directory at all is judged by the head copy under a warning,
 because the pull request that lands the gate has no base copy by definition.
 The workflow file is still the branch's copy, as the closure gate's is.
-`docs/testing.md` has the live invocation.
+**The suite runs after the gate, as the head's only code in the job.** Test
+code can write to `$GITHUB_ENV` or `$GITHUB_PATH` or replace a tool on the
+runner, and every later step inherits that, so a suite ahead of the gate could
+choose its verdict with no workflow edit. A later step cannot turn a failure
+green, and `python -I` would leave a replaced `python`, `gh` or `jq` in place,
+so the order is the control; the suite's `TheShippedWorkflow` reads it. The
+cost is that a run the gate refuses reports no suite result until its next
+run. `docs/testing.md` has the live invocation.
