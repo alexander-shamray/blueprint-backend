@@ -865,11 +865,8 @@ def _term_names_an_event_or_main(term: str, ref_decides: bool) -> bool:
 def _keeps_pull_requests_out(condition: str, ref_decides: bool = True) -> bool:
     """Whether a job's own condition is false on every pull request's run.
 
-    `&&` binds tighter than `||`, so every `||` side has to be false on one, and
-    an `&&` is when any of its terms is. A condition this cannot read is refused,
-    because a gate that passes what it did not understand is the one that stops
-    looking. A `pull_request_target` run's ref is the base branch, so a workflow
-    on that trigger passes `ref_decides=False` and only an event test counts.
+    `&&` binds tighter than `||`. A condition this cannot read is refused, and a
+    `pull_request_target` run's ref is the base branch, so there only an event test counts.
     """
     expression = re.sub(r"^[>|][-+]?\s*", "", condition.strip())
     expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", expression)
@@ -891,10 +888,7 @@ def check_grants(root: Path = ROOT) -> list[str]:
     """No job a pull request reaches holds a write grant beside the branch's code (ADR-196).
 
     The checkout is what brings the branch in: a job with none runs only the
-    workflow's own text, which is why it may hold what it posts with. Read over
-    every workflow, because the next one to need a grant is not this one's job
-    to know about. The head's copy of a workflow is what a pull request runs, so
-    this holds the shape on what lands and stops nobody who edits it on a branch.
+    workflow's own text. It holds the shape on what lands, not on a branch's edit.
     """
     workflows = sorted(
         path for path in (root / ".github" / "workflows").glob("*")
