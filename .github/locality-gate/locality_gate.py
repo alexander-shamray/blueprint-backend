@@ -111,9 +111,10 @@ def read_rows(body: str) -> tuple[list[str], list[str]]:
 
 def _cell(rest: str, row: str) -> str:
     # The text between the second `|` and the closing one, and one cell only.
-    if not rest.rstrip().endswith("|"):
+    # Spaces are trimmed and nothing else, as pr-locality.sh's ` *` trims.
+    if not rest.rstrip(" ").endswith("|"):
         raise InputRefused(f"the {row} row is not one cell")
-    cell = rest.rstrip()[:-1].strip()
+    cell = rest.rstrip(" ")[:-1].strip(" ")
     if "|" in cell:
         raise InputRefused(f"the {row} row is not one cell")
     return cell
@@ -139,7 +140,7 @@ def _read_touch_set(rest: str) -> list[str]:
         raise InputRefused("the Touch set row is empty")
     tokens = []
     for item in _split_outside_braces(cell):
-        token = item.strip()
+        token = item.strip(" ")
         reasoned = _REASONED.fullmatch(token)
         if reasoned:
             token = reasoned.group(1)

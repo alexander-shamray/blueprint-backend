@@ -167,6 +167,13 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "outside the repository"):
             read_rows(body("A", "`{../outside,docs/x.md}`"))
 
+    def test_only_spaces_are_trimmed_around_a_token(self) -> None:
+        # pr-locality.sh trims spaces alone, so a tab-led item keeps its tab.
+        with self.assertRaisesRegex(InputRefused, "unbalanced backtick"):
+            read_rows(body("D", "`docs/a.md`,\t`docs/b.md`"))
+        with self.assertRaisesRegex(InputRefused, "Class row is not a class"):
+            read_rows(body("\tD", "`docs/a.md`"))
+
     def test_an_empty_brace_alternative_is_refused(self) -> None:
         # A leading or doubled comma is a `//` segment, already refused as
         # outside the repository; these two are the ones that reached a verdict.
