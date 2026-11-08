@@ -202,6 +202,7 @@ decision looks wrong.
 | **ADR-193** | [The fulfilment saga's stop is this machine's CPU (#1714)](adr/ADR-193-the-fulfilment-sagas-stop-is-this-machines-cpu-1714.md) |
 | **ADR-194** | [Auto-merge stays off on its own argument (#1716), amending ADR-155](adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md) |
 | **ADR-195** | [The outbox gauges hint the claim index, which includes ProcessedAt (#1713), adding to ADR-180](adr/ADR-195-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md) |
+| **ADR-196** | [A cancelled push run on main is red unless a newer run replaced it (#1871), amending ADR-155](adr/ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md) |
 
 ---
 

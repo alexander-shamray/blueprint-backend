@@ -888,6 +888,20 @@ ALERT = (
     "    workflows: [CI, 'Helm']\n"
     "    types: [completed]\n"
     "    branches: [main]\n"
+    "jobs:\n"
+    "  read-cancelled:\n"
+    "    if: >-\n"
+    "      github.event.workflow_run.conclusion == 'cancelled'\n"
+    "    runs-on: ubuntu-latest\n"
+    "  file:\n"
+    "    needs: read-cancelled\n"
+    "    if: >-\n"
+    "      always() &&\n"
+    "      (contains(fromJSON('[\"failure\", \"timed_out\", \"startup_failure\"]'), "
+    "github.event.workflow_run.conclusion) ||\n"
+    "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n"
+    "      needs.read-cancelled.outputs.reason != '')\n"
+    "    runs-on: ubuntu-latest\n"
 )
 
 
@@ -954,6 +968,35 @@ class AlertTests(unittest.TestCase):
         self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace("'Helm'", "Helm, Commit gate"))
 
         self.assertIn("'Commit gate', which never runs on a push to main", pipeline_gate.check_alerts(self.root)[0])
+
+    def test_a_red_conclusion_the_filing_job_drops_is_caught(self) -> None:
+        for conclusion, listed, kept in (("failure", '"failure", "timed_out"', '"timed_out"'),
+                                         ("timed_out", '"timed_out", "startup', '"startup'),
+                                         ("startup_failure", ', "startup_failure"', "")):
+            with self.subTest(conclusion=conclusion):
+                self.assertIn(listed, ALERT)
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(listed, kept))
+
+                self.assertEqual(pipeline_gate.check_alerts(self.root), [
+                    f"{pipeline_gate.ALERT_WORKFLOW}'s `file` job does not file on `{conclusion}`, "
+                    "so a run ending so alerts nobody"])
+
+    def test_a_cancelled_run_nothing_reads_is_caught(self) -> None:
+        for dropped in ("      github.event.workflow_run.conclusion == 'cancelled'\n",
+                        "      always() &&\n",
+                        "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n",
+                        "\"failure\", ",
+                        ", \"cancelled\"",
+                        " ||\n      needs.read-cancelled.outputs.reason != ''"):
+            with self.subTest(dropped=dropped):
+                self.assertIn(dropped, ALERT)
+                # The last occurrence: `"failure", ` is in the conclusions' list too, which must keep it.
+                self.write(pipeline_gate.ALERT_WORKFLOW, "".join(ALERT.rsplit(dropped, 1)))
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("so a job past its time limit alerts nobody", problems[0])
 
     def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
         self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")
