@@ -75,5 +75,6 @@ that, so a suite ahead of the gate could choose its verdict with no workflow
 edit. A later step cannot turn a failure
 green, and `python -I` would leave a replaced `python`, `gh` or `jq` in place,
 so the order is the control; the suite's `TheShippedWorkflow` reads it. The
-cost is that a run the gate refuses reports no suite result until its next
-run. `docs/testing.md` has the live invocation.
+cost is that a run the gate refuses reports no suite result, and the suite
+speaks only on a run the gate passes. `docs/testing.md` has the live
+invocation.
