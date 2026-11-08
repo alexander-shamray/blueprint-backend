@@ -51,7 +51,8 @@ jobs:
       gateway: ${{ steps.changes.outputs.gateway }}
 
   images:
-    strategy:
+    if: ${{ github.ref != 'refs/heads/main' }}
+    strategy: &image-legs
       matrix:
         include:
           - filter: catalog
@@ -60,6 +61,32 @@ jobs:
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+
+      - name: Build ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        run: >
+          docker build
+          --file ${{ matrix.dockerfile }}
+          --tag ${{ matrix.image }}:${{ github.sha }}
+          --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          .
+
+      - name: SBOM for ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          output-file: sbom-${{ matrix.image }}.spdx.json
+
+  publish-images:
+    if: ${{ contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
+    permissions:
+      packages: write
+    strategy: *image-legs
     steps:
       - uses: actions/checkout@v4
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
@@ -375,12 +402,13 @@ class ImageTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("does not export it", problems[0])
 
-    def test_a_job_level_condition_is_caught(self) -> None:
+    def test_a_job_level_condition_on_a_filter_is_caught(self) -> None:
         """A skipped matrix job is never expanded, so GitHub names its one
-        check with `${{ matrix.image }}` unevaluated."""
+        check with `${{ matrix.image }}` unevaluated, on the pull request that
+        reads it. Each step tests its own filter instead."""
         self.write(WORKFLOW.replace(
-            "  images:\n",
-            "  images:\n    if: ${{ needs.changes.outputs.catalog == 'true' }}\n"))
+            "    if: ${{ github.ref != 'refs/heads/main' }}\n",
+            "    if: ${{ needs.changes.outputs.catalog == 'true' }}\n"))
 
         problems = pipeline_gate.check_images(self.root)
 
@@ -389,8 +417,7 @@ class ImageTests(Fixture):
 
     def test_a_job_level_condition_folded_over_lines_is_read_whole(self) -> None:
         self.write(WORKFLOW.replace(
-            "  images:\n",
-            "  images:\n"
+            "    if: ${{ github.ref != 'refs/heads/main' }}\n",
             "    if: >-\n"
             "      ${{ needs.changes.outputs.catalog == 'true'\n"
             "      || needs.changes.outputs.gateway == 'true' }}\n"))
@@ -400,6 +427,15 @@ class ImageTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("|| needs.changes.outputs.gateway == 'true' }}", problems[0])
 
+    def test_an_images_job_with_no_condition_is_caught(self) -> None:
+        """It would build every image twice on main, beside publish-images."""
+        self.write(WORKFLOW.replace("    if: ${{ github.ref != 'refs/heads/main' }}\n", ""))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("twice on main", problems[0])
+
     def test_a_renamed_images_job_fails_rather_than_passing_empty(self) -> None:
         """The condition check passes on no `if:`, so a key the parser cannot
         find has to fail on its own."""
@@ -408,6 +444,45 @@ class ImageTests(Fixture):
         problems = pipeline_gate.check_images(self.root)
 
         self.assertTrue(any("found no `images:` job" in problem for problem in problems), problems)
+
+    def test_a_publish_job_a_pull_request_can_reach_is_caught(self) -> None:
+        """The job holds what signs and pushes, so its own condition keeps it
+        off a pull request whatever each step's says (ADR-196)."""
+        self.write(WORKFLOW.replace(
+            "    if: ${{ contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
+            "&& github.ref == 'refs/heads/main' }}\n",
+            ""))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("publish-images", problems[0])
+
+    def test_a_renamed_publish_job_fails_rather_than_passing_empty(self) -> None:
+        self.write(WORKFLOW.replace("  publish-images:\n", "  release-images:\n"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertTrue(any("found no `publish-images:` job" in problem for problem in problems), problems)
+
+    def test_a_build_main_runs_and_no_pull_request_proved_is_caught(self) -> None:
+        """The pull request's build is the proof of main's only if the lines match."""
+        head, tail = WORKFLOW.split("  publish-images:\n")
+        self.write(head + "  publish-images:\n" + tail.replace("          --label", "          --pull\n          --label", 1))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not the line", problems[0])
+
+    def test_a_publish_job_with_its_own_matrix_is_caught(self) -> None:
+        """A second list drifts from the first, and the inventory reads pairs from either."""
+        self.write(WORKFLOW.replace("    strategy: *image-legs\n", "    strategy:\n      fail-fast: false\n"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("image-legs", problems[0])
 
     def test_the_filter_parser_keeps_them_apart(self) -> None:
         """The subject of the check above. `read_filters` flattens, which is
@@ -431,7 +506,7 @@ class ImageTests(Fixture):
 
 
 class SbomTests(Fixture):
-    """ADR-071's coverage: every build the images job runs has its SBOM."""
+    """ADR-071's coverage: every build either image job runs has its SBOM."""
 
     def test_a_build_with_no_sbom_step_is_caught(self) -> None:
         self.write(WORKFLOW.replace(SBOM_STEP, ""))
@@ -439,14 +514,25 @@ class SbomTests(Fixture):
         problems = pipeline_gate.check_images(self.root)
 
         self.assertEqual(len(problems), 1)
-        self.assertIn("builds ${{ matrix.image }}:${{ github.sha }} and no anchore/sbom-action@", problems[0])
+        self.assertIn("publish-images job builds ${{ matrix.image }}:${{ github.sha }} and no anchore/sbom-action@", problems[0])
+
+    def test_a_pull_request_build_with_no_sbom_step_is_caught(self) -> None:
+        """Its own job, so reading only the job that signs would leave it out."""
+        head, tail = WORKFLOW.split("      - name: SBOM for ${{ matrix.image }}\n", 1)
+        pull_request_sbom, rest = tail.split("  publish-images:\n", 1)
+        self.write(head + "  publish-images:\n" + rest)
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("the images job builds", problems[0])
 
     def test_an_sbom_of_another_reference_is_caught(self) -> None:
         self.write(WORKFLOW.replace(
             "          image: ${{ matrix.image }}:${{ github.sha }}",
             "          image: ${{ matrix.image }}:latest"))
 
-        self.assertEqual(len(pipeline_gate.check_images(self.root)), 1)
+        self.assertEqual(len(pipeline_gate.check_images(self.root)), 2)
 
     def test_an_sbom_action_pinned_to_a_tag_is_caught(self) -> None:
         """A tag can be moved to other code; the action reads the image."""
@@ -454,8 +540,8 @@ class SbomTests(Fixture):
 
         problems = pipeline_gate.check_images(self.root)
 
-        self.assertEqual(len(problems), 1)
-        self.assertIn("pinned to a commit", problems[0])
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(all("pinned to a commit" in problem for problem in problems), problems)
 
     def test_an_sbom_under_another_condition_is_caught(self) -> None:
         """An SBOM step left at `always()` fails every skipped leg, and one
@@ -478,16 +564,259 @@ class SbomTests(Fixture):
 
         problems = pipeline_gate.check_images(self.root)
 
-        self.assertEqual(len(problems), 2)
+        self.assertEqual(len(problems), 3)
         self.assertTrue(all("vacuously" in problem for problem in problems))
 
     def test_the_step_reader_joins_a_folded_run_and_keeps_with_inputs(self) -> None:
-        steps = pipeline_gate.read_job_steps(WORKFLOW_HEAD + SBOM_STEP, "images")
+        steps = pipeline_gate.read_job_steps(WORKFLOW_HEAD + SBOM_STEP, "publish-images")
 
         self.assertEqual(len(steps), 3)
         self.assertIn("--label org.opencontainers.image.revision=${{ github.sha }} .", steps[1]["run"])
         self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
         self.assertNotIn("comment", " ".join(steps[1].values()))
+
+
+GRANTED = """\
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v7
+
+  report:
+    permissions:
+      issues: write
+    steps:
+      - run: gh issue comment 1 --body hello
+
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+  scheduled:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+"""
+
+
+class GrantTests(unittest.TestCase):
+    """ADR-196: nothing a pull request's branch can run holds a write grant."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.folder = self.root / ".github" / "workflows"
+        self.folder.mkdir(parents=True)
+        self.write(GRANTED)
+
+    def write(self, text: str, name: str = "ci.yml") -> None:
+        (self.folder / name).write_text(text, encoding="utf-8")
+
+    def test_the_fixture_is_clean(self) -> None:
+        """Main-only, schedule-only and no checkout: the three ways out."""
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+    def test_a_grant_beside_a_checkout_on_a_pull_request_is_caught(self) -> None:
+        """#1789's shape: the branch's MSBuild files run beside the job's token."""
+        self.write(GRANTED.replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions:\n      contents: read\n      packages: write\n    steps:"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `build`", problems[0])
+        self.assertIn("packages: write", problems[0])
+
+    def test_a_checkout_in_the_report_job_is_caught(self) -> None:
+        """Its grant is harmless only while it holds none of the branch."""
+        self.write(GRANTED.replace(
+            "      - run: gh issue comment 1 --body hello\n",
+            "      - uses: actions/checkout@v7\n      - run: gh issue comment 1 --body hello\n"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `report`", problems[0])
+
+    def test_a_condition_that_lets_a_pull_request_in_is_caught(self) -> None:
+        self.write(GRANTED.replace(
+            "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+            "    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}\n"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `publish`", problems[0])
+
+    def test_a_condition_that_names_no_event_or_ref_is_caught(self) -> None:
+        """A filter or a variable decides nothing about which event ran."""
+        self.write(GRANTED.replace(
+            "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+            "    if: ${{ needs.changes.outputs.catalog == 'true' }}\n"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `publish`", problems[0])
+
+    def test_a_condition_a_pull_request_can_satisfy_is_caught(self) -> None:
+        """Naming the event or the ref is not excluding a pull request: each of
+        these reads as main-only to a substring test and runs on one."""
+        for condition in (
+            "github.event_name == 'push' || github.actor != 'nobody'",
+            "github.ref == 'refs/heads/main' || always()",
+            "always() || (github.event_name == 'push')",
+            "!(github.event_name == 'push')",
+            "github.event_name != 'push'",
+            "github.ref != 'refs/heads/main'",
+        ):
+            with self.subTest(condition=condition):
+                self.write(GRANTED.replace(
+                    "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+                    f"    if: ${{{{ {condition} }}}}\n"))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("job `publish`", problems[0])
+
+    def test_a_condition_that_excludes_a_pull_request_passes(self) -> None:
+        """The shapes this repository's own jobs carry, with the positive controls
+        the refusals above need."""
+        for condition in (
+            "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
+            "&& github.ref == 'refs/heads/main'",
+            "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') "
+            "&& vars.CHECK_SCHEDULED == 'enabled'",
+            "always() && github.ref == 'refs/heads/main'",
+        ):
+            with self.subTest(condition=condition):
+                self.write(GRANTED.replace(
+                    "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+                    f"    if: ${{{{ {condition} }}}}\n"))
+
+                self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+    def test_a_folded_condition_is_read_whole(self) -> None:
+        self.write(GRANTED.replace(
+            "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n",
+            "    if: >-\n      ${{ github.event_name == 'push'\n      && github.ref == 'refs/heads/main' }}\n"))
+
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+    def test_a_flow_mapping_is_a_grant(self) -> None:
+        """Read as no grant, it would pass beside the checkout it is held for."""
+        self.write(GRANTED.replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions: { contents: read, packages: write }\n    steps:"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("packages: write", problems[0])
+
+    def test_a_commented_grant_is_not_a_grant(self) -> None:
+        self.write(GRANTED.replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions:\n      # packages: write\n      contents: read\n    steps:"))
+
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+    def test_a_trigger_written_as_a_list_is_read(self) -> None:
+        """The other two spellings of `on:`; a trigger it cannot read is a workflow it skips."""
+        for trigger in (
+            "on:\n  - pull_request\n  - push\n",
+            "on: [pull_request, push]\n",
+            "on: pull_request\n",
+        ):
+            with self.subTest(trigger=trigger):
+                self.write(GRANTED.replace(
+                    "on:\n  pull_request:\n  push:\n    branches: [main]\n", trigger
+                ).replace(
+                    "  build:\n    steps:",
+                    "  build:\n    permissions:\n      packages: write\n    steps:"))
+
+                self.assertEqual(len(pipeline_gate.check_grants(self.root)), 1)
+
+    def test_a_grant_at_the_workflow_level_reaches_a_job_with_no_block(self) -> None:
+        self.write(GRANTED.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  packages: write\n\njobs:"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("job `build`", problems[0])
+
+    def test_write_all_is_a_grant(self) -> None:
+        self.write(GRANTED.replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions: write-all\n    steps:"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("write-all", problems[0])
+
+    def test_a_workflow_a_pull_request_never_starts_is_not_read(self) -> None:
+        self.write(GRANTED.replace("  pull_request:\n", "").replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions:\n      packages: write\n    steps:"))
+
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
+    def test_pull_request_target_is_a_pull_request(self) -> None:
+        self.write(GRANTED.replace("  pull_request:\n", "  pull_request_target:\n").replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions:\n      packages: write\n    steps:"))
+
+        self.assertEqual(len(pipeline_gate.check_grants(self.root)), 1)
+
+    def test_every_workflow_is_read(self) -> None:
+        self.write(GRANTED.replace(
+            "  build:\n    steps:",
+            "  build:\n    permissions:\n      packages: write\n    steps:"), "other.yaml")
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("other.yaml", problems[0])
+
+    def test_no_grant_anywhere_fails_rather_than_passing_empty(self) -> None:
+        """The gate's own subject: a parser that read no permissions block finds no fault."""
+        self.write(GRANTED.replace(": write", ": read"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("vacuously", problems[0])
+
+    def test_no_workflow_fails_rather_than_passing_empty(self) -> None:
+        (self.folder / "ci.yml").unlink()
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("vacuously", problems[0])
+
+    def test_the_shipped_workflows_are_clean(self) -> None:
+        """Its subject is the repository's own: the fixture says nothing about ci.yml."""
+        self.assertEqual(pipeline_gate.check_grants(), [])
 
 
 class SupplyChainTests(Fixture):
@@ -630,8 +959,7 @@ class SupplyChainTests(Fixture):
             "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name)",
             "github.event_name == 'pull_request'")
 
-        self.assertTrue(problems)
-        self.assertIn("main-push condition", problems[0])
+        self.assertTrue(any("main-push condition" in problem for problem in problems), problems)
 
     def test_a_step_missing_the_ref_test_is_caught(self) -> None:
         self.assertTrue(self.broken(" && github.ref == 'refs/heads/main' }}", " }}"))
@@ -797,8 +1125,13 @@ class SupplyChainTests(Fixture):
         workflow's steps stopped parsing, every check above would be green
         over an empty list."""
         root = Path(__file__).resolve().parents[2]
-        steps = pipeline_gate.read_job_steps((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"), "images")
+        workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        steps = pipeline_gate.read_job_steps(workflow, "publish-images")
         uses = [step.get("uses", "").split("@")[0] for step in steps]
+
+        self.assertTrue(pipeline_gate.read_job_condition(workflow, "publish-images"))
+        self.assertIn("anchore/sbom-action", [
+            step.get("uses", "").split("@")[0] for step in pipeline_gate.read_job_steps(workflow, "images")])
 
         for action in ("docker/login-action", "sigstore/cosign-installer", "actions/attest-build-provenance",
                        "actions/attest-sbom"):

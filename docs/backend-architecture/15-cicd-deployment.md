@@ -58,11 +58,13 @@ before the first push to `main`. What `actionlint` reads and claims is
 > ([ADR-109](adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
 > which amends
 > [ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
-> a pull request builds and inventories and pushes nothing, and the rollout
-> verifies the signature before Helm runs. The only other thing `main`
-> publishes is a node the diagram does not draw: the `packages` job, after
-> the test stages, pushes each of the AI assistant's two NuGet packages
-> whose project changed to GitHub Packages
+> a pull request builds and inventories and pushes nothing, holding no write
+> grant while its branch's code runs
+> ([ADR-196](adr/ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
+> and the rollout verifies the signature before Helm runs. The only other thing
+> `main` publishes is a node the diagram does not draw: the `publish-packages`
+> job, after the test stages and the `packages` job's pack, pushes each of the
+> AI assistant's two NuGet packages whose project changed to GitHub Packages
 > ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)).
 > No `Deploy:` node is live: there is no dev, staging or production environment,
 > which is why §15.5's canary is `workflow_dispatch` only and why the k6 SLO
@@ -180,7 +182,8 @@ own, and `BuildingBlocks` by `inputs`, which `shared`, the anchor every
 service inherits, takes whole but for two blocks. Two filters are not
 deployables:
 `assistant` and `anthropic` match the AI assistant's two building blocks for
-the `packages` job alone, which pushes their NuGet packages
+the `packages` and `publish-packages` jobs alone, which check and push their
+NuGet packages
 ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)),
 and `shared` excludes those blocks
 ([ADR-150](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)),
@@ -653,8 +656,9 @@ steps:
       docker build
       --file ${{ matrix.dockerfile }}
       --tag ${{ matrix.image }}:${{ github.sha }}
-      --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
+      --tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"
       --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      --label org.opencontainers.image.revision=${{ github.sha }}
       .
 ```
 
@@ -664,15 +668,17 @@ Both images carry the **same tag**, which is what lets `values.yaml` hold one
 the exact failure the migration hook exists to prevent.
 
 **What is built is inventoried, and what is pushed is signed.** On `main` the
-job pushes each image to GHCR as `$REGISTRY/<image>:<sha>`, `REGISTRY` being the
+`publish-images` job takes that matrix and builds that line
+([ADR-196](adr/ADR-196-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)),
+pushes each image to GHCR as `$REGISTRY/<image>:<sha>`, `REGISTRY` being the
 one workflow-level value in `ci.yml` that owns the address, reads the digest
 back, and by that digest signs it keyless, attests its provenance and attests
 its SBOM. The rollout verifies the signature and the provenance before its first
 Helm command
 ([ADR-109](adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
 [ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)).
-The `images` job is path-filtered, so a dispatch of `ci.yml` builds and signs
-every image once.
+The job is path-filtered, so a dispatch of `ci.yml` builds and signs every image
+once.
 **Each image has a moving `main` tag.** A leg that signs an image also moves
 `$REGISTRY/<image>:main` to that digest, after the attestations, and a leg that
 built nothing leaves it alone, so the tag always names the newest signed build
