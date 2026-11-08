@@ -685,6 +685,7 @@ class GrantTests(unittest.TestCase):
             "!(github.event_name == 'push')",
             "github.event_name != 'push'",
             "github.ref != 'refs/heads/main'",
+            "(always()) || (vars.x == 'y' && github.ref == 'refs/heads/main')",
         ):
             with self.subTest(condition=condition):
                 self.write(GRANTED.replace(
@@ -706,6 +707,7 @@ class GrantTests(unittest.TestCase):
             "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') "
             "&& vars.CHECK_SCHEDULED == 'enabled'",
             "always() && github.ref == 'refs/heads/main'",
+            "(github.event_name == 'push') && (vars.x == 'y')",
         ):
             with self.subTest(condition=condition):
                 self.write(GRANTED.replace(
