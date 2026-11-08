@@ -112,7 +112,9 @@ C a rule moved, D docs or harness, E the dependency graph — or two joined
 with `+`, as `C+E`, for a change the contract says needs both, or the one
 three it admits, `A+D+E`, with the touch set as the union. `Touch set` is
 the paths that class allows and this branch actually edited, as globs or files
-on one line. A file in the diff outside the set is a finding for the
+on one line. A widened token takes its reason after its closing backtick, as
+`` `docs/x.md` (added: why) ``, in plain text; a bare token takes none. A file
+in the diff outside the set is a finding for the
 review, and the answer is a narrower diff, a row widened with its
 reason beside it, or a different class — never a row widened silently.
 
