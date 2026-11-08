@@ -139,8 +139,9 @@ Each round is the review done once, end to end:
    ```
 
    The rows are those `.harness/sweep-rows.tsv` names for `security`, with
-   what each holds, the first matching line winning; `samples` is read for
-   its fenced code alone, and the closed records are owned and not read.
+   what each holds, the first matching line winning, bar a mirror row passing
+   a path on; `samples` is read for its fenced code alone, and the closed
+   records are owned and not read.
 
    A tracked path no row owns makes the helper exit 3 naming it: a round
    error under *Never fail open*, never a gap to widen by hand.
@@ -204,9 +205,9 @@ Each round is the review done once, end to end:
      it is a token of the form `ISSUE_BODY_END`, and **before the command is
      composed, every line of the payload is checked against it**; a payload
      containing it gets a different one.
-   - **A title must never begin with `/` or `#`**; write a command or
-     directive it names in backticks — `` `/security-sweep` ``,
-     `` `#nullable` ``.
+   - **A title must never begin with `/` or `#`**; name a command or
+     directive after a leading word and never in backticks, which the
+     heredoc's shell would run — `Honour the #nullable directive`.
 
    (why: docs/commands/security-sweep.md, *File*)
 
