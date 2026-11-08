@@ -224,10 +224,11 @@ runs in the fast half and fails there. What it cannot do is report a pass.
 
 ## Running a gate on its own
 
-A gate with a suite is both tested and run (`.harness/agent-rules.md`, *Hard
-rules*), so a green suite says the gate works and not that this checkout
-passes it; a gate without one is only run. The order of the two is each
-workflow's own.
+Run by hand, a gate with a suite is tested and then run
+(`.harness/agent-rules.md`, *Hard rules*), so a green suite says the gate works
+and not that this checkout passes it; a gate without one is only run. A
+workflow can run the two the other way round, as `locality-gate.yml` does for
+[its README](../.github/locality-gate/README.md)'s reason.
 Most gate runs are the workflow step verbatim. The entries below are the ones
 a step does not show whole, and the gates whose invocation
 [`docs/change-locality.md`](change-locality.md) §3's Class D places here,
