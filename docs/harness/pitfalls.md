@@ -23,6 +23,43 @@ when a step behaves unexpectedly.
   passes when `git log` fails, since the error goes to stderr. Safe:
   capture into a variable under `set -e`, so a failing command stops the
   script before the test.
+- **A pipe reports its last command's exit.** `<gate> | tail -1; git push`
+  pushed past a gate that had printed a finding, since `tail` exited 0,
+  and `git push … | tail -1 && …` went on after a failed push to mark
+  review threads done. `guard-git-argv.py` refuses a piped push chained
+  with `&&` or `||`, not a piped gate before a push. Safe: run a gate
+  unpiped, as its own command, and read its exit before the push; open a
+  chain with `set -o pipefail`; and compare
+  `git ls-remote origin refs/heads/<branch>` with `git rev-parse HEAD`
+  before acting on a push.
+- **A quoted heredoc body is still read as a command.**
+  `guard-git-argv.py` reads what a shell running a script gets on stdin
+  as that script, so an issue body piped to `gh-issue-sweep.sh` is refused
+  for a backtick, a `$(`, a `${` followed by a space, an odd count of
+  apostrophes outside double quotes (a possessive) or a spelled-out push.
+  A 2026-10-18 sweep also had bodies refused for an exclamation mark, a
+  parenthesised group such as a SQL `TOP (10)`, a bare asterisk or a
+  `${NAME}`, by a check outside these guards, which refuse none of the
+  four. Where `Write` is granted, put the
+  text in a file and pass it as `< <path>`. Safe in a sweep, which denies
+  `Write`: code as plain quoted text, an asterisk or an exclamation mark
+  spelled as a word, a push or a flag described in prose, possessives
+  reworded, and the payload checked against these shapes along with the
+  delimiter.
+- **Python's `subprocess` on Windows decodes with cp1252**, in a
+  scratchpad script too, which `test_python_hygiene.py` never reads.
+  `text=True` with no `encoding=` met an em dash in a `gh api` response,
+  left `stdout` `None`, and a poller read that as no results for fifteen
+  minutes. Safe: `encoding="utf-8", errors="replace"` on every call that
+  captures output, a `None` or blank `stdout` treated as a failure, a
+  watcher that reports its own failure rather than going quiet, and
+  `py -3.12 -X utf8` to print such output.
+- **A bare `bash` from Python is WSL's.** `subprocess.run(["bash", …])`
+  from a scratchpad poller exited 1 with `execvpe(/bin/bash) failed`, and
+  read nothing on every poll: CreateProcess searches System32, which holds
+  the WSL launcher, before `PATH`. Safe: run the path
+  `shutil.which("bash")` returns, Git's, as the hygiene test requires
+  under `.claude/`.
 - **A `cd` persists.** A `cd` into a subdirectory makes the next relative
   `mkdir` or `git add -A` land there, and a line that both changes
   directory and writes a relative path is refused whole. Safe: run the

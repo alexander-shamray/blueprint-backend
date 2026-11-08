@@ -118,8 +118,10 @@ class TheSyncRow(unittest.TestCase):
         self.assertIn("the area by tree: .claude/ is harness, other prose documentation, the rest code, with test "
                       "beside harness or code for a suite", step)
         # A target-local low is filed once: the open issues are read first, and a title already open files nothing.
-        self.assertIn("after bash .claude/scripts/gh-issue-list.sh shows no open issue of that title, else nothing is "
-                      "filed and the report says so", step)
+        # ... and only an issue the owner opened suppresses it, which gh-issue-suppresses.sh decides, not the title.
+        self.assertIn("after bash .claude/scripts/gh-issue-list.sh shows no open issue of that title that bash "
+                      ".claude/scripts/gh-issue-suppresses.sh <number> exits 0 on, else nothing is filed and the "
+                      "report says so", step)
 
     def test_no_prose_here_names_what_a_target_does_not_hold(self):
         for text in (flat(section()), flat(ARGUMENT.read_text(encoding="utf-8"))):
@@ -242,7 +244,7 @@ class TheSyncRow(unittest.TestCase):
         self.assertIn("After its rebase helper, which publishes, the new HEAD is the head, and sync_pr.py verify <n> --head <oid> "
                       "runs on it before gh-pr-merge.sh", step)
         self.assertIn("replacing the step 5 recheck", step)
-        self.assertIn("a failed verify is handed back", step)
+        self.assertIn("a failed verify is handed back, and so is a rebase that took continue, before any verify", step)
         # Step 6 merges the head that was proved: a differing headRefOid is a moved sync and merges nothing.
         self.assertIn("its <oid> must be that head: a headRefOid that differs is a moved sync, a failed verify, "
                       "and nothing merges", step)
@@ -264,7 +266,8 @@ class TheSyncRow(unittest.TestCase):
     def test_the_grants_name_every_read_a_dispatched_sync_makes(self):
         grants = [g.strip() for g in frontmatter("allowed-tools").split(",")]
         for grant in (f"Bash({SYNC_PR}:*)", f"Bash({HELPER}:*)", "Bash(py -3.12 -m unittest discover:*)",
-                      "Bash(bash .claude/scripts/gh-issue-list.sh)"):
+                      "Bash(bash .claude/scripts/gh-issue-list.sh)",
+                      "Bash(bash .claude/scripts/gh-issue-suppresses.sh:*)"):
             self.assertIn(grant, grants)
         # The same two reach a session that is not /ship through the settings the sync renders.
         allow = json.loads(BASE.read_text(encoding="utf-8"))["permissions"]["allow"]

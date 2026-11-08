@@ -39,6 +39,11 @@ is* hold their reasons and detail and cite this file for the rule.
   Managed means named in `.harness/manifest.json`; the drift gate refuses
   a managed file that differs from the payload, and the next sync
   overwrites it.
+- **A `local` path under `.claude/` is Edit-denied as a managed one is**:
+  editing it takes the owner's lift, and a deny lifted mid-session can
+  still refuse until Claude Code is relaunched from the worktree
+  (`docs/harness-boundaries.md`, *Settings self-lock and permission
+  root*).
 
 ## Subagents, review rounds and plans
 
@@ -105,7 +110,8 @@ loads*).
 - `docs/harness/token-rules.md` — before briefing a subagent or choosing
   its model; the reasons for *Subagents, review rounds and plans*.
 - `docs/harness/pitfalls.md` — when a shell, git, machine or auto-mode
-  step behaves unexpectedly.
+  step behaves unexpectedly, and before a scratchpad script runs a
+  subprocess or a heredoc carries an issue body.
 - `docs/harness-boundaries.md` — before touching anything under
   `.claude/`: what the harness grants and refuses.
 - `docs/harness-local.md` — this target's own: its change contract, style

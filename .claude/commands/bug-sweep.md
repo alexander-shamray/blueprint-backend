@@ -182,8 +182,9 @@ Each round is the review done once, end to end:
    ```
 
    The rows are those `.harness/sweep-rows.tsv` names for `bug`, with what
-   each holds, the first matching line winning; `samples` is read for its
-   fenced code alone, and the closed records are owned and not read.
+   each holds, the first matching line winning, bar a mirror row passing a
+   path on; `samples` is read for its fenced code alone, and the closed
+   records are owned and not read.
 
    A tracked path no row owns makes the helper exit 3 naming it: a round
    error under *Never fail open*, never a gap to widen by hand. **A row
@@ -251,8 +252,10 @@ Each round is the review done once, end to end:
    hold; it is a token of the form `ISSUE_BODY_END`, and **before the command is
    composed, every line of the payload — title, body, quoted lines — is checked
    against it**, and a payload that contains it gets a different one. **A title
-   must never begin with `/` or `#`**; write a command or directive in backticks
-   — `` `/bug-sweep` ``. (why: docs/commands/bug-sweep.md, *The round: file*)
+   must never begin with `/` or `#`**; name a command or directive after a
+   leading word and never in backticks, which the heredoc's shell would run —
+   `Fix the /bug-sweep filing`. (why: docs/commands/bug-sweep.md, *The round:
+   file*)
 
 5. **Summarise the round.** The helper's `mode` line and the pinned commit,
    new issues filed (with numbers), candidates dropped at each gate and why,

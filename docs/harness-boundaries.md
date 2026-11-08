@@ -407,10 +407,10 @@ walking up, because the helper forks only under `.claude/worktrees/` and the
 worktree has none of its own. Two residuals stand. The helper writes a file
 the session's `Edit` is denied, and what it writes is one key read from a
 file the session is denied too, or, under an approve-all, from `.mcp.json`,
-which the session may edit but whose servers the main checkout's approve-all
-already approves. And the approval names servers rather than
-definitions, so a `.mcp.json` that reaches a worktree through git,
-force-added past the ignore, is found before the main checkout's and
+which the session's `Edit` is denied as well and whose servers the main
+checkout's approve-all already approves. And the approval names servers
+rather than definitions, so a `.mcp.json` that reaches a worktree through
+git, force-added past the ignore, is found before the main checkout's and
 approved under the same name without a prompt. The fork writes nothing at a
 `settings.local.json` the branch already carries, a dangling link included,
 and the locality gate refuses a pull request that leaves an ignored path in
@@ -630,6 +630,17 @@ the window closes on its own schedule and a defect found afterwards needs the
 lift granted again. That happened on the PR that added the argv guard — the
 guard shipped refusing its own commit message, and the fix needed a second
 lift.
+
+**A lift lags the same way, and a relaunch is what ends it.** Measured in
+blueprint-backend on 2026-09-21: with the four `Edit(...)` deny lines deleted
+from the worktree's `.claude/settings.json` and the file read back, an `Edit`
+of `.claude/commands/ship.md` was still refused as *in a directory that is
+denied by your permission settings*. So a session needing an edit under
+`.claude/` has the owner lift the deny and relaunch Claude Code from the
+worktree directory, where `/ship` step 0 stays in the unfinished worktree;
+launched from the main checkout, `/branch` stops on a slug already taken.
+The denies name directories, not the manifest, so a path a target lists
+under `local` in a denied directory is refused exactly as a managed one is.
 
 **`.claude/settings.local.json` was the gap a review found**, and it is the
 enumeration lesson in miniature: an exact-file rule cannot cover a sibling, and
@@ -1461,8 +1472,9 @@ like a sync, which it checks out and runs nothing in.
 
 **`Bash(py -3.12 -m unittest discover:*)` runs the code of whatever tree it is
 pointed at, and is `/ship`'s alone.** A sync's step 2 runs the target-local
-suites with it, and a prefix grant cannot pin `-s`, so what bounds it is where
-it runs: only in a worktree whose `HEAD` equals the proved oid and whose `git
+suites with it, as it runs the payload suites `sync_pr.py` names as walking its
+commands, and a prefix grant cannot pin `-s`, so what bounds it is where it
+runs: only in a worktree whose `HEAD` equals the proved oid and whose `git
 status --short` is empty, which the sync section requires before anything in the
 tree runs, and which `dispatch_board.py sync-launch` and `run` compare before a
 `--dispatched` run starts in it. The settings do not allow it, so no other
@@ -1654,7 +1666,10 @@ prints nothing, and the caller skips its touch-set check and says so; one
 row without the other is refused, because each caller reads the pair. A
 class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
-in balanced backticks, of path and glob characters, each carrying a `/` or a
+in balanced backticks, a backticked one optionally followed by a space and its
+reason in parentheses (no backtick, no nested parenthesis; dropped unread,
+never printed, and its commas and braces its own), of path and glob
+characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
 alternatives included. A token may hold `@` and `+` as a changed path may,
 the `+` read as a character and not as a quantifier, in the class map's items
