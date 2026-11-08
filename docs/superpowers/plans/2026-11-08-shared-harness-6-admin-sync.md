@@ -441,14 +441,14 @@ Admin session, as plan 2's Tasks 8 and 9 and plan 5's Task 9.
 
 **Files (admin, Class D):**
 - Modify: `CLAUDE.md`, `AGENTS.md`, `docs/change-locality.md` §6,
-  `docs/token-plan.md`, `docs/working-rules.md`
+  `docs/token-plan.md`, `docs/token-quality-sets.md`, `docs/working-rules.md`
 
 - [ ] **Step 1:** `CLAUDE.md` gains `@.harness/agent-rules.md` and keeps what
   describes the product; *Subagents, review rounds and plans* and the harness
   half of *Hard rules* become citations. Its owner table gains the managed
   documents. §6's moved bullets become one line citing
   `docs/harness/working-rules.md`. Cluster F's `managed` paragraphs of
-  `docs/working-rules.md` and `docs/token-plan.md` become citations; what only
+  `docs/working-rules.md`, `docs/token-plan.md` and `docs/token-quality-sets.md` become citations; what only
   admin has stays. Report `CLAUDE.md`'s bytes before and after.
 - [ ] **Step 2:** Triage admin's 16 memories as plan 2's Table M did, by a
   table in this PR's body: archived, rewritten, or kept with why. A rule the
