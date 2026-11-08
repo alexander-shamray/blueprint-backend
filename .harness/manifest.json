@@ -1,5 +1,5 @@
 {
-  "harness_commit": "8a00e94907e0c8ac7d801ba102ac13c5405bf55a",
+  "harness_commit": "9bf878652a41ee30ef242758e3d2e8ceba487a5f",
   "files": {
     ".claude/agents/branch-reviewer.md": "a930476f4481dfa1e5bb25f162f3b944eb1a13ecd2a7ec909d36825285394c4d",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -128,9 +128,9 @@
     ".claude/skills/codebase-index/scripts/gate.sh": "b12e682f71053e20afd6562f0b713a97fa331e52ab39a91069467bc605198fa4",
     ".github/ISSUE_TEMPLATE/config.yml": "88f2aef4bae0115e540bc3d32e5174056e01bcd29f93e857e6fb300670898e0c",
     ".github/ISSUE_TEMPLATE/finding.yml": "d5bcb564a07ce3cc78ff191c1748152e85e657b77b9bc129a844eda548eb5625",
-    ".github/closure-gate/README.md": "11df8529bffc1a24507ad1eadae172222007472ddeb52b5d985f37d142f6ee74",
-    ".github/closure-gate/closure_gate.py": "acd4bdd5cb448ed3f546a63790975d6b05db2c9eb6a03812fe38fa62dbaec7dc",
-    ".github/closure-gate/test_closure_gate.py": "bb5854931f431a9b72ccb9a1323bbfd269028646a53e5f0d270221f7b757a271",
+    ".github/closure-gate/README.md": "cacd0c337c417f93a93aa54ce6e86cc844ba191131fb664de0b136625157b93f",
+    ".github/closure-gate/closure_gate.py": "cb7e8ff5627d48cdfeb6cb23c2a0d6f6184db38446d8f00318b296a639cd1fe8",
+    ".github/closure-gate/test_closure_gate.py": "e5cd29771fd9f8455c21441d96051c17a38cd8c5fb75bf2fc7ccfbb13ace8222",
     ".github/comment-gate/README.md": "c40f9b55342aaeb4bdb4b2d0c32bbc474a9f37137e60c389e00dfc927952b782",
     ".github/comment-gate/comment_gate.py": "f904ad716f3281bb3c52a1085d3785562fea7d8b6c5136d164340436d3a8b07e",
     ".github/comment-gate/test_comment_gate.py": "2610d9f647132bd8cb2690d9e71d0fbba3147da0e9dcc4d4fb3eb3d9c7f3904d",
