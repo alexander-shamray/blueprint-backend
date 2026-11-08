@@ -645,7 +645,7 @@ class GrantTests(unittest.TestCase):
         self.assertEqual(pipeline_gate.check_grants(self.root), [])
 
     def test_a_grant_beside_a_checkout_on_a_pull_request_is_caught(self) -> None:
-        """#1789's shape: the branch's MSBuild files run beside the job's token."""
+        """ADR-196's shape: the branch's MSBuild files run beside the job's token."""
         self.write(GRANTED.replace(
             "  build:\n    steps:",
             "  build:\n    permissions:\n      contents: read\n      packages: write\n    steps:"))
