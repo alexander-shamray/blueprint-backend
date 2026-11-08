@@ -63,7 +63,7 @@ The rest of what this plan depends on:
 - Admin's settings deny `.claude/{agents,commands,hooks,scripts,skills}/**`
   and `settings*.json`, and not `.github/**`.
 - Three spellings of the red-`main` issue: backend `main is red: <workflow>`,
-  frontend `CI is red on main`, admin `main is red`.
+  frontend `CI is red on main`, admin `main is red`. The harness files none.
 - Harness #191: the whole payload suite fails on macOS (132) and Windows (10)
   runners. Admin's required `harness` checks run on all three today. Frontend's
   `harness` job runs the whole suite on ubuntu and the harness's `legs`
@@ -237,6 +237,7 @@ requests: the shard runner, the red-`main` helper, then the settings replay.
   if it names how a red `main` is seen, `.github/workflows/ci.yml` (the
   harness's own `payload-suites` ubuntu leg runs through the runner),
   `IMPORT.md`
+- Create (harness root): `.github/workflows/main-red.yml`
 - Modify (frontend, by an owner script): `.github/workflows/ci.yml`, the
   `main-red` job's title
 
@@ -267,8 +268,11 @@ requests: the shard runner, the red-`main` helper, then the settings replay.
   - `test_a_full_page_exits_2`;
   - `test_ship_runs_the_helper_bare`, admin's grant case from
     `test_harness_helpers.py:10498-10501`.
-  Confirm each target's `main-red` workflow writes a title the rule matches,
-  and record the three in the PR body.
+  The harness, the fourth target (spec §5.1), files no red-`main` issue at
+  all, so the same pull request gives it `.github/workflows/main-red.yml` in
+  backend's shape, titled `main is red: ci`. Confirm each of the four targets'
+  workflows writes a title the rule matches, and record the four in the PR
+  body.
 - [ ] **Step 4:** Mark the §8 rows `ported` in `IMPORT.md`.
 - [ ] **Step 5 (settings):** No base change. Count by reading admin's
   transcripts since 2026-10-19 the commands typed bare that the 8 base denies
