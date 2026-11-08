@@ -824,9 +824,25 @@ def _split_outside_parentheses(expression: str, operator: str) -> list[str]:
     return [term.strip() for term in terms]
 
 
+def _first_parenthesis_closes_last(term: str) -> bool:
+    """Whether the `(` a term opens with is closed by its final character and no earlier one."""
+    depth = 0
+    quoted = False
+    for index, character in enumerate(term):
+        if character == "'":
+            quoted = not quoted
+        elif not quoted and character == "(":
+            depth += 1
+        elif not quoted and character == ")":
+            depth -= 1
+            if depth == 0:
+                return index == len(term) - 1
+    return False
+
+
 def _unwrapped(term: str) -> str:
     """A term without the parentheses that enclose the whole of it."""
-    while term.startswith("(") and term.endswith(")") and len(_split_outside_parentheses(term[1:-1], ")")) == 1:
+    while term.startswith("(") and _first_parenthesis_closes_last(term):
         term = term[1:-1].strip()
     return term
 
