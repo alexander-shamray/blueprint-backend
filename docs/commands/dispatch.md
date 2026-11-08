@@ -258,9 +258,10 @@ one.
 
 The executor writes `<group>.json` in its own worktree, and `result` copies
 it into the run and checks it as untrusted data: a missing, unparsable or
-mis-shaped result is a crash, never a success (spec §6.3). A claimed merge
-is believed only once `verify` has read it from GitHub — merged, at that
-oid, from that branch, into `main` — and the main checkout, pulled, holds
+mis-shaped result is a crash, never a success (spec §6.3), unless GitHub shows
+the merge at the worktree's tip (*Waking*). A claimed merge is believed only
+once `verify` has read it from GitHub — merged, at that oid, from that branch,
+into `main` — and the main checkout, pulled, holds
 it. A read that fails leaves the claim to be checked again; a contradiction
 is a stop. The schema is `dispatch_run.py`'s, and `/ship`'s runbook shows
 the executor its shape.
@@ -291,16 +292,40 @@ branch the *In progress* row names, so the order is fork, record, launch.
 `run` hands each executor its own temp directory through `TMP`, `TEMP` and
 `TMPDIR`, a new one per launch made by `mkdtemp` under the system's:
 executors that shared the system's one ran each other's scratch scripts
-(issue #199), and a fixed path in a shared temp root is one another user
-could plant. It stays outside every checkout, because `refresh-index.py`'s
-worker runs from it and the guards admit a mutation proof's scratch
-checkout only under it; `run` removes it, best effort, once the executor
-exits or fails to start (issue #205).
+(blueprint-harness#199), and a fixed path in a shared temp root is one another
+user could plant. It stays outside every checkout, because
+`refresh-index.py`'s worker runs from it and the guards admit a mutation
+proof's scratch checkout only under it; `run` removes it, best effort, once
+the executor exits or fails to start (blueprint-harness#205). After an
+executor it then runs `git worktree prune`, as best effort: a `git worktree
+add` the session made under that directory has lost its target, and would stay
+listed until something pruned it.
 
 On every wake it absorbs the result, verifies a merge, places what was
 filed, then asks `wake` what to launch; the outcome table is the spec's
 §6.4. A hand-back or a stop goes back into its wave marked `OWNER` and is
 not retried (spec §2); a crash is relaunched once (spec §6.4).
+
+A crash that merged is not one. An executor that wrote no result, or none
+valid, and whose worktree meets `/ship` step 0's finished predicate — clean,
+its tip the head of a row `MERGED` into `main` — has nothing a relaunch could
+do but read the merge, so `result` takes it as `merged-claimed`, from GitHub's
+fields and with `verify` still to come, and its `decisions` say the result
+came from there. The rounds it ran went with the file, so a first session goes
+to *Needs a human* as a merge with no review round unless its transcript shows
+a reviewer, and a relaunch reads as one onto a merged PR does (*What an
+executor returns*). A read that fails, or a predicate that does not hold,
+leaves the crash as it was, and so does a sync whose tip is not the head its
+proof bound (*The proof binds*). Run 20261108-071135 relaunched five groups of
+twenty-one: one had merged and written its result to the main checkout's run
+directory rather than its worktree's, which `result` does not read, and four
+had ended the turn on `/commit`'s report, before any merge, which only a
+relaunch can recover. A turn ended there ends a `claude -p` session, which is
+why `/ship --dispatched` says a step's status is not a reply.
+
+A `Model` cell `launch` would refuse holds its group at `board` and `wake`,
+since `launch` comes after the fork and `tasks move`, and a refusal there
+leaves an empty worktree behind.
 
 A `run` that starts no executor — no `claude` on the path, a stale file it
 cannot remove, the stop file — would otherwise hold its slot all night,
@@ -368,6 +393,15 @@ cost is that those groups run under the settings the sync would replace.
 Holding a slot for it would stall the backlog for a change nobody is waiting
 on, so nothing reserves one: the morning's list shows it, and the next
 `/dispatch` that starts with no group active takes it first.
+
+**A wait leaves nothing behind.** A `blueprint-harness` merge touching the
+payload opens a new sync and closes the one before it, and a sync that waits may
+be superseded that way ten times a night, so `sync-ready` asks `sync-launch`'s
+checks that read no tree before `git-worktree-sync.sh` makes a worktree and a
+branch for a launch that was never going to happen. `sync-drop`, before the
+report, offers `git-branch-drop.sh` every local branch named as a sync head:
+what merged goes, as does one whose pull request closed with origin's branch
+gone at this tip, which no merge can land and which a worktree does not hold.
 
 **The proof binds.** The verify at step 0.3 and after each exit runs in the
 main checkout, because the executor runs that head's own copy of `sync_pr.py`,

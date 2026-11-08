@@ -34,6 +34,46 @@ printf '%s\\n\\nThe body.\\n\\nCo-Authored-By: C <c@example.invalid>\\n%s' "$3" 
 """
 
 
+FAILING_REBASE = """\
+sleep() {
+  if [ "$1" = 1 ]; then
+    echo sleep >> "$SHIM_TRACE"
+  else
+    # The watchdog backgrounds this and kills its pid, which `exec` keeps the real sleep's.
+    exec sleep "$@"
+  fi
+}
+git() {
+  if [ "$1" = rebase ] && [ "$2" = --abort ]; then
+    echo abort >> "$SHIM_TRACE"
+    [ -z "$SHIM_STUCK" ] || return 1
+  fi
+  if [ "$1" = rebase ] && [ "$2" != --abort ]; then
+    n=$(cat "$SHIM_COUNT" 2>/dev/null || echo 0)
+    echo $((n + 1)) > "$SHIM_COUNT"
+    if [ "$n" -lt "$SHIM_FAILS" ]; then
+      if [ -n "$SHIM_STUCK" ]; then
+        mkdir "$(command git rev-parse --git-path rebase-merge)"
+        echo "fatal: Unable to create '/x/.git/index.lock': File exists." >&2
+        return 1
+      fi
+      if [ -n "$SHIM_MESSAGE" ]; then
+        echo "$SHIM_MESSAGE" >&2
+        return 1
+      fi
+      lock=$(command git rev-parse --git-path index.lock)
+      : > "$lock"
+      command git "$@"
+      status=$?
+      rm -f "$lock"
+      return "$status"
+    fi
+  fi
+  command git "$@"
+}
+"""
+
+
 def sh(script, **env):
     result = run_bash(
         "set -eu\n" + script,
@@ -73,11 +113,11 @@ class Fixture(unittest.TestCase):
     def branch(self, name="feat/x"):
         self.git("checkout", "-q", "-b", name)
 
-    def run_helper(self, helper, pr="7", row="OPEN\tfeat/x\tmain\tfalse"):
+    def run_helper(self, helper, pr="7", row="OPEN\tfeat/x\tmain\tfalse", **env):
         return sh(
             f'cd "$WORK"\nbash "$HELPER" "$PR"',
             WORK=self.work, HELPER=str(helper), PR=pr, GH_ROW=row,
-            PATH=self.shim + os.pathsep + os.environ["PATH"])
+            PATH=self.shim + os.pathsep + os.environ["PATH"], **env)
 
     def subjects_and_trailers(self, rev):
         return self.git("log", "--format=%s|%(trailers:key=PR,valueonly,separator=,)", rev).splitlines()
@@ -199,6 +239,67 @@ class TrailerHelper(Fixture):
         for bad in ("", "x7", "7 8", "-1"):
             with self.subTest(pr=bad):
                 self.assertEqual(2, self.run_helper(TRAILER, pr=bad).returncode)
+
+    def failing_rebase(self, fails, message="", stuck=""):
+        """The environment that fails the helper's first `fails` rebases and counts them all: a real `index.lock`
+        held for the attempt, as a concurrent git reader holds it, or `message` where one is given, or with `stuck` a
+        rewrite stopped midway whose abort fails too. A shell function through BASH_ENV, because the helper runs none
+        of the repository's hooks and a `git` first on PATH loses to the one Git's bash launcher puts there."""
+        shim = Path(self.root, "git-shim.sh")
+        shim.write_text(FAILING_REBASE, encoding="utf-8", newline="\n")
+        return {"BASH_ENV": shim.as_posix(), "SHIM_COUNT": f"{self.root}/count", "SHIM_FAILS": str(fails),
+                "SHIM_MESSAGE": message, "SHIM_STUCK": stuck, "SHIM_TRACE": f"{self.root}/trace"}
+
+    def rebases_run(self):
+        return int(Path(self.root, "count").read_text(encoding="utf-8").strip())
+
+    def trace(self):
+        return Path(self.root, "trace").read_text(encoding="utf-8").split()
+
+    def test_the_wait_comes_before_the_abort_which_wants_the_same_lock(self):
+        # Also over gh-read-bound.sh's watchdog, which sleeps too, and which a runner with no `timeout` takes.
+        for program in ("timeout", "no-such-timeout"):
+            with self.subTest(program=program):
+                Path(self.root, "trace").unlink(missing_ok=True)
+                Path(self.root, "count").unlink(missing_ok=True)
+                self.git("checkout", "-q", "main")
+                self.branch(f"feat/{program}")
+                self.commit("one", f"feat(x): {program}")
+                out = self.run_helper(TRAILER, row=f"OPEN\tfeat/{program}\tmain\tfalse", GH_READ_TIMEOUT=program,
+                                      **self.failing_rebase(1))
+                self.assertEqual(0, out.returncode, out.stderr)
+                self.assertEqual(["sleep", "abort"], self.trace())
+
+    def test_an_abort_that_fails_too_is_not_called_the_branch_as_it_was(self):
+        self.two_commit_branch()
+        out = self.run_helper(TRAILER, **self.failing_rebase(99, stuck="1"))
+        self.assertEqual(6, out.returncode, out.stderr)
+        self.assertIn("the abort did too", out.stderr)
+        self.assertNotIn("the branch is as it was", out.stderr)
+        self.assertEqual(1, self.rebases_run(), "a retry over a rewrite still in progress")
+
+    def test_a_single_index_lock_failure_is_retried_once_and_succeeds(self):
+        self.two_commit_branch()
+        out = self.run_helper(TRAILER, **self.failing_rebase(1))
+        self.assertEqual(0, out.returncode, out.stderr)
+        self.assertEqual(["docs: two|#7", "feat(x): one|#7"], self.subjects_and_trailers("origin/main..HEAD"))
+        self.assertEqual(2, self.rebases_run())
+
+    def test_a_persistent_index_lock_failure_stops_after_two_attempts_with_the_branch_as_it_was(self):
+        self.two_commit_branch()
+        before = self.git("rev-parse", "HEAD")
+        out = self.run_helper(TRAILER, **self.failing_rebase(99))
+        self.assertEqual(6, out.returncode, out.stderr)
+        self.assertIn("index.lock", out.stderr)
+        self.assertEqual(2, self.rebases_run())
+        self.assertEqual(before, self.git("rev-parse", "HEAD"))
+
+    def test_a_failure_that_is_not_a_lock_is_not_retried(self):
+        self.two_commit_branch()
+        out = self.run_helper(TRAILER, **self.failing_rebase(99, "boom"))
+        self.assertEqual(6, out.returncode, out.stderr)
+        self.assertIn("boom", out.stderr)
+        self.assertEqual(1, self.rebases_run())
 
     def test_the_repositorys_own_hooks_do_not_run_inside_the_rewrite(self):
         # A `post-rewrite` hook in the repository runs after an amend or a rebase, and this helper rewrites published

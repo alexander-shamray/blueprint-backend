@@ -247,6 +247,23 @@ def common_git_dir(root):
     return common if os.path.isdir(common) else None
 
 
+def left_main_checkout(cwd, path):
+    """The checkout holding `path`, when `cwd` stands in a linked worktree of it.
+
+    `None` for a path in the worktree itself, and for one in any other checkout:
+    a sibling's own `.git` holds it first, and it is judged as a sibling.
+    """
+    standing = checkout_root(cwd)
+    gitdir = verified_gitdir(standing) if standing is not None else None
+    owner = checkout_root(path)
+    if gitdir is None or owner is None or under(path, standing, traits_of(standing)):
+        return None
+    marker = os.path.join(owner, ".git")
+    if not os.path.isdir(marker) or not under(gitdir, os.path.realpath(marker), traits_of(owner)):
+        return None
+    return owner
+
+
 def protected_in_worktree(path, root):
     """Which `Edit(...)` deny of this target holds `path` beneath `root`, or `None`.
 
@@ -415,6 +432,20 @@ def offence(event):
             )
         checkouts = checkouts + [
             (sibling, os.path.realpath(sibling), traits_of(sibling))]
+
+    # EnterWorktree moves the permission root and leaves the project at main,
+    # so main is an anchor here and no rule names its machinery any more.
+    main_checkout = left_main_checkout(cwd, lexical)
+    if main_checkout is not None:
+        machinery = protected_in_worktree(lexical, main_checkout)
+        if machinery is not None:
+            return (
+                f"guard-edit-target: {spelled} is held by {machinery} in the "
+                "main checkout, which this session has left for a worktree of "
+                "it, so none of its permission rules name the file. Change it "
+                "from the main checkout, or hand it to the owner "
+                "(docs/harness-boundaries.md)."
+            )
 
     # Every anchor containing the target must agree, so an extra anchor cannot
     # excuse what another refuses — the property `anchors` rests its trust in

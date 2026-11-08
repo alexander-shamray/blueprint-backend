@@ -38,6 +38,10 @@ review you were given.
   tree set does not admit, resolved by a narrower diff or a different class;
   with no verdict file, or an empty one, skip that check and name
   `locality` in `skipped`.
+- **The impact file**, beside the diff on a full pass where the caller wrote
+  one: the symbols and files the diff reaches through the graph. It names no
+  absences, so a file it omits may still depend on the change. With none, read
+  on: its absence is no check you skipped.
 - **The symbols the diff touches**, named by the parent.
 
 ## How you read
