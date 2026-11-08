@@ -9,8 +9,10 @@ bug	^tests/	suites	where the cannot-fail class lives, and the only area whose de
 security	^(src|tests)/	source	the services, the building blocks and the suites that stand up their hosts
 bug	^(tools|\.github|\.claude|\.harness)/	tooling	Python, shell, CI, the command and agent definitions, and the harness's `.harness/`
 security	^(tools|\.github|\.claude|\.harness)/	tooling	CI, the harness and its `.harness/`, and the command and agent definitions
-*	^(deploy|\.config)/	deploy	deployment and configuration
+bug	^(deploy|\.config)/	deploy	deployment and configuration, and every tracked file at the repository root: the build files, the dotfiles, `CLAUDE.md` and `README.md` alike
+security	^(deploy|\.config)/	deploy	deployment and configuration, and every tracked file at the repository root
 bug	^docs/	samples	fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read
 security	^docs/	samples	fenced code in `docs/`: a credential or an unsafe default an adopter copies; the closed records are owned and not read
 *	^.*/.*$	-	a directory no line above names: the run refuses until one owns it
-*	^[^/]+$	deploy	every tracked file at the repository root: the build files, the dotfiles, `CLAUDE.md` and `README.md` alike
+bug	^[^/]+$	deploy	deployment and configuration, and every tracked file at the repository root: the build files, the dotfiles, `CLAUDE.md` and `README.md` alike
+security	^[^/]+$	deploy	deployment and configuration, and every tracked file at the repository root
