@@ -196,6 +196,7 @@ exist, so the suite reports a pass it never tested. Commit, then run it.
 **A file that does not exist yet is on no list read from `git ls-files`**,
 which is why `Directory.Build.targets` and the other auto-imported names are
 denied here even though this command runs no build: the artefact outlives the
-command that wrote it. `docs/harness-boundaries.md`, *Agent-type, push and
-dotnet entries*, owns that argument and records which half — the exact
-filenames, not the `**/` globs beside them — is the measured control.
+command that wrote it. `docs/harness-boundaries.md`, *Agent-type and push
+entries*, states that argument; which half — the exact filenames, not the
+`**/` globs beside them — is the measured control has no owner there
+now.
