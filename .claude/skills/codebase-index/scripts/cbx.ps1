@@ -1,5 +1,7 @@
 # Windows PowerShell wrapper around the installed `codebase-index` CLI.
-# Mirrors scripts/cbx: whitelist, then PATH CLI, then py -3.12, then python -m.
+# Mirrors scripts/cbx: whitelist, index gate, then PATH CLI, then py -3.12, then
+# python -m. The gate is gate-index.py under the first Python 3.12 found; a
+# refusal is its exit and no such Python is exit 4, as cbx has it.
 # Python fallbacks pass -P / PYTHONSAFEPATH so a checkout codebase_index.py
 # is not imported.
 param(
@@ -30,13 +32,34 @@ $code = $null
 try {
     $env:CBX_NO_SKILL_AUTO_UPDATE = "1"
     $env:PYTHONSAFEPATH = "1"
+    $ErrorActionPreference = "Continue"
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    $gateProbe = "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)"
+    $gateRun = $null
+    $gateArgs = @()
+    if ($pyLauncher) {
+        & $pyLauncher.Source -3.12 -I -c $gateProbe 2>$null
+        if ($LASTEXITCODE -eq 0) { $gateRun = $pyLauncher.Source; $gateArgs = @("-3.12") }
+    }
+    if ($null -eq $gateRun -and $py) {
+        & $py.Source -I -c $gateProbe 2>$null
+        if ($LASTEXITCODE -eq 0) { $gateRun = $py.Source }
+    }
+    $ErrorActionPreference = $saved
+    if ($null -eq $gateRun) {
+        [Console]::Error.WriteLine("gate-index: no Python 3.12, so the index cannot be judged; refusing to open it")
+        $code = 4
+    } else {
+        & $gateRun @gateArgs -I (Join-Path $PSScriptRoot "gate-index.py")
+        if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE }
+    }
     $bin = Get-Command codebase-index -ErrorAction SilentlyContinue
-    if ($bin) {
+    if ($null -eq $code -and $bin) {
         & $bin.Source $Subcommand @Rest
         $code = $LASTEXITCODE
     }
     $ErrorActionPreference = "Continue"
-    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($null -eq $code -and $pyLauncher) {
         & $pyLauncher.Source -3.12 -P -c "import codebase_index" 2>$null
         if ($LASTEXITCODE -eq 0) {
@@ -45,7 +68,6 @@ try {
             $code = $LASTEXITCODE
         }
     }
-    $py = Get-Command python -ErrorAction SilentlyContinue
     if ($null -eq $code -and $py) {
         & $py.Source -P -c "import sys, codebase_index; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" 2>$null
         if ($LASTEXITCODE -eq 0) {

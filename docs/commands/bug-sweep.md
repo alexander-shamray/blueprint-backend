@@ -632,10 +632,14 @@ its fenced lines, so a `samples` auditor reads the fences and not the
 prose, and a docs file with no fence is not sliced. The closed records,
 `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are owned and
 not read: they are never edited to match the code, so a defect in their
-samples has nothing to fix. The lists stay beside the worktree, and the
-parent reads them only to `Grep` for a path a scope hint names, keeping
-the slices that hold it, or the slices of the rows it names; the summary
-says which it dropped.
+samples has nothing to fix. A row named `=<dir>/` is a mirror: a path it
+matches whose blob equals the file of that name under `<dir>/` is owned and
+counted, not listed, because that file is read as itself, as a repository
+that renders a root from its payload reads each file once; a copy that
+differs or has none falls to the next row and is read. The lists stay
+beside the worktree, and the parent reads them only to `Grep` for a path a
+scope hint names, keeping the slices that hold it, or the slices of the
+rows it names; the summary says which it dropped.
 
 **Round 1 is one auditor per slice; every later round follows leads.**
 From round 2 the tree is not re-read: one auditor goes to each row that
@@ -741,8 +745,11 @@ is the guard.
 
 **A title must not begin with `#`.** The helper refuses it: a body that opens
 with a heading and a blank line passes the separator check when handed over
-without its title line, and would be filed under the heading. Write a
-directive such as `#nullable` in backticks.
+without its title line, and would be filed under the heading. Name a
+directive such as `#nullable` after a leading word, and never in backticks:
+the title is the first line of a heredoc its shell reads as a script, so
+`guard-git-argv.py` refuses a backtick there as a command substitution
+(`docs/harness/pitfalls.md`, *Shell and encoding*).
 
 **A title must never begin with `/`.** MSYS argument conversion rewrites an
 argument that looks like an absolute POSIX path before the native `gh.exe`
@@ -757,10 +764,8 @@ or a leading space both suppress the conversion and a bare `/` does not.
 grant could not.** `gh-issue-create.sh`, which `gh-issue-sweep.sh` execs,
 sets `MSYS2_ARG_CONV_EXCL` for its own `gh` child, so the conversion never
 sees the title; the command's grant is on the entry point and is
-unchanged. Writing the subject in backticks —
-`` `/bug-sweep` `` — is still the house form for a title that names a command,
-because a reader of the tracker deserves it, not because the filing needs
-it.
+unchanged. A title that names a command does so after a leading word — the
+/bug-sweep filing — for the backtick reason above.
 
 ## Residuals
 
