@@ -190,7 +190,7 @@ and `shared` excludes those blocks
 which only the BFF's image holds, so `bff` takes `inputs` instead: a negation
 wins under `some-with-excludes`, so no filter can name back what an anchor it
 takes excludes
-([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)).
 Everything under `deploy/` except
 `deploy/compose/**` is matched by `deploy` — `deploy/helm/**` included, whose
 own workflow renders the charts but deploys nothing. Charts are deliberately
@@ -348,7 +348,7 @@ deployed one — and a check that guessed would pass a production realm on the
 local realm's terms.
 
 The sixth is the object store check
-([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)).
+([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)).
 `.github/workflows/object-store.yml`, path-filtered to `deploy/objectstore/**`,
 runs that tree's suite, which holds `store_check.py` to a local server answering
 as a store configured to taste. Its `deployed` job runs the check daily and on
@@ -361,7 +361,7 @@ fails unless both are allowed, so a bucket the pairs have no grant on is not a
 pass
 ([ADR-148](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)).
 It is opted in by a repository variable, on the realm job's reasoning, and a red
-run files a tracker issue or comments on the open one ([ADR-111](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
+run files a tracker issue or comments on the open one ([ADR-111](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988.md)).
 A green run then requests a monitor's URL, so a schedule that stops is heard as
 silence, and `provision.py` sets what the Environment needs
 ([ADR-114](adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)).
@@ -1473,7 +1473,7 @@ namespace read access.
 | `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls out under a grant of its own**, as above |
 | `Identity__Client__ClientSecret` | Secret | `web-bff-identity`, `shipping-identity` and `notifications-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5). The BFF's two releases are one host and read `web-bff-identity` both ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)) | ✓ **for a host that calls out under a grant of its own**, as above |
 | `Assistant__Provider` | Config | Helm `assistant.provider` → ConfigMap — **`web-bff-assistant` only**; the capability is refused on every other chart, so the main `web-bff` release leaves it unset ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)) | ✓ **when `assistant.enabled`** — the chart refuses to render it unset and accepts `anthropic` alone; on any other release the host reads it unset as `off`, which builds no provider (`AssistantOptions.ProviderInEffect`) |
-| `ANTHROPIC_API_KEY` | Secret | External Secrets → `web-bff-assistant-provider`, named by `assistant.apiKeySecretRef` and read by that release alone. The SDK's own variable, because the host's `Assistant` section refuses a key named like a secret ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) | ✓ **when `Assistant__Provider` is `anthropic`** — the chart refuses to render without the reference, and the pod does not start until External Secrets has created the Secret; a key the provider refuses is answered `no-credential` on the status route |
+| `ANTHROPIC_API_KEY` | Secret | External Secrets → `web-bff-assistant-provider`, named by `assistant.apiKeySecretRef` and read by that release alone. The SDK's own variable, because the host's `Assistant` section refuses a key named like a secret ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)) | ✓ **when `Assistant__Provider` is `anthropic`** — the chart refuses to render without the reference, and the pod does not start until External Secrets has created the Secret; a key the provider refuses is answered `no-credential` on the status route |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |
@@ -1553,7 +1553,7 @@ third outcome, because a key that never varies has nothing to validate.
 > The saga's schedule delays (§9.6) pass on a developer's word instead: a
 > developer's stack differs from production in them, because a wait of minutes
 > cannot be watched by hand, and no deployed value is set
-> ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
+> ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-1072.md)).
 > The gateway's budgets and the workers' pace pass on the same word: the stress
 > run's stack differs from production in them, because a run that measures the
 > host cannot carry the limiter or a third party's modelled rate, and again no

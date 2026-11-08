@@ -23,7 +23,7 @@ plan for each. Clustered on `SequenceNumber`, the plan compiled over a
 near-empty table, as it is whenever Ordering is idle, scans the clustered
 index rather than seeking the filtered one, and under load that scan waits on
 the commit of every other delivery's rows: the queue, not the cycle,
-[ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md)'s
+[ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992.md)'s
 first consequence foresaw. ADR-112 weighed this re-clustering and refused it
 because under `Serializable` the bounded seek still locked to the next key,
 the end of a near-empty table; ADR-112 itself made the transaction

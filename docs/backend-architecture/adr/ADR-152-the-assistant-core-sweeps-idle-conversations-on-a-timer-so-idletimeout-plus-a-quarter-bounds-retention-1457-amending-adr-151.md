@@ -11,7 +11,7 @@ not anything opens or finds a conversation. `Web.Bff`'s `AssistantRuntime`
 disposes the core with the host's container. Both packages move to 0.1.1 under
 [ADR-150](ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)'s
 rule.
-**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
+**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 accepted that the store swept only on an open or a find, so on a replica nobody
 touched, what a customer typed and what the tools read for them stayed in
 memory for the process's life. `docs/personal-data.md` could state only that

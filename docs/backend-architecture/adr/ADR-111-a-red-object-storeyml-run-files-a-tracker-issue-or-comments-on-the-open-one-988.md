@@ -8,7 +8,7 @@ The job holds `issues: write` and the `check` job does not, the asking step
 carries its own timeout shorter than the job's so a hung store is a failed step
 and not a cancelled job, and `deploy/objectstore/test_store_check.py` asserts
 each of those properties of the workflow's commands.
-**Why.** [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
+**Why.** [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)
 left a red run to the repository's notification, which is read once and closes
 with nothing open; the realm job it was modelled on files an issue for that
 reason ([ADR-043](ADR-043-the-deployed-realm-is-checked-between-rollouts.md)).

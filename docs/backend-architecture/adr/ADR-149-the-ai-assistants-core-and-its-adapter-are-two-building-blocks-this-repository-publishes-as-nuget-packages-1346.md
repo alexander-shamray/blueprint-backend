@@ -66,7 +66,7 @@ request, with the feed's refusal on `main` kept as the backstop, and §15.1's
 is otherwise unchanged.
 
 **Amended by
-[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)**:
+[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)**:
 the Web BFF is the first host here that references the two blocks, serving
 the assistant to signed-in customers, off by default. This record is otherwise
 unchanged.

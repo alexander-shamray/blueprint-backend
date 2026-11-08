@@ -25,7 +25,7 @@ selector matches one service name and track by equality, never counts it in
 `web-bff`'s baseline; whether the chart can set that name or the host needs an
 option for it is the follow-up's to find. The design is this record; the pieces
 that make it true are filed as issues under #1451.
-**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
+**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 accepted that a conversation lives in the memory of the process that opened
 it, and the main release runs three to twenty replicas behind a Service with
 no affinity, so a customer's next request lands elsewhere and answers 404 for

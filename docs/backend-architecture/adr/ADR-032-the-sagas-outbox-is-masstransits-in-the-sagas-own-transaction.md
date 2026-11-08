@@ -200,7 +200,7 @@ Retiring either one costs a guarantee the other never made.
   not name.
 
 **Superseded in part by
-[ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md)**:
+[ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992.md)**:
 the Decision's `IsolationLevel.Serializable`, chosen for the key-range lock two
 first deliveries need; and, in the consequence calling the consume
 transaction longer, wider and stricter, the word "stricter" and both of its

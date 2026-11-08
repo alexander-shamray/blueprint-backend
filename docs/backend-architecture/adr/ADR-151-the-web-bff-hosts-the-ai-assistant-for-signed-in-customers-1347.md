@@ -93,7 +93,7 @@ own gateway route, so the main release keeps it off by design and #1451 is
 the set of pieces that make that true. This record is otherwise unchanged.
 
 **Amended by
-[ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)**:
+[ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)**:
 `get_stock` answers whether a product is in stock, through an Inventory hop
 under this host's own credentials, so the host's instructions no longer say
 that stock cannot be answered, and the in-stock flag joins a product's name and
@@ -101,7 +101,7 @@ price in what the provider is shown of a product. This record is otherwise
 unchanged.
 
 **Amended by
-[ADR-156](ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)**:
+[ADR-156](ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-1484-1485.md)**:
 `Assistant:Provider` also takes `scripted`, a keyless fixed reply the host
 runs in Development alone and Compose's BFF sets, and each of the host's 429s
 carries a `code` of its own, still with no `Retry-After`. This record is

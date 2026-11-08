@@ -476,7 +476,7 @@ a non-`https` endpoint, loopback aside, for the same reason.
 **Rotate it with the pair it copies.** Rotating a pair in the store and not here
 makes the next run red with `InvalidAccessKeyId` or `SignatureDoesNotMatch`,
 which the check deliberately does not read as a refusal
-([ADR-110](backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)).
+([ADR-110](backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)).
 Fix the secret; never fix the run by deleting the check.
 
 ### A notification credential

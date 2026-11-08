@@ -72,7 +72,7 @@ ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT ON;
 ```
 
 **Every service database runs read-committed snapshot**
-([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
+([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-1653.md)).
 A database a migrator makes gets it from EF Core's `CREATE DATABASE`, and one
 an operator makes gets it from the last statement above; §7.4's migrator
 refuses a database without it before applying anything. A read at read
@@ -441,7 +441,7 @@ every attempt has failed before that branch pages.
 isolation** through the same `MigratorCommand`, and a database without §7.1's
 read-committed snapshot fails the Job with the statement that sets it, nothing
 applied
-([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
+([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-1653.md)).
 A database not yet made is not read, since the provider's `CREATE DATABASE`
 sets it.
 

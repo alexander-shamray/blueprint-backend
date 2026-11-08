@@ -35,7 +35,7 @@ ended until it does. A shipment already ended before this decision stays ended:
 nothing carries the order back.
 
 **Amended by
-[ADR-146](ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md)**,
+[ADR-146](ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-1320.md)**,
 under which the emptying and the address delete are two statements of one
 unit, the emptying first, and not one batch.
 

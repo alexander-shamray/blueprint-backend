@@ -4,7 +4,7 @@
 [ADR-090](ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)
 has Catalog's take it, and then stages on the Broker lane, instead of
 migrating, a `PersonalDataDeleteClosed` for every closed request whose close
-[ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)
+[ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md)
 lets Privacy publish: one where no amendment removed a holder that Privacy
 never heard from. The payload carries the request's id and its `ClosedAt` as
 `OccurredAt`; the row gets a new `MessageId` and the run's time as its own

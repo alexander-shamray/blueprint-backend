@@ -47,7 +47,7 @@ vocabulary, and the gateway's 429 still carries none, so a client tells the
 two apart by the code's presence rather than by a header's absence; the web
 client's half, keying its exemption on the code and adding an end-to-end spec
 of the panel, stays on blueprint-frontend#350.
-[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
+[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 is otherwise unchanged and is read beside this record.
 
 ---

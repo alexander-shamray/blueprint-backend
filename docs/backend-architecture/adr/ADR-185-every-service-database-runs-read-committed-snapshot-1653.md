@@ -16,7 +16,7 @@ not read, since the provider's `CREATE DATABASE` is what makes it.
 `CREATE DATABASE`, one switched on by hand and one the provider made, and
 `MigratorIsolationTests` holds every `*.Migrator` under `src/` to the check
 before its `MigrateAsync`.
-**Why.** [ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md)
+**Why.** [ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992.md)
 says the Ordering database does not run read-committed snapshot.
 [#1653](https://github.com/alexander-shamray/blueprint-backend/issues/1653)
 found every database on the stress stack running it, all eight made by the

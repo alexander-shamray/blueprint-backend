@@ -2024,7 +2024,7 @@ would multiply inside the drawing:
 Each delay is a default: the saga's host binds the `Saga` section over them,
 and a laptop's Compose override shortens all five so an expiry can be watched
 by hand
-([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
+([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-1072.md)).
 
 `ConfirmationTimeoutDelay` is the one set against this repository's own
 mechanisms rather than against a peer — `RetryPolicy`'s ladder on
@@ -3225,7 +3225,7 @@ has a Shipping worker read a delivery address from Ordering with nothing
 waiting on the answer, so it spends no hop of this budget and §2.3's callout
 records the departure, and the BFF's assistant reads whether a product is in
 stock from Inventory inside a turn, which runs off the request that started it
-([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)).
+([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)).
 ADR-052 also has a Notifications worker read a
 mailbox from Keycloak's admin API on the same terms, which reaches no service
 of the platform at all, and only a verified one
@@ -3355,7 +3355,7 @@ assistant's model provider is none of these rules' subject: no request waits on
 a turn's call, which runs off the request that started it, and the status route
 waits only on the adapter's model probe, cached and bounded by its own timeout
 inside `ServiceOptions.OperationTimeout`. It is the provider SDK's own client,
-with that SDK's timeout and retries ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)). A call under the caller's
+with that SDK's timeout and retries ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)). A call under the caller's
 own token is a third kind, and §4.2's helper registers none of it either: in the
 reference domain the BFF's hop to Notifications forwards the buyer's access
 token unchanged and holds no grant for it ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md), [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)), so

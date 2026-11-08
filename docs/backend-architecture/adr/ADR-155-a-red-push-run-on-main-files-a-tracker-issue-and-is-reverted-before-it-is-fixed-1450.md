@@ -21,7 +21,7 @@ as it stood at its last run, not the one it lands on, and two that are green
 on their own can be red together; the push run on `main` is the first run that
 tests them together. A red push run told only the notification of whoever
 pushed, which is read once, where an issue stays open until somebody closes it
-([ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)'s
+([ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988.md)'s
 argument). Revert before fixing, because a fix forward takes as long as it
 takes, and every branch cut from a red `main` meanwhile inherits the red; a
 revert restores the last green tree in one known step, and the `PR:` trailer

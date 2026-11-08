@@ -8,7 +8,7 @@ under `uploads/`, at a key named for this run alone, and the store must answer
 with an empty body. A write that is not answered `200` fails the run and skips
 the read, because there is nothing written to read. The delete and list
 probes of
-[ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
+[ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)
 then run unchanged.
 **Why.** A refusal proves nothing about a bucket the pairs were never granted.
 An existing bucket that grants them nothing, such as staging or another
@@ -36,7 +36,7 @@ the policy allows everything the services need, such as Catalog's write under
 would pass the control, which is why the refusal probes still follow it.
 
 **Supersedes in part
-[ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)**:
+[ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)**:
 its Decision's clauses that each pair signs three requests and that a request
 passes only on `403 AccessDenied`, which now hold of the refusal probes alone,
 and its Why's clause that the check never writes to a production bucket.

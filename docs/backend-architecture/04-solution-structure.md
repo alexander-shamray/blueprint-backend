@@ -446,7 +446,7 @@ build failure; no ASP.NET, because it is a job host
 resolves a `DbContext` and calls `Database.Migrate()`, and what a building block
 gives that path arrives only through the Infrastructure's `MigratorTransport`
 and `MigratorCommand` ([ADR-184](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md),
-[ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
+[ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-1653.md)).
 
 **Nothing references the migrator, and saying so is a third gate rather than a
 shorter list of this service's own projects.** No row in the table names the
@@ -536,7 +536,7 @@ Every ordering constraint below is stated rather than left to the sample of
 | `UseRequestTimeouts` below `UseExceptionHandler` | Above it, the handler answers the cancelled request first, as a 499, and §10.5's 504 is never written ([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)) |
 | `UseAuthentication` before `UseAuthorization` | **Every authenticated request 401s** — in a `WebApplication` too. Omitting a call is repaired by auto-insertion; writing both in the wrong order is not, because the markers they set suppress it. See the callout below |
 | `UseAuthentication` before `UseRateLimiter` (gateway only) | Same empty `User`, but this one does not 403 — §10.3's per-user partition key silently degrades to per-IP, and everyone behind one NAT shares a single bucket. **Silent is the measured half**: reversing the two leaves every test in `Gateway.Api.Tests` green, the authenticated-partition test included, so nothing in the repository is watching this line (see below) |
-| `UseRateLimiter` below `UseAuthorization` (BFF only) | The assistant's partition is the caller's subject ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)), read through `ICurrentUser`, which throws without one: above authorization, an anonymous request to a limited route answers 500 rather than §11.4's 401, and `AssistantEndpointTests`' anonymous case fails |
+| `UseRateLimiter` below `UseAuthorization` (BFF only) | The assistant's partition is the caller's subject ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)), read through `ICurrentUser`, which throws without one: above authorization, an anonymous request to a limited route answers 500 rather than §11.4's 401, and `AssistantEndpointTests`' anonymous case fails |
 | `UseForwardedHeaders` above the limiter, and **below** the handler and the correlation ID (gateway only) | Two rules meeting: putting it first means a fault parsing a forwarded header unwinds past no exception handler, and anything the middleware logs runs outside the correlation scope. Neither of those two reads the address, so nothing is lost by letting them wrap it — while the limiter, which does read it, stays below. `ForwardedHeadersTests` covers the lower half: below `UseRateLimiter`, two forwarded addresses collapse onto the one connection the gateway can see |
 | Both before endpoint mapping | `RequireAuthorization` has nothing to evaluate against |
 | Health endpoints mapped **anonymous** | Probes 401, Kubernetes reads that as unhealthy, and the pod is killed in a loop |
@@ -587,7 +587,7 @@ confidence nobody checked.
 The **gateway** has its own pipeline and is the only place the platform's
 capacity limit is applied (§10.1); no service behind it calls `UseRateLimiter`,
 and the BFF calls it only for
-[ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)'s per-customer limit on the assistant's routes
+[ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)'s per-customer limit on the assistant's routes
 that start work: opening a conversation and starting a turn.
 `src/Gateway/Gateway.Api/Program.cs` follows in three excerpts. Its
 registrations, up to the reverse proxy:

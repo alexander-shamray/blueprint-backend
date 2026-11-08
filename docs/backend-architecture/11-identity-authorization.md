@@ -1498,7 +1498,7 @@ Rules for each service's consumer:
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a count, when it was erased
   and when its request closed
-  ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
+  ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md)).
   It is `Common.Domain`'s `PersonalDataErasure`, which each holder maps to a
   table in its own schema.
 - **Idempotent.** The message is delivered at least once, and a second erasure
@@ -1518,7 +1518,7 @@ Rules for each service's consumer:
   [ADR-141](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md)).
   The check asks no request that closed, by the time `PersonalDataDeleteClosed`
   stamps on the holder's row, before its data left the owner, less a margin
-  for the clocks ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
+  for the clocks ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md)).
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 

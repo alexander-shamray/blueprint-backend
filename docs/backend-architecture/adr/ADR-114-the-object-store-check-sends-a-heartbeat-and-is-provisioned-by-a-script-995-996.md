@@ -12,7 +12,7 @@ set unless every value is present, secrets travel on stdin, and the opt-in
 variable `OBJECT_STORE_CHECK_SCHEDULED` is set last. An optional Environment
 variable `OBJECT_STORE_ADDRESSING`, `path` unless set to `virtual`, makes the
 check name the bucket as a label of the host for a store reachable no other way.
-**Why.** [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md) and [ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md) left two things open.
+**Why.** [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md) and [ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988.md) left two things open.
 GitHub sheds a schedule under load and suspends it after a stretch without a
 commit, in both cases without a red run, so nothing in the repository could
 notice the daily check had stopped
@@ -37,7 +37,7 @@ the same residual and is left as it is. The check still cannot tell a drifted
 policy from an unreachable store, and it does not see a CDN or an ACL that
 grants a delete around the policy.
 
-**Supersedes in part [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md) and [ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)**: their
+**Supersedes in part [ADR-110](ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md) and [ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988.md)**: their
 Consequences' clauses that a store reachable only by a virtual-hosted name is
 not covered, and that a monitor outside GitHub is the deployment's to add with
 nothing in the repository to feed it.
