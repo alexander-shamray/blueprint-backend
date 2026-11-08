@@ -22,7 +22,7 @@ named in that command's scope.
 `Platform.slnx` is the only list of them. Everything else is stdlib Python or
 shell, kept beside the thing it checks, and **the workflow that runs it is
 the enumeration** — `ci.yml` tests each gate and then runs it, and each
-workflow beside it is the run of whatever it watches, with a suite in front
+workflow beside it is the run of whatever it watches, with a suite beside it
 where the gate has one. None
 of those suites is in `Platform.slnx`, so a green solution says nothing about
 any of them; read the workflows, not this file, for what exists.
@@ -30,7 +30,7 @@ any of them; read the workflows, not this file, for what exists.
 To run one locally, do what its workflow step does, from the directory the
 step runs in, with `py -3.12` in place of `python`. A suite is
 `py -3.12 -m unittest` or `py -3.12 -m unittest discover -s <dir>` as the
-step spells it; the gate is the command the step after it runs. Each tree
+step spells it; the gate is the command its enforcing step runs. Each tree
 under `deploy/` carries a README stating what its gate asserts and, more
 usefully, what it does not — the chart gate reaches no cluster, the
 observability gate no Prometheus, the realm gate a file locally and a live
@@ -224,9 +224,10 @@ runs in the fast half and fails there. What it cannot do is report a pass.
 
 ## Running a gate on its own
 
-A gate's suite runs before the gate (`.harness/agent-rules.md`, *Hard
+A gate with a suite is both tested and run (`.harness/agent-rules.md`, *Hard
 rules*), so a green suite says the gate works and not that this checkout
-passes it; a gate without one is only run.
+passes it; a gate without one is only run. The order of the two is each
+workflow's own.
 Most gate runs are the workflow step verbatim. The entries below are the ones
 a step does not show whole, and the gates whose invocation
 [`docs/change-locality.md`](change-locality.md) §3's Class D places here,
