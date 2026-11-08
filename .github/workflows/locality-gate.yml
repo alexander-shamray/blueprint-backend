@@ -41,7 +41,7 @@ permissions:
 
 # The workflow definition comes from the head ref, so a pull request can edit
 # or delete the enforcing step. A required status check on `main` closes a job
-# that never reports; an edited step still reports, and only its diff shows it.
+# that never reports; an edited step still reports.
 jobs:
   locality-gate:
     # Dependabot's pull requests declare no class or touch set and carry no
