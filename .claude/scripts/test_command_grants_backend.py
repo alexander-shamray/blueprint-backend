@@ -40,11 +40,9 @@ class MutationSweepFilesUnderTheMutationRoute(unittest.TestCase):
 
 
 class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase):
-    """The rule the payload holds its managed commands to, on the local ones no payload suite may require it of.
+    """A memory file or an output style instructs every later session, and these commands read a branch's text.
 
-    A memory file or an output style instructs every later session, and these commands read a branch's text
-    (`docs/harness-boundaries.md`, *A command that holds `Write` or `Edit`*). The set is read from the tree, so a new
-    local command that writes is a red build rather than a quiet widening.
+    The set is read from the tree, so a new local command that writes is a red build rather than a quiet widening.
     """
 
     REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)")
