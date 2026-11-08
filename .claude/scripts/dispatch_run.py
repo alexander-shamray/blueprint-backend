@@ -462,7 +462,7 @@ def run_session(root, run, gid):
     except OSError as error:
         raise Refusal(f"could not remove the stale {marker}: {error}") from None
     try:
-        child, text, started = _launch(root, directory, run, gid, entry, berserk(state)[0])
+        child, text, started, scratch = _launch(root, directory, run, gid, entry, berserk(state)[0])
     except Refusal as refusal:
         # The group holds a slot until `result` reads why nothing launched; state.json stays the dispatcher's.
         try:
@@ -470,7 +470,10 @@ def run_session(root, run, gid):
         except Refusal as unwritten:
             raise Refusal(f"{refusal}; {unwritten}") from None
         raise
-    out, err = child.communicate(text.encode("utf-8"))
+    try:
+        out, err = child.communicate(text.encode("utf-8"))
+    finally:
+        _remove_temp(scratch)
     ended = now()
     record = {"exit": child.returncode, "started": started.isoformat(), "ended": ended.isoformat(),
               "seconds": round((ended - started).total_seconds()),
@@ -479,7 +482,8 @@ def run_session(root, run, gid):
 
 
 def _launch(root, directory, run, gid, entry, flag=False):
-    """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
+    """Everything up to a started executor, which is returned with its prompt, start time and temp directory; a
+    refusal starts none and leaves no temp directory."""
     # A relaunch's earlier session was read, so it goes before the launch checks; a record this removal missed is
     # read as absent beside a marker or a refusal line. Its pid goes too: `result --refused` reads a pid file as an
     # executor started, and one this removal missed as the cautious side. An earlier launch's went at `launch`.
@@ -511,6 +515,7 @@ def _launch(root, directory, run, gid, entry, flag=False):
         child = subprocess.Popen([*command, "-p", "--output-format", "json", "--model", flag], cwd=worktree, env=env,
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except OSError as error:
+        _remove_temp(scratch)
         raise Refusal(f"could not start claude: {error}") from None
     try:
         _write(directory / f"{gid}.pid", f"{child.pid}\n")
@@ -518,8 +523,9 @@ def _launch(root, directory, run, gid, entry, flag=False):
         # An executor resume cannot see would be relaunched over; Popen.kill is the intended stop here.
         child.kill()
         child.wait()
+        _remove_temp(scratch)
         raise
-    return child, text, started
+    return child, text, started, scratch
 
 
 def executor_temp(root, run, gid):
@@ -531,6 +537,13 @@ def executor_temp(root, run, gid):
         return Path(tempfile.mkdtemp(prefix=f"dispatch-{Path(root).resolve().name}-{run}-{gid}-", dir=base)).resolve()
     except OSError as error:
         raise Refusal(f"could not create the executor's temp directory under {base}: {error}") from None
+
+
+def _remove_temp(scratch):
+    """The executor's temp directory removed once it has exited. Best effort: a process the executor left holding
+    a file in it is the system's to clear later, and must not stop `run` writing the session record or the refusal
+    that follows."""
+    shutil.rmtree(scratch, ignore_errors=True)
 
 
 def _remove_stale(*paths):
@@ -827,11 +840,21 @@ def classify(end, result, crashes, now):
 
 
 def alive(pid):
-    if not _number(pid):
+    # A pid past the C int is out of shape, as a hand-edited pid file can be, and no host hands one out: os.kill raises
+    # OverflowError on it, and OpenProcess's DWORD would truncate one past 2**32, which could alias a live process.
+    if not _number(pid) or pid > 0x7FFFFFFF:
         return False
     if os.name != "nt":
-        # Linux is the only other host, CI's; os.kill is never the probe, since on Windows it terminates.
-        return Path(f"/proc/{pid}").exists()
+        # Signal 0 asks the kernel and delivers nothing, on Linux and macOS alike; `/proc` was Linux's alone, so on
+        # macOS every executor read as dead. Never the probe on Windows, where os.kill terminates.
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Another user's process still exists; only a pid with no process behind it is dead.
+            return True
+        return True
     import ctypes
     from ctypes import wintypes
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)

@@ -65,9 +65,13 @@ class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def run_helper(self, *args, body=""):
+    def run_helper(self, *args, body="", timeout_program=None):
+        # `timeout_program` names the program gh-read-bound.sh's `bounded` looks for, so one that is not there takes
+        # the watchdog a host without GNU `timeout` runs, as macOS does.
         env = dict(os.environ)
         env["PATH"] = self.dir + os.pathsep + env["PATH"]
+        if timeout_program is not None:
+            env["GH_READ_TIMEOUT"] = timeout_program
         return subprocess.run([BASH, str(self.HELPER), *args], capture_output=True, text=True,
                               encoding="utf-8", input=body, env=env)
 
@@ -210,7 +214,22 @@ class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
         calls = [ln for ln in code if re.search(r"(^|[^\w-])gh issue ", ln)]
         self.assertEqual(3, len(calls), "the search, the comment and the filing each call gh")
         for ln in calls:
-            self.assertRegex(ln, r"timeout [0-9]+ gh ", ln)
+            self.assertRegex(ln, r"bounded [0-9]+ gh ", ln)
+        self.assertIn('. "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"', code)
+
+    def test_the_watchdog_hands_gh_the_body_and_the_conversion_switch(self):
+        # Where no `timeout` is installed, as on macOS, every call runs under the watchdog, which backgrounds gh: a
+        # background command is handed /dev/null unless its stdin is named, and the filing and the comment both
+        # read the body there.
+        result = self.run_helper("bug", "high", "harness", body=self.stdin(), timeout_program="no-such-timeout")
+        self.assertEqual(0, result.returncode, result.stderr)
+        d = Path(self.dir)
+        self.assertEqual(f"the body\n\n{self.HAND_TRAILER}\n", (d / "body").read_text(encoding="utf-8"))
+        self.assertEqual("*", (d / "conv").read_text(encoding="utf-8").strip())
+        self.open_issues((41, "a title"))
+        result = self.run_helper("bug", "high", "harness", body=self.stdin(), timeout_program="no-such-timeout")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(f"the body\n\n{self.HAND_TRAILER}\n", (d / "comment").read_text(encoding="utf-8"))
 
     def test_the_trailer_is_the_hand_routes_and_no_other(self):
         for trailer in (self.SWEEP_TRAILER, self.REQUEST_TRAILER):

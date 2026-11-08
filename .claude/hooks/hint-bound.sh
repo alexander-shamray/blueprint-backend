@@ -4,6 +4,8 @@
 # bound, or on any non-zero exit, this prints the line below instead, and it exits 0 either way because exit 2
 # erases the prompt. Why the bound is here: docs/harness-boundaries.md (*Index hint hooks and hook wiring*).
 set -u
+# `bounded` is the pull request helpers' bound, which macOS, shipping no `timeout`, runs as a watchdog.
+. "$(dirname "${BASH_SOURCE[0]}")/../scripts/gh-read-bound.sh"
 HINT_BOUND_SECONDS="${HINT_BOUND_SECONDS:-10}"
 event="${1:?event}"
 export HINT_HOOK="${2:?hook}"
@@ -11,7 +13,7 @@ export HINT_HOOK="${2:?hook}"
 out="$(mktemp)"
 trap 'rm -f "$out"' EXIT
 rc=0
-timeout "$HINT_BOUND_SECONDS" py -3.12 -P -c \
+bounded "$HINT_BOUND_SECONDS" py -3.12 -P -c \
   "import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/' + os.environ['HINT_HOOK'], run_name='__main__')" \
   >"$out" || rc=$?
 if [ "$rc" -eq 0 ]; then

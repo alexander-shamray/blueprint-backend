@@ -4,6 +4,8 @@
 # on stdin with the hand route's last line. An open issue of that exact title
 # takes the body as a comment, so a re-taken sync adds to its issue.
 set -euo pipefail
+# `bounded`, which every `gh` call below runs under: GNU `timeout` where it is installed, a watchdog on macOS.
+. "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 
 [ "$#" -eq 3 ] || {
   echo "usage: gh-issue-harness.sh <bug|test-gap|enhancement> <critical|high|medium|low>" \
@@ -60,7 +62,7 @@ repo=alexander-shamray/blueprint-harness
 # nothing, since filing would repeat what a match takes; so does a list that
 # fills the limit, which may hide the match.
 limit=1000
-open=$(timeout 60 gh issue list --repo "$repo" --state open --limit "$limit" \
+open=$(bounded 60 gh issue list --repo "$repo" --state open --limit "$limit" \
   --json number,title --jq '.[] | "\(.number)\t\(.title)"') ||
   { echo "cannot search the harness's open issues" >&2; exit 3; }
 if [ -n "$open" ] && [ "$(printf '%s\n' "$open" | wc -l)" -ge "$limit" ]; then
@@ -70,14 +72,14 @@ fi
 while IFS=$'\t' read -r number existing; do
   existing="${existing%$'\r'}"
   if [ "$existing" = "$title" ] && [[ "$number" =~ ^[0-9]+$ ]]; then
-    printf '%s' "$body" | timeout 60 gh issue comment "$number" --repo "$repo" --body-file -
+    printf '%s' "$body" | bounded 60 gh issue comment "$number" --repo "$repo" --body-file -
     exit 0
   fi
 done <<<"$open"
 area_labels=()
 IFS=, read -r -a areas <<<"$area"
 for label in "${areas[@]}"; do area_labels+=(--label "$label"); done
-printf '%s' "$body" | MSYS2_ARG_CONV_EXCL='*' timeout 60 gh issue create \
+printf '%s' "$body" | MSYS2_ARG_CONV_EXCL='*' bounded 60 gh issue create \
   --repo "$repo" \
   --title "$title" \
   --label "$kind" \

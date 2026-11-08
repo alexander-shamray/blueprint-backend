@@ -20,6 +20,8 @@ from review_helpers import (
 
 DETACH = SCRIPTS / "git-worktree-detach.sh"
 DROP = SCRIPTS / "git-worktree-drop.sh"
+# A modification time long past the sweep's day, in `touch -t`'s POSIX form, which GNU, BSD and MSYS all read.
+OLD_TOUCH = 'touch -t 200001010000 "$P"'
 
 
 def bash_tmproot():
@@ -171,7 +173,8 @@ class StaleSweepWorktrees(unittest.TestCase):
         return result.stdout.strip()
 
     def age(self, path):
-        aged = run_bash('touch -d "2 days ago" "$P"', P=path)
+        # `-t`, which POSIX defines: `-d "2 days ago"` is GNU's, and BSD's `touch` on macOS refuses it.
+        aged = run_bash(OLD_TOUCH, P=path)
         self.assertEqual(0, aged.returncode, aged.stderr)
 
     def names(self):
@@ -284,7 +287,7 @@ class ATrackedLinkIsRefusedBeforeAnythingIsMade(unittest.TestCase):
 
     def test_a_refused_commit_drops_no_stale_worktree(self):
         old = self.detach("HEAD").stdout.strip()
-        self.assertEqual(0, run_bash('touch -d "2 days ago" "$P"', P=old).returncode)
+        self.assertEqual(0, run_bash(OLD_TOUCH, P=old).returncode)
         result = self.detach("HEAD~1")
         self.assertEqual(5, result.returncode, result.stderr)
         self.assertEqual("yes", run_bash('[ -d "$P" ] && echo yes', P=old).stdout.strip(),

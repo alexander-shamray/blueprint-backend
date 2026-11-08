@@ -98,7 +98,9 @@ class ALauncherCheckout:
     """
 
     def __init__(self, case, guards=False):
-        self.root = Path(tempfile.mkdtemp(prefix="launcher-mark-"))
+        # Resolved: a Windows runner's TEMP is an 8.3 alias (`RUNNER~1`), which `pwd -W` hands the guard expanded,
+        # so the `cwd` below would be a spelling of the copy's root that its anchor does not recognise, and refused.
+        self.root = Path(os.path.realpath(tempfile.mkdtemp(prefix="launcher-mark-")))
         case.addCleanup(shutil.rmtree, str(self.root), ignore_errors=True)
         self.source = SCRIPTS.parent / "hooks"
         self.hooks = self.root / ".claude" / "hooks"

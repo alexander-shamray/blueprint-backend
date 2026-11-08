@@ -68,8 +68,8 @@ sweeps' `mktemp -d` ones.
    | | |
    |---|---|
    | `docs/**` only | `docs/` |
-   | `.editorconfig`, `CLAUDE.md`, `.claude/**`, CI, `Directory.*.props` | `chore/` |
-   | `src/**` or `tests/**` | `feat(<scope>)/`, `fix/` or `refactor/` — the diff decides which |
+   | Repo config — `.editorconfig`, `CLAUDE.md`, `.claude/**`, CI, build and dependency settings | `chore/` |
+   | Solution code and its tests, whatever trees the repository keeps them in | `feat(<scope>)/`, `fix/` or `refactor/` — the diff decides which |
 
    A mixed tree takes the type of the change carrying the argument. Two
    unrelated changes: say so, name the dominant one, and flag that the other
