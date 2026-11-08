@@ -424,6 +424,32 @@ class PathWhichParity(unittest.TestCase):
             finally:
                 os.chdir(here)
 
+    def test_both_copies_skip_a_relative_entry_and_search_from_a_filesystem_root(self):
+        import dispatch_board
+        name = "tool.cmd" if os.name == "nt" else "tool"
+        with tempfile.TemporaryDirectory() as parent:
+            sub = Path(parent) / "bin"
+            sub.mkdir()
+            (sub / name).write_text("x", encoding="ascii")
+            (sub / name).chmod(0o755)
+            sibling = Path(parent) / "cwd"
+            sibling.mkdir()
+            here = os.getcwd()
+            root = sub.anchor
+            try:
+                for copy in (dispatch_board.path_which, ID.path_which):
+                    # The entry resolves outside the working directory, so only the relative-entry rule skips it.
+                    os.chdir(sibling)
+                    with mock.patch.dict(os.environ, {"PATH": os.path.join(os.pardir, "bin")}):
+                        self.assertIsNone(copy("tool"), "a relative PATH entry is not searched")
+                    # At a filesystem root `here` already ends in the separator, so appending one more matched
+                    # nothing and a file below the root was taken as outside it.
+                    os.chdir(root)
+                    with mock.patch.dict(os.environ, {"PATH": str(sub)}):
+                        self.assertIsNone(copy("tool"), "a file below a root working directory is skipped")
+            finally:
+                os.chdir(here)
+
 
 if __name__ == "__main__":
     unittest.main()

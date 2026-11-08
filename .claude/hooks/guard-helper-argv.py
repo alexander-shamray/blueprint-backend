@@ -6,11 +6,25 @@ A grant matches the typed string while the shell runs `$(…)`, quoted or not; t
 
 import importlib.util
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
 
 INDEX_GUARD = Path(__file__).with_name("guard-index-argv.py")
+ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
+# Words that run the command after them, and the wrappers' options that take a separate argument; as `guard-sed-crlf.py`.
+PREFIXES = frozenset({
+    "command", "exec", "time", "builtin", "nohup",
+    "!", "if", "then", "elif", "else", "while", "until", "do",
+})
+WRAPPERS = {
+    "env": {"-u", "--unset", "-C", "--chdir"},
+    "nice": {"-n", "--adjustment"},
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+}
+GH_VALUE_FLAGS = frozenset({"-R", "--repo", "--hostname"})
 REASON = (
     "a command substitution in a command that runs a helper is refused: its prefix grant matches the typed string "
     "while the shell still runs `$(…)` and backticks, inside double quotes too. Put issue text in the file the "
@@ -26,12 +40,60 @@ def _index_guard():
     return module
 
 
+def _command_word(run):
+    """The words from the one this simple command runs: past assignments, prefix words and wrappers' options."""
+    index = 0
+    while index < len(run):
+        word = run[index]
+        if ASSIGNMENT.match(word) or word in PREFIXES:
+            index += 1
+        elif word in WRAPPERS:
+            index += 1
+            while index < len(run) and run[index].startswith("-") and run[index] != "-":
+                option = run[index]
+                index += 2 if option in WRAPPERS[word] else 1
+                if option == "--":
+                    break
+            # `timeout` takes its duration before the command.
+            index += 1 if word == "timeout" else 0
+        else:
+            break
+    return run[index:]
+
+
+def _python_script(run, index):
+    """The script a python launcher's line names, past `py -3.12` and the interpreter's value flags, else ''."""
+    position = 1
+    if index._base_name(run[0]).removesuffix(".exe") == "py" and len(run) > 1 and run[1][1:2].isdigit():
+        position = 2
+    while position < len(run):
+        word = run[position]
+        if word in index._PYTHON_VALUE_FLAGS:
+            position += 2
+        elif word.startswith("-"):
+            position += 1
+        else:
+            return word.replace("\\", "/")
+    return ""
+
+
+def _is_pr_create(run):
+    """`gh pr create`, past gh's global flags."""
+    position = 1
+    while position < len(run) and run[position].startswith("-"):
+        position += 2 if run[position] in GH_VALUE_FLAGS else 1
+    return run[position:position + 2] == ["pr", "create"]
+
+
 def _runs_a_helper(run, index):
-    if run[:3] == ["gh", "pr", "create"]:
-        return True
+    run = _command_word(run)
+    if not run:
+        return False
+    if index._base_name(run[0]).removesuffix(".exe") == "gh":
+        return _is_pr_create(run)
     if not index._is_python_launcher(run[0]):
         return False
-    script = next((word for word in run[1:] if not word.startswith("-")), "").replace("\\", "/")
+    script = _python_script(run, index)
     return ".claude/scripts/" in script and script.endswith(".py")
 
 

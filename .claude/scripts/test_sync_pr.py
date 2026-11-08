@@ -176,6 +176,24 @@ class SyncCase(unittest.TestCase):
         return out
 
 
+class HeadBlobsTests(SyncCase):
+    def test_the_head_tree_is_read_from_its_root_whatever_the_working_directory(self):
+        # `ls-tree` lists paths relative to the working directory, and a copy run from payload/ has one that is not
+        # the root; --full-tree is what makes the listing the head's.
+        oid = self.start()
+
+        def from_subdirectory(argv, cwd=None, timeout=60):
+            done = subprocess.run(argv, cwd=self.root / "docs", capture_output=True, encoding="utf-8",
+                                  errors="replace", check=False)
+            return done.returncode, done.stdout, done.stderr
+
+        with mock.patch.object(sync_pr, "run", from_subdirectory):
+            found = sync_pr.head_blobs(oid)
+        self.assertIn(".claude/settings.json", found)
+        self.assertIn("docs/b.md", found)
+        self.assertNotIn("b.md", found)
+
+
 class VerifyTests(SyncCase):
     def test_an_authentic_sync_verifies(self):
         self.start()
@@ -775,6 +793,25 @@ class LocalSuitesTests(SyncCase):
         self.write({".harness/config.json": json.dumps({"local": ["payload/**", "harness_sync/**", "measure/**"]})})
         self.tracked("payload/.claude/scripts/test_p.py", "harness_sync/tests/test_h.py", "measure/test_m.py")
         self.assertEqual(["harness_sync/tests/test_h.py", "measure/test_m.py"], self.cli("local-suites")[1].splitlines())
+
+    def test_local_suites_also_prints_the_payload_suites_that_walk_local_commands(self):
+        # They are managed, so no `local` glob names them, yet they read the target's own commands and settings.
+        self.write({".harness/config.json": json.dumps({"local": ["tools/**"]})})
+        self.tracked(".claude/scripts/test_command_grants.py", ".claude/scripts/test_grants_name_existing_helpers.py",
+                     ".claude/scripts/test_other_payload.py", "tools/test_a.py")
+        self.assertEqual([".claude/scripts/test_command_grants.py",
+                          ".claude/scripts/test_grants_name_existing_helpers.py", "tools/test_a.py"],
+                         self.cli("local-suites")[1].splitlines())
+
+    def test_every_command_walker_is_a_suite_the_payload_ships(self):
+        here = Path(__file__).resolve().parent
+        for path in sync_pr.COMMAND_WALKERS:
+            self.assertTrue((here / path.rsplit("/", 1)[-1]).is_file(), path)
+
+    def test_local_suites_lists_a_walker_once_when_a_glob_matches_it_too(self):
+        self.write({".harness/config.json": json.dumps({"local": [".claude/scripts/test_*.py"]})})
+        self.tracked(".claude/scripts/test_command_grants.py")
+        self.assertEqual([".claude/scripts/test_command_grants.py"], self.cli("local-suites")[1].splitlines())
 
     def test_local_suites_prints_nothing_when_no_suite_matches(self):
         self.write({".harness/config.json": json.dumps({"local": ["nothing/**"]})})
