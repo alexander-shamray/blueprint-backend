@@ -2393,6 +2393,23 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertAdmitted("git commit -F - <<\"EOF\"\na message\nEOF")
         self.assertAdmitted("git commit -F - <<'EOF'\na message\nEOF")
 
+    def test_a_refused_sweep_body_names_the_route_a_sweep_can_take(self):
+        # A sweep denies `Write`, so the file route the refusal opens with
+        # cannot be taken there; the refusal names the heredoc rewording and
+        # the pitfalls entry that lists the shapes another check refuses.
+        for body in ("the parent's tree", "The `foo` call.",
+                     "then git push origin +HEAD:main ran"):
+            with self.subTest(body=body):
+                reason = self.assertRefused(
+                    "bash .claude/scripts/gh-issue-sweep.sh bug low code "
+                    f"<<'ISSUE_BODY_END'{NEWLINE}Title{NEWLINE}{NEWLINE}"
+                    f"{body}{NEWLINE}ISSUE_BODY_END")
+                self.assertIn("handed to a shell on stdin", reason)
+                self.assertIn("Where `Write` is denied", reason)
+                self.assertIn("even count of apostrophes", reason)
+                self.assertIn(
+                    "`docs/harness/pitfalls.md`, *Shell and encoding*", reason)
+
     def test_a_stdin_script_that_builds_itself_is_refused(self):
         # A substitution inside a script a shell will run supplies the command
         # itself, and no reading models that:

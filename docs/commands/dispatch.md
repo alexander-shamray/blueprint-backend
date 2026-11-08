@@ -72,6 +72,14 @@ row of another session's is named to the owner rather than deleted. The
 rebuild's cleanup of closed and merged rows is therefore *Remaining*,
 *Tracking* and *Paused* only.
 
+**A list `board` refuses is still rebuilt from.** `board --run` keeps its
+copy as soon as it has read the list, before it cuts a group, so a group
+spanning two waves or two models, which it refuses, is re-cut by the same
+rebuild rather than by a hand edit. A list that does not parse at all, a
+malformed header or an *In progress* row naming two issues, still needs a
+human: `tasks rewrite` parses the live list too, and *In progress* is never
+rebuilt.
+
 `--run` takes the run's name, as every other subcommand does, and is
 resolved under `artifacts/dispatch/` to a run `start` opened; `board --run`
 and every `tasks` action refuse any other, so neither creates a directory of
@@ -421,7 +429,11 @@ session, one entry per model and its subagents included. The envelope's
 1662280, and it looks just as plausible, so it is read only for an envelope
 with no model counts and the row says which of the two it came from. The row
 carries `total_cost_usd`, and a session on more than one model has a line per
-model, since a Sonnet executor's reviewer runs on Opus.
+model, since a Sonnet executor's reviewer runs on Opus. A session that left
+no envelope, none of the three, spent an amount nothing records, so the row
+ends with how many sessions it did not count, and a group whose every
+session left none still gets a row saying so: a relaunched group's figure
+would otherwise read as its whole cost.
 
 The report is `report`'s English facts written up in `--lang`, in seven
 sections, the spec's §10's and *Syncs*, eight on a `--berserk` run (*The

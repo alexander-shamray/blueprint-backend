@@ -214,6 +214,10 @@ class SyncLaunch(Bound):
         record(RUN, "S1", status="done")
         self.assertEqual("", self.sync_launch())
 
+    def test_a_sync_is_not_launched_beside_a_claimed_merge(self):
+        record_sync(pr=6, status="merged-claimed", branch="chore/harness-sync-1234567")
+        self.refused("sync-6's merge is claimed and not verified; a sync is launched alone")
+
     def test_the_stop_file_launches_no_sync(self):
         (state_dir() / "STOP").write_text("", encoding="utf-8")
         self.refused("stop file: the owner ended the night, so nothing more launches")
@@ -263,6 +267,29 @@ class RunningASync(Bound):
         self.assertIn(f"refused: {WORKTREE} is at {moved}, not the proved {self.oid}", self.run_group())
         self.assertFalse(Path("fake/seen.json").exists())
         self.assertIn(f"{GID}: crashed-before-launch", run_cli(["result", RUN, GID]))
+
+    def test_a_moved_head_whose_pull_request_merged_says_so(self):
+        # Step 6's rebase moves the head, so a crash after it leaves a tree that reads as a head nobody proved
+        # though the merge landed; the refusal names the merge rather than leaving a bare crash.
+        self.sync_launch()
+        (self.tree / "h").write_text("moved\n", encoding="utf-8")
+        git_in(self.tree, "add", "h")
+        git_in(self.tree, "commit", "-q", "-m", "moved")
+        moved = git_in(self.tree, "rev-parse", "HEAD")
+        for state, said in (("MERGED", True), ("OPEN", False)):
+            with self.subTest(state=state), mock.patch.object(dr, "helper", lambda *a, state=state: json.dumps(
+                    {"state": state})):
+                out = self.run_group()
+                self.assertIn(f"{WORKTREE} is at {moved}, not the proved {self.oid}", out)
+                self.assertEqual(said, f"#{PR} is MERGED, so the head moved because the merge landed" in out)
+
+    def test_a_dirty_tree_is_not_called_a_landed_merge(self):
+        self.sync_launch()
+        (self.tree / "dirt").write_text("x\n", encoding="utf-8")
+        with mock.patch.object(dr, "helper", lambda *a: json.dumps({"state": "MERGED"})):
+            out = self.run_group()
+        self.assertIn("is not clean", out)
+        self.assertNotIn("merge landed", out)
 
     def test_the_sync_result_validates_with_no_issues(self):
         self.assertEqual(sorted(dr.RESULT_KEYS), sorted(SYNC_MERGED))
@@ -401,6 +428,15 @@ class Wake(InRoot):
                 self.assertEqual("launch: none", lines[-1])
                 self.assertIn(f"running: {GID}", lines)
         record_sync(status="closed", closed_from="verified")
+        self.assertEqual("launch: S1 S3", self.wake()[-1])
+
+    def test_no_group_launches_while_a_sync_merge_is_claimed_and_unverified(self):
+        # `main` is not confirmed to hold it until `verify` has read GitHub, and the next group would run on that.
+        record_sync(status="merged-claimed")
+        lines = self.wake()
+        self.assertEqual("launch: none", lines[-1])
+        self.assertIn(f"held: {GID} merge claimed, not yet verified", lines)
+        record_sync(status="verified")
         self.assertEqual("launch: S1 S3", self.wake()[-1])
 
     def test_a_sync_running_does_not_end_the_night(self):
