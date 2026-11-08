@@ -1475,7 +1475,12 @@ the path and root checks are `git-worktree-fork.sh`'s; a branch that exists
 locally, or that origin lacks, is refused. A name that matches is not a proved
 sync, which is `sync_pr.py verify`'s to say, and `/ship` and `/dispatch` run it
 before the helper. Residual: called directly, the helper opens any branch named
-like a sync, which it checks out and runs nothing in.
+like a sync, which it checks out and runs nothing in. The helper also seeds
+neither the MCP approval nor the code index that `git-worktree-fork.sh` does,
+and that is left so: a sync run reads a diff and runs suites, which need no
+index, and a session an owner opens there sees `codebase-index` pending until
+they approve it. Seeding would add a read of the main checkout's `.mcp.json`
+and settings to a grant that is meant to do two git commands and nothing else.
 
 **`Bash(py -3.12 -m unittest discover:*)` runs the code of whatever tree it is
 pointed at, and is `/ship`'s alone.** A sync's step 2 runs the target-local
