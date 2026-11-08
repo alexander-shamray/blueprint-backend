@@ -187,7 +187,7 @@ Clusters:
 - [ ] **Step 2:** Verdicts are plan 5's closed set: `port`, `covered`, `out of
   scope`, `local`, `obsolete`. Cluster F also has `residual`, for admin's
   `docs/harness-local.md` *Residuals*, and `managed`, for a paragraph of
-  `docs/working-rules.md` or `token-plan.md` the payload's
+  `docs/working-rules.md`, `token-plan.md` or `token-quality-sets.md` the payload's
   `docs/harness/*.md` already states, which Task 9 then cites.
 - [ ] **Step 3:** Check each cluster A `port` row against the three criteria
   of *The guards' threat model* by hand, and each `covered` row by reading the
