@@ -18,8 +18,9 @@ gives the `images` job a build on `main`, a push, a signature or a tag, read
 gave `packages` runs no MSBuild file. The integration shards hold no grant and
 leave what they saw as artefacts; `integration-report`, with no checkout, holds
 `issues: write` and posts them. Every checkout in these jobs sets
-`persist-credentials: false`, so `packages` reads the base's project files from
-a second checkout rather than a fetch.
+`persist-credentials: false`, and `packages` reads the base's project files from
+a second checkout rather than a fetch, so it holds no git credential whatever
+the repository's visibility.
 **Why.** A job holds its grants from its first step, and `permissions:` takes no
 expression, so a step's `if:` stops that step and nothing else. A target in a
 branch's `Directory.Build.targets` runs during `dotnet pack`, reads the token
