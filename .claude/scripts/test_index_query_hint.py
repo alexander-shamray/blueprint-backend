@@ -234,7 +234,7 @@ class TheSkillAgrees(unittest.TestCase):
         rows = set(re.findall(r"^\|[^|]+\| `([^`]+)` \|$", self.skill, re.M))
         for _kind, _pattern, command in _module().ROUTES:
             with self.subTest(command=command):
-                self.assertIn(command.replace(" --limit 3", ""), rows)
+                self.assertIn(command, rows)
 
     def test_search_carries_the_limit_the_skill_sets(self):
         self.assertIn("**`search` takes `--limit 3`**", self.skill)
