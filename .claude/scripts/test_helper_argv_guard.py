@@ -41,6 +41,38 @@ class GuardHelperArgv(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn("substitution", self.judge(command) or "")
 
+    def test_a_wrapped_helper_line_is_refused(self):
+        for command in (
+            f'PYTHONUTF8=1 {BOARD} x "$(id)"',
+            f'A=1 B=2 {BOARD} x "$(id)"',
+            f'env PYTHONUTF8=1 {BOARD} x "$(id)"',
+            f'env -u HOME {BOARD} x "$(id)"',
+            f'timeout 60 {BOARD} x "$(id)"',
+            f'timeout -k 5 60 {BOARD} x "$(id)"',
+            f'nohup {BOARD} x "$(id)"',
+            'py -3.12 -X utf8 .claude/scripts/dispatch_board.py x "$(id)"',
+            'python -W ignore .claude/scripts/sync_pr.py x `id`',
+            'gh --repo o/r pr create --title "$(id)"',
+            'gh -R o/r pr create --title "$(id)"',
+            'GH_TOKEN=x gh --repo=o/r pr create --title `id`',
+            'if py -3.12 .claude/scripts/sync_pr.py verify 1 --head "$(id)"; then echo ok; fi',
+            'for n in 1; do py -3.12 .claude/scripts/sync_pr.py verify 1 --head "$(id)"; done',
+            '! py -3.12 .claude/scripts/sync_pr.py verify 1 --head "$(id)"',
+        ):
+            with self.subTest(command=command):
+                self.assertIn("substitution", self.judge(command) or "")
+
+    def test_a_wrapped_line_that_runs_no_helper_is_left_alone(self):
+        for command in (
+            'PYTHONUTF8=1 echo "$(id)"',
+            'timeout 60 py -3.12 -c "print(1)" "$(id)"',
+            'py -3.12 -X utf8 -m unittest "$(ls x)"',
+            'gh --repo o/r pr view "$(id)"',
+            'env -u HOME gh issue list --search "$(id)"',
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command))
+
     def test_the_same_text_kept_from_the_shell_passes(self):
         for command in (
             f"{BOARD} run 20261101-220000 S1",

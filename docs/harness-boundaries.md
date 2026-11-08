@@ -407,10 +407,10 @@ walking up, because the helper forks only under `.claude/worktrees/` and the
 worktree has none of its own. Two residuals stand. The helper writes a file
 the session's `Edit` is denied, and what it writes is one key read from a
 file the session is denied too, or, under an approve-all, from `.mcp.json`,
-which the session may edit but whose servers the main checkout's approve-all
-already approves. And the approval names servers rather than
-definitions, so a `.mcp.json` that reaches a worktree through git,
-force-added past the ignore, is found before the main checkout's and
+which the session's `Edit` is denied as well and whose servers the main
+checkout's approve-all already approves. And the approval names servers
+rather than definitions, so a `.mcp.json` that reaches a worktree through
+git, force-added past the ignore, is found before the main checkout's and
 approved under the same name without a prompt. The fork writes nothing at a
 `settings.local.json` the branch already carries, a dangling link included,
 and the locality gate refuses a pull request that leaves an ignored path in
@@ -631,6 +631,17 @@ lift granted again. That happened on the PR that added the argv guard — the
 guard shipped refusing its own commit message, and the fix needed a second
 lift.
 
+**A lift lags the same way, and a relaunch is what ends it.** Measured in
+blueprint-backend on 2026-09-21: with the four `Edit(...)` deny lines deleted
+from the worktree's `.claude/settings.json` and the file read back, an `Edit`
+of `.claude/commands/ship.md` was still refused as *in a directory that is
+denied by your permission settings*. So a session needing an edit under
+`.claude/` has the owner lift the deny and relaunch Claude Code from the
+worktree directory, where `/ship` step 0 stays in the unfinished worktree;
+launched from the main checkout, `/branch` stops on a slug already taken.
+The denies name directories, not the manifest, so a path a target lists
+under `local` in a denied directory is refused exactly as a managed one is.
+
 **`.claude/settings.local.json` was the gap a review found**, and it is the
 enumeration lesson in miniature: an exact-file rule cannot cover a sibling, and
 Claude Code loads both files. Denying `.claude/**` wholesale was considered and
@@ -772,7 +783,11 @@ otherwise: it refuses a command substitution anywhere in a command that runs a
 for its own. So `oid=$(git rev-parse HEAD)` and a helper line beneath it are
 refused though that line is clean: a heredoc's substitution runs for the
 helper's stdin on no helper line, so the whole command is what is judged, and
-such a value is read in a call of its own. It leaves the `.sh` helpers, whose
+such a value is read in a call of its own. It takes the command word past
+assignment prefixes, `env`, `timeout`, `nice`, `nohup`, `stdbuf`, `time`,
+`command` and `exec`, the interpreter's value flags (`py -X utf8`) and gh's
+`--repo`, as `guard-sed-crlf.py` does; a wrapper it does not name (`xargs`,
+`sudo`, `bash -c`) is a residual. It leaves the `.sh` helpers, whose
 arguments are numbers and names, and it judges substitutions alone: a second
 command is the grant's own matching.
 
@@ -1461,8 +1476,9 @@ like a sync, which it checks out and runs nothing in.
 
 **`Bash(py -3.12 -m unittest discover:*)` runs the code of whatever tree it is
 pointed at, and is `/ship`'s alone.** A sync's step 2 runs the target-local
-suites with it, and a prefix grant cannot pin `-s`, so what bounds it is where
-it runs: only in a worktree whose `HEAD` equals the proved oid and whose `git
+suites with it, as it runs the payload suites `sync_pr.py` names as walking its
+commands, and a prefix grant cannot pin `-s`, so what bounds it is where it
+runs: only in a worktree whose `HEAD` equals the proved oid and whose `git
 status --short` is empty, which the sync section requires before anything in the
 tree runs, and which `dispatch_board.py sync-launch` and `run` compare before a
 `--dispatched` run starts in it. The settings do not allow it, so no other
@@ -1654,7 +1670,10 @@ prints nothing, and the caller skips its touch-set check and says so; one
 row without the other is refused, because each caller reads the pair. A
 class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
-in balanced backticks, of path and glob characters, each carrying a `/` or a
+in balanced backticks, a backticked one optionally followed by a space and its
+reason in parentheses (no backtick, no nested parenthesis; dropped unread,
+never printed, and its commas and braces its own), of path and glob
+characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
 alternatives included. A token may hold `@` and `+` as a changed path may,
 the `+` read as a character and not as a quantifier, in the class map's items
@@ -2323,6 +2342,15 @@ crash, never a success.
 
 **Residuals.**
 
+- The dispatcher's and `issue_decisions.py`'s `path_which` take a `.bat` or
+  `.cmd` that `PATHEXT` names, where `refresh-index.py`'s `on_path` takes only
+  `.exe` and `.com`. The decision (issue #130) is to keep it: `claude`
+  installed by npm is a `.cmd`, so refusing one would stop `/dispatch` on such
+  a machine. The other two rules bound it: only an absolute `PATH` entry is
+  searched and never the working directory, and `dispatch_run.py` passes
+  `claude` fixed arguments with its prompt on stdin, so no issue or executor
+  text reaches the command interpreter. A planted batch file needs write
+  access to a `PATH` directory, which already runs code.
 - A refusal at night is a hand-back. `result` classifies it, the morning
   report shows it, and the grant is never widened to get past it (the
   spec's §2, its last anti-goal).
