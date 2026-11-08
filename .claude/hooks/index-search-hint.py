@@ -413,7 +413,7 @@ def looked(transcript: Path) -> bool:
 
 def in_worktree(cwd: str) -> bool:
     """True when `cwd` is in a linked worktree: a `.git` file whose gitdir
-    carries a `commondir`. The MCP server keeps the root it started in."""
+    carries a `commondir`."""
     try:
         start = Path(cwd).resolve()
         for candidate in (start, *start.parents):
@@ -429,6 +429,23 @@ def in_worktree(cwd: str) -> bool:
     except (OSError, ValueError):
         return False
     return False
+
+
+def off_server(cwd: str) -> bool:
+    """True when the MCP server reads another checkout than the one `cwd` sits
+    in. The server's root is the folder the session started in, which
+    `CLAUDE_PROJECT_DIR` names, so this asks what `index-mcp-root.py` refuses a
+    call on; without it, or without a checkout at either, a linked worktree is
+    taken to be off it, because that is the move the server does not follow."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    here = checkout(cwd) if cwd else None
+    served = checkout(project) if project else None
+    if here is not None and served is not None:
+        try:
+            return not os.path.samefile(here, served)
+        except OSError:
+            return os.path.normcase(str(here)) != os.path.normcase(str(served))
+    return bool(cwd) and in_worktree(cwd)
 
 
 def names(pattern: str) -> list[str]:
@@ -475,16 +492,16 @@ def single(term: str) -> str:
     return "'" + term.replace("'", "'\\''") + "'"
 
 
-def ask(found: list[str], worktree: bool) -> str:
+def ask(found: list[str], off_it: bool) -> str:
     """The refusal's reason: one route to the index, the one that answers
     from this tree, because the MCP server serves the checkout it started in."""
     named = ", ".join(f"`{name}`" for name in found)
-    if worktree:
+    if off_it:
         runs = ", ".join(f"`{CBX} refs {single(name)} --json`" for name in found)
-        route = (f"load the codebase-index skill, whose grant the CLI runs under, then run from the "
-                 f"worktree's root {runs}, adding `--kind callers` for call sites only, and "
+        route = (f"load the codebase-index skill, whose grant the CLI runs under, then run from this "
+                 f"checkout's root {runs}, adding `--kind callers` for call sites only, and "
                  f"`{CBX} symbol {single(found[0])} --json` for where it is defined, each alone on its line, "
-                 "with no pipe, `;` or `&&`, which the index guard refuses; the CLI reads this worktree's "
+                 "with no pipe, `;` or `&&`, which the index guard refuses; the CLI reads this checkout's "
                  "own index")
     else:
         load = ",".join(MCP + TOOLS[tool] for tool in ("refs", "symbol"))
@@ -511,7 +528,7 @@ def answer(event: dict) -> str | None:
         return None
     if not first(asked):
         return None
-    return ask(found[:NAMES], bool(cwd) and in_worktree(cwd))
+    return ask(found[:NAMES], off_server(cwd))
 
 
 def main() -> int:
