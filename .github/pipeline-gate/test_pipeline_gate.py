@@ -458,6 +458,19 @@ class ImageTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("publish-images", problems[0])
 
+    def test_a_publish_job_a_branch_dispatch_can_reach_is_caught(self) -> None:
+        """Every word the right condition holds, joined so a dispatch from any branch builds."""
+        self.write(WORKFLOW.replace(
+            "    if: ${{ contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
+            "&& github.ref == 'refs/heads/main' }}\n    permissions:",
+            "    if: ${{ contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) "
+            "|| github.ref == 'refs/heads/main' }}\n    permissions:"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("publish-images", problems[0])
+
     def test_a_renamed_publish_job_fails_rather_than_passing_empty(self) -> None:
         self.write(WORKFLOW.replace("  publish-images:\n", "  release-images:\n"))
 
