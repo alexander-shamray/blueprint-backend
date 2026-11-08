@@ -167,6 +167,15 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "outside the repository"):
             read_rows(body("A", "`{../outside,docs/x.md}`"))
 
+    def test_an_empty_brace_alternative_is_refused(self) -> None:
+        # A leading or doubled comma is a `//` segment, already refused as
+        # outside the repository; these two are the ones that reached a verdict.
+        for token in ("docs/x{}.md", "docs/{a,}.md"):
+            with self.subTest(token=token), self.assertRaisesRegex(InputRefused, "empty brace alternative"):
+                read_rows(body("D", f"`{token}`"))
+            with self.subTest(map_item=token), self.assertRaisesRegex(InputRefused, "empty brace alternative"):
+                read_map(MAP.replace("'docs/**'", f"'{token}'"))
+
     def test_a_second_cell_in_the_touch_row_is_refused(self) -> None:
         with self.assertRaisesRegex(InputRefused, "not one cell"):
             read_rows(body("A", "`src/**` | and more"))
