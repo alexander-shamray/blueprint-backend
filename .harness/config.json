@@ -26,7 +26,6 @@
     ".claude/scripts/test_harness_denies_backend.py",
     ".claude/scripts/test_mutation_survivors.py",
     ".claude/scripts/test_pr_helpers_backend.py",
-    ".claude/scripts/test_sweep_slices_backend.py",
     "docs/commands/mutation-sweep.md",
     "docs/commands/review-branch.md",
     "docs/commands/validate-blueprint.md",
