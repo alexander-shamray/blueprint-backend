@@ -746,10 +746,7 @@ is the guard.
 **A title must not begin with `#`.** The helper refuses it: a body that opens
 with a heading and a blank line passes the separator check when handed over
 without its title line, and would be filed under the heading. Name a
-directive such as `#nullable` after a leading word, and never in backticks:
-the title is the first line of a heredoc its shell reads as a script, so
-`guard-git-argv.py` refuses a backtick there as a command substitution
-(`docs/harness/pitfalls.md`, *Shell and encoding*).
+directive such as `#nullable` after a leading word.
 
 **A title must never begin with `/`.** MSYS argument conversion rewrites an
 argument that looks like an absolute POSIX path before the native `gh.exe`
@@ -765,7 +762,7 @@ grant could not.** `gh-issue-create.sh`, which `gh-issue-sweep.sh` execs,
 sets `MSYS2_ARG_CONV_EXCL` for its own `gh` child, so the conversion never
 sees the title; the command's grant is on the entry point and is
 unchanged. A title that names a command does so after a leading word — the
-/bug-sweep filing — for the backtick reason above.
+/bug-sweep filing.
 
 ## Residuals
 

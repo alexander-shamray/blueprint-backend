@@ -18,6 +18,7 @@ from review_helpers import (
     COMMANDS,
     setUpModule,
 )
+from test_link_skips import skip_only_without_links
 
 HELPER = SCRIPTS / "gh-pr-create.sh"
 TITLE = "artifacts/pr/title.txt"
@@ -123,8 +124,8 @@ class PrCreateHelper(unittest.TestCase):
         try:
             os.symlink(target, self.repo / "artifacts" / "pr" / "link.md")
             os.symlink(elsewhere, self.repo / "artifacts" / "linked", target_is_directory=True)
-        except OSError:
-            self.skipTest("this machine cannot create symbolic links")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
         self.assert_refused(self.run_helper(TITLE, "artifacts/pr/link.md"), 2, "a symbolic link is not a PR input")
         self.assert_refused(self.run_helper(TITLE, "artifacts/linked/body.md"), 2, "a PR input lives under")
 

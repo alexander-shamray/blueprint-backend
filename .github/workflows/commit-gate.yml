@@ -56,11 +56,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Test the proposed gate
-        if: steps.dependabot.outputs.own != 'true'
-        working-directory: .github/commit-gate
-        run: python -m unittest
-
       # The base copy judges, as in closure-gate.yml. The one difference is
       # the pull request that introduces the gate: its base carries none, so
       # it is judged by its own copy, with a notice. A base that predates the
@@ -97,3 +92,9 @@ jobs:
             --pr "${{ github.event.pull_request.number }}" \
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}"
+
+      # Last, so head test code cannot steer the gate above (closure-gate.yml).
+      - name: Test the proposed gate
+        if: steps.dependabot.outputs.own != 'true'
+        working-directory: .github/commit-gate
+        run: python -m unittest

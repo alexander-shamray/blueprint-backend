@@ -773,6 +773,39 @@ class AWorktreeTheSessionHasNotEntered(GuardCase):
         self.assertAdmitted(os.path.join(self.root, "docs", "note.md"),
                             cwd=here, project=here)
 
+    def test_the_main_checkout_is_judged_from_inside_a_linked_worktree(self):
+        # EnterWorktree moves the permission root and the project stays main:
+        # main is an anchor, and no rule names its machinery from here.
+        worktree = self.linked()
+        for parts in ((".git", "hooks", "pre-commit"), (".git", "config"),
+                      (".claude", "settings.json"), (".claude", "hooks", "x.py")):
+            with self.subTest(parts=parts):
+                reason = self.assertRefused(os.path.join(self.root, *parts), cwd=worktree)
+                self.assertIn("main checkout", reason)
+        for parts in (("docs", "note.md"), ("TODO.md",), ("artifacts", "x.md"),
+                      (".claude", "cache", "x")):
+            with self.subTest(parts=parts):
+                self.assertAdmitted(os.path.join(self.root, *parts), cwd=worktree)
+        self.assertAdmitted(os.path.join(worktree, "docs", "note.md"), cwd=worktree)
+        # The session standing in main is the permission rules' own case.
+        self.assertAdmitted(os.path.join(self.root, ".claude", "settings.json"))
+
+    def test_the_worktree_nested_inside_main_keeps_its_own_files_admitted(self):
+        # The production layout: its files are under main too.
+        beside = os.path.join(self.root, ".claude", "worktrees")
+        os.makedirs(beside, exist_ok=True)
+        worktree = self.linked("nested", beside=beside)
+        for parts in (("docs", "note.md"), (".claude", "hooks", "x.py")):
+            with self.subTest(parts=parts):
+                self.assertAdmitted(os.path.join(worktree, *parts), cwd=worktree)
+        self.assertRefused(os.path.join(self.root, ".claude", "settings.json"), cwd=worktree)
+
+    def test_a_directory_with_a_forged_git_file_judges_no_main_checkout(self):
+        forged = os.path.join(self.root, "docs", "forged")
+        os.makedirs(forged)
+        self.write(os.path.join(forged, ".git"), "gitdir: " + self.outside + "\n")
+        self.assertAdmitted(os.path.join(self.root, ".claude", "settings.json"), cwd=forged)
+
     def test_the_worktree_the_session_stands_in_is_not_this_rule(self):
         # There the permission rules apply, and a lifted deny is the owner's.
         worktree = self.linked()
