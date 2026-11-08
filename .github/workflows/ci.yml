@@ -1336,8 +1336,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # A second checkout and not a fetch, which needs the token this job does
-      # not persist.
+      # A second checkout and not a fetch, so this job holds no git credential
+      # whatever the repository's visibility.
       - uses: actions/checkout@v7
         if: github.event_name == 'pull_request'
         with:
