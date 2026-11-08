@@ -89,6 +89,15 @@ def section(text, name):
 
 
 class ParseTests(unittest.TestCase):
+    def test_a_remaining_group_cell_is_a_group_id_or_a_dash(self):
+        for bad in ("x1", "ZZ1", "sync-5", "Z1 Z2", "Z"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(db.Refusal, "has Group .*, not a group id or a dash"):
+                db.parse_tasks(tasks_of(line(gid=bad)))
+        self.assertEqual("Z1", db.parse_tasks(tasks_of(line(gid="Z1"))).remaining[0].group)
+        # A dash still parses and `groups` says it has none.
+        with self.assertRaisesRegex(db.Refusal, "is in Remaining with no group"):
+            db.groups(db.parse_tasks(tasks_of(line(gid="—"))))
+
     def test_the_four_sections_parse_in_order(self):
         tasks = db.parse_tasks(FIXTURE)
         self.assertEqual([1682, 1683, 1681, 1685, 1686, 1440], [r.number for r in tasks.remaining])

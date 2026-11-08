@@ -176,6 +176,24 @@ class SyncCase(unittest.TestCase):
         return out
 
 
+class HeadBlobsTests(SyncCase):
+    def test_the_head_tree_is_read_from_its_root_whatever_the_working_directory(self):
+        # `ls-tree` lists paths relative to the working directory, and a copy run from payload/ has one that is not
+        # the root; --full-tree is what makes the listing the head's.
+        oid = self.start()
+
+        def from_subdirectory(argv, cwd=None, timeout=60):
+            done = subprocess.run(argv, cwd=self.root / "docs", capture_output=True, encoding="utf-8",
+                                  errors="replace", check=False)
+            return done.returncode, done.stdout, done.stderr
+
+        with mock.patch.object(sync_pr, "run", from_subdirectory):
+            found = sync_pr.head_blobs(oid)
+        self.assertIn(".claude/settings.json", found)
+        self.assertIn("docs/b.md", found)
+        self.assertNotIn("b.md", found)
+
+
 class VerifyTests(SyncCase):
     def test_an_authentic_sync_verifies(self):
         self.start()

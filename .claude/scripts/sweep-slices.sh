@@ -34,13 +34,16 @@ rows="$(dirname "${BASH_SOURCE[0]}")/../../.harness/sweep-rows.tsv"
 [ -r "$rows" ] || { echo "the row file cannot be read: .harness/sweep-rows.tsv" >&2; exit 3; }
 # Tab-separated `kind pattern row holds`, `#` opening a comment line; a line of
 # any other shape is refused naming it, so a typo never moves a path silently.
+# A row `=<dir>/` is a mirror: a matching path whose copy under <dir>/ is the
+# same blob is owned and counted, not listed, since that copy is read as itself;
+# one whose copy is absent or differs falls through to the next row, read.
 LC_ALL=C awk -F'\t' '
   { sub(/\r$/, "") }
   $0 == "" || /^#/ { next }
   NF != 4 { bad("not four tab-separated fields") }
   $1 != "bug" && $1 != "security" && $1 != "*" { bad("kind is not bug, security or *") }
   $2 == "" { bad("an empty pattern") }
-  $3 != "-" && $3 !~ /^[a-z][a-z-]*$/ { bad("row is not - or a lower-case word") }
+  $3 != "-" && $3 !~ /^[a-z][a-z-]*$/ && $3 !~ /^=[A-Za-z0-9._-]+\/$/ { bad("row is not -, a lower-case word or =<dir>/") }
   $4 == "" { bad("an empty holds") }
   # A pattern awk cannot compile stops awk here, which the caller refuses too.
   { if ("" ~ $2) n++ }
@@ -111,6 +114,8 @@ g --attr-source="$empty" grep -I -l -z -e '' "$pinned" -- . > "$out/text.z" || [
 lines_of "$out/tree.z" "$out/tree.txt"
 lines_of "$out/text.z" "$out/text.raw"
 lines_of "$out/changed.z" "$out/changed.txt"
+# Each tracked path's blob, for the mirror rows' comparison: `oid<TAB>path`.
+awk -F'\t' '{ split($1, m, " "); print m[3] "\t" $2 }' "$out/tree.txt" > "$out/oids.txt"
 sed "s/^[0-9a-f]*://" "$out/text.raw" > "$out/text.txt"
 [ -s "$out/tree.txt" ] || { echo "no tracked files at $pinned" >&2; exit 3; }
 # A tab or a carriage return in a name would split or trim a list line, and
@@ -119,13 +124,22 @@ sed "s/^[0-9a-f]*://" "$out/text.raw" > "$out/text.txt"
   awk -F'\t' 'NF != 2 { bad = 1 } END { exit bad }' "$out/tree.txt" ||
   { echo "a tracked name with a tab or a carriage return" >&2; exit 3; }
 
-# The rows of this kind in file order, the first match winning; row `-` and no
+# The rows of this kind in file order, the first match winning (a mirror row
+# passes a path with no equal counterpart on to the next match); row `-` and no
 # match alike leave a path unowned, printed on stderr and counted, and the run
 # refuses below. The other lines are `L row size file` for what the sweep reads
 # and `B file` for a binary one it does not.
 awk -F'\t' -v kind="$kind" -v since="$since" '
   function row_of(f,   i) {
-    for (i = 1; i <= nrows; i++) if (f ~ pattern[i]) return row[i] == "-" ? "" : row[i]
+    for (i = 1; i <= nrows; i++) {
+      if (f !~ pattern[i]) continue
+      if (row[i] ~ /^=/) {
+        copy = substr(row[i], 2) f
+        if ((copy in oid) && oid[copy] == oid[f]) return "="
+        continue
+      }
+      return row[i] == "-" ? "" : row[i]
+    }
     return ""
   }
   FILENAME == ARGV[1] {
@@ -136,12 +150,14 @@ awk -F'\t' -v kind="$kind" -v since="$since" '
   }
   FILENAME == ARGV[2] { text[$0] = 1; next }
   FILENAME == ARGV[3] { changed[$0] = 1; next }
+  FILENAME == ARGV[4] { oid[$2] = $1; next }
   {
     tracked++
     file = $2; n = split($1, meta, " "); size = meta[n]
     if (size !~ /^[0-9]+$/) size = 0
     r = row_of(file)
     if (r == "") { print "no row owns: " file > "/dev/stderr"; unowned++; next }
+    if (r == "=") { mirrored++; next }
     if (since != "" && !(file in changed)) { unchanged++; next }
     if (size == 0) { empty++; next }
     if (!(file in text)) { binary++; printf "B\t%s\n", file; next }
@@ -152,11 +168,11 @@ awk -F'\t' -v kind="$kind" -v since="$since" '
     }
     printf "L\t%s\t%s\t%s\n", r, size, file
   }
-  END { printf "T\t%d\t%d\t%d\t%d\t%d\t%d\n", tracked, unowned, unchanged, empty, binary, record }
-' "$rows" "$out/text.txt" "$out/changed.txt" "$out/tree.txt" > "$out/plan.raw"
+  END { printf "T\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", tracked, unowned, unchanged, empty, binary, record, mirrored }
+' "$rows" "$out/text.txt" "$out/changed.txt" "$out/oids.txt" "$out/tree.txt" > "$out/plan.raw"
 
 totals=$(grep '^T' "$out/plan.raw")
-IFS=$'\t' read -r _ tracked unowned unchanged empty binary record <<<"$totals"
+IFS=$'\t' read -r _ tracked unowned unchanged empty binary record mirrored <<<"$totals"
 [ "$unowned" -eq 0 ] || { echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
 # No auditor reads a binary file, so each is named in a list the plan points at:
 # a NUL byte is all it takes to make a script one.
@@ -188,7 +204,7 @@ LC_ALL=C sort -t$'\t' -k1,1 -s "$out/plan.rows" > "$out/plan.sorted"
 
 echo "pinned $pinned"
 if [ -n "$since" ]; then echo "mode since $since"; else echo "mode full"; fi
-echo "tracked $tracked listed $listed unchanged $unchanged empty $empty binary $binary record $record fenceless $fenceless"
+echo "tracked $tracked listed $listed unchanged $unchanged empty $empty binary $binary record $record mirrored $mirrored fenceless $fenceless"
 if [ "$binary" -gt 0 ]; then echo "binary $binary $out/binary.txt"; else rm -f "$out/binary.txt"; fi
 
 n=0 bytes=0 files=0 current="" list=""
@@ -206,6 +222,6 @@ while IFS=$'\t' read -r row size file; do
 done < "$out/plan.sorted"
 flush
 # Only the lists stay beside the worktree.
-rm -f "$out"/*.z "$out"/*.raw "$out"/tree.txt "$out"/text.txt "$out"/changed.txt \
+rm -f "$out"/*.z "$out"/*.raw "$out"/tree.txt "$out"/oids.txt "$out"/text.txt "$out"/changed.txt \
   "$out"/plan.rows "$out"/plan.sorted "$out"/samples.txt "$out"/samples.fenced
 trap - EXIT

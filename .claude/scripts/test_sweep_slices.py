@@ -208,6 +208,39 @@ class ASmallRepository(unittest.TestCase):
         self.assertIn("tools/e.py", listed([s for s in slices if s[0] == "tooling"]))
         self.assertNotIn("tools/d.py", listed([s for s in slices if s[0] == "tooling"]))
 
+    def test_a_mirror_row_owns_an_equal_copy_and_leaves_it_unlisted(self):
+        # The rendered root is the payload's bytes: the copy is counted and the
+        # payload's file is the one read. A copy that differs, or has no
+        # counterpart, falls through to the next row and is read as itself.
+        mirror = "*\t^tools/\t=payload/\tcopies of the payload's files\n"
+        script = self.helper(mirror + "*\t^payload/\tpayload\tthe payload\n" + SMALL_ROWS)
+        self.commit("payload/tools/same.py", "x\n")
+        self.commit("tools/same.py", "x\n")
+        self.commit("payload/tools/differs.py", "x\n")
+        self.commit("tools/differs.py", "y\n")
+        self.commit("tools/alone.py", "x\n")
+        for kind in ("bug", "security"):
+            with self.subTest(kind=kind):
+                result = self.sweep(script).slices(kind)
+                self.assertEqual(0, result.returncode, result.stderr)
+                head, slices = parse(result.stdout)
+                paths = listed(slices)
+                self.assertNotIn("tools/same.py", paths)
+                self.assertIn("payload/tools/same.py", paths)
+                self.assertIn("tools/differs.py", paths)
+                self.assertIn("tools/alone.py", paths)
+                self.assertIn("tools/d.py", paths)  # the small tree's, with no copy
+                self.assertEqual(1, head["counts"]["mirrored"])
+                self.assertEqual(len(paths), len(set(paths)))
+
+    def test_a_mirror_row_must_name_a_directory(self):
+        for bad in ("=payload", "=/payload/", "=pay load/"):
+            with self.subTest(row=bad):
+                rows = f"*\t^x/\t{bad}\tholds\n" + SMALL_ROWS
+                result = self.sweep(self.helper(rows)).slices("bug")
+                self.assertEqual(3, result.returncode, result.stderr)
+                self.assertIn("line 1", result.stderr)
+
     def test_a_crlf_row_file_reads_as_its_rows(self):
         # Git for Windows checks a text file out with CRLF under autocrlf.
         result = self.sweep(self.helper(SMALL_ROWS.replace("\n", "\r\n"))).slices("bug")
@@ -353,6 +386,35 @@ class TheCheckout(unittest.TestCase):
                 head, slices = parse(result.stdout)
                 self.assertEqual("full", head["mode"])
                 self.assertGreater(len(slices), 0)
+
+
+class TheCheckoutReadsEachFileOnce(unittest.TestCase):
+    """The partition's subject: no path is listed twice across a sweep's slices,
+    and none is listed beside a payload file of the same blob, since the
+    payload's is the one read. A target with no `payload/` passes with nothing
+    to mirror; the one that renders from it is where the rows had to."""
+
+    def test_no_file_is_listed_twice_and_no_copy_beside_its_payload_file(self):
+        tree = run_bash('git -C "$R" ls-tree -r -z --full-tree HEAD', R=REPO)
+        self.assertEqual(0, tree.returncode, tree.stderr)
+        blobs = {}
+        for entry in tree.stdout.split(chr(0)):
+            if entry:
+                meta, _, name = entry.partition("\t")
+                blobs[name] = meta.split(" ")[2]
+        for kind in ("bug", "security"):
+            with self.subTest(kind=kind):
+                result = Sweep(self, REPO).slices(kind, "full")
+                self.assertEqual(0, result.returncode, result.stderr)
+                head, slices = parse(result.stdout)
+                paths = listed(slices)
+                self.assertEqual([], sorted({p for p in paths if paths.count(p) > 1}))
+                copies = [p for p in paths if not p.startswith("payload/")
+                          and blobs.get(f"payload/{p}") == blobs.get(p)
+                          and f"payload/{p}" in blobs]
+                self.assertEqual([], copies)
+                if any(name.startswith("payload/") for name in blobs):
+                    self.assertGreater(head["counts"]["mirrored"], 0)
 
 
 class TheSliceLoop(unittest.TestCase):

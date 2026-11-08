@@ -48,22 +48,40 @@ case "$cells" in *'|'*) refuse "the Touch set row is not one cell" ;; esac
 [ -n "$cells" ] || refuse "the Touch set row is empty"
 # Split on commas outside braces, because a brace glob carries its own —
 # `.claude/commands/{pr,ship}.md` is one token, not two halves of one.
-items=(); cur=""; depth=0
+# A backticked token may carry its reason beside it in parentheses, the form
+# `/pr` prescribes for a widened row: a `(` outside backticks and after a space
+# opens one, whose commas and braces are the reason's, and it is dropped below.
+items=(); cur=""; depth=0; inbt=0; rdepth=0; prev=""
 for ((i = 0; i < ${#cells}; i++)); do
   ch="${cells:i:1}"
+  if [ "$rdepth" -gt 0 ]; then
+    case "$ch" in
+      '(') rdepth=$((rdepth + 1)) ;;
+      ')') rdepth=$((rdepth - 1)) ;;
+    esac
+    cur+="$ch"; prev="$ch"; continue
+  fi
   case "$ch" in
+    '`') inbt=$((1 - inbt)) ;;
+    '(') if [ "$inbt" -eq 0 ] && [[ "$prev" == [[:space:]] ]]; then rdepth=1; fi ;;
     '{') depth=$((depth + 1)) ;;
     '}') depth=$((depth - 1)); [ "$depth" -ge 0 ] || refuse "the Touch set row has an unbalanced brace" ;;
-    ',') if [ "$depth" -eq 0 ]; then items+=("$cur"); cur=""; continue; fi ;;
+    ',') if [ "$depth" -eq 0 ]; then items+=("$cur"); cur=""; prev=""; continue; fi ;;
   esac
-  cur+="$ch"
+  cur+="$ch"; prev="$ch"
 done
+[ "$rdepth" -eq 0 ] || refuse "the Touch set row has an unbalanced parenthesis"
 items+=("$cur")
 [ "$depth" -eq 0 ] || refuse "the Touch set row has an unbalanced brace"
 patterns=()
 for item in "${items[@]}"; do
   t="${item#"${item%%[! ]*}"}"
   t="${t%"${t##*[! ]}"}"
+  # The reason beside a backticked token is dropped unread and never printed;
+  # it holds no backtick and no nested parenthesis.
+  if [[ "$t" =~ ^(\`[^\`]+\`)[[:space:]]+\([^\`\(\)]*\)$ ]]; then t="${BASH_REMATCH[1]}"; fi
+  # A reason that failed the form above is named as such, not as a backtick.
+  if [[ "$t" =~ ^\`[^\`]+\`[[:space:]]+\( ]]; then refuse "the Touch set row has a reason outside its grammar"; fi
   case "$t" in
     '`'*'`') t="${t:1:${#t}-2}" ;;
     *'`'*) refuse "the Touch set row has an unbalanced backtick" ;;

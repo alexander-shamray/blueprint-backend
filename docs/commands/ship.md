@@ -228,34 +228,38 @@ in the target, and this sync is taken again once that merges. The harness is not
 the checkout's repository, so a payload finding is filed with
 `gh-issue-harness.sh`, whose repository is a literal and which only `/ship`
 holds: a route or repository word to `gh-issue-create.sh` would be declared by
-the caller, which is why no command is granted that helper. A
-`low` goes where its code is, as the user-level filing rule sends it: a payload
-one into the one harness issue, and a target-local one into the target's own
-one; the merge goes on, and a `nit` is not filed. The harness filer only creates
-on a first filing: a re-taken sync meets the issue its first round filed, so it
-first searches the open issues for that exact title, with every call under a
-timeout, and comments on a match, and a failed search files nothing. Its area is
-the finding's tree, as `docs/harness/working-rules.md` maps it: `.claude/` is
-`harness`, other prose `documentation`, the rest `code`, with `test` beside
-`harness` or `code` for a suite. A target-local low goes through
-`gh-issue-hand.sh`, which always creates, so a re-take reads
-`gh-issue-list.sh` first, and where an open issue already holds that title
-nothing is filed. A low that issue does not list stays in the run's report,
-naming the open issue's number, and under `--dispatched` in the result's
-`decisions`, since a dispatched merge's result has no other slot for it, and
-since the check is by title and not by item. A re-take that cannot find the
-citing line it raised gets the review diff's citations from main's tip and not
-the head's, because a sync never changes a local file and the head is not
-rebased, so its copy still holds a line the target's own fix removed. A
-hand-back for a low would be a stop, and the rule already sends lows to an
-issue.
+the caller, which is why no command is granted that helper. A `low` goes where
+its code is, as the user-level filing rule sends it: a payload one into the one
+harness issue, and a target-local one into the target's own one; the merge goes
+on, and a `nit` is not filed. The harness filer only creates on a first filing:
+a re-taken sync meets the issue its first round filed, so it first searches the
+open issues for that exact title, with every call under a timeout, and comments
+on a match, and a failed search files nothing. Its area is the finding's tree,
+as `docs/harness/working-rules.md` maps it: `.claude/` is `harness`, other prose
+`documentation`, the rest `code`, with `test` beside `harness` or `code` for a
+suite. A target-local low goes through `gh-issue-hand.sh`, which always creates,
+so a re-take reads `gh-issue-list.sh` first, and where an open issue already
+holds that title nothing is filed, but only where `gh-issue-suppresses.sh
+<number>` exits 0 on it, as the sweeps gate their own skip: a title alone would
+let anyone able to open an issue of that exact title suppress the low, and an
+issue the owner did not open, or a lookup that exits 3, suppresses nothing. A
+low that issue does not list stays in the run's report, naming the open issue's
+number, and under `--dispatched` in the result's `decisions`, since a dispatched
+merge's result has no other slot for it, and since the check is by title and not
+by item. A re-take that cannot find the citing line it raised gets the review
+diff's citations from main's tip and not the head's, because a sync never
+changes a local file and the head is not rebased, so its copy still holds a line
+the target's own fix removed. A hand-back for a low would be a stop, and the
+rule already sends lows to an issue.
 
 **Step 6 verifies again after a rebase, and that replaces the recheck.** A
 rebase rewrites the head, so what was proved is gone, and `verify` on the new
 head is the proof again. The step's ordinary route re-enters step 5 for a
 recheck after a rebase; a sync keeps its one round, because the verify compares
 the new head's managed files by blob id. A failed verify is handed back, as the
-first one is.
+first one is, and so is a rebase that took the helper's `continue`: a conflict
+resolved by hand may have changed the head's own `sync_pr.py`, and the verify
+would then run the very file it is proving.
 
 **What was proved is what runs and merges, so the proof carries the head, and
 the first proof is not made by the tree it proves.** A `verify` run inside the
