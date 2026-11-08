@@ -185,6 +185,9 @@ def _row(section, line):
         if not re.fullmatch(r"\d+", cells[WAVE]):
             raise Refusal(f"{key} has wave {cells[WAVE]!r}, not a number")
         wave, group = int(cells[WAVE]), cells[GROUP]
+        # A dash or an empty cell is no group, which `groups` reports for Remaining; anything else is a group id.
+        if group not in ("", "—", "-") and not re.fullmatch(ROW_GROUP.pattern, group):
+            raise Refusal(f"{key} has Group {group!r}, not a group id or a dash")
     elif section == "In progress":
         # The group it carried in Remaining, kept so a conflicts cell naming it still sees it; a dash is none.
         if cells[0] != "—" and not re.fullmatch(ROW_GROUP.pattern, cells[0]):

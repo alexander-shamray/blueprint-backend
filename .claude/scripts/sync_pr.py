@@ -189,7 +189,7 @@ def base_of(oid):
     base = read(["git", "merge-base", "origin/main", oid]).strip()
     if not OID.fullmatch(base):
         raise Refusal("git merge-base returned no commit")
-    if not read(["git", "ls-tree", "-z", base, "--", MANIFEST]):
+    if not read(["git", "ls-tree", "--full-tree", "-z", base, "--", MANIFEST]):
         return base, None, set()
     commit, paths = manifest_at(base, "origin/main")
     return base, commit, paths
@@ -203,7 +203,7 @@ def changed_paths(base, oid):
 
 def head_blobs(oid):
     found = {}
-    for entry in read(["git", "ls-tree", "-r", "-z", oid], GIT_TIMEOUT).split("\0"):
+    for entry in read(["git", "ls-tree", "--full-tree", "-r", "-z", oid], GIT_TIMEOUT).split("\0"):
         meta, _, path = entry.partition("\t")
         parts = meta.split()
         if len(parts) == 3 and parts[1] == "blob" and OID.fullmatch(parts[2]):
@@ -236,7 +236,7 @@ def on_harness_main(commit):
 
 def main_commit():
     """The harness commit main's manifest names, or None before a first sync."""
-    if not read(["git", "ls-tree", "-z", MAIN, "--", MANIFEST]):
+    if not read(["git", "ls-tree", "--full-tree", "-z", MAIN, "--", MANIFEST]):
         return None
     return manifest_at(MAIN, "origin/main")[0]
 

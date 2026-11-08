@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-The README beside this file owns the argument; the testing document docs/harness-local.md names, the invocation.
+The README beside this file owns the argument; the invocation is in closure-gate.yml and `/pr`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,15 @@ _KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)"
 # Every keyword and the token after it, classified afterwards: a keyword whose
 # reference this gate cannot parse is a finding, not a non-match. The token is
 # a lookahead, so a keyword used as the token still matches: "fix closes it".
-KEYWORD_THEN_TOKEN = re.compile(rf"\b{_KEYWORD}\b\s*:?\s+(?=(?P<token>\S+))", re.IGNORECASE)
+# Markup may sit around the colon, which needs no space; a bare keyword does.
+_NOT_ALNUM_BEFORE = r"(?<![^\W_])"
+_NOT_ALNUM_AFTER = r"(?![^\W_])"
+_MARKUP = r"[*_`~]*"
+KEYWORD_THEN_TOKEN = re.compile(
+    rf"{_NOT_ALNUM_BEFORE}{_KEYWORD}{_NOT_ALNUM_AFTER}{_MARKUP}"
+    rf"(?:\s*:{_MARKUP}\s*|\s+)(?=(?P<token>\S+))",
+    re.IGNORECASE,
+)
 
 # GitHub ends a long subject's headline with this mark and starts the body
 # with it, at about 70 characters.
@@ -29,7 +37,7 @@ CUT = "…"
 # `owner/repo` prefix is captured so a cross-repository form can be refused by
 # name rather than failing to match and vanishing.
 REFERENCE = re.compile(
-    r"^(?:(?P<repo>[\w.-]+/[\w.-]+))?#(?P<number>\d+)\b"
+    r"^(?:(?:(?P<repo>[\w.-]+/[\w.-]+))?#|gh-)(?P<number>\d+)\b"
     r"|^https?://github\.com/(?P<url_repo>[\w.-]+/[\w.-]+)/issues/(?P<url_number>\d+)\b",
     re.IGNORECASE,
 )
@@ -40,8 +48,8 @@ WRAPPERS = "`\"'([{*_<"
 
 # A token this matches is issue-shaped whatever markup wraps it, so an
 # unresolved one struck through with `~~` is reported rather than read as
-# prose and dropped from the commit set.
-ISSUE_SHAPED = re.compile(r"#\d")
+# prose and dropped from the commit set. `GH-n` is GitHub's own autolink form.
+ISSUE_SHAPED = re.compile(r"#\d|(?<![^\W_])gh-\d", re.IGNORECASE)
 
 # The house form's metadata row: `| Closes | <issue> (high), <issue> (high) |`.
 TABLE_ROW = re.compile(
@@ -49,7 +57,7 @@ TABLE_ROW = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-ISSUE_NUMBER = re.compile(r"#(\d+)\b")
+ISSUE_NUMBER = re.compile(r"(?:#|(?<![^\W_])gh-)(\d+)\b", re.IGNORECASE)
 
 # Dependabot copies the upstream release notes into its description, inside
 # `<details>`, and a note there can carry a closing keyword about the upstream
@@ -72,6 +80,29 @@ def repository_of(pull_url: str) -> str | None:
     """`owner/name` from the pull request's own URL, so nothing has to be passed in."""
     match = PULL_URL.match(pull_url.strip())
     return match.group("repo") if match else None
+
+
+ISSUE_URL = re.compile(r"^https?://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/issues/\d+", re.IGNORECASE)
+
+
+def linked_issues(entries: list[dict], repository: str) -> tuple[set[int], list[str]]:
+    """This repository's closing numbers, and a description of each foreign entry.
+
+    No `url` reads as local; a `url` that is another repository's, or unreadable, is foreign.
+    """
+    numbers: set[int] = set()
+    foreign: list[str] = []
+    for entry in entries:
+        url = entry.get("url")
+        if url is None:
+            numbers.add(entry["number"])
+            continue
+        match = ISSUE_URL.match(str(url).strip())
+        if match and match.group("repo").lower() == repository.lower():
+            numbers.add(entry["number"])
+        else:
+            foreign.append(f"{match.group('repo')}#{entry['number']}" if match else str(url))
+    return numbers, foreign
 
 
 def commit_texts(commit: dict) -> list[str]:
@@ -183,7 +214,13 @@ def check(payload: dict) -> list[str]:
             f"pass the complete list"
         ]
 
-    linked = {issue["number"] for issue in payload["closingIssuesReferences"]}
+    linked, foreign = linked_issues(payload["closingIssuesReferences"], repository)
+    for reference in foreign:
+        problems.append(
+            f"GitHub links `{reference}` as closed by merging, which is outside "
+            f"{repository} — this gate compares only this repository's issues, "
+            f"so unlink it in the sidebar or its number may hide a local one"
+        )
     declared = declared_in_table(payload["body"] or "")
 
     from_commits: dict[int, list[str]] = {}
@@ -283,7 +320,8 @@ def main(argv: list[str]) -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    linked = sorted(issue["number"] for issue in payload["closingIssuesReferences"])
+    repository = repository_of(payload["url"]) or ""
+    linked = sorted(linked_issues(payload["closingIssuesReferences"], repository)[0])
     closes = ", ".join(f"#{number}" for number in linked) if linked else "nothing"
     print(
         f"closure-gate: what this pull request says it closes matches what "
