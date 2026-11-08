@@ -234,7 +234,7 @@ def _normalise_token(token: str, *, where: str) -> str:
         raise InputRefused(f"{where} names a path outside the repository")
     # pr-locality.sh refuses an empty alternative, which GNU and BSD grep read
     # differently, so a token it refuses is refused here too; the boundary
-    # check above took a leading or doubled comma.
+    # check above took a doubled comma and a leading one after a `/`.
     if re.search(r"\{\}|\{,|,,|,\}", token):
         raise InputRefused(f"{where} has an empty brace alternative")
     return token

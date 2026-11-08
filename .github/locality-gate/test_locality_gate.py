@@ -175,9 +175,9 @@ class TouchSetGrammar(unittest.TestCase):
             read_rows(body("\tD", "`docs/a.md`"))
 
     def test_an_empty_brace_alternative_is_refused(self) -> None:
-        # A leading or doubled comma is a `//` segment, already refused as
-        # outside the repository; these two are the ones that reached a verdict.
-        for token in ("docs/x{}.md", "docs/{a,}.md"):
+        # A doubled comma, or a leading one after a `/`, is a `//` segment,
+        # already refused as outside the repository; these reached a verdict.
+        for token in ("docs/x{}.md", "docs/{a,}.md", "docs/x{,a}.md"):
             with self.subTest(token=token), self.assertRaisesRegex(InputRefused, "empty brace alternative"):
                 read_rows(body("D", f"`{token}`"))
             with self.subTest(map_item=token), self.assertRaisesRegex(InputRefused, "empty brace alternative"):
