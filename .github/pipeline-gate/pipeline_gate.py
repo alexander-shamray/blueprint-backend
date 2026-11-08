@@ -861,19 +861,25 @@ def _term_names_an_event_or_main(term: str) -> bool:
 def _keeps_pull_requests_out(condition: str) -> bool:
     """Whether a job's own condition is false on every pull request's run.
 
-    True when some `&&` term is, which a `||` term only is when each of its sides
-    is. A condition this cannot read is refused, because a gate that passes what
-    it did not understand is the one that stops looking.
+    `&&` binds tighter than `||`, so every `||` side has to be false on one, and
+    an `&&` is when any of its terms is. A condition this cannot read is refused,
+    because a gate that passes what it did not understand is the one that stops
+    looking.
     """
     expression = re.sub(r"^[>|][-+]?\s*", "", condition.strip())
     expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", expression)
-    return any(
-        all(
-            _term_names_an_event_or_main(side)
-            for side in _split_outside_parentheses(_unwrapped(term), "||")
-        )
-        for term in _split_outside_parentheses(_unwrapped(expression), "&&")
-    )
+    return _false_on_a_pull_request(expression)
+
+
+def _false_on_a_pull_request(expression: str) -> bool:
+    expression = _unwrapped(expression)
+    sides = _split_outside_parentheses(expression, "||")
+    if len(sides) > 1:
+        return all(_false_on_a_pull_request(side) for side in sides)
+    terms = _split_outside_parentheses(expression, "&&")
+    if len(terms) > 1:
+        return any(_false_on_a_pull_request(term) for term in terms)
+    return _term_names_an_event_or_main(expression)
 
 
 def check_grants(root: Path = ROOT) -> list[str]:
