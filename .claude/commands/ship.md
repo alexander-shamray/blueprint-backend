@@ -36,7 +36,7 @@ checkout and removes the worktree, however the review ended.
 
 | | |
 |---|---|
-| A helper or a guarded git command exits non-zero, or the harness refuses it | The step did not run; a report that says otherwise is false. `git pull --ff-only` refusing a diverged branch is the commonest one; step 7's `system-sleep.sh`, the branch drop's `git-branch-drop.sh` and the rebase helper's two continuations and a usage exit after step 6's pull are the exceptions, each reported and not a stop |
+| A helper or a guarded git command exits non-zero, or the harness refuses it | The step did not run; a report that says otherwise is false. `git pull --ff-only` refusing a diverged branch is the commonest one; step 7's `system-sleep.sh`, the branch drop's `git-branch-drop.sh` and the rebase helper's two continuations and a usage exit after line 5's pull on `main` are the exceptions, each reported and not a stop |
 | This branch's PR was closed unmerged | Reopening a deliberate closure is not a recommended option |
 | A `branch-reviewer` round did not run — the agent missing, a reply that is not the JSON its profile declares, or one whose `read` is empty or whose `skipped` names anything but `locality` | The round did not happen, so no verdict may be minted from it |
 | A fix to a script under `.claude/` lacks its case | Step 2's read refuses it, and the case is a file this session is denied editing, so the run has no fix to make |
@@ -647,8 +647,8 @@ target*)
    - Run lines 4 to 6 and the prune on both paths; report containment,
      never equality: the oid `main` landed on, and that the merge is in
      its history.
-   - **A usage exit after the pull is not a stop**: rerun from the exiting line
-     as the pulled `ship.md` spells it, and report it.
+   - **A usage exit after line 5's pull on `main` is not a stop**: rerun from
+     the exiting line as the pulled `ship.md` spells it, and report it.
    - Once the merge is verified, delete this change's row from *In
      progress* in the task list named by `.harness/config.json`
      `task_list`, in the main checkout's parent directory, by that path (why:
