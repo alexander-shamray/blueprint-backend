@@ -1491,7 +1491,7 @@ def main(argv: list[str]) -> int:
     sub.add_parser("shards", help="the integration shards partition the stage")
     sub.add_parser("actions", help="every third-party action is pinned to a commit")
     sub.add_parser("grants", help="no job a pull request reaches holds a write grant beside a checkout")
-    sub.add_parser("alerts",help="every workflow pushed on main is watched by the red-main alert")
+    sub.add_parser("alerts", help="every workflow pushed on main is watched by the red-main alert")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
