@@ -7,7 +7,8 @@ bug	^src/BuildingBlocks/	building-blocks	the dispatcher and its behaviours, the 
 bug	^src/	services	the rest of `src/`: the services, and §4.1's gateway, BFF and AppHost as they land
 bug	^tests/	suites	where the cannot-fail class lives, and the only area whose defects are all of one kind
 security	^(src|tests)/	source	the services, the building blocks and the suites that stand up their hosts
-*	^(tools|\.github|\.claude|\.harness)/	tooling	Python, shell, CI, the command and agent definitions, and the harness's `.harness/`
+bug	^(tools|\.github|\.claude|\.harness)/	tooling	Python, shell, CI, the command and agent definitions, and the harness's `.harness/`
+security	^(tools|\.github|\.claude|\.harness)/	tooling	CI, the harness and its `.harness/`, and the command and agent definitions
 *	^(deploy|\.config)/	deploy	deployment and configuration
 bug	^docs/	samples	fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read
 security	^docs/	samples	fenced code in `docs/`: a credential or an unsafe default an adopter copies; the closed records are owned and not read
