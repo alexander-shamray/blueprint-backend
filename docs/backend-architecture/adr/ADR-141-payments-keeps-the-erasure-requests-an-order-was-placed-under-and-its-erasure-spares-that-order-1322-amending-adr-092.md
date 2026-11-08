@@ -25,7 +25,7 @@ order, so a placement meanwhile waits and its check then finds that row. An
 order placed under the request keeps its payer past that request's erasure, and
 goes to a later request. An order placed by an event without the field, from
 a publisher older than it, holds the empty list and is erased as before. The
-check asks the rows [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md) leaves it.
+check asks the rows [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md) leaves it.
 
 ---
 

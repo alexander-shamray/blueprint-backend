@@ -980,7 +980,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 |---|---|---|---|
 | Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
 | Device registration and preferences | `Web.Bff` | Notifications.Api, `devices.proto` and `preferences.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
-| Stock availability, for the assistant's `get_stock`, off every request path | `Web.Bff` | Inventory.Api, `stock.proto` | `src/BFF/Web.Bff/StockHop.cs` ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)) |
+| Stock availability, for the assistant's `get_stock`, off every request path | `Web.Bff` | Inventory.Api, `stock.proto` | `src/BFF/Web.Bff/StockHop.cs` ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)) |
 | Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
 | Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
@@ -988,7 +988,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
 | FCM | Notifications' worker | FCM, and Google's token endpoint | `Notifications.Infrastructure/Push/FcmHop.cs` |
 | APNs | Notifications' worker | APNs | `Notifications.Infrastructure/Push/ApnsHop.cs` |
-| Model provider | `Web.Bff`'s assistant turn, and its status route's cached probe; off by default | the AI assistant's provider | `src/BFF/Web.Bff/Assistant/AnthropicProviderFactory.cs`, the SDK's own client ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) |
+| Model provider | `Web.Bff`'s assistant turn, and its status route's cached probe; off by default | the AI assistant's provider | `src/BFF/Web.Bff/Assistant/AnthropicProviderFactory.cs`, the SDK's own client ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)) |
 
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
 Inventory owns `stock.proto` in `Inventory.Api/Protos`, which `Web.Bff` links on
@@ -1018,7 +1018,7 @@ receive endpoints when the provider is unavailable. Catalog's `Money` refuses a
 negative amount, which the BFF's quote does not rely on. The consumer-driven
 contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
 `ResilienceHierarchyTests`) and Catalog's own, and the stock hop of
-[ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)
+[ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)
 has a pair of its own: `tests/Web.Bff.Tests` (`StockContractTests`,
 `CustomerStockToolTests`, `ResilienceHierarchyTests`) and Inventory's
 `StockContractVerificationTests`.
@@ -1090,7 +1090,7 @@ hop, so those two are the hops whose request the correlation ID crosses. The
 assistant's stock read to Inventory.Api is made inside a turn, off any
 request, and `CorrelationIdHandler` is registered on it all the same, sending
 an ID only when a request is there to supply one
-([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)).
+([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)).
 
 ### E.6.2 Error catalogue and refusals
 
@@ -1273,7 +1273,7 @@ queue by each holder
 ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)),
 and, from the release after every holder binds it, publishes the close, which
 each holder stamps on its audit row to bound its check
-([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md));
 a request closed before that release, where Privacy may announce its close,
 is told once an operator runs a republish of Privacy's migrator image
 ([ADR-143](adr/ADR-143-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md)).
@@ -1608,7 +1608,7 @@ request
 ([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md)),
 and does nothing for a copy of a request whose audit row it already holds
 closed
-([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md));
 the responder set does not change, since
 the BFF was already one of the holders an erasure request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)).
@@ -1756,7 +1756,7 @@ The outbound-hop row of §12.1 has three suites in the reference domain:
 
 | Suite | What it holds |
 |---|---|
-| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm; and the registration hop of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md): its timeout hierarchy, and the caller's own token in place of a credential handler, against a stub Notifications on loopback; and the stock hop of [ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md): its timeout hierarchy, the tool's answers and the contract, against a stub Inventory on loopback |
+| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm; and the registration hop of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md): its timeout hierarchy, and the caller's own token in place of a credential handler, against a stub Notifications on loopback; and the stock hop of [ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md): its timeout hierarchy, the tool's answers and the contract, against a stub Inventory on loopback |
 | `Shipping.Worker.Tests` | The first two properties, for the address read of [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md), against a stub Ordering on loopback |
 | `Notifications.Worker.Tests` | All three, for the contact read the same record adds: the first two against a stub Keycloak on loopback, and the realm against a real one, which is also the owner the read asks |
 

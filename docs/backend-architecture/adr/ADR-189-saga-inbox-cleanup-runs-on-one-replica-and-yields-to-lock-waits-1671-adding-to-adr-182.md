@@ -20,7 +20,7 @@ saga's queue grew from 3 843 to 6 911 messages and fulfilment's p95 reached
 `OutboxMessage` row still names it, through
 `FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId`, and that check
 reads under locks even under
-[ADR-185](ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)'s
+[ADR-185](ADR-185-every-service-database-runs-read-committed-snapshot-1653.md)'s
 row versioning, so it waited on the outbox rows of consumers still in their
 transactions. Those rows are keyed by message id, and the ids
 `Guid.CreateVersion7` draws sort at random

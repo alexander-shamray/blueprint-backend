@@ -103,7 +103,7 @@ service no consumer calls is an expectation nobody holds.
 > second, unverified specification**, and every one of those was it drifting.
 
 **Amended by
-[ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)**:
+[ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-1452.md)**:
 a second relationship is covered, `StockContract`, linked into
 `Inventory.Api.Tests` as `PricingContract` is into Catalog's, so "only one" and
 "exactly one hop" above describe the day this record was written. This record

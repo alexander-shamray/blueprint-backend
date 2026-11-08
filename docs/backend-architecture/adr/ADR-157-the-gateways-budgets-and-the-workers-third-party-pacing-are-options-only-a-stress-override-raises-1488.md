@@ -33,7 +33,7 @@ replicas is [ADR-063](ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-
 production lever, but each replica spends the host's CPU and memory, the very
 resources the run reads. Options leave every production value where it was,
 and each type passes §15.4's test on
-[ADR-128](ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)'s
+[ADR-128](ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-1072.md)'s
 terms: the stress run's stack differs from production in each member the
 override sets, and no deployed value is set.
 **Consequences.** A configured pace is one nobody argued for production, so it

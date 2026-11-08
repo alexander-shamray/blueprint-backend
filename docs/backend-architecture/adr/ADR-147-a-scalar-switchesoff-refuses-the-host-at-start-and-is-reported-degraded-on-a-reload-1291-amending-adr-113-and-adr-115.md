@@ -12,7 +12,7 @@ and a value beside indexed children is let by, since the binder reads the
 children.
 **Why.** A list binds from indexed child keys only, so a scalar leaves `Off`
 empty: every name reads as on, nothing throws or logs, and the check of
-[ADR-115](ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md)
+[ADR-115](ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-1013.md)
 reports Healthy while an operator believes a queue is stopped. A validator on
 the bound options cannot see the scalar, since the binder drops it, so the raw
 section is read. It refuses at start, where the host is not yet serving. It only

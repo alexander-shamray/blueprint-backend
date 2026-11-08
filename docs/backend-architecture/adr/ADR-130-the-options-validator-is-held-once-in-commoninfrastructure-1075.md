@@ -1,7 +1,7 @@
 # ADR-130 — The options validator is held once in Common.Infrastructure (#1075), superseding ADR-128's sentence that the Ordering validator is a copy of Shipping's
 
 **Supersedes.**
-[ADR-128](ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)'s last sentence,
+[ADR-128](ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-1072.md)'s last sentence,
 which called the validator a copy of Shipping's.
 **Decision.** `AnnotatedOptionsValidator<TOptions>` is a public type in
 `Common.Infrastructure.Validation`, and Shipping and Ordering register it from

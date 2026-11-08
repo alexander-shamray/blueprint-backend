@@ -3,7 +3,7 @@
 **What §10.8's permissions are asked of a deployed store, and what this tree
 deliberately does not check.**
 
-[ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
+[ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)
 is the decision. [§10.8](../../docs/backend-architecture/10-api-gateway.md)
 states that neither of the two image credential pairs can list a bucket or
 delete; Compose's store is held to it by `ProductImageStoreTests`, and this is
@@ -89,7 +89,7 @@ grace period will do, with a period a little over a day.
 ## What a red run means
 
 A red run of the deployed check files an issue labelled `security` and
-`high`, or comments on the open one ([ADR-111](../../docs/backend-architecture/adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
+`high`, or comments on the open one ([ADR-111](../../docs/backend-architecture/adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988.md)).
 The run log says which of three things it was, per credential pair:
 
 - **The store refused the sentinel's write or its read `AccessDenied`.** Either

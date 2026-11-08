@@ -14,7 +14,7 @@ HTTP/2 only, for the reason Catalog's `appsettings.json` measures; the service
 is authenticated and requires no permission, because the BFF's service account
 carries none and the reply holds nothing a permission would guard. The BFF
 reaches it under its own client credentials, never a customer's token, which
-a turn does not hold ([ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)),
+a turn does not hold ([ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)),
 through `StockHop`, whose resilience budget is `PricingHop`'s value for value
 and whose address is the same shape, the Service name on the h2c port,
 registered in the same order with the credential and
@@ -24,7 +24,7 @@ unchanged. The consumer-driven contract is `StockContract`, linked into
 Inventory's suite as `PricingContract` is into Catalog's, and the sentence in
 `AssistantRuntime.Instructions` that stock is unreadable is replaced by one
 that says the tools tell whether a product is in stock and never how many.
-**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
+**Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 left stock out because nothing the BFF could reach answered it: the gateway
 admits Inventory's reads only to `inventory:admin`, the BFF has no hop to
 Inventory, and its projection holds no stock. Three ways to give it one were

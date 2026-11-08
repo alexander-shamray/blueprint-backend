@@ -43,7 +43,7 @@ pod. The validator is a copy of Shipping's, because the class library carries
 no DataAnnotations package; the second copy is the cost of not adding one to
 the pins.
 **Superseded in part by
-[ADR-130](ADR-130-the-options-validator-is-held-once-in-commoninfrastructure-1075-superseding-adr-128s-sentence-that-the-ordering-validator-is-a-copy-of-shippings.md):**
+[ADR-130](ADR-130-the-options-validator-is-held-once-in-commoninfrastructure-1075.md):**
 the last sentence of the Consequences; the validator is held once in
 `Common.Infrastructure`.
 

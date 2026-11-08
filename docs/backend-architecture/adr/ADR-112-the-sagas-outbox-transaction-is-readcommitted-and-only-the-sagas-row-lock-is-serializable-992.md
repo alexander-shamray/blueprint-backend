@@ -81,7 +81,7 @@ ROWLOCK` when constructed with `serializable: true`.
   no longer across three tables.
 
 **Superseded in part by
-[ADR-185](ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)**:
+[ADR-185](ADR-185-every-service-database-runs-read-committed-snapshot-1653.md)**:
 the first consequence's clause that the Ordering database does not enable
 read-committed snapshot, with its claim that the delivery read waits for
 other consumers' commits, and the consequence that read-committed snapshot

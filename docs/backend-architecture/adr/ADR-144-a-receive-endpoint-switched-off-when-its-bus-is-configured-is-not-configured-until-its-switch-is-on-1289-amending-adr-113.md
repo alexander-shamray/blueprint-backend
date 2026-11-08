@@ -37,7 +37,7 @@ sense, and the release that starts emitting waits until the switch is on and the
 pod has connected the endpoint. A pod started with an endpoint off shows that
 endpoint in no bus health entry, so the bus check is Healthy rather than
 Degraded for it; the `operator-switches` check
-([ADR-115](ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md))
+([ADR-115](ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-1013.md))
 still reports it Degraded, so readiness answers the same. A name thrown in the
 moment between the bus's configuration and an endpoint's readiness still lets
 that endpoint take a batch before its stop lands. The bus still connects the

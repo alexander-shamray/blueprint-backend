@@ -520,7 +520,7 @@ options.OnRejected = async (context, _) =>
 > **The BFF's assistant has a limiter of its own**, and its rejection takes
 > the same `IProblemDetailsService` write with no `Retry-After`, since this
 > helper is the gateway's; a `code` marks it instead, which §10.5's table
-> names ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)).
+> names ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-1484-1485.md)).
 
 The `authenticated` policy is only correct if `UseAuthentication` has already
 run when the limiter middleware executes — see the pipeline in §4.2. The
@@ -730,7 +730,7 @@ services it calls
 [Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes)), and
 the AI assistant's status probe to its model provider, which is cached and
 shared across requests and so carries no one request's ID
-([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)).
 Without a header on it the callee mints an ID from its own trace, and one
 incident has two of them.
 
@@ -863,7 +863,7 @@ no host can take the one without the others.
 | A route an operator has switched off | 503 | The gateway only (§10.2), `code` `service.suspended`, with `Retry-After`; nothing is forwarded. Not the row above: that one is a fault and this is a decision ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)) |
 | A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | An exception thrown by the repository method that takes the lock, with `Retry-After` and a `code`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands. In the reference domain two services take such a lock, and [Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals) names each one's exception, method and `code` |
 | The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
-| Rate limited | 429 | With `Retry-After`, but for the BFF's AI assistant, whose 429s carry none ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) and a `code` instead, `AssistantEndpoints.RateLimitedCode` from its limiter and `AssistantEndpoints.ConversationsFullCode` from a full conversation store. The gateway's carries no `code`, so a client tells the BFF's refusal from the edge's by the code, never by a missing header ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)) |
+| Rate limited | 429 | With `Retry-After`, but for the BFF's AI assistant, whose 429s carry none ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)) and a `code` instead, `AssistantEndpoints.RateLimitedCode` from its limiter and `AssistantEndpoints.ConversationsFullCode` from a full conversation store. The gateway's carries no `code`, so a client tells the BFF's refusal from the edge's by the code, never by a missing header ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-1484-1485.md)) |
 | Unhandled | 500 | **Never** include the exception message or stack trace |
 
 ### `Error`, and why its code is a closed vocabulary
@@ -1055,7 +1055,7 @@ exactly this: `request.concurrency_conflict`, `request.in_progress`,
 ([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)),
 `device.stale_sequence` for §10.10's out-of-order registration, and
 `assistant.turn_running` for a turn sent while the conversation's last one
-still runs ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
+still runs ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)).
 The `Error` path carries a `code` on the same terms, and so does the one 412,
 `preference.precondition_failed`.
 
@@ -1273,7 +1273,7 @@ policy that allows the writes and reads above and nothing else. A deployed
 store is run outside this repository, so holding it to the same sentence is the
 deployment's to do, and `object-store.yml` checks that it has, in a deployment
 that has opted in
-([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)):
+([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)):
 each pair is asked to delete and to list on a daily schedule, and a store that
 allows either fails the run. The BFF's pair first writes an empty object under
 the upload prefix and the attaching service's reads it back, and a store that
@@ -1324,7 +1324,7 @@ in the request's audit row, unless the row was saved under that request
 ([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md)),
 and does nothing for a copy of a request whose audit row it already holds
 closed
-([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882.md));
 the BFF was already one of the holders an erasure
 request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),

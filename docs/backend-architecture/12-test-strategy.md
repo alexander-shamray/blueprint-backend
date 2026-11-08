@@ -340,7 +340,7 @@ asked once, and an overload that the SDK's own retries ask again. The nightly
 half is not held: the provider has no sandbox, so the test would spend
 against its production API for a release no deployment runs yet, and #1483
 holds it until one does
-([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)).
 
 ## 12.4 Application tests — real infrastructure
 
