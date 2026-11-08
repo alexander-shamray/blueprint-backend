@@ -130,7 +130,7 @@ jobs:
 
       # The head copy, deliberately, since this step's subject is the gate this
       # pull request proposes, so a proposal that fails its own suite belongs
-      # red here. Last, because this is the job's only run of the head's code:
+      # red here. Last, so that head test code cannot steer the enforcing step:
       # .github/locality-gate/README.md, How it runs.
       - name: Test the proposed gate
         working-directory: .github/locality-gate
