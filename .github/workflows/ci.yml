@@ -283,6 +283,15 @@ jobs:
       - name: Every SQL join names its kind and keeps its ON off its line
         run: python .github/sql-style-gate/sql_style_gate.py
 
+      # A Windows worktree's room for a path, over the tracked tree, so a long
+      # name fails here rather than at the next fork.
+      - name: Test the path-length gate
+        working-directory: .github/path-length-gate
+        run: python -m unittest
+
+      - name: Every tracked path leaves a worktree room for its slug on Windows
+        run: python .github/path-length-gate/path_length_gate.py
+
   # The other gates read the workflows as text for coverage and order; none
   # checks expression syntax, step-output references, action input names or the
   # shell in a `run:` block, and the signing steps cannot run before the first
