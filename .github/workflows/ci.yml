@@ -25,6 +25,10 @@ env:
   # registry refuses an upper-case name, and nothing here lower-cases it:
   # github.repository keeps the case it was registered in.
   REGISTRY: ghcr.io/${{ github.repository }}
+  # Every artefact here is read by a later job of its own run or by a person
+  # looking at a recent one (ADR-199), and an SBOM a signed image needs is in
+  # its attestation (ADR-109).
+  ARTIFACT_RETENTION_DAYS: 14
 
 concurrency:
   # On main each commit has a group of its own: a run cancelled, or replaced
@@ -825,6 +829,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: stages-build
           path: TestResults
           if-no-files-found: error
@@ -965,6 +970,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: stages-integration-${{ matrix.shard }}
           path: TestResults/integration
           if-no-files-found: error
@@ -978,6 +984,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: failed-integration-${{ matrix.shard }}
           path: |
             TestResults/integration
@@ -994,6 +1001,7 @@ jobs:
         if: always() && hashFiles('TestResults/sightings/*.txt') != ''
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: sightings-${{ matrix.shard }}
           path: TestResults/sightings
 
@@ -1009,6 +1017,7 @@ jobs:
         if: always() && steps.stage.outputs.retried == 'true'
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: warm-up-retry-${{ matrix.shard }}
           path: warm-up-retry.txt
 
@@ -1259,6 +1268,7 @@ jobs:
           format: spdx-json
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
+          upload-artifact-retention: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       - name: Note the failed SBOM for ${{ matrix.image }}
         if: ${{ steps.sbom.outcome == 'failure' }}
@@ -1272,6 +1282,7 @@ jobs:
           format: spdx-json
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
+          upload-artifact-retention: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       # A retry hides the failure it recovered from, so image-retry-report posts it.
       # Only after success, since a leg still red says so itself,
@@ -1281,6 +1292,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: image-retry-${{ matrix.image }}
           path: ${{ runner.temp }}/image-retries.txt
           if-no-files-found: ignore
@@ -1341,6 +1353,7 @@ jobs:
           format: spdx-json
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
+          upload-artifact-retention: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       - name: Note the failed SBOM for ${{ matrix.image }}
         if: ${{ steps.sbom.outcome == 'failure' }}
@@ -1354,6 +1367,7 @@ jobs:
           format: spdx-json
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
+          upload-artifact-retention: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
       # Each carries the filter too, so a leg that built nothing signs nothing.
       - name: Sign in to the registry
@@ -1485,6 +1499,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: image-retry-${{ matrix.image }}
           path: ${{ runner.temp }}/image-retries.txt
           if-no-files-found: ignore
@@ -1592,6 +1607,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.changes.outputs.assistant == 'true' || needs.changes.outputs.anthropic == 'true')
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           name: packages
           path: artifacts/package/release/*.nupkg
           if-no-files-found: error

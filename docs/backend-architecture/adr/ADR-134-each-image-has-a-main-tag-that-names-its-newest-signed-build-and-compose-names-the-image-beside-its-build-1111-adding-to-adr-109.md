@@ -55,6 +55,11 @@ and one plugin). Until the first dispatch after this lands, no image has a
 `main` tag, and the consumer's pull fails closed rather than finding a stale
 set.
 
+**Amended by
+[ADR-199](ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)**,
+which limits how long a commit's set and a pinned digest last once its prune is
+opted in. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

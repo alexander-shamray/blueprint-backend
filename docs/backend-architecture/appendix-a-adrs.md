@@ -205,6 +205,7 @@ decision looks wrong.
 | **ADR-196** | [A cancelled push run on main is red unless a newer run replaced it (#1871), amending ADR-155](adr/ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md) |
 | **ADR-197** | [Write grants leave the jobs that run a pull request's code (#1789), amending ADR-109 and ADR-149](adr/ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md) |
 | **ADR-198** | [The packages job runs on every run a stage reads (#1907), amending ADR-149](adr/ADR-198-the-packages-job-runs-on-every-run-a-stage-reads-1907-amending-adr-149.md) |
+| **ADR-199** | [A scheduled prune keeps what a rollout named (#1900), amending ADR-071 and ADR-134](adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md) |
 
 ---
 

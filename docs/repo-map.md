@@ -256,6 +256,11 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              daily and on dispatch under the production
                              Environment, opted in by the repository variable
                              OBJECT_STORE_CHECK_SCHEDULED
+.github/workflows/ghcr-prune.yml  runs tools/ci-cost/ghcr_prune.py (ADR-199):
+                             on a schedule once the repository variable
+                             GHCR_PRUNE_SCHEDULED opts it in, and on
+                             dispatch, which only reports unless asked to
+                             delete
 .github/workflows/commit-gate.yml  the commit gate's run: every commit of a
                              pull request names it in a `PR: #<n>` trailer.
                              No `edited` trigger, because a body edit changes
@@ -308,7 +313,9 @@ deploy/workflow_paths/       the one reader of a workflow's `paths:` filter and
                              by the `pipeline-gate` job
 tools/ci-cost/               the Actions bill per dated window, from the
                              REST API through `gh api`; stdlib Python with
-                             a suite, for docs/ci-cost-comparison.md
+                             a suite, for docs/ci-cost-comparison.md. Beside
+                             it `ghcr_prune.py`, which shares its readers and
+                             deletes what ADR-199 does not keep
 tools/new-service/           §4.5's scaffold — see the notes below
 tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              publishers' processed outbox rows to the BFF's
