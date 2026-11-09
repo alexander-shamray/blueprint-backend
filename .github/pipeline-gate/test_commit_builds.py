@@ -54,7 +54,7 @@ def run_block() -> str:
 
 class ScratchRepository(unittest.TestCase):
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.temp = Path(directory.name)
         self.repo = self.temp / "repo"
