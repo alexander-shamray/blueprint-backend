@@ -653,6 +653,7 @@ steps:
   - name: Build ${{ matrix.image }}
     if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
     run: >
+      bash .github/pipeline-gate/image_retry.sh run "Build"
       docker build
       --file ${{ matrix.dockerfile }}
       --tag ${{ matrix.image }}:${{ github.sha }}
