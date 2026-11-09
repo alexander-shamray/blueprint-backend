@@ -374,10 +374,10 @@ jobs:
   # the property §15.1 relies on to put the licence gate ahead of the build —
   # and adding .NET to it would spend that on every run. This one runs in
   # parallel with `build`. It gates nothing, for the reason the job above
-  # gives: a broken scaffold does not make the solution wrong. So nothing requires
-  # it, and it can skip whole on a change `changes` says no stage reads.
+  # gives: a broken scaffold does not make the solution wrong.
   scaffold-build:
     needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
+    # Nothing requires it, so it skips whole, as edit-target-guard does.
     if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-latest
     steps:
@@ -831,8 +831,7 @@ jobs:
   # head. A commit that does not compile costs a `git bisect` its whole range,
   # so each one before the head is built here; a red test in one costs a
   # single step, so tests are not run. A pull request of one commit has
-  # nothing to build and passes. A commit whose diff from its parent no stage
-  # reads builds what that parent did, so it is skipped by name (commit_builds.py).
+  # nothing to build and passes.
   commits:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -850,9 +849,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Decided ahead of the loop, whose checkouts and clean take the script away,
-      # and through a file so that its failure stops the step rather than reading
-      # as no commits.
+      # A commit whose diff from its parent no stage reads builds what that parent
+      # did, so it is skipped by name. Decided ahead of the loop, whose checkouts
+      # and clean take the script away, and through a file so that its failure
+      # stops the step rather than reading as no commits.
       - name: Every commit before the head builds
         shell: bash
         env:

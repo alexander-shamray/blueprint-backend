@@ -1457,10 +1457,8 @@ def check_code_filters(filters: dict[str, list[str]]) -> list[str]:
 def read_tested_paths(root: Path) -> list[tuple[str, str]]:
     """(source file, path) for each excluded-tree path a C# test or project names.
 
-    A test that reads such a file at run time is the one way `code` can answer
-    false for a change a stage would fail on. A tree with no file named after it
-    gets a `?`, which no filter selects, so a path built from a variable is
-    reported rather than read as nothing.
+    Such a read is how `code` could say false for a change a stage fails on. A tree
+    with no file named gets a `?`, so a path built from a variable is reported.
     """
     named: list[tuple[str, str]] = []
     for tree in ("tests", "tools"):
