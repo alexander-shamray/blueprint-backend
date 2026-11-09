@@ -74,6 +74,24 @@ when a step behaves unexpectedly.
   conversion**, into `origin\main;…`. Safe: read the file through
   `gh api repos/<owner>/<repo>/contents/<path>?ref=main`, or from a
   checkout of `main`.
+- **A `python -` heredoc that writes a tracked file is a redirection round
+  the edit tools.** `py -3.12 - <<'EOF'` with `open(path, "w")` in it
+  changes a file no `Edit` deny saw, and the guards admit it: replayed
+  against `guard-git-argv.py`, `guard-helper-argv.py` and
+  `guard-edit-target.py`, it passes all three. Safe: change a tracked file
+  with `Edit`, and hand a denied one over as a script
+  (`.harness/agent-rules.md`, *Handing over to the owner*).
+- **A test shim for `git` on a Windows runner goes in a `BASH_ENV`
+  function.** An extensionless script earlier on `PATH` was ignored
+  there. Safe: `git() { …; }` in a file `BASH_ENV` names, exported to the
+  script under test.
+- **`gh run list --commit` needs the full sha.** A short one prints nothing
+  and exits 0, so a monitor keyed on it stays silent through a red `main`.
+  Safe: `git rev-parse HEAD` for the sha, and treat an empty list as a
+  failure of the read.
+- **`gh` inside a command substitution is refused**, by Claude Code and not
+  by these guards, which admit it. Safe: write the poll's output to an
+  absolute scratch file and `grep` that.
 - **A new file named `README.md` can be refused** by a directory deny no
   listed rule names, while a sibling file writes. Safe: name the file for
   what it is and say so in the PR.
