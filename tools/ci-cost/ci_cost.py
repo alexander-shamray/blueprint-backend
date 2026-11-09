@@ -134,6 +134,9 @@ def paged(fetch: Fetch, path: str, key: str | None = None):
         body = fetch(f"{path}{separator}per_page={size}&page={number}")
         return body[key] if key else body
 
+    # A listing newest first moves down a row when one arrives between two pages, which repeats the row at the
+    # boundary: docs/ci-cost-comparison.md, *Window A reproduced*, is what that does to a count.
+    seen = set()
     page = 1
     while True:
         try:
@@ -148,7 +151,11 @@ def paged(fetch: Fetch, path: str, key: str | None = None):
                 items += chunk
                 if len(chunk) < SMALL_PAGE:
                     break
-        yield from items
+        for item in items:
+            identity = item.get("id")
+            if identity is None or identity not in seen:
+                seen.add(identity)
+                yield item
         if len(items) < PAGE:
             return
         page += 1
