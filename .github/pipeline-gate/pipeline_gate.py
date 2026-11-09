@@ -1530,7 +1530,7 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
         if term not in export:
             problems.append(
                 f"the changes job's `{CODE_FILTER}` output does not read `{term}`, so it can say false for "
-                "a push or a dispatch, or for a change only `stage-inputs` selects"
+                "a push or a dispatch, for a change only `stage-inputs` selects, or for a lost step output"
             )
 
     for job in CODE_GATED_JOBS:
