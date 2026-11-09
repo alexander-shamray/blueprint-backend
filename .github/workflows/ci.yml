@@ -1260,7 +1260,7 @@ jobs:
           .
 
       # The artefact is also the file the attestation below reads, so the two
-      # cannot differ (ADR-071).
+      # cannot differ (ADR-109).
       - name: SBOM for ${{ matrix.image }}
         id: sbom
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
