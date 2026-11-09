@@ -33,7 +33,8 @@ jobs:
           python-version: '3.12'
 
       # The judge comes out of the base commit, so a pull request cannot loosen
-      # the rule it is judged by; the bootstrap branch is the locality gate's.
+      # the rule it is judged by. A base with no gate directory has no copy to
+      # read, so the head copy judges under a warning (the bootstrap branch).
       - name: The comments this pull request adds keep the style guide's rule
         shell: bash
         env:

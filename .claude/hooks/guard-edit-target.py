@@ -413,7 +413,7 @@ def offence(event):
     lexical = os.path.normpath(os.path.abspath(joined))
     resolved = os.path.realpath(joined)
 
-    # A worktree the session has not entered is reached by no permission rule,
+    # A rule anchored at the session's root misses a worktree it has not entered,
     # so the target's denies judge it, and it becomes an anchor so that a link
     # inside it is judged. The one the session stands in is the project.
     sibling = linked_worktree(lexical, checkouts)
@@ -424,8 +424,9 @@ def offence(event):
             return (
                 f"guard-edit-target: {spelled} is held by {machinery} in a "
                 "worktree of this repository the session is not standing in, "
-                "where none of its permission rules apply. Move into the "
-                "worktree to edit it (docs/harness-boundaries.md)."
+                "which a rule anchored at the session's root does not reach. "
+                "Move into the worktree to edit it "
+                "(docs/harness-boundaries.md)."
             )
         checkouts = checkouts + [
             (sibling, os.path.realpath(sibling), traits_of(sibling))]

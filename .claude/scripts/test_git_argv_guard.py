@@ -77,8 +77,11 @@ class TheGitArgvGuard(unittest.TestCase):
     commands no allow or deny rule is consulted for.
     """
 
-    def judge(self, command, tool="Bash"):
-        """The hook's verdict on one command: None to allow, or the reason."""
+    def judge(self, command, tool="Bash", cwd=None):
+        """The hook's verdict on one command: None to allow, or the reason.
+
+        `cwd` is the directory the hook runs in, the process's own when `None`.
+        """
         event = {"tool_name": tool, "tool_input": {"command": command}}
         # A verdict that arrives after the harness's 60 seconds is no verdict,
         # and a hook with none is non-blocking, so a slow answer is the failure
@@ -87,7 +90,7 @@ class TheGitArgvGuard(unittest.TestCase):
             result = subprocess.run(
                 [sys.executable, str(HOOK)],
                 input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
-                timeout=HOOK_TIMEOUT,
+                timeout=HOOK_TIMEOUT, cwd=cwd,
             )
         except subprocess.TimeoutExpired:
             self.fail(f"no verdict within {HOOK_TIMEOUT}s: {command[:80]!r}")
@@ -206,6 +209,36 @@ class TheGitArgvGuard(unittest.TestCase):
         ):
             with self.subTest(command=command):
                 self.assertRefused(command)
+
+    def test_a_ref_a_short_source_reads_ahead_of_the_branch_is_refused(self):
+        # A short refspec source takes either on origin ahead of the branch.
+        for command in (
+            "git push origin HEAD:refs/tags/main",
+            "git push origin abc1234:refs/tags/main",
+            "git push origin refs/tags/main",
+            # With no destination, git names the same ref on origin as here.
+            "git push origin tags/main",
+            "git push origin HEAD:refs/main",
+            "git push origin refs/main",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("ahead of the branch", self.assertRefused(command))
+        # `--follow-tags` sends an annotated tag no refspec here names, so this
+        # guard could not read its name.
+        self.assertIn("not one of the options",
+                      self.assertRefused("git push origin feature --follow-tags"))
+        # A tag merely beginning with the name, one git tries after the branch,
+        # and a branch `refs/tags/main` or `tags/main` only under a prefix of its
+        # own or by a named source.
+        for command in (
+            "git push origin v1:refs/tags/v1",
+            "git push origin HEAD:refs/tags/mainline",
+            "git push origin HEAD:refs/remotes/main",
+            "git push origin topic:refs/heads/refs/tags/main",
+            "git push origin topic:tags/main",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
 
     def test_a_branch_that_only_looks_like_a_prefixed_main_is_admitted(self):
         # The control for the prefix strip: it removes one prefix and compares,
@@ -359,11 +392,10 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertAdmitted(command)
 
-    def test_a_legitimate_push_flag_that_merely_looks_similar_is_admitted(self):
-        # `--follow-tags` is what shows the prefix test is the right way round:
-        # `"force".startswith("follow-tags")` is false, so it passes, while
-        # `--fo` is refused exactly as git refuses it for being ambiguous.
-        self.assertAdmitted("git push origin feature --follow-tags")
+    def test_a_listed_push_flag_is_admitted_and_an_unlisted_prefix_is_not(self):
+        # `--fo` is refused, as git refuses it for being ambiguous.
+        self.assertIn("not one of the options",
+                      self.assertRefused("git push origin feature --fo"))
         self.assertAdmitted("git push origin feature --set-upstream")
 
     def test_an_unknown_global_option_cannot_hide_a_push(self):
@@ -2657,7 +2689,9 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertEqual(
             2, len(guard.heredoc_spans(command)),
             "both bodies are found, not just the one before the apostrophe")
-        self.assertAdmitted(command)
+        # A relative `a.md` resolves under the directory the guard runs in, so
+        # the case sets one that no deny covers.
+        self.assertIsNone(self.judge(command, cwd=temp_root(self)), command)
 
         # And the fail-safe direction is unchanged: a command after a body,
         # however the body quotes, is still judged.
@@ -3557,10 +3591,12 @@ class TheGitArgvGuard(unittest.TestCase):
 
     def test_a_fetch_that_discards_a_local_branch_is_refused(self):
         for command in (
-            "git fetch -f origin main:main", "git fetch --force origin",
+            "git fetch -f origin refs/heads/main:main", "git fetch --force origin",
             "git fetch --forc origin", "git fetch -qf origin",
-            "git fetch -u origin main:main", "git fetch --update-head-ok origin",
+            "git fetch -u origin refs/heads/main:main",
+            "git fetch --update-head-ok origin",
             "git fetch origin +main:main",
+            "git fetch origin +refs/heads/main:main",
             "git fetch origin +refs/heads/main:refs/heads/main",
         ):
             with self.subTest(command=command):
@@ -3568,7 +3604,7 @@ class TheGitArgvGuard(unittest.TestCase):
         # `/ship` fast-forwards with the plain form.
         for command in (
             "git fetch origin", "git fetch origin main",
-            "git fetch origin main:main", "git fetch -q origin main",
+            "git fetch origin refs/heads/main:main", "git fetch -q origin main",
             "git fetch --prune origin", "git fetch --all", "git fetch -p origin",
             "git fetch --update-shallow origin",
             # Typed by a dependabot rebase: a remote-tracking ref holds no work.
@@ -3604,10 +3640,28 @@ class TheGitArgvGuard(unittest.TestCase):
             "git fetch origin main:refs/heads/victim",
             "git fetch origin main:victim",
             "git fetch origin :refs/sweeps/bug",
-            "git fetch ../other main:main",
+            "git fetch ../other refs/heads/main:main",
             "git fetch ../other +refs/heads/main:refs/remotes/origin/main",
             "git pull --ff-only origin +main:refs/sweeps/security",
             "git pull --ff-only origin main:refs/sweeps/security",
+            # With a tag `main` on origin, these took the tag's commit.
+            "git fetch origin main:main",
+            "git fetch -q --depth 1 origin main:main",
+            "git pull --ff-only origin main:main",
+            # A value is taken only by an option git reads as one: an ambiguous
+            # prefix and a glued value leave the next word an operand.
+            "git fetch --de origin main:refs/sweeps/bug",
+            "git fetch --se origin main:refs/sweeps/bug",
+            "git fetch --dep=1 origin main:refs/sweeps/bug",
+            "git fetch -j2 origin main:refs/sweeps/bug",
+            "git fetch --dep 1 origin main:refs/sweeps/bug",
+            "git fetch --fi blob:none origin main:refs/sweeps/bug",
+            "git fetch -qj 2 origin main:refs/sweeps/bug",
+            # Git reads the rest of each as `-S`'s or `-r`'s value, so the word
+            # after it is the repository and not a value of `-s`.
+            "git pull --ff-only -Ss origin main:refs/sweeps/bug",
+            "git pull -Sj origin main:refs/sweeps/bug",
+            "git pull -rmerges origin main:refs/sweeps/bug",
         ):
             with self.subTest(command=command):
                 self.assertIn("a plain fetch would not", self.assertRefused(command))
@@ -3617,6 +3671,8 @@ class TheGitArgvGuard(unittest.TestCase):
             "git fetch origin --refmap +refs/heads/other:refs/sweeps/security other",
             "echo +main:refs/sweeps/security | git fetch origin --stdin",
             "echo +main:refs/sweeps/security | git fetch origin --stdi",
+            # `--st` is `--stdin` on a fetch, which has no `--strategy` to share it.
+            "echo +main:refs/sweeps/security | git fetch origin --st",
             "git pull --ff-only --refmap=+refs/heads/main:refs/sweeps/security origin main",
             "git pull --ff-only --ref=+refs/heads/main:refs/sweeps/security origin main",
         ):
@@ -3629,7 +3685,8 @@ class TheGitArgvGuard(unittest.TestCase):
             "git -c remote.origin.fetch=+refs/heads/main:refs/sweeps/security fetch origin"))
         # Only what origin holds there, and a colon that is not a refspec's.
         for command in (
-            "git fetch origin main:main", "git fetch -q --depth 1 origin main:main",
+            "git fetch origin refs/heads/main:main",
+            "git fetch -q --depth 1 origin refs/heads/main:main",
             "git fetch origin main:", "git fetch origin +main", "git fetch origin tag v1",
             "git fetch origin +refs/heads/*:refs/remotes/origin/*",
             "git fetch origin refs/heads/x:refs/remotes/origin/x",
@@ -3642,9 +3699,45 @@ class TheGitArgvGuard(unittest.TestCase):
             "git fetch --shallow-since '2026-01-01 10:00' origin main",
             "git fetch origin main > C:/tmp/fetch.log 2>&1",
             "git fetch --no-stdin origin main",
-            "git pull --ff-only origin main", "git pull --ff-only origin main:main",
+            "git pull --ff-only origin main",
+            "git pull --ff-only origin refs/heads/main:main",
             "echo git fetch origin --stdin",
         ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_value_option_takes_its_value_however_it_is_abbreviated(self):
+        # Each read its value as an operand, and so refused as not origin or as
+        # a destination. The rows hold each option's shortest prefix git
+        # reads as it, and some a longer one.
+        for command in (
+            "git fetch --dep 1 origin refs/heads/main:main",
+            "git fetch --dee 1 origin refs/heads/main:main",
+            "git fetch --j 2 origin refs/heads/main:main",
+            "git fetch --jo 2 origin refs/heads/main:main",
+            "git fetch --fi blob:none origin main",
+            "git fetch origin main --filt blob:none",
+            "git fetch --negotiati a:b origin main",
+            "git fetch --ser a:b origin main",
+            "git fetch origin main --serv a:b",
+            "git fetch --shallow-e a:b origin main",
+            "git fetch --shallow-s '2026-01-01 10:00' origin main",
+            "git pull --ff-only --dep 1 origin refs/heads/main:main",
+            "git pull --ff-only origin main --strategy- a:b",
+            "git pull --ff-only origin main -X a:b",
+            # A short letter at the end of its cluster.
+            "git fetch -qj 2 origin refs/heads/main:main",
+            "git fetch origin main -qo a:b",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_the_fetch_the_teardown_names_is_admitted(self):
+        # The guard and the command move together, or the teardown's line refuses.
+        ship = (SCRIPTS.parent / "commands" / "ship.md").read_text(encoding="utf-8")
+        spellings = re.findall(r"git fetch origin \S+:\S+", ship)
+        self.assertTrue(spellings, "ship.md no longer names a fetch with a refspec")
+        for command in spellings:
             with self.subTest(command=command):
                 self.assertAdmitted(command)
 
@@ -3652,8 +3745,8 @@ class TheGitArgvGuard(unittest.TestCase):
         # Run from another branch, the first moved local main to origin's and
         # dropped the commit only main held.
         for command in (
-            "git pull --ff-only -f origin main:main",
-            "git pull --ff-only --force origin main:main",
+            "git pull --ff-only -f origin refs/heads/main:main",
+            "git pull --ff-only --force origin refs/heads/main:main",
             "git pull --ff-only --forc origin", "git pull -qf --ff-only",
         ):
             with self.subTest(command=command):
@@ -4217,10 +4310,11 @@ class TheListsTheGuardReads(unittest.TestCase):
         """Whether one of the folded `paths` names the root file `name`.
 
         `fnmatchcase` wants a `/` before `**/`, so `denied_path` asks such a rule
-        again without it, and so does this.
+        again without it, and a `x/**` rule names the root file `x`, so does this.
         """
         return any(fnmatch.fnmatchcase(name, path) or (
-                       path.startswith("**/") and fnmatch.fnmatchcase(name, path[3:]))
+                       path.startswith("**/") and fnmatch.fnmatchcase(name, path[3:])) or (
+                       path.endswith("/**") and name == path[:-3])
                    for path in paths)
 
     def managed_commands(self):
@@ -4276,10 +4370,12 @@ class TheListsTheGuardReads(unittest.TestCase):
         # The test above reaches a `**/` rule only where a target's own config
         # names a root file under one; these rules reach it in every copy.
         module = self.guard_module()
-        rules = ("**/playwright.config.ts", "**/*.config.mts", "package.json", ".github/**")
+        rules = ("**/playwright.config.ts", "**/*.config.mts", "package.json", ".github/**",
+                 "tools/**")
         module.edit_denies = lambda: rules
         for name, named in (("playwright.config.ts", True), ("vite.config.mts", True),
-                            ("package.json", True), ("playwright.config.ts.bak", False),
+                            ("package.json", True), (".github", True), ("tools", True),
+                            ("playwright.config.ts.bak", False),
                             ("readme.md", False)):
             with self.subTest(name=name):
                 self.assertEqual(named, self.named_at_root(name, rules))

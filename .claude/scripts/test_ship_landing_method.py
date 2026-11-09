@@ -157,8 +157,34 @@ class TheGrantAndTheInvocationAgree(unittest.TestCase):
         start = text.index("# 1. MERGED")
         block = text[start:text.index("git worktree prune", start)]
         self.assertLess(block.index("git branch --show-current"), block.index("git pull --ff-only"))
-        self.assertIn("git fetch origin main:main", block)
+        self.assertIn("git fetch origin refs/heads/main:main", block)
         self.assertIn("--is-ancestor <merge-oid> main ", block)
+
+    def test_a_tag_named_main_on_origin_does_not_reach_the_teardown_s_fetch(self):
+        # The short source took the tag, which no branch reviewed.
+        text = SHIP.read_text(encoding="utf-8")
+        start = text.index("# 1. MERGED")
+        refspec = re.search(r"git fetch origin (\S+)",
+                            text[start:text.index("git worktree prune", start)]).group(1)
+        with tempfile.TemporaryDirectory() as tmp:
+            origin, clone = Path(tmp) / "origin", Path(tmp) / "clone"
+            subprocess.run(("git", "init", "-q", "--initial-branch=main", str(origin)), check=True)
+            git(origin, "config", "user.email", "t@example.invalid")
+            git(origin, "config", "user.name", "t")
+            git(origin, "commit", "-q", "--allow-empty", "-m", "the branch")
+            branch = git(origin, "rev-parse", "HEAD").strip()
+            git(origin, "clone", "-q", str(origin), str(clone))
+            git(origin, "switch", "-q", "-c", "side")
+            git(origin, "commit", "-q", "--allow-empty", "-m", "the tag")
+            git(origin, "tag", "main")
+            tagged = git(origin, "rev-parse", "HEAD").strip()
+            git(origin, "switch", "-q", "main")
+            git(clone, "switch", "-q", "-c", "other")
+            git(clone, "fetch", "-q", "origin", refspec)
+            self.assertEqual(git(clone, "rev-parse", "refs/heads/main").strip(), branch)
+            # The control: this fixture does tell the two spellings apart.
+            git(clone, "fetch", "-q", "--no-tags", "origin", "main:main")
+            self.assertEqual(git(clone, "rev-parse", "refs/heads/main").strip(), tagged)
 
 
 class ARefusedMergeIsAStop(unittest.TestCase):
