@@ -590,6 +590,10 @@ class TheDiff(unittest.TestCase):
         self.assertEqual(gate.added_lines(diff),
                          {"A.cs": {2, 3, 10}, "B.cs": {1}})
 
+    def test_the_tab_git_ends_a_spaced_name_with_is_not_part_of_it(self):
+        diff = "+++ b/my file.cs\t\n@@ -0,0 +1 @@\n+x\n"
+        self.assertEqual(gate.added_lines(diff), {"my file.cs": {1}})
+
     def test_a_header_it_does_not_know_refuses_the_run(self):
         for header in ['+++ "b/odd\\tname.cs"', "+++ odd.cs"]:
             with self.subTest(header=header):
@@ -662,6 +666,19 @@ class TheGateOnARepository(unittest.TestCase):
         self.assertIn("New.cs:1: a comment names an issue", result.stdout)
         self.assertNotIn("Renamed.cs", result.stdout)
         self.assertNotIn("Old.cs", result.stdout)
+
+    def test_a_spaced_path_has_its_added_lines_judged(self):
+        # Real git rather than a written header: the file list and the diff
+        # must agree on the name, or the file counts as judged with nothing read.
+        self.write("my tools/my file.cs", "x(); // see #3\n")
+        self.write("docs/my notes.md", "a " * 41 + "\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("my tools/my file.cs:1: a comment names an issue",
+                      result.stdout)
+        self.assertIn("docs/my notes.md:1: a prose line runs 82 columns",
+                      result.stdout)
 
     def test_a_line_added_inside_an_old_block_fails_it(self):
         text = Path(self.repo, "Old.cs").read_text().replace(

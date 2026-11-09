@@ -4,6 +4,7 @@ The hook suppresses every failure, so its exit status says nothing. The tree
 refreshed is the one the edit landed in, exactly one refresh owns it, or none.
 """
 
+import errno
 import importlib.util
 import io
 import json
@@ -20,6 +21,8 @@ import time
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from test_link_skips import skip_only_without_links
 
 SCRIPTS = Path(__file__).resolve().parent
 NO_CWD_SEARCH = "NoDefaultCurrentDirectoryInExePath"
@@ -198,13 +201,14 @@ class Base(unittest.TestCase):
             os.symlink(destination, link, target_is_directory=True)
         except (OSError, NotImplementedError) as refused:
             if sys.platform != "win32":
-                self.skipTest(f"no symbolic link here: {refused}")
+                skip_only_without_links(refused, "symbolic link")
             # The real `Popen`, which `setUp` replaces.
             junction = self.start_process(
                 ["cmd", "/c", "mklink", "/J", str(link), str(destination)],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if junction.wait(timeout=30) != 0:
-                self.skipTest("no directory link here")
+            status = junction.wait(timeout=30)
+            if status != 0:
+                self.fail(f"mklink /J exited {status} for {link}")
 
     def run_hook(self, body, project_dir=None):
         self.patch(mock.patch.dict(self.mod.os.environ, {}, clear=False))
@@ -614,12 +618,34 @@ class SeedingAWorktree(Base):
         try:
             os.symlink(elsewhere, main / CACHE / "index.sqlite")
         except (OSError, NotImplementedError) as refused:
-            self.skipTest(f"no symbolic link here: {refused}")
+            skip_only_without_links(refused, "symbolic link")
         worktree = self.linked(main)
 
         self.assertIsNone(self.mod.seed_source(worktree))
         self.assertEqual(0, self.run_event({"cwd": str(worktree)}))
         self.assertEqual([], self.spawned)
+
+
+class ADirectoryLinkSkipsOnlyWithoutALink(Base):
+    """`link_dir`, whose junction has no sibling in `test_link_skips.py`."""
+
+    def attempt(self, platform, refused):
+        with mock.patch.object(os, "symlink", side_effect=refused), \
+                mock.patch.object(sys, "platform", platform):
+            self.link_dir("link", "destination")
+
+    def test_a_posix_host_that_grants_no_link_skips(self):
+        with self.assertRaises(unittest.SkipTest):
+            self.attempt("linux", OSError(errno.EPERM, "no"))
+
+    def test_a_missing_parent_fails_rather_than_skips(self):
+        with self.assertRaises(FileNotFoundError):
+            self.attempt("linux", FileNotFoundError(errno.ENOENT, "no parent"))
+
+    def test_a_junction_windows_refuses_fails_rather_than_skips(self):
+        self.start_process = lambda *arguments, **keywords: _Child(1)
+        with self.assertRaisesRegex(self.failureException, "mklink /J exited 1"):
+            self.attempt("win32", OSError(errno.EINVAL, "no privilege"))
 
 
 class OneRefreshAtATime(Base):
@@ -988,7 +1014,7 @@ class OnlyARegisteredCheckout(Base):
         try:
             os.link(real / ".git", forged / ".git")
         except (OSError, NotImplementedError) as refused:
-            self.skipTest(f"no hard link here: {refused}")
+            skip_only_without_links(refused, "hard link")
         self.index(forged)
 
         self.assertFalse(self.mod.registered(forged))
@@ -1129,7 +1155,7 @@ class OnlyAnIndexAtRest(Base):
                 try:
                     os.symlink(aimed, path)
                 except (OSError, NotImplementedError) as refused:
-                    self.skipTest(f"no file link here: {refused}")
+                    skip_only_without_links(refused, "file link")
                 try:
                     self.assertFalse(self.mod.index_openable(root))
                 finally:
@@ -2296,8 +2322,8 @@ class FindingTheCli(Base):
         outside.mkdir()
         try:
             (outside / stub.name).symlink_to(stub)
-        except (OSError, NotImplementedError) as error:
-            self.skipTest(f"no symlinks here: {error}")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
 
         # Run from outside the checkout, so that only the fence on the link's
         # target can refuse it: from the root, the working-directory check

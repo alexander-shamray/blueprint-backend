@@ -29,6 +29,7 @@ HEADERS = {
 TASK_AT = {"In progress": 2, "Remaining": 3, "Tracking": 3, "Paused": 1}
 NUMBER_AT = {"In progress": 1, "Remaining": 2, "Tracking": 2, "Paused": 0}
 WAVE, GROUP, TASK, LABELS, DEPENDS, MODEL, CONFLICTS = 0, 1, 3, 4, 5, 6, 7
+MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
 EXTENSIONS = "cs|csproj|py|sh|md|json|ya?ml|sql|ps1|props|slnx|toml"
 BARE_PATH = re.compile(rf"(?<![\w./\\-])([\w.\\/-]+\.(?:{EXTENSIONS}))(?!\w)", re.IGNORECASE)
 KNOWN_FILE = re.compile(rf"\.(?:{EXTENSIONS})$", re.IGNORECASE)
@@ -355,6 +356,10 @@ def _without_owner(depends):
     return depends if rest == depends else rest.strip(" ;,:.—–-") or "none"
 
 
+def model_problem(model):
+    return None if model in MODELS else f"model {model!r} is not one of {', '.join(MODELS)}"
+
+
 def _blocker(row, open_issues, today, bodies, berserk=False):
     """Why a row cannot launch, or None. `berserk` lifts the human wait and the .claude/ reach and nothing else."""
     if row.number is None:
@@ -389,7 +394,8 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
     prose = f"{row.cells[TASK]} {bodies.get(row.number, '')}".replace("\\", "/")
     if not berserk and (CLAUDE_TREE.search(row.cells[CONFLICTS].replace("\\", "/")) or CLAUDE_PATH.search(prose)):
         return "edits .claude/"
-    return None
+    # Here as well as at `launch`, which runs after the fork and `tasks move`: its refusal leaves an empty worktree.
+    return model_problem(row.cells[MODEL])
 
 
 def ready(group, open_issues, today, bodies=None, berserk=False, kept=frozenset()):

@@ -161,7 +161,7 @@ class TheSyncRow(unittest.TestCase):
     def test_the_bind_is_argued_and_scoped_in_the_boundaries(self):
         boundaries = flat((ROOT / "docs" / "harness-boundaries.md").read_text(encoding="utf-8"))
         self.assertNotIn("A dispatched sync's step 2 runs", boundaries)
-        self.assertIn("A sync's step 2 runs the target-local suites with it", boundaries)
+        self.assertIn("a sync's step 2 runs sync_pr.py run-local-suites <n> --head <oid>", boundaries)
         self.assertIn("which dispatch_board.py sync-launch and run compare before a --dispatched run starts in it",
                       boundaries)
         self.assertNotIn("holding no proof", boundaries)
@@ -213,13 +213,12 @@ class TheSyncRow(unittest.TestCase):
     def test_step_1_opens_the_worktree_on_the_existing_branch(self):
         lead = flat(section().split("\n- **", 1)[0])
         self.assertIn(f"{HELPER} .claude/worktrees/sync-<sha7> <head> in place of /branch and enters it", lead)
-        self.assertIn(f"Bash(py -3.12 -m unittest discover:*)", [g.strip() for g in frontmatter("allowed-tools").split(",")])
         self.assertIn("chore/harness-sync-[0-9a-f]{7}", lead)
 
     def test_step_2_runs_the_target_local_suites_as_ci_does(self):
         step = bullet("Step 2")
-        self.assertIn("each path sync_pr.py local-suites prints", step)
-        self.assertIn("py -3.12 -m unittest discover -s <dir> -p <file>", step)
+        self.assertIn("py -3.12 .claude/scripts/sync_pr.py run-local-suites <n> --head <oid>", step)
+        self.assertIn("each path local-suites prints", step)
         self.assertIn("nothing else in *Ship checks*", step)
         # Step 2 otherwise says to fix what the checks find, and a sync branch is never committed to.
         self.assertIn("a failing suite is a target-local finding: filed in the target with gh-issue-hand.sh, the "
@@ -265,10 +264,15 @@ class TheSyncRow(unittest.TestCase):
 
     def test_the_grants_name_every_read_a_dispatched_sync_makes(self):
         grants = [g.strip() for g in frontmatter("allowed-tools").split(",")]
-        for grant in (f"Bash({SYNC_PR}:*)", f"Bash({HELPER}:*)", "Bash(py -3.12 -m unittest discover:*)",
+        for grant in (f"Bash({SYNC_PR}:*)", f"Bash({HELPER}:*)",
                       "Bash(bash .claude/scripts/gh-issue-list.sh)",
                       "Bash(bash .claude/scripts/gh-issue-suppresses.sh:*)"):
             self.assertIn(grant, grants)
+        # A prefix grant on the module cannot pin `-s`, so it ran a file written anywhere; `discover` takes the last
+        # `-s`, so a grant that spells one pins nothing either. The interpreter reaches scripts by their path alone.
+        self.assertEqual([], [g for g in grants if g.startswith("Bash(py -3.12 -")])
+        self.assertIn("Bash(py -3.12 .claude/scripts/shard-harness-suite.py)", grants,
+                      "with `:*` this grant would admit --ids <file> and --queue <file>")
         # The same two reach a session that is not /ship through the settings the sync renders.
         allow = json.loads(BASE.read_text(encoding="utf-8"))["permissions"]["allow"]
         self.assertIn(f"Bash({HELPER}:*)", allow)

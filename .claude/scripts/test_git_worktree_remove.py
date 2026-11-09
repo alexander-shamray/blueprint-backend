@@ -286,13 +286,17 @@ class RemoveShape(unittest.TestCase):
         self.assertFalse(self.present(root, "masstransit"))
         self.assertTrue(self.present(root))
 
-    def leftover(self, root, git_exit, content):
+    def leftover(self, root, git_exit, content, held=False):
         """Run the helper over a git that does what Git for Windows does when a delete fails: it removes the
         worktree and its registration, leaves the directory behind, and exits as given. `content` says whether
-        a file is left in it too, as a file another process holds open is."""
+        a file is left in it too, as a file another process holds open is, and `held` has `rmdir` refuse the
+        empty directory, as Windows refuses one that is a session's working directory."""
         native = Path(root)
         shim = native / "shim"
         shim.mkdir()
+        if held:
+            (shim / "rmdir").write_bytes(b"#!/usr/bin/env bash" + chr(10).encode() + b"exit 1" + chr(10).encode())
+            os.chmod(shim / "rmdir", 0o755)
         real = Path(shutil.which("git")).as_posix()
         (shim / "git").write_bytes((
             "#!/usr/bin/env bash" + chr(10)
@@ -338,6 +342,24 @@ class RemoveShape(unittest.TestCase):
                 self.assertEqual(1, run_bash('[ -e "$W" ]', W=f"{root}/checkout/.claude/worktrees/probe").returncode,
                                  "the empty directory is still there")
                 self.assertFalse(self.registered(root))
+
+    def test_an_empty_directory_a_process_holds_is_named_apart_from_one_holding_files(self):
+        # A /ship launched inside its worktree stands in the directory it removes, and Windows refuses the delete.
+        # Told only "remove it by hand", the owner looks for work that is not there and removes nothing they can.
+        root, _ = self.fixture()
+        result = self.leftover(root, 0, content=False, held=True)
+        self.assertEqual(4, result.returncode, result.stderr)
+        self.assertIn("is empty and held by a process", result.stderr)
+        self.assertIn(".claude/worktrees/probe", result.stderr)
+        self.assertNotIn("remove it by hand", result.stderr)
+        self.assertFalse(self.registered(root))
+
+    def test_a_held_directory_with_a_file_in_it_is_not_called_empty(self):
+        root, _ = self.fixture()
+        result = self.leftover(root, 0, content=True, held=True)
+        self.assertEqual(4, result.returncode, result.stderr)
+        self.assertIn("remove it by hand", result.stderr)
+        self.assertNotIn("is empty", result.stderr)
 
     def test_the_dirty_refusal_names_gits_own_reason_and_keeps_the_work(self):
         # A worktree git still registers is the dirty-tree refusal, which keeps git's own status and message.

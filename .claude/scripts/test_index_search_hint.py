@@ -151,21 +151,27 @@ class Session:
                            "cwd": str(cwd or CLAUDE.parent), "tool_name": name, "tool_input": given,
                            "tool_use_id": "toolu_now", **extra}, ensure_ascii=False).encode("utf-8")
 
-    def before(self, name, given, cwd=None, **extra):
-        return run(self.event(name, given, cwd, **extra), self.temp)
+    def before(self, name, given, cwd=None, project=None, **extra):
+        return run(self.event(name, given, cwd, **extra), self.temp, project)
 
 
-def environment(temp: Path) -> dict:
-    """What the hook sees: a text stdin a Windows pipe gets, and `temp` as
-    the temporary directory, so each case keeps its own record of asks."""
-    return dict(os.environ, PYTHONIOENCODING="cp1252:surrogateescape",
-                TMP=str(temp), TEMP=str(temp), TMPDIR=str(temp))
+def environment(temp: Path, project: Path | None = None) -> dict:
+    """What the hook sees: a text stdin a Windows pipe gets, `temp` as the
+    temporary directory, so each case keeps its own record of asks, and
+    `project` as the folder the session started in, or none: a session running
+    this suite exports its own, which is no checkout a case built."""
+    env = dict(os.environ, PYTHONIOENCODING="cp1252:surrogateescape",
+               TMP=str(temp), TEMP=str(temp), TMPDIR=str(temp))
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    if project is not None:
+        env["CLAUDE_PROJECT_DIR"] = str(project)
+    return env
 
 
-def run(payload: bytes, temp: Path):
+def run(payload: bytes, temp: Path, project: Path | None = None):
     return subprocess.run(
         [sys.executable, str(HINT)], input=payload, capture_output=True,
-        timeout=30, check=False, env=environment(temp))
+        timeout=30, check=False, env=environment(temp, project))
 
 
 def reason(done) -> str:
@@ -517,7 +523,7 @@ class OneRoute(Scratch):
         self.assertEqual("'MapPost'", single("MapPost"))
         self.assertEqual("'it'" + chr(92) + "''s'", single("it's"))
 
-    def test_a_linked_worktree_is_sent_to_the_cli_alone(self):
+    def test_with_no_project_dir_a_linked_worktree_is_sent_to_the_cli_alone(self):
         _main, tree = self.worktree()
         text = self.refused(*bash_call('grep -rnE "MapPost|MapPut" .'), cwd=tree / "src")
 
@@ -526,10 +532,70 @@ class OneRoute(Scratch):
         self.assertIn("cbx symbol 'MapPost' --json", text)
         self.assertNotIn('"', text)
         self.assertIn("codebase-index skill", text)
-        self.assertIn("from the worktree's root", text)
+        self.assertIn("from this checkout's root", text)
         self.assertIn("each alone on its line", text)
         self.assertIn("`--kind callers`", text)
         self.assertNotIn("mcp__", text)
+
+    def test_a_session_started_in_the_worktree_is_served_by_it(self):
+        _main, tree = self.worktree()
+        text = self.refused(*grep_call(), cwd=tree / "src", project=tree)
+
+        self.assertEqual(["find_refs", "find_symbol"], tools(text))
+        self.assertNotIn("cbx", text)
+
+    def test_from_the_checkout_the_session_started_in_it_names_the_mcp_tools(self):
+        main, _tree = self.worktree()
+        text = self.refused(*grep_call(), cwd=main, project=main)
+
+        self.assertEqual(["find_refs", "find_symbol"], tools(text))
+        self.assertNotIn("cbx", text)
+
+    def test_from_a_worktree_entered_mid_session_it_names_the_cli_alone(self):
+        main, tree = self.worktree()
+        text = self.refused(*grep_call(), cwd=tree, project=main)
+
+        self.assertIn("cbx refs 'ClaimAsync' --json", text)
+        self.assertNotIn("mcp__", text)
+
+    def test_the_main_checkout_after_a_session_started_in_a_worktree_names_the_cli_alone(self):
+        main, tree = self.worktree()
+        text = self.refused(*grep_call(), cwd=main, project=tree)
+
+        self.assertIn("cbx refs 'ClaimAsync' --json", text)
+        self.assertIn("from this checkout's root", text)
+        self.assertNotIn("mcp__", text)
+
+    def test_with_no_project_dir_a_linked_worktree_is_taken_to_be_off_it(self):
+        main, tree = self.worktree()
+        hook = module()
+        with mock.patch.dict(os.environ):
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+
+            self.assertTrue(hook.off_server(str(tree)))
+            self.assertFalse(hook.off_server(str(main)))
+
+    def test_with_no_checkout_at_the_project_dir_a_linked_worktree_is_taken_to_be_off_it(self):
+        main, tree = self.worktree()
+        nowhere = self.scratch / "nowhere"
+        nowhere.mkdir()
+        hook = module()
+        with mock.patch.dict(os.environ, CLAUDE_PROJECT_DIR=str(nowhere)):
+            self.assertTrue(hook.off_server(str(tree)))
+            self.assertFalse(hook.off_server(str(main)))
+
+    def test_with_both_checkouts_known_it_names_the_cli_where_the_mcp_call_is_refused(self):
+        """Naming the MCP tools where `index-mcp-root.py` refuses them sends the
+        session to a second refusal."""
+        spec = importlib.util.spec_from_file_location("index_mcp_root", CLAUDE / "hooks" / "index-mcp-root.py")
+        root = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(root)
+        hook = module()
+        main, tree = self.worktree()
+        for cwd, project in ((main, main), (main, tree), (tree, main), (tree, tree), (tree / "src", tree)):
+            event = {"tool_name": "mcp__codebase-index__find_refs", "tool_input": {"symbol": "X"}, "cwd": str(cwd)}
+            with self.subTest(cwd=cwd, project=project), mock.patch.dict(os.environ, CLAUDE_PROJECT_DIR=str(project)):
+                self.assertEqual(root.answer(event) is not None, hook.off_server(str(cwd)))
 
     def test_the_commands_it_names_pass_the_index_guard(self):
         _main, tree = self.worktree()

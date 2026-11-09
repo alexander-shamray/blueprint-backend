@@ -38,6 +38,35 @@ ROW_READ = "bash .claude/scripts/pr-for-branch.sh <branch>"
 RETIRED_READS = ("git log origin/main..HEAD", "git cherry", "git log --merges --cc")
 
 
+class TheConflictAndTheWorktreeTheRunbookNames(unittest.TestCase):
+    """Two places the runbook and what actually happens had parted."""
+
+    def setUp(self):
+        self.text = " ".join(SHIP.read_text(encoding="utf-8").split()).replace("`", "")
+
+    def test_a_conflict_takes_the_rebase_the_working_rule_gives_it(self):
+        rule = " ".join((ROOT / "docs" / "harness" / "working-rules.md").read_text(encoding="utf-8").split())
+        self.assertIn("only when GitHub reports it conflicting", rule)
+        # At any point: `main` can move during the checks wait, and that wait passes only on MERGEABLE.
+        self.assertIn("What resolves GitHub's, and a CONFLICTING read at any point, is a rebase:", self.text)
+        self.assertNotIn("Conflicts are the caller's tree", self.text)
+        # The route is the one a refused landing already takes, and the helper is what it runs.
+        at = self.text.index("a CONFLICTING read at any point")
+        self.assertLess(at, self.text.index("bash .claude/scripts/git-rebase-onto-main.sh <branch> start"))
+
+    def test_the_conflict_stop_is_left_only_for_the_update_having_answered(self):
+        self.assertIn("| CONFLICTING again on a head rebased onto the current origin/main |", self.text)
+        self.assertIn("Bash(git merge-base origin/main HEAD)", self.text)
+
+    def test_a_session_launched_in_its_worktree_is_told_what_is_left(self):
+        for words in ("**Launched inside the worktree**, line 2 answers that no session is active",
+                      "Run lines 4 to 8 by cd to the main checkout",
+                      "On Windows line 7 exits 4 on the directory this session holds, so no line 9",
+                      "the report gives the owner rmdir and the drop"):
+            with self.subTest(words=words):
+                self.assertIn(words, self.text)
+
+
 def setUpModule():
     # Not a skip: a skip on a missing tool reports a pass.
     if BASH is None:
@@ -130,6 +159,57 @@ class TheGrantAndTheInvocationAgree(unittest.TestCase):
         self.assertLess(block.index("git branch --show-current"), block.index("git pull --ff-only"))
         self.assertIn("git fetch origin main:main", block)
         self.assertIn("--is-ancestor <merge-oid> main ", block)
+
+
+class ARefusedMergeIsAStop(unittest.TestCase):
+    """The classifier can refuse the helper with no exit code, so the row that reads exit codes never sees it."""
+
+    LINE = "`! bash .claude/scripts/gh-pr-merge.sh <n> <oid>`"
+
+    def setUp(self):
+        self.ship = SHIP.read_text(encoding="utf-8")
+        self.argument = (ROOT / "docs" / "commands" / "ship.md").read_text(encoding="utf-8")
+
+    def flat(self, text):
+        return " ".join(text.split())
+
+    def test_the_stop_list_hands_over_the_line(self):
+        stops = self.ship[self.ship.index("**A refused push stops"):self.ship.index("## Resume, don't restart")]
+        bullet = stops[stops.index("**A refused merge"):]
+        self.assertIn(self.LINE, self.flat(bullet))
+
+    def test_a_branch_update_is_for_github_refusing_and_not_for_this(self):
+        # GitHub's refusal exits non-zero and takes the rebase; answering the classifier with one rewrites a reviewed head.
+        gate = self.flat(self.ship[self.ship.index("A rebase landing refused"):self.ship.index("git-rebase-onto-main.sh <branch> start")])
+        self.assertIn("exits non-zero", gate)
+        self.assertIn("refused-merge stop", gate)
+
+    def test_the_argument_keeps_the_resume_and_refuses_a_branch_update(self):
+        section = self.flat(self.argument[self.argument.index("**A refused merge"):self.argument.index("**The review hitting its ceiling")])
+        for phrase in (self.LINE, "*already merged* row", "never answered with a branch update"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+    def test_the_task_list_row_is_named_on_the_resume(self):
+        # Step 6's teardown deletes it, and a merge the owner ran never reaches that teardown.
+        bullet = self.ship[self.ship.index("**A refused merge"):]
+        self.assertIn("task list", self.flat(bullet[:bullet.index("\n- **")]))
+
+
+class TheCiWaitIsCheap(unittest.TestCase):
+    """Off a terminal `--watch` reprints the table every ten seconds by default, all of it read at the wake."""
+
+    def test_every_spelling_of_the_wait_names_the_interval(self):
+        text = SHIP.read_text(encoding="utf-8")
+        waits = re.findall(r"^\s*gh pr checks .*$", text, re.M)
+        self.assertTrue(waits, "the runbook's wait went away")
+        for wait in waits:
+            with self.subTest(wait=wait):
+                self.assertIn("--watch --fail-fast --interval 60", wait)
+
+    def test_the_argument_says_why(self):
+        argument = (ROOT / "docs" / "commands" / "ship.md").read_text(encoding="utf-8")
+        self.assertIn("**`--interval 60`", argument)
 
 
 class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):

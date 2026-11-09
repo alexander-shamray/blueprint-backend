@@ -68,6 +68,23 @@ the report: the push did not happen, the `! git push -u origin <branch>` line
 for the caller, and the user-level `autoMode.environment` setting that removes
 the need. A resumed run lands at the *clean and pushed* row.
 
+**A refused merge is the same stop at the other end of the chain.** The
+auto-mode classifier can refuse `gh-pr-merge.sh` with no exit code and no hook
+reason after every step 6 gate has passed: blueprint-admin measured it (its
+#613), as "Merge Without Review" with a clean review behind it and `/ship`'s own
+grant on the helper, and it let another merge through the same day. So the step
+is tried rather than skipped, and a refusal is reported, never retried by
+another spelling and never answered with a branch update, which would rewrite a
+reviewed head and answer nothing, since GitHub was not what refused. The PR did
+not merge, and the caller gets the `! bash .claude/scripts/gh-pr-merge.sh <n>
+<oid>` line with the oid the gates read. The owner's merge leaves the run at the
+*already merged* row: step 0 tears the workspace down, and the task list row
+step 6's teardown would have deleted goes then. What lifts it is the user's own
+`autoMode` settings, not a grant here, and admin's `autoMode.allow` entry for
+the helper is the expected remedy rather than a measured one; that record is
+admin's, and `docs/harness/pitfalls.md` says only that the classifier refuses
+some outward writes.
+
 **The review hitting its ceiling is not in the runbook's stop table.** A
 ceiling ends the review — it reports itself unconverged and step 6 merges
 anyway, because a budget running out is not a verdict. Reading it as a
@@ -192,8 +209,11 @@ never runs is the target-local test or command a payload change can trip
 (`docs/harness/working-rules.md`). Each is run as CI runs it, with `discover -s
 <dir> -p <file>`, because it imports its siblings from its own directory and a
 dotted module name cannot be formed from `.claude/` or `.github/comment-gate/`.
-The command is granted in the frontmatter, since a dispatched run's reads must
-be named by its own grants. A failing suite has no ending of its own, since step
+`sync_pr.py run-local-suites <n> --head <oid>` runs each of them so, and the
+frontmatter's grant on `sync_pr.py` is what names it, since a dispatched run's
+reads must be named by its own grants; it takes no path, since a grant on
+`discover` itself ran a file written anywhere (`docs/harness-boundaries.md`). A
+failing suite has no ending of its own, since step
 2 otherwise says to fix what the checks find and a sync branch is never
 committed to: it is a target-local finding, filed in the target, and the sync
 ends unmerged or is handed back with no round run, because the code under test
@@ -543,8 +563,8 @@ shapes:
 **Neither branching from `HEAD` nor forking past the commits makes them
 safe, and neither is this chain's decision.** Commits sitting on `main`
 want pushing, moving to a branch, or dropping, and picking one of those is
-the caller's call in exactly the sense a merge conflict is. It is in the
-stop table for that reason and not because the run gave up.
+the caller's call. It is in the stop table for that reason and not because
+the run gave up.
 
 **It is also the one stop that fires before anything has happened**, which
 is the cheapest place a stop can be. Nothing is branched, committed,
@@ -649,6 +669,17 @@ carries on with the current branch, and the assumption is said aloud, with
 the branch and the directory named, so a tree that has drifted onto the
 wrong one is visible before anything is committed to it.
 
+**Then the change itself, and its code is found through the index before it is
+read.** The prompt-time hint cannot do this for a run: it reads a `/ship`
+argument as a question, and an issue number or a plan's task is none. So the
+runbook names the skill's `search`, `refs` and `impact` lines, and grants them,
+since the skill's own grant holds only once it is loaded and a dispatched run's
+every shell read has to be one its grants name. `update` and `index`, which
+write the cache, stay the skill's. **An empty `refs` or `impact` is never an
+absence**, the skill's confidence contract says when to read further, and a
+`cbx` that cannot answer is not one of the stops: a target may have no index,
+and the index speeds the run without being what makes it correct.
+
 ## Step 2: checks
 
 **The checks are the target's, and follow the class the PR body will
@@ -749,6 +780,17 @@ a lease would be satisfied by them because they have been fetched.
 told what the author thinks is a second copy of the author. Step 6 refuses a
 head no round read, so each round's `git rev-parse HEAD` is recorded when its
 input is written.
+
+**A full pass starts from the diff's blast radius.** `diff-impact` names the
+symbols and files the diff reaches through the graph, beyond the lines a
+reviewer quotes, and a contradiction outside the changed lines lives there. It
+is read against the merge base, which `git merge-base origin/main HEAD` answers
+under an exact grant, because its default of `HEAD` compares nothing on a clean
+branch. It names no absences, so a file it omits may still depend on the change.
+A recheck reads the diff and the findings and nothing else, so it writes none,
+which nobody would read. The reviewer never names it in `skipped`, whose other
+entries stop the chain, since an index a target lacks is not a round that did
+not run.
 
 **The bar comes from `origin/main`, never from the branch.** A change under
 `docs/harness/` is ordinary here, so a reviewer taking its bar from the
@@ -907,10 +949,11 @@ upstream. That is why the fetch and a `git pull --ff-only` also run
 **before step 5**: reviewing the wrong tree is a wasted round.
 
 **A fast-forward that will not fast-forward is divergence**, which is another
-session's history against this one's, and it stops the chain for the reason an
-unmergeable PR does. The rebase helper, `git-rebase-onto-main.sh`, does not
-resolve it and is not meant to: it refuses a remote carrying commits this
-checkout lacks, which is exactly this case. A lease would be satisfied here —
+session's history against this one's, and it stops the chain because that
+history is not this run's to replace. The rebase helper,
+`git-rebase-onto-main.sh`, does not resolve it and is not meant to: it refuses
+a remote carrying commits this checkout lacks, which is exactly this case. A
+lease would be satisfied here —
 those commits have been fetched — and the other session's work would still be
 gone, so the refusal is the helper's own rather than git's.
 
@@ -946,6 +989,11 @@ to perform. The rule is to wait for the run on the pushed head; `--watch`
 is the spelling that actually does, and `--fail-fast` returns the moment
 one check fails rather than sitting out the rest.
 
+**`--interval 60` is what keeps the wait cheap.** Off a terminal `--watch`
+prints the whole table again every interval, ten seconds by default. A minute is
+a sixth of the repeats and costs at most that much latency on a run of minutes;
+blueprint-admin read about a quarter less text a call (its #225).
+
 **`headRefOid` is read here, before the checks and before the merge**, and
 it is the `<oid>` the merge below matches on. Reading it afterwards would
 defeat the point: the value has to come from the same look that decided the
@@ -953,16 +1001,64 @@ PR was mergeable, so that everything between that decision and the merge is
 something the merge can refuse.
 
 `mergeable` must be `MERGEABLE` and every check must pass. **A merge onto a
-red `main` is not a recommended option**, and a conflicted branch is a
-question about the caller's tree that this chain cannot answer. Either one
-stops here and is reported as what it is.
+red `main` is not a recommended option**, so a failed check stops here and is
+reported as what it is.
 
-**`MERGEABLE` is GitHub's answer about a merge commit, and the step below
-asks for a rebase**, which replays each commit and can conflict where
-merging the same branch would not. So the landing may be refused after this
-read said yes. That failure is loud and it lands *before* the teardown, so
-the workspace is intact when the chain stops: report the refusal rather
-than reaching for another method.
+**A conflicted branch is a branch update, not a stop.** This row used to call
+it a question about the caller's tree, while `docs/harness/working-rules.md`,
+*Pull requests*, has a session rebase a branch it owns when GitHub reports it
+conflicting, and the helper is granted. #265 met the difference when `main`
+moved during its checks wait and the pull request read `CONFLICTING` over one
+bullet (#269). The rule won, because a run already resolves a replay's conflict
+in the replayed commit when a landing is refused after `MERGEABLE`, and the
+answer to the opposite choice, handing back every branch `main` moved under, is
+a chain that stops on the ordinary course of two pull requests. So `CONFLICTING`
+takes that same route whenever it is read: before the wait, which on it has
+nothing to report, or after it, the wait passing only on `MERGEABLE`. What is
+left of the stop is `CONFLICTING` read again on a head replayed onto the
+`origin/main` still current: the update has answered and GitHub disagrees.
+
+**An open `main is red` issue is a red check, and the pull request's own
+checks cannot show it.** A `pull_request` run is pinned to the merge ref of the
+push that started it and nothing reruns it when `main` moves, so a pull request
+last pushed before `main` went red still reads green, and `--watch` exits 0 over
+it (blueprint-admin's #531). The signal that does move is the issue the target's
+CI files on a red push run, and `main-red-open.sh` reads it. It matches the bare
+title and `main is red: <workflow>`, because a target that keeps one issue per
+watched workflow suffixes the title, and a title the rule does not match would
+read green while `main` is red. A `main-red` job or workflow therefore writes
+one of those two, with the `bug` label the read filters on. Exit 3 names every
+open one and is the CI-not-green stop; 2 is a listing it could not take, cut or
+read, and a read that cannot say `main` is green has not said so.
+
+It runs after the checks wait rather than before it, because that wait lasts
+minutes and `main` can turn red inside it. Two residues are accepted: the
+seconds between this read and the merge, and the signal's own lag, since the
+issue opens only once the push run has finished, so a `main` a landing broke
+reads green for that run's length. The helper takes no argument and fixes its
+fields, so the grant reaches no issue body, the reason `gh-issue-list.sh` exists
+and a raw `gh issue list` grant would undo.
+
+**The run that answers the issue is the one exemption.** The issue closes only
+once `main` is green, and the revert or the fix forward that makes it so is
+itself a landing, so a gate with no exemption leaves a red `main` no way out
+through this command. A run started as `/ship #<n>` for the open issue's own
+number exists to answer it, and exit 3 naming that number and no other is not
+its stop: where two workflows are red, answering one does not license landing
+over the other. It is keyed on the argument rather than on a `Reverts:` trailer
+because a fix forward, such as an external drift no revert undoes, carries none.
+A resumed run that drops the argument stops, and is resumed with it. A
+dispatched run's leading tag is not that argument, so it stops too: which of a
+red `main`'s answers lands first is the owner's.
+
+**`MERGEABLE` is GitHub's answer about a merge commit, and the step below asks
+for a rebase**, which replays each commit and can conflict where merging the
+same branch would not. So the landing may be refused after this read said yes.
+That failure is loud and it lands *before* the teardown, so the workspace is
+intact when the chain stops: report the refusal rather than reaching for another
+method. **This is GitHub refusing the rebase, and the helper exits non-zero.** A
+refusal by the auto-mode classifier, with no exit code, is the refused-merge
+stop instead (*It runs to the end*), and no branch update answers it.
 
 `git-rebase-onto-main.sh`, the runbook's step 6 branch update, replays the
 branch onto `origin/main` and publishes the result under a lease. **A conflict
@@ -1023,8 +1119,8 @@ for ever. Both states already have handling:
 **A loop that can only exit on success is not a poll, it is a wait**, and
 the difference only shows when the thing being waited on stops existing.
 
-**`UNKNOWN` is neither of those, and treating it as a conflict stops the
-run for a value that means *ask again*.** GitHub computes mergeability
+**`UNKNOWN` is neither of those, and treating it as a conflict rewrites a
+branch for a value that means *ask again*.** GitHub computes mergeability
 asynchronously, so a read taken shortly after a push — which is exactly
 where this one is taken, the review having just pushed a fix — finds
 the answer still being worked out. Poll while it reads `UNKNOWN`, and take
@@ -1032,7 +1128,7 @@ the answer still being worked out. Poll while it reads `UNKNOWN`, and take
 first: a run that captured the oid up front and then waited would bind the
 merge to a head that a push during the wait had already replaced, and the
 merge would fail on a branch that was fine. Only a *known* non-mergeable
-result stops the chain.
+result is acted on.
 
 **CI runs on the head commit, not on the PR**, so check the oid: a review
 round that pushed a fix invalidates the previous run, and `gh pr checks`
@@ -1042,10 +1138,10 @@ rather than reading whichever finished last.
 
 ## Step 6: the wait
 
-**The CI wait is the one place this chain sleeps, and a session that
-sleeps pays for its context at every wake.** A `/ship` main session's call
-sent about 274k tokens in backend's measurement of 2026-10-10, so what
-matters is how many times the wait wakes it.
+**The CI wait is where this chain sleeps, as a sync's step 2 does over its
+suites, and a session that sleeps pays for its context at every wake.** A
+`/ship` main session's call sent about 274k tokens in backend's measurement of
+2026-10-10, so what matters is how many times the wait wakes it.
 
 **The wait runs in this session as one background task.**
 `run_in_background` detaches `gh pr checks --watch`, nothing is sent while it
@@ -1189,6 +1285,19 @@ fails outright: git refuses to check out a branch another worktree already
 holds. `ExitWorktree` is what returns the session to the main checkout,
 which is why the runbook skips line 3 on this path.
 
+**A session launched inside the worktree has no such move.** It never called
+`EnterWorktree`, so `ExitWorktree` has nothing to undo and answers that no
+session is active, while the *Resume* rows send that session down the forked
+path all the same. Found shipping #214 from a session started in its worktree:
+the later lines ran from the main checkout by `cd`, and `git-worktree-remove.sh`
+exited 4, since the session's own working directory holds the emptied directory
+on Windows (#235). The run can still do everything but delete that directory:
+the removal unregisters the worktree, and the helper names an empty directory a
+process holds apart from one holding files, so the owner does not go looking
+for work. An exit 4 keeps its branch however it arose, because the drop's reason
+for waiting is the directory, so the drop goes in the owner's closing lines
+with the `rmdir`, run once the session has closed.
+
 **And the main checkout is not always on `main` when the session gets
 there.** `/branch` puts a branch in place there whenever `main` is dirty, so
 another session's branch may be the one checked out. A pull there would run
@@ -1205,12 +1314,17 @@ main checkout — so line 3 is the only thing that makes the pull mean `main`.
 Running line 7 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
-**The task-list row `/branch` added is deleted once the merge is verified**,
-after the pull, by the file's own path, which `.harness/agent-rules.md`,
-*Working in a target*, puts outside every checkout so that the isolation refuses
-it to no workspace. Nothing else removes it: a row left behind reads as work
-still in progress after the PR has landed, which is what *In progress* exists
-not to say.
+**The task-list rows of this change are re-derived when the nine lines end**, at
+line 9 or at a line that stops them after the verified merge, which deletes
+the row `/branch` added unless its issue stays open, by the file's own path,
+which `.harness/agent-rules.md`, *Working in a target*, puts outside every
+checkout so that the isolation refuses it to no workspace. Nothing else removes
+it: a row left behind reads as work still in progress after the PR has landed,
+which is what *In progress* exists not to say. An issue the merge left open, one
+a later pull request of a set closes, is still open work, so its row goes where
+`docs/harness/working-rules.md`, *Issues and the task list*, puts it rather than
+off the list. It reads the branch as those lines left it, since read earlier
+the branch still stands and the row stays *In progress* naming one about to go.
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
