@@ -3,10 +3,9 @@
 **The claim: no tracked path is longer than `LIMIT` in
 `path_length_gate.py`, so a worktree under `.claude/worktrees/` can check the
 tree out on Windows with an ordinary slug.** A path past Windows' limit fails
-late and expensively: `git-worktree-fork.sh` stops with `Filename too long`,
-after `git worktree add -b` has made a branch that `git-branch-drop.sh` then
-refuses to drop, and the comment gate's `git show` fails the same way on a
-checkout that does hold the file.
+late and expensively: `git-worktree-fork.sh` stops with `Filename too long`
+after the checkout has begun, and removes the branch it made, and the comment
+gate's `git show` fails the same way on a checkout that does hold the file.
 
 ## The arithmetic
 
