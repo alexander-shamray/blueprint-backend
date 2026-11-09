@@ -271,7 +271,8 @@ a saving depends on what one unit of work is taken to be:
 
 | Per | A | B | Change |
 |---|---|---|---|
-| CI run | 81.0 minutes | 73.2 minutes | −9.6% |
+| CI run, CI's own minutes | 68.4 minutes | 58.9 minutes | −13.9% |
+| CI run, the whole bill | 81.0 minutes | 73.2 minutes | −9.6% |
 | PR opened | $2.00 | $1.59 | −20.1% |
 | Head commit on a PR | $0.67 | $0.55 | −18.1% |
 | Commit reaching `main` | $2.16 | $2.21 | +2.2% |
