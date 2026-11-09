@@ -62,11 +62,11 @@ in a way `code` cannot see goes red there, on the next push, under ADR-155.
 
 `commit_builds.py` lives beside the gate for the reason the two above do: the
 `commits` job runs it, and it reads the same two filters, so there is one list.
-A build's outcome is a function of its inputs and a commit's parent was built in
-that loop or by `main`, so a commit whose diff from its one parent touches none
-of those inputs builds what its parent built, and is skipped with a line naming
-it. A merge, a root, an empty diff or a path it does not know is a build, and a
-failed git read fails the step. It is a superset of what compiles: a commit
+A build's outcome is a function of its inputs, so a commit whose diff from its
+one parent touches none of those inputs builds what its nearest built ancestor
+built, and is skipped with a line naming it. A merge, a root, an empty diff or
+a path it does not know is a build, and a failed git read fails the step. It
+is a superset of what compiles: a commit
 editing `docs/personal-data.md` builds although only a test reads that file,
 because a second list is what would drift. `test_commit_builds.py` runs the
 step's own text over a scratch repository with `dotnet` stubbed.
