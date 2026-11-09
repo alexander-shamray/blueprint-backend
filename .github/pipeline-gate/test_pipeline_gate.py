@@ -1810,8 +1810,17 @@ class CodeTests(unittest.TestCase):
         self.assertIn("github.event_name != 'pull_request'", self.problems(text))
 
     def test_an_output_that_ignores_stage_inputs_is_caught(self) -> None:
-        text = self.broken(" || steps.changes.outputs.stage-inputs == 'true'", "")
+        text = self.broken(" || steps.changes.outputs.stage-inputs != 'false'", "")
         self.assertIn("stage-inputs", self.problems(text))
+
+    def test_an_output_a_lost_step_output_turns_false_is_caught(self) -> None:
+        for name in ("code", "stage-inputs"):
+            with self.subTest(name=name):
+                text = self.broken(
+                    f"steps.changes.outputs.{name} != 'false'",
+                    f"steps.changes.outputs.{name} == 'true'",
+                )
+                self.assertIn(f"steps.changes.outputs.{name} != 'false'", self.problems(text))
 
     def test_an_output_that_is_gone_is_caught(self) -> None:
         text = re.sub(r"^      code: .*\n", "", self.text, count=1, flags=re.MULTILINE)
