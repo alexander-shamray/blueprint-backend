@@ -1,0 +1,47 @@
+name: GHCR prune
+
+# What is kept, and why nothing here deletes until it is opted in: ADR-199.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      delete:
+        description: 'Delete what the report names. Left off, the run only reports.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghcr-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    # A schedule waits on the variable; a dispatch is a person asking, and only
+    # main's copy of the script holds the grant (ADR-197).
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.GHCR_PRUNE_SCHEDULED == 'enabled') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Prune
+        run: |
+          if [ "$DELETE" = "true" ]; then set -- --delete; fi
+          python tools/ci-cost/ghcr_prune.py --repo "$GITHUB_REPOSITORY" "$@"
+        env:
+          DELETE: ${{ github.event_name == 'schedule' || inputs.delete }}
+          GH_TOKEN: ${{ github.token }}

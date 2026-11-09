@@ -1,5 +1,9 @@
 name: Deploy
 
+# The one place the API keeps a dispatch's inputs, and ghcr_prune.py keeps every
+# tag it reads here (ADR-199). Blank on any other event, which GitHub titles itself.
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Roll {0} to {1}', inputs.workload, inputs.tag) || '' }}
+
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
 # cluster: no environment, no kubeconfig. It does reach a registry, to verify
 # what CI pushed and pin the digest it verified (ADR-109). The rest is

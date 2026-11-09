@@ -38,6 +38,10 @@ an overwritten tag cannot run other bytes.
 which names the registry, GHCR, and makes the push, the signature, the two
 attestations and the admission check run.
 
+**Amended by
+[ADR-199](ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)**,
+which sets the artefact's retention.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -693,6 +693,11 @@ they are set; the rollout passes the digest `cosign verify` reported, and
 ([ADR-081](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
 GHCR has no tag immutability, and this pinning is what answers an overwritten
 tag.
+**What ADR-199 does not keep is pruned, once opted in.** A scheduled run deletes
+the container versions outside what
+[ADR-199](adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)
+keeps, walking the manifests so that an image's untagged children, signature
+and attestations go only after it.
 
 ## 15.3 Deployment
 

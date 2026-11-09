@@ -45,6 +45,20 @@ listing without `read:packages`, typically — is printed under the table rather
 than failing the run; a refused runs or jobs read ends it, because no figure
 stands without them.
 
+## The prune
+
+`ghcr_prune.py` deletes what
+[ADR-199](../../docs/backend-architecture/adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)
+does not keep, and that ADR owns the rule and its limits. Without `--delete` it
+only reports, so this reads the registry and changes nothing:
+
+```bash
+py -3.12 tools/ci-cost/ghcr_prune.py
+```
+
+A run takes minutes, since it lists every version and reads the manifests of
+the tagged ones it keeps.
+
 Stdlib only, and the suite answers from a fake API:
 
 ```bash
