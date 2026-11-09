@@ -133,8 +133,13 @@ class RolledTags(unittest.TestCase):
 
         return answer
 
-    def test_the_title_deploy_yml_writes_names_the_tag(self):
-        self.assertEqual(ghcr_prune.rolled_tags(self.fetch(["Roll catalog-api to abc"]), REPO), {"abc"})
+    def test_the_title_deploy_yml_writes_names_the_commit(self):
+        self.assertEqual(ghcr_prune.rolled_tags(self.fetch([f"Roll catalog-api to {commit('a')}"]), REPO),
+                         {commit("a")})
+
+    def test_a_tag_the_rollout_refuses_names_nothing_and_stops_nothing(self):
+        titles = ["Roll catalog-api to main", "Roll catalog-api to a b", "Roll catalog-api to "]
+        self.assertEqual(ghcr_prune.rolled_tags(self.fetch(titles), REPO), set())
 
     def test_a_title_it_cannot_read_refuses_rather_than_missing_a_tag(self):
         with self.assertRaisesRegex(LookupError, "names no tag"):
