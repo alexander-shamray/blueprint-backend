@@ -529,8 +529,9 @@ jobs:
       # Empty on a dispatch, which builds images and has no guard to test.
       guard: ${{ steps.changes.outputs.guard }}
       # False only on a pull request: a push run is what tests two merged changes
-      # together (§15.1). Readers test `!= 'false'`, so a lost output builds.
-      code: ${{ github.event_name != 'pull_request' || steps.changes.outputs.code == 'true' || steps.changes.outputs.stage-inputs == 'true' }}
+      # together (§15.1). Only two real false answers skip, and readers test
+      # `!= 'false'`, so an output lost at either end builds.
+      code: ${{ github.event_name != 'pull_request' || steps.changes.outputs.code != 'false' || steps.changes.outputs.stage-inputs != 'false' }}
     steps:
       - uses: actions/checkout@v7
 

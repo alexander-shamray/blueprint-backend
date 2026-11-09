@@ -1391,8 +1391,8 @@ STATUS_GUARD = re.compile(r"\b(?:failure|always)\(\)")
 # Everything else a pull request's run needs to tell a skip from a lost answer.
 CODE_OUTPUT_TERMS = (
     "github.event_name != 'pull_request'",
-    "steps.changes.outputs.code == 'true'",
-    "steps.changes.outputs.stage-inputs == 'true'",
+    "steps.changes.outputs.code != 'false'",
+    "steps.changes.outputs.stage-inputs != 'false'",
 )
 # The trees `code` excludes wholesale, which a test can still read at run time.
 EXCLUDED_TREES = r"docs|\.github|\.claude|\.harness"
