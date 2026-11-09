@@ -1316,9 +1316,8 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # Keyless: the identity is this workflow on main, vouched for by the
-      # job's OIDC token and recorded in Sigstore's public log (ADR-071). A second
-      # attempt signs with a new key, so Rekor takes a new entry, and deploy.yml's
-      # verifier passes on any one signature that verifies.
+      # job's OIDC token and recorded in Sigstore's public log (ADR-071). Signing
+      # twice is safe, as .github/pipeline-gate/README.md argues.
       - name: Sign ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
         run: bash .github/pipeline-gate/image_retry.sh run "Sign" cosign sign --yes "$REGISTRY/${{ matrix.image }}@$DIGEST"
