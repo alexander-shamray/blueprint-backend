@@ -4,10 +4,12 @@
 """
 
 import contextlib
+import http.client
 import io
 import json
 import re
 import unittest
+import urllib.error
 from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 from urllib.parse import unquote
@@ -310,6 +312,60 @@ class Gh(unittest.TestCase):
                 self.assertRaisesRegex(LookupError, "Not Found"):
             ci_cost.gh("repos/owner/repo")
         slept.assert_not_called()
+
+
+class Registry(unittest.TestCase):
+    def read(self, *answers, env=None):
+        """One manifest read, each urlopen answering in turn; a token request always succeeds."""
+        queue = list(answers)
+        asked = []
+
+        def urlopen(request, timeout):
+            asked.append(request)
+            if "/token?" in request.full_url:
+                return io.BytesIO(b'{"token": "t"}')
+            answer = queue.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return io.BytesIO(answer)
+
+        with mock.patch("urllib.request.urlopen", urlopen), mock.patch("time.sleep"), \
+                mock.patch.dict("os.environ", env or {}, clear=True):
+            try:
+                return ci_cost.registry("Owner/repo")("repo/image", "sha256:a"), asked
+            except LookupError as error:
+                return error, asked
+
+    def refused(self, code):
+        return urllib.error.HTTPError("url", code, "refused", {}, None)
+
+    def test_the_owner_is_lower_cased_and_the_read_accepts_an_index(self):
+        body, asked = self.read(b'{"manifests": []}')
+        self.assertEqual(body, {"manifests": []})
+        self.assertEqual(asked[-1].full_url, "https://ghcr.io/v2/owner/repo/image/manifests/sha256:a")
+        self.assertIn("image.index", asked[-1].get_header("Accept"))
+
+    def test_gh_token_signs_the_token_request_and_no_token_is_anonymous(self):
+        self.assertIsNone(self.read(b"{}")[1][0].get_header("Authorization"))
+        self.assertTrue(self.read(b"{}", env={"GH_TOKEN": "x"})[1][0].get_header("Authorization").startswith("Basic "))
+
+    def test_an_expired_registry_token_is_asked_for_again(self):
+        body, asked = self.read(self.refused(401), b"{}")
+        self.assertEqual(body, {})
+        self.assertEqual(sum("/token?" in request.full_url for request in asked), 2)
+
+    def test_a_cut_short_body_or_a_dropped_connection_is_retried(self):
+        body, _ = self.read(http.client.IncompleteRead(b""), OSError("reset"), self.refused(502), b"{}")
+        self.assertEqual(body, {})
+
+    def test_a_refusal_ends_the_read_as_a_lookup_error(self):
+        error, asked = self.read(self.refused(404))
+        self.assertIsInstance(error, LookupError)
+        self.assertEqual(sum("/manifests/" in request.full_url for request in asked), 1)
+
+    def test_a_read_that_keeps_failing_ends_as_a_lookup_error(self):
+        error, _ = self.read(*[http.client.IncompleteRead(b"")] * ci_cost.TRANSIENT_TRIES)
+        self.assertIsInstance(error, LookupError)
 
 
 class RunsBetween(unittest.TestCase):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import http.client
 import json
 import math
 import os
@@ -297,7 +298,7 @@ def registry(repo: str) -> Manifest:
                 elif error.code < 500:
                     raise LookupError(f"{package}@{reference}: HTTP {error.code}") from error
                 failure = error
-            except (OSError, ValueError) as error:
+            except (OSError, ValueError, http.client.HTTPException) as error:
                 failure = error
             time.sleep(TRANSIENT_WAIT * attempt)
         raise LookupError(f"{package}@{reference}: {failure}")
