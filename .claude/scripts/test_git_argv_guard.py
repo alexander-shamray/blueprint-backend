@@ -3578,6 +3578,86 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertAdmitted(command)
 
+    def test_a_refspec_writes_no_ref_a_plain_fetch_would_not(self):
+        # `sweep-slices.sh` narrows a sweep by `refs/sweeps/<kind>`, and `/ship`
+        # reads the review bar from `origin/main`: each spelling here asks for a
+        # ref, or a value of one, that a plain fetch would not write.
+        for command in (
+            "git fetch origin +main:refs/sweeps/security",
+            "git fetch origin main:refs/sweeps/security",
+            "git fetch -q --depth 1 origin main:refs/sweeps/bug",
+            "git -C sub fetch origin +main:refs/sweeps/security",
+            "git fetch origin main main:refs/sweeps/bug",
+            "git fetch origin +refs/heads/other:refs/remotes/origin/main",
+            "git fetch origin refs/heads/other:refs/remotes/origin/main",
+            "git fetch origin other:refs/remotes/origin/main",
+            # With a tag `main` on origin, this one wrote the tag's commit.
+            "git fetch origin main:refs/remotes/origin/main",
+            "git fetch origin +refs/heads/other:refs/tags/v1",
+            # Two names, which the raw reading sees though an expansion's may not.
+            'git fetch origin "+refs/heads/$A:refs/remotes/origin/$B"',
+            'git fetch origin "+refs/heads/$(a):refs/remotes/origin/$(b)"',
+            'git fetch origin "+refs/heads/main$X:refs/remotes/origin/main"',
+            "git fetch origin main:refs/sweeps/$B",
+            "git fetch origin +main:refs/heads/victim",
+            "git fetch origin main:refs/heads/victim",
+            "git fetch origin main:victim",
+            "git fetch origin :refs/sweeps/bug",
+            "git fetch ../other main:main",
+            "git fetch ../other +refs/heads/main:refs/remotes/origin/main",
+            "git pull --ff-only origin +main:refs/sweeps/security",
+            "git pull --ff-only origin main:refs/sweeps/security",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("a plain fetch would not", self.assertRefused(command))
+        for command in (
+            "git fetch origin --refmap=+refs/heads/other:refs/remotes/origin/main other",
+            "git fetch origin --refm=+refs/heads/other:refs/sweeps/security other",
+            "git fetch origin --refmap +refs/heads/other:refs/sweeps/security other",
+            "echo +main:refs/sweeps/security | git fetch origin --stdin",
+            "echo +main:refs/sweeps/security | git fetch origin --stdi",
+            "git pull --ff-only --refmap=+refs/heads/main:refs/sweeps/security origin main",
+            "git pull --ff-only --ref=+refs/heads/main:refs/sweeps/security origin main",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("no refspec operand names", self.assertRefused(command))
+        # Two more routes to the same refs, each refused by a check of its own.
+        self.assertIn("can move a local branch",
+                      self.assertRefused("git fetch -u origin +main:refs/heads/victim"))
+        self.assertIn("sets configuration", self.assertRefused(
+            "git -c remote.origin.fetch=+refs/heads/main:refs/sweeps/security fetch origin"))
+        # Only what origin holds there, and a colon that is not a refspec's.
+        for command in (
+            "git fetch origin main:main", "git fetch -q --depth 1 origin main:main",
+            "git fetch origin main:", "git fetch origin +main", "git fetch origin tag v1",
+            "git fetch origin +refs/heads/*:refs/remotes/origin/*",
+            "git fetch origin refs/heads/x:refs/remotes/origin/x",
+            "git fetch -q origin +refs/heads/$B:refs/remotes/origin/$B",
+            "git fetch git@github.com:alexander-shamray/blueprint-harness.git main",
+            "git fetch --filter blob:none origin main",
+            "git fetch origin main --filter blob:none",
+            "git fetch --filter=blob:none origin main",
+            "git fetch origin main -o a:b",
+            "git fetch --shallow-since '2026-01-01 10:00' origin main",
+            "git fetch origin main > C:/tmp/fetch.log 2>&1",
+            "git fetch --no-stdin origin main",
+            "git pull --ff-only origin main", "git pull --ff-only origin main:main",
+            "echo git fetch origin --stdin",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_forced_pull_that_discards_a_local_branch_is_refused(self):
+        # Run from another branch, the first moved local main to origin's and
+        # dropped the commit only main held.
+        for command in (
+            "git pull --ff-only -f origin main:main",
+            "git pull --ff-only --force origin main:main",
+            "git pull --ff-only --forc origin", "git pull -qf --ff-only",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("can move a local branch", self.assertRefused(command))
+
     def test_nothing_overrides_the_fast_forward_of_a_granted_pull(self):
         for command in (
             "git pull --ff-only --no-ff", "git pull --ff-only --ff",
