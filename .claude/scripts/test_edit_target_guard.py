@@ -690,6 +690,31 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             with self.subTest(target=target):
                 self.assertIn("control surface", self.assertRefused(target))
 
+    def test_names_that_cannot_be_read_refuse_the_home_and_nothing_else(self):
+        # They live in `guard-git-argv.py`, so a guard copied without it fails
+        # closed under the home directory and leaves the rest of the outside.
+        alone = os.path.join(self.outside, "lone", ".claude", "hooks")
+        home = os.path.join(self.outside, "home")
+        os.makedirs(alone)
+        os.makedirs(home)
+        guard = shutil.copy(HOOK, alone)
+        event = {"tool_name": "Write", "cwd": self.outside}
+        # A Windows runner's temp root is under its real home, so this one is set.
+        env = {key: value for key, value in os.environ.items() if key != "CLAUDE_PROJECT_DIR"}
+        env.update(HOME=home, USERPROFILE=home)
+        for target, reason in ((os.path.join(home, "notes.md"), "cannot be read"),
+                               (os.path.join(self.outside, "loot.txt"), None)):
+            with self.subTest(target=target):
+                result = subprocess.run(
+                    [sys.executable, guard],
+                    input=json.dumps({**event, "tool_input": {"file_path": target}}),
+                    capture_output=True, encoding="utf-8", env=env)
+                self.assertEqual(0, result.returncode, result.stderr)
+                if reason is None:
+                    self.assertEqual("", result.stdout.strip())
+                else:
+                    self.assertIn(reason, result.stdout)
+
     def test_the_harness_state_stays_admitted(self):
         # `~/.claude/CLAUDE.md` holds the owner's rules and was edited six
         # times; a control name below `projects` is session state.

@@ -447,9 +447,9 @@ class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
     def test_every_helper_that_takes_a_branch_takes_the_same_names(self):
         # One class, read from every helper that tests `"$branch"`: a name `/branch` can make and one helper refuses
         # is a branch stranded at that helper's step. The helpers are found by the test they carry rather than named,
-        # so a further copy is held the day it is written, and the makers must be among them or the scan has stopped
-        # seeing what it exists for. `git-worktree-sync.sh` is narrower on purpose: it takes only a sync's head, so
-        # its pattern is pinned and has to stay inside the class. `git-branch-drop.sh` asks it as well as the class.
+        # so a further copy is held the day it is written, and the makers must be among them or the scan is blind.
+        # `git-worktree-sync.sh` and `git-sync-head-drop.sh` take only a sync's head, so their pattern is pinned and
+        # has to stay inside the class. `git-branch-drop.sh` asks it as well as the class.
         sync_head = r"^chore/harness-sync-[0-9a-f]{7}$"
         patterns = {}
         for path in sorted(SCRIPTS.glob("*.sh")):
@@ -461,8 +461,8 @@ class TheArgumentGuardsEachHaveTheirOwnCase(unittest.TestCase):
         for named in ("git-branch-create.sh", "git-worktree-fork.sh", HELPER.name, "git-switch-existing.sh",
                       "git-worktree-remove.sh", "git-branch-drop.sh", "pr-for-branch.sh"):
             self.assertIn(named, patterns)
-        sync = patterns.pop("git-worktree-sync.sh")
-        self.assertEqual(sync_head, sync)
+        for narrow in ("git-worktree-sync.sh", "git-sync-head-drop.sh"):
+            self.assertEqual(sync_head, patterns.pop(narrow))
         self.assertRegex("chore/harness-sync-0123abc", patterns[HELPER.name])
         for name, pattern in patterns.items():
             with self.subTest(helper=name):

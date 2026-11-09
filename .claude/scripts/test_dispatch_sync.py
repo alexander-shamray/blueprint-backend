@@ -274,7 +274,7 @@ class SyncReady(Bound):
 
 
 class SyncDrop(Bound):
-    """Every local sync branch offered to the drop helper, which alone decides, and nothing else offered."""
+    """Every sync head offered to its drop helper, origin's and then the local ones, and nothing else offered."""
 
     def setUp(self):
         super().setUp()
@@ -283,11 +283,61 @@ class SyncDrop(Bound):
         stub(".", "git-branch-drop.sh",
              'if [ "$1" = chore/harness-sync-1234567 ]; then echo "dropped $1, superseded"; exit 0; fi\n'
              'echo "$1 is in use, and kept" >&2; exit 4\n')
+        stub(".", "git-sync-head-drop.sh",
+             'if [ "$1" = chore/harness-sync-7654321 ]; then echo "deleted $1 from origin"; exit 0; fi\n'
+             'echo "$1 is still open, and kept" >&2; exit 7\n')
+        # Not `origin.git`: with the remote gone, git would still find `origin` by that name.
+        git_in(".", "init", "-q", "--bare", "elsewhere.git")
+        git_in(".", "remote", "add", "origin", "elsewhere.git")
 
-    def test_each_sync_head_is_offered_and_each_answer_is_a_line(self):
+    def publish(self, *names):
+        for name in names:
+            git_in(".", "push", "-q", "origin", f"HEAD:refs/heads/{name}")
+
+    def test_each_local_sync_head_is_offered_and_each_answer_is_a_line(self):
         self.assertEqual([f"kept {BRANCH}: git-branch-drop.sh {BRANCH} exited 4: {BRANCH} is in use, and kept",
                           "dropped chore/harness-sync-1234567, superseded"],
                          sorted(run_cli(["sync-drop"]).splitlines(), reverse=True))
+
+    def test_each_of_origins_sync_heads_is_offered_before_the_local_ones(self):
+        self.publish("chore/harness-sync-7654321", "chore/harness-sync-1111111", "chore/harness-sync-workflow",
+                     "feat/on-origin", "main")
+        lines = run_cli(["sync-drop"]).splitlines()
+        self.assertEqual(["kept chore/harness-sync-1111111: git-sync-head-drop.sh chore/harness-sync-1111111 exited 7: "
+                          "chore/harness-sync-1111111 is still open, and kept",
+                          "deleted chore/harness-sync-7654321 from origin"], lines[:2])
+        self.assertEqual(4, len(lines), lines)
+        self.assertNotIn("workflow", " ".join(lines))
+        self.assertNotIn("on-origin", " ".join(lines))
+
+    def test_each_line_is_out_before_the_next_head_is_offered(self):
+        # A run the dispatcher's timeout cuts short is killed here, and what it already deleted has to have been said.
+        self.publish("chore/harness-sync-7654321", "chore/harness-sync-1111111")
+
+        class Piped(io.StringIO):
+            """Holds what a flush has sent, since `getvalue` also shows what a killed process would have lost."""
+            sent = ""
+
+            def flush(self):
+                self.sent = self.getvalue()
+
+        real_helper, seen, out = dr.helper, [], Piped()
+
+        def watch(root, script, *args):
+            seen.append(out.sent)
+            return real_helper(root, script, *args)
+
+        with mock.patch.object(dr, "helper", watch), contextlib.redirect_stdout(out):
+            db.main(["sync-drop"])
+        self.assertEqual("", seen[0])
+        self.assertIn("chore/harness-sync-1111111", seen[1])
+
+    def test_an_origin_it_cannot_read_leaves_the_local_heads_offered(self):
+        git_in(".", "remote", "remove", "origin")
+        lines = run_cli(["sync-drop"]).splitlines()
+        self.assertIn("origin's sync heads were not read: ", lines[0])
+        self.assertEqual("dropped chore/harness-sync-1234567, superseded", lines[1])
+        self.assertEqual(3, len(lines), lines)
 
     def test_no_sync_branch_is_said_so(self):
         for name in ("chore/harness-sync-1234567", "chore/harness-sync-workflow", "feat/other"):
