@@ -24,7 +24,12 @@ one index row apiece, and the row is the only place they meet.
    branch renumbers its own ADR, never the one already on `main`.
 2. **Name the file** `ADR-0NN-<slug>.md`: the title lower-cased, punctuation
    dropped, spaces to hyphens — the slug the title's heading anchor would
-   carry, so a reader who knows one knows the other.
+   carry, so a reader who knows one knows the other. The exception is a title
+   long enough to take the path past `LIMIT` in
+   `.github/path-length-gate/path_length_gate.py`, which fails the build on it:
+   cut that slug to the words that name the decision, keep any issue number the
+   title ends on and leave the title itself whole, so that only the Appendix A
+   row pairs the two.
 3. **Write the file** in exactly this form:
 
    ```markdown
