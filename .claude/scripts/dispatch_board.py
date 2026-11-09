@@ -887,9 +887,19 @@ def owned_issues(root):
     return frozenset(data)
 
 
+def main_red(root):
+    """Each open `main is red` line, none for a green `main`; a read that cannot say green is refused, never read so."""
+    code, out, err = _child([git_bash(), ".claude/scripts/main-red-open.sh"], root)
+    lines = out.splitlines()
+    if (code == 0 and not lines) or (code == 3 and lines):
+        return lines
+    raise Refusal(f"main-red-open.sh exited {code}: {one_line(err or out, 200)}")
+
+
 # Command line
 
-def main(argv=None, body_source=None, open_source=None, branch_source=None, weekly_source=None, owned_source=None):
+def main(argv=None, body_source=None, open_source=None, branch_source=None, weekly_source=None, owned_source=None,
+         red_source=None):
     import dispatch_run
     parser = argparse.ArgumentParser(prog="dispatch_board.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -926,6 +936,7 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
     open_from = open_source or (lambda: open_issues(root))
     branch_from = branch_source or (lambda branch: branch_paths(root, branch))
     owned_from = owned_source or (lambda: owned_issues(root))
+    red_from = red_source or (lambda: main_red(root))
     try:
         # A group names files under the run, so only a group letter and number, or a sync's, may reach a path.
         known = ROW_GROUP if args.command == "tasks" else GROUP_ID
@@ -953,7 +964,8 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
         elif args.command == "tasks":
             _tasks_command(args, today)
         else:
-            return dispatch_run.command(args, today, bodies_from, open_from, branch_from, weekly_source, owned_from)
+            return dispatch_run.command(args, today, bodies_from, open_from, branch_from, weekly_source, owned_from,
+                                        red_from)
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
