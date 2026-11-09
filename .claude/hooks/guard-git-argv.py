@@ -206,6 +206,42 @@ def denied_path(relative, whole=False):
     return None
 
 
+# ---- what the home directory holds -----------------------------------------
+
+# Named rather than bounded by an allow-list, which would refuse sibling
+# checkouts and the task list. `CLAUDE.md` and `AGENTS.md` stay out of the
+# control set: they are the owner's rules, not a grant. Both guards read these.
+HOME_TREES = frozenset({".ssh"})
+HOME_FILES = frozenset({
+    ".bash_login", ".bash_logout", ".bash_profile", ".bashrc", ".gitconfig",
+    ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
+})
+CONTROL_DIRECTORIES = frozenset({
+    "agents", "commands", "hooks", "plugins", "sandbox", "scripts", "skills",
+})
+CONTROL_FILES = frozenset({
+    ".credentials.json", "settings.json", "settings.local.json",
+})
+# Below `~/.claude`, what later sessions load as the user's own. The editing
+# tools may save there, where a command's deny judges the path; a shell write
+# meets no such rule.
+STANDING_DIRECTORIES = frozenset({"output-styles", "projects"})
+
+
+def home_place(parts):
+    """What the path `parts` spells below the home is: `login`, `control` or `None`.
+
+    `parts` are folded by the caller: the edit guard as the filesystem does, this one always.
+    """
+    if parts[0] in HOME_TREES or (len(parts) == 1 and parts[0] in HOME_FILES):
+        return "login"
+    if parts[0] == ".claude" and len(parts) > 1 and (
+            parts[1] in CONTROL_DIRECTORIES
+            or (len(parts) == 2 and parts[1] in CONTROL_FILES)):
+        return "control"
+    return None
+
+
 # ---- the push allow-list ---------------------------------------------------
 
 # Options a push may carry. Anything else — including a spelling git invented
@@ -2490,27 +2526,85 @@ def xargs_supplies_push(tokens):
     return False
 
 
-FORCED_ONTO_BRANCH = re.compile(r"^\+[^:]*:(?!refs/(?!heads/))")
-
-
 def fetch_offence(segment):
-    """The reason to refuse a fetch that can move a local branch backwards.
+    """The reason to refuse a fetch or pull that can move a branch backwards.
 
-    `main:main` is `/ship`'s fast-forward and stays; `-f`, `-u` and a `+` onto
-    a branch are what discard local commits. A remote-tracking ref holds none.
+    `-f`, and a fetch's `-u`, are what discard local commits; `refspec_offence`
+    judges a `+` in a refspec, as it judges every destination.
     """
     stripped = after_global_options(segment)
-    if not stripped or stripped[0] != "fetch":
+    if not stripped or stripped[0] not in ("fetch", "pull"):
         return None
+    kind = stripped[0]
     for element in stripped[1:]:
         name = element.split("=", 1)[0]
-        if (FORCED_ONTO_BRANCH.match(element) or short_flag(element, "fetch", "fu")
+        if (short_flag(element, kind, "fu" if kind == "fetch" else "f")
                 or (len(name) > 3 and "--force".startswith(name))
-                or (len(name) > 9 and "--update-head-ok".startswith(name))):
+                or (kind == "fetch" and len(name) > 9
+                    and "--update-head-ok".startswith(name))):
             return (
-                f"`git fetch {element}` can move a local branch to a commit "
+                f"`git {kind} {element}` can move a local branch to a commit "
                 "that does not contain it, which discards local commits under "
                 "a read's grant. Fetch without it; `main:main` fast-forwards."
+            )
+    return None
+
+
+# A fetch's or a pull's options that take the next word as their value, so a
+# colon in it is no refspec's. One this misses reads as a refspec, which costs a
+# false refusal at worst.
+FETCH_VALUE_OPTIONS = frozenset({
+    "--deepen", "--depth", "--filter", "--jobs", "--negotiation-tip",
+    "--server-option", "--shallow-exclude", "--shallow-since", "--strategy",
+    "--strategy-option", "-X", "-j", "-o", "-s",
+})
+
+# A branch of origin onto its own tracking ref, or a tag onto itself: only the
+# value origin holds there, so it can poison nothing. The branch is named in full
+# because a short name takes origin's same-named tag first. A dependabot rebase
+# types that form with `$B` for both names.
+ORIGIN_OWN_REF = re.compile(
+    r"^\+?refs/(?:heads/(?P<branch>[^:]+):refs/remotes/origin/(?P=branch)"
+    r"|tags/(?P<tag>[^:]+):refs/tags/(?P=tag))$")
+
+
+def refspec_offence(segment):
+    """The reason to refuse a fetch or a pull writing a ref of its own choosing.
+
+    A destination, `--refmap` or `--stdin` writes what a sweep and `/ship`'s
+    review bar trust, under a read's grant; only `main:main` and `ORIGIN_OWN_REF`
+    stay, from origin."""
+    stripped = after_global_options(segment)
+    if not stripped or stripped[0] not in ("fetch", "pull"):
+        return None
+    operands, position = [], 1
+    while position < len(stripped):
+        word = stripped[position]
+        name = word.split("=", 1)[0]
+        position += 1
+        if word in FETCH_VALUE_OPTIONS:
+            position += 1
+        elif not word.startswith("-"):
+            operands.append(word)
+        elif ((len(name) > 4 and "--refmap".startswith(name))
+              or (stripped[0] == "fetch" and len(name) > 3
+                  and "--stdin".startswith(name))):
+            return (
+                f"`git {stripped[0]} {word}` writes a ref no refspec operand "
+                "names, under a read's grant. Fetch without it."
+            )
+    for refspec in operands[1:]:
+        destination = refspec.partition(":")[2]
+        # A reading of `$B` as empty or as whitespace leaves one ending in a
+        # slash, which git refuses as invalid; the raw reading judges the rest.
+        if destination and not destination.endswith("/") and not (
+                operands[0] == "origin" and (
+                    refspec == "main:main" or ORIGIN_OWN_REF.match(refspec))):
+            return (
+                f"`{refspec}` writes a ref a plain fetch would not, which a "
+                "sweep or a review may then trust. Fetch without a destination "
+                "and read FETCH_HEAD; `main:main` from origin fast-forwards, and "
+                "`refs/heads/<name>:refs/remotes/origin/<name>` tracks."
             )
     return None
 
@@ -2768,17 +2862,58 @@ def protected_target(path, whole=False):
     return None
 
 
-def destination_offence(word, cwd, command, writer, whole=False, inside=None):
+def home_target(path, cwd, command, whole=False, removing=False):
+    """The name below the home that shell-written `path` reaches, or `None`.
+
+    Judged as spelled and as resolved, the session's own checkout left to its denies. `whole` counts
+    `~/.claude` itself; `removing` frees a project's memory file, which no editing tool can remove.
+    """
+    if whole and os.path.basename(path) == "*":
+        path = os.path.dirname(path)
+    session = checkout_of(os.path.abspath(EVENT_CWD or os.getcwd()))
+    standing = (session, os.path.realpath(session)) if session is not None else ()
+    homes = [written_path("~", cwd, command), os.path.expanduser("~")]
+    roots = {root for home in homes if home
+             for root in (os.path.abspath(home), os.path.realpath(home))}
+    for place in (path, os.path.realpath(path)):
+        if any(beneath(place, checkout) for checkout in standing):
+            continue
+        for root in roots:
+            if not beneath(place, root) or os.path.normcase(place) == os.path.normcase(root):
+                continue
+            parts = os.path.relpath(place, root).replace("\\", "/").lower().split("/")
+            if removing and parts[:2] == [".claude", "projects"] and (
+                    len(parts) > 4 and parts[3] == "memory"
+                    and not any(mark in part for part in parts for mark in "*?[{")):
+                continue
+            if home_place(parts) is not None or (parts[0] == ".claude" and (
+                    (len(parts) > 1 and parts[1] in STANDING_DIRECTORIES)
+                    or (whole and len(parts) == 1))):
+                return "~/" + "/".join(parts)
+    return None
+
+
+def destination_offence(word, cwd, command, writer, whole=False, inside=None, removing=False):
     """The reason to refuse writing the file shell `word` names, or `None`.
 
     `inside` is the name a copy gives its source in the directory `word` names.
+    `removing` is `home_target`'s.
     """
     path = written_path(word, cwd, command)
     if path is not None and inside is not None:
         path = os.path.join(path, inside)
     named = protected_target(path, whole) if path is not None else None
     if named is None:
-        return None
+        home = home_target(path, cwd, command, whole, removing) if path is not None else None
+        if home is None:
+            return None
+        return (
+            f"{writer} would write `{path}`, which is `{home}`: a key, a shell "
+            "profile, git's own configuration or what `~/.claude` applies to "
+            "later sessions. No rule judges a shell write there. Use an editing "
+            "tool, where one does, or hand it to the owner "
+            "(docs/harness-boundaries.md, *The edit-target guard*)."
+        )
     return (
         f"{writer} would write `{path}`, which {named} protects, and a deny "
         "binds the editing tools alone, so this writes straight past it. Use "
@@ -3082,8 +3217,8 @@ def verb_offence(verb, operands, cwd, command, writer):
         names = [None] if sources is None or verb not in TREE_VERBS else (
             landings(word, sources, into, cwd, command))
         for name in names:
-            refusal = destination_offence(word, cwd, command, writer,
-                                          verb in TREE_VERBS, name)
+            refusal = destination_offence(word, cwd, command, writer, verb in TREE_VERBS, name,
+                                          verb in ("rm", "unlink"))
             if refusal is not None:
                 return refusal
     return None
@@ -3463,7 +3598,7 @@ def _offence(command, depth, judged, reading):
     for segment in git_segments(tokens):
         refusal = (push_offence(segment) or trap_offence(segment)
                    or fetch_offence(segment) or pull_offence(segment)
-                   or config_offence(segment))
+                   or refspec_offence(segment) or config_offence(segment))
         if refusal is not None:
             return refusal
 

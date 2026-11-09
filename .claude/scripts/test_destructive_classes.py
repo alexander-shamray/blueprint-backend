@@ -344,6 +344,46 @@ class DestructiveClasses(unittest.TestCase):
             Row("planted", "sed --binary -i s/one/uno/ crlf.txt",
                 "guard-sed-crlf", "none")))
 
+    def test_the_list_grant_is_denied_only_where_git_would_change_a_branch(self):
+        # What each form does is run here, so the deny's shape rests on git and
+        # not on a reading of its help: the grant admits both columns as a prefix.
+        rule = "Bash(git branch --list *--no-l*)"
+        self.assertIn(rule, base_denies())
+        with tempfile.TemporaryDirectory(prefix="destructive-list-") as root:
+            def git(*arguments):
+                return subprocess.run(["git", "-C", root, *arguments], capture_output=True,
+                                      encoding="utf-8", timeout=HOOK_TIMEOUT)
+
+            def changes(form):
+                before = git("for-each-ref", "refs/heads", "--format=%(refname) %(objectname)").stdout
+                done = git(*form.split()[1:])
+                after = git("for-each-ref", "refs/heads", "--format=%(refname) %(objectname)").stdout
+                return before != after, done
+            git("init", "-q", "-b", "main", ".")
+            for setting in ("user.email=t@example.invalid", "user.name=t"):
+                git("config", *setting.split("="))
+            git("commit", "-q", "--allow-empty", "-m", "one")
+            for name in ("a", "b", "c", "d"):
+                git("branch", name)
+            for form in ("git branch --list --no-list -D a", "git branch --list --no-l -D b",
+                         "git branch --list --no-list made", "git branch --list --no-list -m c renamed"):
+                with self.subTest(form=form):
+                    self.assertTrue(deny_matches(rule, form))
+                    self.assertTrue(changes(form)[0], form)
+            for form in ("git branch --list d", "git branch --list -v", "git branch --list --no-merged",
+                         "git branch --list --no-color", "git branch --list --no-column"):
+                with self.subTest(form=form):
+                    self.assertFalse(deny_matches(rule, form))
+                    moved, done = changes(form)
+                    self.assertFalse(moved, form)
+                    self.assertEqual(0, done.returncode, done.stderr)
+            # List mode still on, a mutating flag is git's usage error: it needs no rule.
+            for form in ("git branch --list -D d", "git branch --list -u main d"):
+                with self.subTest(form=form):
+                    moved, done = changes(form)
+                    self.assertFalse(moved, form)
+                    self.assertNotEqual(0, done.returncode)
+
     def test_deny_matches_follows_the_prefix_semantics(self):
         self.assertTrue(deny_matches("Bash(git clean:*)", "git clean"))
         self.assertTrue(deny_matches("Bash(git clean:*)", "git clean -fd"))
