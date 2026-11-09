@@ -1377,6 +1377,167 @@ def check_shards() -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# code
+# --------------------------------------------------------------------------
+
+CODE_FILTER = "code"
+STAGE_INPUTS_FILTER = "stage-inputs"
+CODE_GATE = "needs.changes.outputs.code != 'false'"
+# Step-level, because a matrix job skipped by its own `if:` is never expanded and a
+# skipped stage skips what `needs:` it (the comment above `images`).
+CODE_GATED_JOBS = ("build", "integration", "stage-gate")
+# These run only behind a step that ran, so a gated job with nothing to do skips them.
+STATUS_GUARD = re.compile(r"\b(?:failure|always)\(\)")
+# Everything else a pull request's run needs to tell a skip from a lost answer.
+CODE_OUTPUT_TERMS = (
+    "github.event_name != 'pull_request'",
+    "steps.changes.outputs.code == 'true'",
+    "steps.changes.outputs.stage-inputs == 'true'",
+)
+# The trees `code` excludes wholesale, which a test can still read at run time.
+EXCLUDED_TREES = r"docs|\.github|\.claude|\.harness"
+COMBINED_PATH = re.compile(rf'"({EXCLUDED_TREES})"((?:\s*,\s*"[^"]+")*)')
+SLASHED_PATH = re.compile(rf'(?:"|(?:\.\.[\\/])+)((?:{EXCLUDED_TREES})[\\/][^"\s{{<>]*)')
+GLOB_UNSUPPORTED = re.compile(r"[\[\]{}()+@?]")
+
+
+def _glob(pattern: str, path: str) -> bool:
+    """`**`, `*` and literals, as picomatch reads them; `check_code_filters` refuses anything more."""
+    expression = ""
+    for token in re.split(r"(\*\*/|\*\*|\*)", pattern):
+        expression += {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*"}.get(token, re.escape(token))
+    return re.fullmatch(expression, path) is not None
+
+
+def is_code(filters: dict[str, list[str]], path: str) -> bool:
+    """Whether a path makes the two filters answer `code`, under some-with-excludes.
+
+    An exclusion is final there, so `stage-inputs` is read on its own terms.
+    """
+    if any(_glob(pattern, path) for pattern in filters[STAGE_INPUTS_FILTER]):
+        return True
+    patterns = filters[CODE_FILTER]
+    if any(_glob(pattern[1:], path) for pattern in patterns if pattern.startswith("!")):
+        return False
+    return any(_glob(pattern, path) for pattern in patterns if not pattern.startswith("!"))
+
+
+def check_code_filters(filters: dict[str, list[str]]) -> list[str]:
+    """The two filters exist and fail closed: an unlisted path is code."""
+    code = filters.get(CODE_FILTER, [])
+    stage_inputs = filters.get(STAGE_INPUTS_FILTER, [])
+    if not code or not stage_inputs:
+        return [
+            f"found no `{CODE_FILTER}` or no `{STAGE_INPUTS_FILTER}` patterns in the paths-filter block, so "
+            "nothing here can say what a stage reads: the parser or a filter's name is what is broken"
+        ]
+
+    problems: list[str] = []
+    if code[0] != "**" or not all(pattern.startswith("!") for pattern in code[1:]):
+        problems.append(
+            f"the `{CODE_FILTER}` filter is not `**` and exclusions, so it lists what is code and a new "
+            "path nobody listed skips every stage rather than costing a build"
+        )
+    for pattern in code + stage_inputs:
+        if GLOB_UNSUPPORTED.search(pattern):
+            problems.append(
+                f"the pattern {pattern!r} holds glob syntax `_glob` does not read, so what reads these "
+                "patterns here and the `changes` filter could disagree about it"
+            )
+    for pattern in stage_inputs:
+        if pattern.startswith("!"):
+            problems.append(
+                f"`{STAGE_INPUTS_FILTER}` holds the exclusion {pattern!r}; it names what a stage reads, so "
+                "narrowing it is how a read input stops counting"
+            )
+    return problems
+
+
+def read_tested_paths(root: Path) -> list[tuple[str, str]]:
+    """(source file, path) for each excluded-tree path a C# test or project names.
+
+    A test that reads such a file at run time is the one way `code` can answer
+    false for a change a stage would fail on. A tree with no file named after it
+    gets a `?`, which no filter selects, so a path built from a variable is
+    reported rather than read as nothing.
+    """
+    named: list[tuple[str, str]] = []
+    for tree in ("tests", "tools"):
+        for source in sorted((root / tree).rglob("*")):
+            if source.suffix not in {".cs", ".csproj"} or not source.is_file():
+                continue
+            text = source.read_text(encoding="utf-8", errors="replace")
+            where = source.relative_to(root).as_posix()
+            for found in COMBINED_PATH.finditer(text):
+                parts = re.findall(r'"([^"]+)"', found.group(2))
+                named.append((where, "/".join([found.group(1), *(parts or ["?"])])))
+            for found in SLASHED_PATH.finditer(text):
+                named.append((where, found.group(1).replace("\\", "/")))
+    return named
+
+
+def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]:
+    """A pull request skips the stages only for a change none of them reads."""
+    if workflow_text is None:
+        try:
+            workflow_text = WORKFLOW.read_text(encoding="utf-8")
+        except OSError as error:
+            return [f".github/workflows/ci.yml is not readable: {error}"]
+
+    filters = read_filters_by_name(workflow_text)
+    problems = check_code_filters(filters)
+    if CODE_FILTER not in filters or STAGE_INPUTS_FILTER not in filters:
+        return problems
+
+    export = next(
+        (line for line in read_jobs(workflow_text).get("changes", []) if re.match(rf"^\s{{6}}{CODE_FILTER}:", line)),
+        "",
+    )
+    for term in CODE_OUTPUT_TERMS:
+        if term not in export:
+            problems.append(
+                f"the changes job's `{CODE_FILTER}` output does not read `{term}`, so it can say false for "
+                "a push or a dispatch, or for a change only `stage-inputs` selects"
+            )
+
+    for job in CODE_GATED_JOBS:
+        condition = read_job_condition(workflow_text, job)
+        if condition:
+            problems.append(
+                f"the {job} job carries a job-level `if: {condition}`. Skipped there it reports no shard's "
+                f"name and skips what needs it; each step's `if: {CODE_GATE}` keeps the check and passes it"
+            )
+        steps = read_job_steps(workflow_text, job)
+        if not steps:
+            problems.append(
+                f"found no steps in a `{job}:` job in ci.yml: the check on them would pass vacuously, so "
+                "the parser or the job's key is what is broken"
+            )
+        for index, step in enumerate(steps):
+            guard = step.get("if", "")
+            if CODE_GATE not in guard and not STATUS_GUARD.search(guard):
+                name = step.get("name", step.get("uses", step.get("run", ""))).strip()[:60]
+                problems.append(
+                    f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}`, so a change no "
+                    "stage reads still runs it, or fails it for want of what a skipped step would have left"
+                )
+
+    named = read_tested_paths(root)
+    if not named:
+        problems.append(
+            "found no test naming a file under docs/ or .github/. Tests do read docs/ today, so the scan is "
+            "what is broken, and with nothing read this check would pass vacuously"
+        )
+    for source, path in named:
+        if not is_code(filters, path):
+            problems.append(
+                f"{source} names {path}, which the `{CODE_FILTER}` filter excludes and "
+                f"`{STAGE_INPUTS_FILTER}` does not list, so a pull request changing it skips the test that reads it"
+            )
+    return problems
+
+
+# --------------------------------------------------------------------------
 # stages
 # --------------------------------------------------------------------------
 
@@ -1543,6 +1704,7 @@ def main(argv: list[str]) -> int:
     sub.add_parser("actions", help="every third-party action is pinned to a commit")
     sub.add_parser("grants", help="no job a pull request reaches holds a write grant beside a checkout")
     sub.add_parser("alerts", help="every workflow pushed on main is watched by the red-main alert")
+    sub.add_parser("code", help="a pull request skips the stages only for a change none of them reads")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
@@ -1592,6 +1754,13 @@ def main(argv: list[str]) -> int:
         if code := fail(problems, f"the workflows {ALERT_WORKFLOW} watches"):
             return code
         print(f"pipeline-gate: every workflow a push to main runs is watched by {ALERT_WORKFLOW}.")
+        return 0
+
+    if args.command == "code":
+        problems = check_code()
+        if code := fail(problems, "what skips the test stages in ci.yml"):
+            return code
+        print("pipeline-gate: a pull request skips the stages only for a change none of them reads.")
         return 0
 
     problems = check_stages(args.results)

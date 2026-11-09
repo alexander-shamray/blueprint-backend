@@ -1759,6 +1759,138 @@ def trx(total: int, assembly: str, tests: list[str]) -> str:
     )
 
 
+class CodeTests(unittest.TestCase):
+    """What skips the stages, over the real workflow with one thing broken in it."""
+
+    GATE = f"        if: {pipeline_gate.CODE_GATE}\n"
+
+    def setUp(self) -> None:
+        self.text = pipeline_gate.WORKFLOW.read_text(encoding="utf-8")
+
+    def broken(self, old: str, new: str, count: int = 1) -> str:
+        self.assertIn(old, self.text)
+        return self.text.replace(old, new, count)
+
+    def problems(self, text: str) -> str:
+        return "\n".join(pipeline_gate.check_code(workflow_text=text))
+
+    def test_the_real_workflow_is_clean(self) -> None:
+        self.assertEqual(pipeline_gate.check_code(), [])
+
+    def test_the_scan_sees_the_documents_tests_read_today(self) -> None:
+        named = {path for _source, path in pipeline_gate.read_tested_paths(pipeline_gate.ROOT)}
+        self.assertLessEqual({"docs/personal-data.md", "docs/backend-architecture/13-observability.md"}, named)
+
+    def test_a_document_a_test_reads_that_stage_inputs_lacks_is_caught(self) -> None:
+        text = self.broken("              - 'docs/personal-data.md'\n", "")
+        self.assertIn("docs/personal-data.md", self.problems(text))
+
+    def test_an_allow_list_is_caught(self) -> None:
+        text = self.broken("              - '**'\n", "              - 'src/**'\n")
+        self.assertIn("a new path nobody listed", self.problems(text))
+
+    def test_a_positive_pattern_beside_the_exclusions_is_caught(self) -> None:
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/**'\n              - 'tools/**'\n")
+        self.assertIn("a new path nobody listed", self.problems(text))
+
+    def test_a_negation_in_stage_inputs_is_caught(self) -> None:
+        text = self.broken("              - 'docs/personal-data.md'\n", "              - '!docs/personal-data.md'\n")
+        self.assertIn("narrowing it", self.problems(text))
+
+    def test_glob_syntax_the_classifier_cannot_read_is_caught(self) -> None:
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/{a,b}/**'\n")
+        self.assertIn("does not read", self.problems(text))
+
+    def test_a_renamed_filter_fails_rather_than_passing_empty(self) -> None:
+        text = self.broken("            code:\n", "            renamed:\n")
+        self.assertIn("what is broken", self.problems(text))
+
+    def test_an_output_that_can_skip_a_push_is_caught(self) -> None:
+        text = self.broken("github.event_name != 'pull_request' || ", "")
+        self.assertIn("github.event_name != 'pull_request'", self.problems(text))
+
+    def test_an_output_that_ignores_stage_inputs_is_caught(self) -> None:
+        text = self.broken(" || steps.changes.outputs.stage-inputs == 'true'", "")
+        self.assertIn("stage-inputs", self.problems(text))
+
+    def test_an_output_that_is_gone_is_caught(self) -> None:
+        text = re.sub(r"^      code: .*\n", "", self.text, count=1, flags=re.MULTILINE)
+        self.assertNotEqual(text, self.text)
+        self.assertIn("does not read", self.problems(text))
+
+    def test_a_job_level_condition_on_each_gated_job_is_caught(self) -> None:
+        for job, old in (
+            ("build", "  build:\n    needs:"),
+            ("integration", "  integration:\n"),
+            ("stage-gate", "  stage-gate:\n    needs:"),
+        ):
+            with self.subTest(job=job):
+                head = old.split("\n", 1)
+                text = self.broken(old, f"{head[0]}\n    if: {pipeline_gate.CODE_GATE}\n{head[1]}")
+                self.assertIn(f"the {job} job carries a job-level", self.problems(text))
+
+    def test_a_step_with_no_gate_in_each_gated_job_is_caught(self) -> None:
+        for job, before in (
+            ("build", "      - name: Unit stage\n"),
+            ("integration", "      - name: Integration stage, ${{ matrix.shard }}\n        id: stage\n"),
+            ("stage-gate", "      - name: Report domain-layer coverage\n"),
+        ):
+            with self.subTest(job=job):
+                text = self.broken(f"{before}{self.GATE}", before)
+                self.assertIn(f"the {job} job's step", self.problems(text))
+
+    def test_a_renamed_job_fails_rather_than_passing_empty(self) -> None:
+        text = self.broken("  stage-gate:\n    needs:", "  stages:\n    needs:")
+        self.assertIn("found no steps", self.problems(text))
+
+    def test_no_test_naming_a_document_fails_rather_than_passing_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tests").mkdir()
+            (root / "tools").mkdir()
+            problems = "\n".join(pipeline_gate.check_code(root, self.text))
+        self.assertIn("the scan is what is broken", problems)
+
+    def test_the_reader_finds_each_spelling_of_a_document_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "tests" / "A"
+            source.mkdir(parents=True)
+            (root / "tools").mkdir()
+            (source / "A.cs").write_text(
+                'var a = Path.Combine(root, "docs", "a.md");\n'
+                'var b = Path.Combine(root, "docs",\n    "sub",\n    "b.md");\n'
+                'var c = Locate("docs/c.md");\n'
+                'var d = Path.Combine(root, "docs", name);\n'
+                'var e = Locate(".github/e.yml");\n',
+                encoding="utf-8",
+            )
+            (source / "A.csproj").write_text('<None Include="..\\..\\docs\\f.md" />\n', encoding="utf-8")
+            named = {path for _source, path in pipeline_gate.read_tested_paths(root)}
+        self.assertEqual(
+            named,
+            {"docs/a.md", "docs/sub/b.md", "docs/c.md", "docs/?", ".github/e.yml", "docs/f.md"},
+        )
+
+    def test_a_path_built_from_a_variable_is_refused_as_unlisted(self) -> None:
+        filters = pipeline_gate.read_filters_by_name(self.text)
+        self.assertFalse(pipeline_gate.is_code(filters, "docs/?"))
+
+    def test_the_globs_read_as_picomatch_reads_them(self) -> None:
+        for pattern, path, expected in (
+            ("**", "a/b/c.cs", True),
+            ("**", ".github/x", True),
+            ("docs/**", "docs/a/b.md", True),
+            ("docs/**", "docs2/a.md", False),
+            ("*.md", "README.md", True),
+            ("*.md", "src/README.md", False),
+            ("docs/personal-data.md", "docs/personal-data.md", True),
+            ("docs/personal-data.md", "docs/personal-dataXmd", False),
+        ):
+            with self.subTest(pattern=pattern, path=path):
+                self.assertEqual(pipeline_gate._glob(pattern, path), expected)
+
+
 class StageTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()

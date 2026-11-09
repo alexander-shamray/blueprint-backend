@@ -237,6 +237,9 @@ jobs:
       - name: Every workflow pushed on main is watched by the red-main alert
         run: python .github/pipeline-gate/pipeline_gate.py alerts
 
+      - name: A pull request skips the stages only for a change none of them reads
+        run: python .github/pipeline-gate/pipeline_gate.py code
+
       # §3.2's table against the code that publishes and consumes, stdlib
       # Python over text like the inventories above, so it belongs here.
       - name: Test the messaging gate
@@ -371,9 +374,11 @@ jobs:
   # the property §15.1 relies on to put the licence gate ahead of the build —
   # and adding .NET to it would spend that on every run. This one runs in
   # parallel with `build`. It gates nothing, for the reason the job above
-  # gives: a broken scaffold does not make the solution wrong.
+  # gives: a broken scaffold does not make the solution wrong. So nothing requires
+  # it, and it can skip whole on a change `changes` says no stage reads.
   scaffold-build:
-    needs: [licence-gate, pipeline-gate, format, workflow-lint]
+    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
+    if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -523,6 +528,9 @@ jobs:
       anthropic: ${{ steps.changes.outputs.anthropic }}
       # Empty on a dispatch, which builds images and has no guard to test.
       guard: ${{ steps.changes.outputs.guard }}
+      # False only on a pull request: a push run is what tests two merged changes
+      # together (§15.1). Readers test `!= 'false'`, so a lost output builds.
+      code: ${{ github.event_name != 'pull_request' || steps.changes.outputs.code == 'true' || steps.changes.outputs.stage-inputs == 'true' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -639,6 +647,26 @@ jobs:
             guard:
               - '.claude/**'
               - '.github/workflows/ci.yml'
+            # What the build and the test stages read, named by what they do
+            # not, so a new path costs a build rather than skipping one.
+            code:
+              - '**'
+              - '!.claude/**'
+              - '!.github/**'
+              - '!.harness/**'
+              - '!docs/**'
+              - '!*.md'
+            # An exclusion is final, so what those exclude and a stage still
+            # reads is a filter of its own: the gates the build and stage-gate
+            # run, this workflow, and each document a test reads, which
+            # `pipeline-gate code` holds to the tests.
+            stage-inputs:
+              - '.github/coverage/**'
+              - '.github/output-gate/**'
+              - '.github/pipeline-gate/**'
+              - '.github/workflows/ci.yml'
+              - 'docs/backend-architecture/13-observability.md'
+              - 'docs/personal-data.md'
 
   # What IDE0055 cannot read — the byte-order mark and the final newline —
   # over every C# file but generated code; docs/style-guide.md
@@ -661,8 +689,12 @@ jobs:
   # workflow-syntax error is known in seconds. No run-wide cancel: it hides
   # every failure but the first. `workflow-lint` downloads actionlint, so an
   # outage of that download holds the three back.
+
+  # Every step of `build`, `integration` and `stage-gate` asks `changes` whether a
+  # stage reads this change, and the jobs carry no `if:` (`pipeline-gate code`):
+  # skipped steps pass, so the check keeps its name and `needs:` still run.
   build:
-    needs: [licence-gate, pipeline-gate, format, workflow-lint]
+    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     # Forty green runs before 2026-10-09 took at most 5.4 minutes here and 6.2
     # in the slowest integration shard, so 30 fails a hanging test in half an
@@ -670,10 +702,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code != 'false'
 
       # No version named here. global.json is the pin (§4.4), and a version in
       # two places is a version that drifts.
       - uses: actions/setup-dotnet@v6
+        if: needs.changes.outputs.code != 'false'
         with:
           global-json-file: global.json
 
@@ -682,12 +716,15 @@ jobs:
       # Python, and relying on it would make this the one job whose interpreter
       # nobody chose.
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.code != 'false'
         with:
           python-version: '3.12'
 
       - run: dotnet restore Platform.slnx
+        if: needs.changes.outputs.code != 'false'
 
       - run: dotnet build Platform.slnx --no-restore -c Release
+        if: needs.changes.outputs.code != 'false'
 
       # §4.1's rule that the source trees hold nothing a build wrote, as a
       # property CI re-measures. It runs behind the restore and the build and
@@ -699,6 +736,7 @@ jobs:
       # a second MSBuild property, is argued in `Directory.Build.props`' Output
       # comment, which owns that decision.
       - name: No build output landed beside the source
+        if: needs.changes.outputs.code != 'false'
         run: python .github/output-gate/output_gate.py
 
       # The other half of §4.1, and the half only CI can check. The gate above
@@ -719,6 +757,7 @@ jobs:
       # developer's own work in progress, so it lives where the precondition is
       # true and nowhere else.
       - name: The build left src/, tests/ and tools/ byte-identical
+        if: needs.changes.outputs.code != 'false'
         run: |
           wrote="$(git status --porcelain --ignored -- src tests tools)"
           if [ -n "$wrote" ]; then
@@ -728,10 +767,10 @@ jobs:
           fi
 
       # Two of §15.1's three stages select from this build; the integration
-      # stage is sharded into jobs of its own below. The path filter above
-      # decides what to image and deploy, never what to test, because §4.2's
+      # stage is sharded into jobs of its own below. The service filters above
+      # decide what to image and deploy, never which tests run, because §4.2's
       # gates read the whole dependency graph and §12.9's coverage figure is
-      # over the whole run.
+      # over the whole run: `code` says all of them or none.
 
       # The first seam is instrumentation rather than category. §4.2's
       # architecture gates read GetReferencedAssemblies on the Domain
@@ -759,6 +798,7 @@ jobs:
       # merged attachment and one partial per test project. The reporter merges
       # rather than assuming a single file, and its suite pins that.
       - name: Architecture gates
+        if: needs.changes.outputs.code != 'false'
         run: >
           dotnet test Platform.slnx --no-build -c Release
           --filter "FullyQualifiedName~ArchitectureTests"
@@ -769,6 +809,7 @@ jobs:
       # Microsoft.NET.Test.Sdk and is therefore already in every test project:
       # no package added, no licence-register entry owed.
       - name: Unit stage
+        if: needs.changes.outputs.code != 'false'
         run: >
           dotnet test Platform.slnx --no-build -c Release
           --filter "FullyQualifiedName!~ArchitectureTests&Category!=Integration"
@@ -778,6 +819,7 @@ jobs:
           --results-directory ./TestResults/unit
 
       - name: Hand the two stages to the stage gate
+        if: needs.changes.outputs.code != 'false'
         uses: actions/upload-artifact@v7
         with:
           name: stages-build
@@ -828,7 +870,7 @@ jobs:
   integration:
     # Unnamed, a leg is labelled with every matrix value, `selects` included.
     name: integration (${{ matrix.shard }})
-    needs: [licence-gate, pipeline-gate, format, workflow-lint]
+    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
@@ -855,22 +897,27 @@ jobs:
               FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.&FullyQualifiedName!~Platform.IntegrationTests.
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code != 'false'
         with:
           persist-credentials: false
 
       - uses: actions/setup-dotnet@v6
+        if: needs.changes.outputs.code != 'false'
         with:
           global-json-file: global.json
 
       - run: dotnet restore Platform.slnx
+        if: needs.changes.outputs.code != 'false'
 
       - run: dotnet build Platform.slnx --no-restore -c Release
+        if: needs.changes.outputs.code != 'false'
 
       # ADR-010 already made real infrastructure non-optional, and a category
       # is not a skip: selected out, a test is not reported as passing;
       # selected in, it needs the daemon exactly as before. The runner has one.
       - name: Integration stage, ${{ matrix.shard }}
         id: stage
+        if: needs.changes.outputs.code != 'false'
         env:
           PLATFORM_SIGHTINGS_DIR: ${{ github.workspace }}/TestResults/sightings
           FILTER: Category=Integration&${{ matrix.selects }}
@@ -900,6 +947,7 @@ jobs:
           stage
 
       - name: Hand the shard to the stage gate
+        if: needs.changes.outputs.code != 'false'
         uses: actions/upload-artifact@v7
         with:
           name: stages-integration-${{ matrix.shard }}
@@ -952,10 +1000,11 @@ jobs:
   # The grant to comment, in a job with no checkout: the shards run the branch's
   # tests and hold none (ADR-197). The artifacts are the record, so a fork's token,
   # which cannot comment, or a missed comment fails no run the shards passed. A red
-  # shard's sighting is still a sighting, and a shard the gates skipped wrote nothing.
+  # shard's sighting is still a sighting, and a shard the gates skipped wrote nothing,
+  # as a shard `changes` skipped did not.
   integration-report:
-    needs: integration
-    if: ${{ !cancelled() && needs.integration.result != 'skipped' }}
+    needs: [changes, integration]
+    if: ${{ !cancelled() && needs.integration.result != 'skipped' && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -1014,22 +1063,26 @@ jobs:
   # nothing to count, and a second red job would say the gate broke when the
   # suite did.
   stage-gate:
-    needs: [build, integration]
+    needs: [changes, build, integration]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code != 'false'
 
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.code != 'false'
         with:
           python-version: '3.12'
 
       - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.code != 'false'
         with:
           name: stages-build
           path: TestResults
 
       # One directory per shard under integration/, and both readers walk it.
       - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.code != 'false'
         with:
           pattern: stages-integration-*
           path: TestResults/integration
@@ -1039,6 +1092,7 @@ jobs:
       # each, that every test project in Platform.slnx ran in one of them, and
       # that none ran in two.
       - name: Every stage ran, ran enough, and ran once
+        if: needs.changes.outputs.code != 'false'
         run: >
           python .github/pipeline-gate/pipeline_gate.py stages
           ./TestResults/architecture ./TestResults/unit ./TestResults/integration
@@ -1058,6 +1112,7 @@ jobs:
       # One root per shard, so a shard whose collector wrote nothing is named
       # rather than hidden in the stage's total.
       - name: Report domain-layer coverage
+        if: needs.changes.outputs.code != 'false'
         run: >
           python .github/coverage/domain_coverage.py
           ./TestResults/unit ./TestResults/integration/*
