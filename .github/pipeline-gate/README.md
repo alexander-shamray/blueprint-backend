@@ -2,7 +2,7 @@
 
 **The claim: [§15.1](../../docs/backend-architecture/15-cicd-deployment.md)'s
 staged pipeline is not quietly doing other than it appears to.** Each of its
-seven subcommands is an inventory, and each fails on the ways the pipeline
+eight subcommands is an inventory, and each fails on the ways the pipeline
 can go green while running something other than what it shows.
 
 | Subcommand | Refuses | Reads |
@@ -13,6 +13,7 @@ can go green while running something other than what it shows.
 | `actions` | a `uses:` in any workflow, a step's or a reusable workflow's, that names an action outside `actions/` by anything but a full commit SHA, and a `docker://` image with no digest. A tag can be moved to other code, and `paths-filter` decides which gates run. GitHub's own `actions/*` ride major tags by a separate decision | every `.yml` and `.yaml` under `.github/workflows/` |
 | `grants` | a job in a workflow a pull request starts that holds a write grant, its own or the workflow's, and checks out the branch, unless its own `if:` is false on every pull request's run, which a condition it cannot read as a test of the ref or the event is not; no workflow, or no job holding a grant anywhere, fails rather than passing. It reads what lands: a pull request runs the head's copy of the workflow, and of this gate, so it stops nobody editing either on a branch ([ADR-197](../../docs/backend-architecture/adr/ADR-197-write-grants-leave-the-jobs-that-run-a-pull-requests-code-1789-amending-adr-109-and-adr-149.md)) | every `.yml` and `.yaml` under `.github/workflows/`: its `on:` block's `pull_request`, and each job's `permissions:`, `if:` and `actions/checkout` |
 | `alerts` | a workflow a push to `main` runs that `main-red.yml`'s `workflow_run` list does not name, one with no `name:` for it to name, and a listed name that no workflow carries or whose workflow never runs on a push to `main`, and an `on:` written as a flow mapping, which it cannot read. `workflow_run` matches by name and a name nothing carries matches nothing without an error, so a workflow added or renamed would go red on `main` unheard ([ADR-155](../../docs/backend-architecture/adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md)); an alert file missing or listing nothing, or no workflow pushed on `main` at all, fails rather than passing; and a `file` job that drops a conclusion a red run ends on, or a `cancelled` run no `read-cancelled` job reads into it ([ADR-196](../../docs/backend-architecture/adr/ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md)) | every `.yml` and `.yaml` under `.github/workflows/`: its `name:` and its `on:` block's `push` filter, and `main-red.yml`'s `workflow_run` list and those two jobs' `if:` |
+| `code` | a `code` filter that is not `**` and exclusions, which would list what is code so that a path nobody listed skips every stage; a `stage-inputs` filter holding an exclusion; a pattern holding glob syntax the gate's own reader does not read; a `code` output that can say false for a push or a dispatch or ignores `stage-inputs`; a job-level `if:` on `build`, `integration` or `stage-gate`, which would lose a shard's name or skip what needs the job; a step of those three with no `if:` on the output, unless it runs on `failure()` or `always()`; and a file under `docs/`, `.github/`, `.claude/` or `.harness/` that a C# test or project names and neither filter counts, which is a test a pull request changing that file would skip. No such file named, no steps or no filter fails rather than passing | in `ci.yml`, those two filters, the `changes` job's output and those three jobs; the `.cs` and `.csproj` files under `tests/` and `tools/` |
 | `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, a stage under its floor, a stage whose results directory was never passed, and a directory naming no stage it knows | `Platform.slnx` and the TRX files in the three stage result directories |
 
 `stages` counts tests rather than trusting an exit code, because `dotnet
@@ -28,8 +29,8 @@ an order-of-magnitude miss, not a count.
 
 ## How it runs
 
-Its suite and `filters`, `images`, `shards`, `actions`, `grants` and `alerts`
-run in the fast job of [`ci.yml`](../workflows/ci.yml); `stages` runs after the three
+Its suite and `filters`, `images`, `shards`, `actions`, `grants`, `alerts` and
+`code` run in the fast job of [`ci.yml`](../workflows/ci.yml); `stages` runs after the three
 test stages.
 The suite is negative cases with their positive controls, because a gate
 only ever observed green is one nobody has established is looking at
@@ -49,3 +50,12 @@ holds in that shape and the suite holds the real workflow to. Signing twice is
 safe, as checked against cosign's pinned release: a second attempt signs with a
 new key, so Rekor's 409 for an entry it already holds does not arise, and
 `cosign verify` passes on any one signature that verifies.
+
+## What a pull request may skip
+
+`changes` answers `code` from two filters: everything but the trees and root
+Markdown no stage reads, and what a stage reads inside those exclusions. A path
+nobody listed is code, so a new input costs a build rather than skipping one.
+The answer is false only on a pull request. A push run on `main` tests
+everything whatever it changed, so a test that starts reading an unlisted file
+in a way `code` cannot see goes red there, on the next push, under ADR-155.
