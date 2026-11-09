@@ -4,6 +4,7 @@
 # covers. It takes no argument. Its guards and its exit codes are
 # `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/git-push-url.sh"
 
 [ "$#" -eq 0 ] ||
   { echo "usage: git-push-force.sh (no argument: it publishes the branch checked out)" >&2; exit 2; }
@@ -20,6 +21,8 @@ case "$lowered" in
   main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
     echo "refusing to force-push main, checked out as $branch" >&2; exit 3 ;;
 esac
+
+origin_pushes_where_added || exit 7
 
 # Origin itself, not the tracking ref, which any earlier fetch or a branch that
 # was deleted on origin may have left behind. The match is exact, because

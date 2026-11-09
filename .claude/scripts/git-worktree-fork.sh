@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Fork /branch step 5's worktree under .claude/worktrees/, and nothing else.
-#
-# The whole command is fixed: `git worktree add --no-track -b <branch> <path>
-# origin/main`. A prefix grant on `git worktree add` also buys `-B`, which
-# resets an existing branch to the start point past the `git branch --force`
-# and `git branch -M` denies, and a prefix rule cannot exclude a flag.
+# Fork /branch step 5's worktree under .claude/worktrees/, or undo its branch.
+# The whole command is fixed: a prefix grant on `git worktree add` also buys
+# `-B`, which resets an existing branch past the `git branch --force` and
+# `git branch -M` denies, and a prefix rule cannot exclude a flag.
 set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-worktree-fork.sh <path> <branch>" >&2; exit 2; }
 path="$1"
@@ -47,11 +45,35 @@ esac
   { echo "branch already exists: $branch" >&2; exit 3; }
 git show-ref --verify --quiet refs/remotes/origin/main ||
   { echo "no refs/remotes/origin/main — fetch first (step 1)" >&2; exit 4; }
-# `--no-track` is fixed because the start point is a remote-tracking ref, so
-# without it the new branch's upstream becomes origin/main and /pr never sets
-# the right one. origin/main is fixed because step 5 forks only from the
-# fetched base.
-git worktree add --no-track -b "$branch" "$path" origin/main
+# origin/main is fixed because step 5 forks only from the fetched base, and read
+# once because another session's fetch can move it: the branch is cut at the oid
+# the cleanup below compares. An oid names no branch to track, so it gets no
+# upstream, and /pr sets the right one.
+start=$(git rev-parse refs/remotes/origin/main)
+# Apart from the add, whose one exit cannot say which step failed: a name
+# another fork took after the check above stops here, its branch left alone.
+git branch "$branch" "$start"
+added=0
+git worktree add "$path" "$branch" || added=$?
+if [ "$added" -ne 0 ]; then
+  # Git's cleanup of a failed add leaves the branch, where a retry exits 3 above
+  # and nothing the session holds can remove it. Only a branch at the start
+  # point goes, which holds no commit, and `update-ref` compares that but does
+  # not ask, as `git branch -D` would, whether a worktree has taken it since.
+  # The exit stays git's.
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    if ! worktrees=$(git worktree list --porcelain); then
+      echo "$branch is kept: the worktrees cannot be read, so whether one holds it is unknown" >&2
+    elif grep -qxF -- "branch refs/heads/$branch" <<<"${worktrees//$'\r'/}"; then
+      echo "$branch is kept: a worktree holds it" >&2
+    elif git update-ref --no-deref -d "refs/heads/$branch" "$start" 2>/dev/null; then
+      echo "removed $branch, which this failed fork created" >&2
+    else
+      echo "$branch is kept: it is not at $start, or could not be deleted" >&2
+    fi
+  fi
+  exit "$added"
+fi
 # python3 stands in where the `py` launcher the hooks name does not exist.
 python=python3
 command -v py >/dev/null 2>&1 && python="py -3.12"
