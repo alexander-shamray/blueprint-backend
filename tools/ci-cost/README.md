@@ -51,8 +51,8 @@ stands without them.
 [ADR-199](../../docs/backend-architecture/adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)
 does not keep, from the packages
 [ADR-200](../../docs/backend-architecture/adr/ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md)
-names, and those two ADRs own the rule and its limits. Without `--delete` it only
-reports, so this reads the registry and changes nothing:
+names, and those two ADRs own the rule and its limits. Without `--delete` it
+only reports, so this reads the registry and changes nothing:
 
 ```bash
 py -3.12 tools/ci-cost/ghcr_prune.py
