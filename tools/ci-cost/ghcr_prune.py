@@ -22,12 +22,15 @@ MAX_DELETES = 400
 COMMIT_TAG = re.compile(r"[0-9a-f]{40}")
 REFERRER_TAG = re.compile(r"sha256-[0-9a-f]{64}")
 # deploy.yml's run-name, which is the one place the API keeps a dispatch's inputs.
-ROLLOUT_TITLE = re.compile(r"Roll \S+ to (\S+)")
+ROLLOUT_TITLE = re.compile(r"Roll \S+ to (.*)")
 ROLLOUT_RUNS = "actions/workflows/deploy.yml/runs?event=workflow_dispatch"
 
 
 def rolled_tags(fetch: Fetch, repo: str) -> set[str]:
-    """Every tag a dispatch of the rollout named. A title this cannot read refuses, since a miss loses an image."""
+    """Every commit a dispatch of the rollout named. A title this cannot read refuses, since a miss loses an image.
+
+    A tag that is no commit names nothing: `image_revision` refuses that rollout, so no release pins what it named.
+    """
     runs = f"repos/{repo}/{ROLLOUT_RUNS}"
     total = fetch(f"{runs}&per_page=1")["total_count"]
     if total > SEARCH_CAP:
@@ -36,8 +39,10 @@ def rolled_tags(fetch: Fetch, repo: str) -> set[str]:
     for run in paged(fetch, runs, "workflow_runs"):
         match = ROLLOUT_TITLE.fullmatch(run["display_title"])
         if not match:
-            raise LookupError(f"run {run['id']} is titled {run['display_title']!r}, which names no tag")
-        tags.add(match[1])
+            raise LookupError(f"run {run['id']} is titled {run['display_title']!r}, which names no tag: read what "
+                              "it rolled, keep that image by a tag of its own, and delete the run")
+        if COMMIT_TAG.fullmatch(match[1]):
+            tags.add(match[1])
     return tags
 
 
