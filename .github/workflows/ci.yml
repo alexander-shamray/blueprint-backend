@@ -692,8 +692,8 @@ jobs:
   # every failure but the first. `workflow-lint` downloads actionlint, so an
   # outage of that download holds the three back.
 
-  # Every step of `build`, `integration` and `stage-gate` asks `changes` whether a
-  # stage reads this change, and the jobs carry no `if:` (`pipeline-gate code`):
+  # Each step of `build`, `integration` and `stage-gate` that does work asks `changes`
+  # whether a stage reads this change, and the jobs carry no `if:` (`pipeline-gate code`):
   # skipped steps pass, so the check keeps its name and `needs:` still run.
   build:
     needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
