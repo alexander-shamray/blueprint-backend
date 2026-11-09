@@ -1778,8 +1778,35 @@ class CodeTests(unittest.TestCase):
         self.assertEqual(pipeline_gate.check_code(), [])
 
     def test_the_scan_sees_the_documents_tests_read_today(self) -> None:
-        named = {path for _source, path in pipeline_gate.read_tested_paths(pipeline_gate.ROOT)}
+        code = pipeline_gate.read_filters_by_name(self.text)[pipeline_gate.CODE_FILTER]
+        named = {path for _source, path in pipeline_gate.read_tested_paths(pipeline_gate.ROOT, code)}
         self.assertLessEqual({"docs/personal-data.md", "docs/backend-architecture/13-observability.md"}, named)
+
+    def test_a_new_exclusion_is_scanned_for_what_tests_read_under_it(self) -> None:
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/**'\n              - '!deploy/helm/**'\n")
+        problems = self.problems(text)
+        self.assertIn("tests/Common.Web.Tests/RequestTimeoutTests.cs names deploy/helm/?", problems)
+
+    def test_an_exclusion_no_search_can_be_derived_from_is_caught(self) -> None:
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/*/generated.md'\n")
+        self.assertIn("neither a whole tree nor a name at the root", self.problems(text))
+
+    def test_a_test_reading_an_excluded_root_name_is_caught(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "tests" / "A"
+            source.mkdir(parents=True)
+            (root / "src").mkdir()
+            (root / "tools").mkdir()
+            (source / "A.cs").write_text(
+                'var root_read = Path.Combine(root, "README.md");\n'
+                'var nested = Path.Combine(root, "deploy", "compose", "README.md");\n',
+                encoding="utf-8",
+            )
+            problems = "\n".join(pipeline_gate.check_code(root, self.text))
+        self.assertIn("tests/A/A.cs names README.md", problems)
+        self.assertNotIn("names compose", problems)
+        self.assertEqual(problems.count("tests/A/A.cs names"), 1)
 
     def test_a_document_a_test_reads_that_stage_inputs_lacks_is_caught(self) -> None:
         text = self.broken("              - 'docs/personal-data.md'\n", "")
@@ -1855,6 +1882,7 @@ class CodeTests(unittest.TestCase):
     def test_no_test_naming_a_document_fails_rather_than_passing_empty(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "src").mkdir()
             (root / "tests").mkdir()
             (root / "tools").mkdir()
             problems = "\n".join(pipeline_gate.check_code(root, self.text))
@@ -1865,6 +1893,7 @@ class CodeTests(unittest.TestCase):
             root = Path(directory)
             source = root / "tests" / "A"
             source.mkdir(parents=True)
+            (root / "src").mkdir()
             (root / "tools").mkdir()
             (source / "A.cs").write_text(
                 'var a = Path.Combine(root, "docs", "a.md");\n'
@@ -1875,7 +1904,8 @@ class CodeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (source / "A.csproj").write_text('<None Include="..\\..\\docs\\f.md" />\n', encoding="utf-8")
-            named = {path for _source, path in pipeline_gate.read_tested_paths(root)}
+            code = pipeline_gate.read_filters_by_name(self.text)[pipeline_gate.CODE_FILTER]
+            named = {path for _source, path in pipeline_gate.read_tested_paths(root, code)}
         self.assertEqual(
             named,
             {"docs/a.md", "docs/sub/b.md", "docs/c.md", "docs/?", ".github/e.yml", "docs/f.md"},

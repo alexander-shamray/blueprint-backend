@@ -1394,11 +1394,9 @@ CODE_OUTPUT_TERMS = (
     "steps.changes.outputs.code != 'false'",
     "steps.changes.outputs.stage-inputs != 'false'",
 )
-# The trees `code` excludes wholesale, which a test can still read at run time.
-EXCLUDED_TREES = r"docs|\.github|\.claude|\.harness"
-COMBINED_PATH = re.compile(rf'"({EXCLUDED_TREES})"((?:\s*,\s*"[^"]+")*)')
-SLASHED_PATH = re.compile(rf'(?:"|(?:\.\.[\\/])+)((?:{EXCLUDED_TREES})[\\/][^"\s{{<>]*)')
 GLOB_UNSUPPORTED = re.compile(r"[\[\]{}()+@?]")
+# What the scan below can derive a search from: a whole tree, or a name at the root.
+EXCLUSION_SHAPE = re.compile(r"![^*/]+(?:/[^*/]+)*/\*\*|![^/]+")
 
 
 def _glob(pattern: str, path: str) -> bool:
@@ -1451,27 +1449,51 @@ def check_code_filters(filters: dict[str, list[str]]) -> list[str]:
                 f"`{STAGE_INPUTS_FILTER}` holds the exclusion {pattern!r}; it names what a stage reads, so "
                 "narrowing it is how a read input stops counting"
             )
+    for pattern in code[1:]:
+        if not EXCLUSION_SHAPE.fullmatch(pattern):
+            problems.append(
+                f"the exclusion {pattern!r} is neither a whole tree nor a name at the root, so no "
+                "search for what a test reads can be derived from it"
+            )
     return problems
 
 
-def read_tested_paths(root: Path) -> list[tuple[str, str]]:
-    """(source file, path) for each excluded-tree path a C# test or project names.
+def _as_read(path: str) -> str:
+    """A name with no extension is read as a directory, so a tree's own path counts as inside it."""
+    return path if "." in path.rsplit("/", 1)[-1] or path.endswith("?") else f"{path}/?"
 
-    Such a read is how `code` could say false for a change a stage fails on. A tree
-    with no file named gets a `?`, so a path built from a variable is reported.
+
+def read_tested_paths(root: Path, code: list[str]) -> list[tuple[str, str]]:
+    """(source file, path) for each path a C# file or MSBuild file names under what `code` excludes.
+
+    Such a read is how `code` could say false for a change a stage fails on. The search
+    comes from the filter, so a new exclusion is scanned; a variable's part reads `?`.
     """
+    excluded = [pattern.removeprefix("!") for pattern in code[1:]]
+    trees = {pattern.split("/")[0] for pattern in excluded if pattern.endswith("/**")}
+    heads = "|".join(re.escape(pattern.split("/")[0]).replace(r"\*", r'[^"\\/\s]*') for pattern in excluded)
+    combined = re.compile(rf'"(?:(?:\.\.[\\/])+)?({heads})"((?:\s*,\s*"[^"]+")*)')
+    slashed = re.compile(rf'(?:"|(?:\.\.[\\/])+)((?:{heads})[\\/][^"\s{{<>]*)')
+
+    sources = [path for tree in ("src", "tests", "tools") for path in sorted((root / tree).rglob("*"))]
+    sources += sorted(root.glob("*"))
     named: list[tuple[str, str]] = []
-    for tree in ("tests", "tools"):
-        for source in sorted((root / tree).rglob("*")):
-            if source.suffix not in {".cs", ".csproj"} or not source.is_file():
+    for source in sources:
+        if source.suffix not in {".cs", ".csproj", ".props", ".targets"} or not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8", errors="replace")
+        where = source.relative_to(root).as_posix()
+        for found in combined.finditer(text):
+            before = text[max(0, found.start() - 200):found.start()].rstrip()
+            # `"compose", "README.md"` is a file in that directory, not one at the root.
+            if found.group(1) not in trees:
+                if not (before.endswith(",") and before[:-1].rstrip().endswith('"')):
+                    named.append((where, found.group(1)))
                 continue
-            text = source.read_text(encoding="utf-8", errors="replace")
-            where = source.relative_to(root).as_posix()
-            for found in COMBINED_PATH.finditer(text):
-                parts = re.findall(r'"([^"]+)"', found.group(2))
-                named.append((where, "/".join([found.group(1), *(parts or ["?"])])))
-            for found in SLASHED_PATH.finditer(text):
-                named.append((where, found.group(1).replace("\\", "/")))
+            parts = re.findall(r'"([^"]+)"', found.group(2))
+            named.append((where, _as_read("/".join([found.group(1), *(parts or ["?"])]))))
+        for found in slashed.finditer(text):
+            named.append((where, _as_read(found.group(1).replace("\\", "/"))))
     return named
 
 
@@ -1521,11 +1543,11 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
                     "stage reads still runs it, or fails it for want of what a skipped step would have left"
                 )
 
-    named = read_tested_paths(root)
+    named = read_tested_paths(root, filters[CODE_FILTER])
     if not named:
         problems.append(
-            "found no test naming a file under docs/ or .github/. Tests do read docs/ today, so the scan is "
-            "what is broken, and with nothing read this check would pass vacuously"
+            "found no test naming a file under what `code` excludes. Tests do read docs/ today, so the scan "
+            "is what is broken, and with nothing read this check would pass vacuously"
         )
     for source, path in named:
         if not is_code(filters, path):
