@@ -57,7 +57,11 @@ py -3.12 tools/ci-cost/ghcr_prune.py
 ```
 
 A run takes minutes, since it lists every version and reads the manifests of
-the tagged ones it keeps.
+the tagged ones it keeps. It takes its packages from `ci.yml`'s image matrix,
+because a job's token answers 400 to the owner's package listing, so an image
+dropped from the matrix is never pruned again. A job's token deletes a version
+only where the repository holds the Admin role on that package, under the
+package's *Manage Actions access*.
 
 Stdlib only, and the suite answers from a fake API:
 
