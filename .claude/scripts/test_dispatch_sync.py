@@ -246,8 +246,8 @@ class SyncLaunch(Bound):
 class SyncReady(Bound):
     """What refuses a launch whatever the tree holds, asked before the worktree exists, so a wait leaves none."""
 
-    def ready(self, pr=PR):
-        return run_cli(["sync-ready", RUN, str(pr)])
+    def ready(self, pr=PR, **sources):
+        return run_cli(["sync-ready", RUN, str(pr)], **sources)
 
     def test_nothing_in_the_way_says_nothing_and_records_nothing(self):
         before = dr.load_state(state_dir())
@@ -265,6 +265,24 @@ class SyncReady(Bound):
         self.assertIn("refused: sync-6 is already in this run", self.ready(6))
         (state_dir() / "STOP").write_text("", encoding="utf-8")
         self.assertIn("refused: stop file", self.ready())
+
+    def test_a_red_main_holds_a_sync_before_it_has_a_tree_and_at_its_launch(self):
+        # A sync's executor stops at step 6 on that issue as any other does, only after spending its round.
+        before = dr.load_state(state_dir())
+
+        def red():
+            return ["main is red: #1 u1", "main is red: #2 u2"]
+        expected = "refused: main is red: #1 u1; main is red: #2 u2; a sync waits for a green main"
+        self.assertIn(expected, self.ready(red_source=red))
+        launch = ["sync-launch", RUN, str(PR), "--branch", BRANCH, "--worktree", WORKTREE, "--oid", self.oid]
+        self.assertIn(expected, run_cli(launch, red_source=red))
+        self.assertEqual(before, dr.load_state(state_dir()))
+        self.assertEqual("", self.ready())
+
+    def test_a_read_that_cannot_say_main_is_green_holds_a_sync(self):
+        def failed():
+            raise db.Refusal("main-red-open.sh exited 2: cannot list the open issues")
+        self.assertIn("refused: main-red-open.sh exited 2", self.ready(red_source=failed))
 
     def test_it_reads_no_tree(self):
         # The worktree does not exist yet when it runs, so a gone head or a dirty tree is sync-launch's alone.
@@ -872,6 +890,7 @@ class Runbook(unittest.TestCase):
                                    "--oid <oid>"))
         self.assertLess(loop.index("sync-launch"), loop.index("dispatch_board.py wake <run>"))
         self.assertIn("run <run> sync-<n>, the same on a relaunch", loop)
+        self.assertIn("one naming a running group or a red main only waits for a later exit", loop)
         # A handed-back sync leaves both, and the helper refuses both.
         self.assertIn("Skip the helper where that worktree already exists on that branch", loop)
 

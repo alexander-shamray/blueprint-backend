@@ -34,13 +34,37 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
         deny = self.deny()
         # `hooks/**` is on the list because a hook runs on every Bash call: a
         # session able to rewrite one could delete its own guard and then act.
-        # `.harness/**` holds the base settings these denies render from.
         for path in (".claude/scripts/**", ".claude/commands/**", ".claude/agents/**",
                      ".claude/hooks/**", ".claude/skills/**",
-                     ".claude/settings.json", ".claude/settings.local.json", ".harness/**"):
+                     ".claude/settings.json", ".claude/settings.local.json"):
             for prefix in ("", "./"):
                 with self.subTest(path=path, prefix=prefix):
                     self.assertIn(f"Edit({prefix}{path})", deny)
+
+    def test_the_harness_tree_is_denied_at_the_root_alone(self):
+        # It holds the base settings these denies render from. A rule of one component reaches any depth, with or
+        # without `./`, measured on 2.1.319 (`docs/harness-boundaries.md`, *Normalisation, residuals and the
+        # sweeps*), and a bare spelling would refuse `payload/.harness/` in the repository that develops it.
+        deny = self.deny()
+        self.assertIn("Edit(/.harness/**)", deny)
+        for rule in ("Edit(.harness/**)", "Edit(./.harness/**)"):
+            with self.subTest(rule=rule):
+                self.assertNotIn(rule, deny)
+
+    def test_no_one_component_directory_deny_of_the_base_reaches_a_tracked_tree_below_the_root(self):
+        # The subject is the tree, so a new rule of this shape meets whatever a checkout holds. A `**/` rule says it
+        # means any depth, so it is left out, and the base is read and not the settings, since a target's own may too.
+        base = json.loads((SCRIPTS.parent.parent / ".harness" / "settings.base.json").read_text(encoding="utf-8"))
+        rules = [rule[len("Edit("):-len("/**)")].removeprefix("./") for rule in base["permissions"]["deny"]
+                 if rule.startswith("Edit(") and rule.endswith("/**)")]
+        names = {rule for rule in rules if rule and "/" not in rule and "*" not in rule}
+        self.assertTrue(names, "no one-component directory rule was found to judge")
+        tracked = subprocess.run([GIT, "ls-files"], cwd=SCRIPTS.parent.parent, capture_output=True,
+                                 encoding="utf-8", check=True).stdout.splitlines()
+        self.assertTrue(tracked, "the tracked listing went empty")
+        for path in tracked:
+            with self.subTest(path=path):
+                self.assertFalse(names & set(path.split("/")[1:-1]))
 
     MACHINERY = (".git/**", ".git", ".mcp.json", ".codeindexignore")
 

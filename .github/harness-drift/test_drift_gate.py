@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import importlib.util
 import io
@@ -11,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -25,6 +27,34 @@ HERE = Path(__file__).resolve().parent
 BASE = {"env": {"A": "1"}, "permissions": {"allow": ["Bash(ls)"], "deny": []}, "hooks": {}}
 # The keys apply requires, so a test config fails only on what the test changes.
 CFG = {"repo": "o/r", "task_list": "t"}
+NO_LINK = frozenset({errno.EPERM, errno.ENOTSUP, errno.ENOSYS})
+# ERROR_INVALID_FUNCTION and ERROR_NOT_SUPPORTED, a volume with no such link;
+# ERROR_PRIVILEGE_NOT_HELD, an unprivileged symlink. Read as winerror, since
+# Python gives all three the errno EINVAL.
+NO_LINK_ON_WINDOWS = frozenset({1, 50, 1314})
+
+
+def host_grants_no_link(refused: BaseException) -> bool:
+    if isinstance(refused, NotImplementedError):
+        return True
+    if sys.platform == "win32":
+        return getattr(refused, "winerror", None) in NO_LINK_ON_WINDOWS
+    return getattr(refused, "errno", None) in NO_LINK
+
+
+def skip_only_without_links(refused: BaseException, link: str) -> None:
+    """Skip the case if `refused` says the host grants no `link`, else raise it.
+    A missing parent is the case's own setup failing, and a skip would hide it."""
+    if host_grants_no_link(refused):
+        raise unittest.SkipTest(f"this host grants no {link}: {refused}") from refused
+    raise refused
+
+
+def windows_refusal(winerror: int, code: int = errno.EINVAL) -> OSError:
+    """An OSError as Windows raises it, on any host: POSIX drops the winerror."""
+    refused = OSError(code, "refused")
+    refused.winerror = winerror  # type: ignore[attr-defined]
+    return refused
 
 
 def sha(data: bytes) -> str:
@@ -262,8 +292,8 @@ class DriftGate(unittest.TestCase):
         loop = Path(self.tmp).parent / f"{Path(self.tmp).name}-loop"
         try:
             os.symlink(loop, loop, target_is_directory=True)
-        except OSError:
-            self.skipTest("symlinks cannot be created here")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
         self.addCleanup(os.unlink, loop)
         path = os.pathsep.join([str(loop), str(Path(real).parent)])
         with mock.patch.dict(os.environ, {"PATH": path}):
@@ -416,8 +446,8 @@ class DriftGate(unittest.TestCase):
         (tree.root / ".harness/config.json").unlink()
         try:
             (tree.root / ".harness/config.json").symlink_to(outside)
-        except OSError:
-            self.skipTest("symlinks need privileges here")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
         self.assertTrue(any(".harness/config.json passes through a link" in p for p in check(tree.root)))
 
     def test_a_linked_managed_directory_is_a_problem_and_not_walked(self) -> None:
@@ -428,8 +458,8 @@ class DriftGate(unittest.TestCase):
         (outside / "x.sh").write_text("x\n", encoding="utf-8")
         try:
             (tree.root / ".claude/hooks").symlink_to(outside, target_is_directory=True)
-        except OSError:
-            self.skipTest("symlinks need privileges here")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
         problems = check(tree.root)
         self.assertEqual(len(problems), 1)
         self.assertIn("link", problems[0])
@@ -573,8 +603,8 @@ class AgainstThePayload(unittest.TestCase):
         (self.tree.root / rel).unlink()
         try:
             (self.tree.root / rel).symlink_to(outside)
-        except OSError:
-            self.skipTest("symlinks need privileges here")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
         problems = check(self.tree.root, self.payload)
         self.assertTrue(any(f"{rel} is local but unreadable" in p and "link" in p for p in problems), problems)
 
@@ -606,6 +636,37 @@ class AgainstThePayload(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             code = main(["--root", str(self.tree.root), "--payload", str(self.payload)])
         self.assertEqual((code, out.getvalue().strip()), (0, "harness-drift: clean"))
+
+
+class OnlyAHostThatGrantsNoLinkSkips(unittest.TestCase):
+    def attempt(self, platform: str, refused: BaseException) -> None:
+        with mock.patch.object(sys, "platform", platform):
+            skip_only_without_links(refused, "link")
+
+    def test_a_posix_host_that_grants_no_link_skips(self) -> None:
+        for refused in (OSError(errno.EPERM, "no"), OSError(errno.ENOTSUP, "no"),
+                        OSError(errno.ENOSYS, "no"), NotImplementedError()):
+            with self.subTest(refused=refused), self.assertRaises(unittest.SkipTest):
+                self.attempt("linux", refused)
+
+    def test_a_windows_host_that_grants_no_link_skips(self) -> None:
+        for refused in (windows_refusal(1314), windows_refusal(1), windows_refusal(50),
+                        NotImplementedError()):
+            with self.subTest(refused=refused), self.assertRaises(unittest.SkipTest):
+                self.attempt("win32", refused)
+
+    def test_a_missing_parent_raises_rather_than_skips(self) -> None:
+        for platform, missing in (("linux", FileNotFoundError(errno.ENOENT, "no parent")),
+                                  ("win32", windows_refusal(3, errno.ENOENT))):
+            with self.subTest(platform=platform), self.assertRaises(OSError) as caught:
+                self.attempt(platform, missing)
+            self.assertIs(missing, caught.exception)
+
+    def test_windows_is_read_by_winerror_and_not_by_errno(self) -> None:
+        denied = windows_refusal(5, errno.EPERM)
+        with self.assertRaises(OSError) as caught:
+            self.attempt("win32", denied)
+        self.assertIs(denied, caught.exception)
 
 
 if __name__ == "__main__":

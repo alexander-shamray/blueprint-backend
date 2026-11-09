@@ -160,6 +160,6 @@ judges is read out of the base commit**, on the closure gate's design, so a pull
 request cannot loosen the rule it is judged by. The suite runs the head copy
 only after that gate has judged, so head test code cannot alter the run ahead
 of it, and a red gate leaves the suite unrun. A base with no gate directory is
-judged by the head copy under a warning, as the locality gate's bootstrap is,
-because the pull request that lands the gate has no base copy. The testing
+judged by the head copy under a warning, the bootstrap, because the pull
+request that lands the gate has no base copy. The testing
 document `docs/harness-local.md` *Documents* names has the local invocation.
