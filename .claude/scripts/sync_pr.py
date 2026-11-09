@@ -1,4 +1,4 @@
-"""A sync pull request: `list`, `verify <n>`, `review-diff <n> <out>` and `local-suites`.
+"""A sync pull request: `list`, `verify <n>`, `review-diff <n> <out>`, `local-suites` and `run-local-suites`.
 
 A branch name proves nothing, so `verify` repeats CI's drift gate checks, rendered settings included, before a sync is
 reviewed or launched. What it reads is data, and a read it cannot complete fails (docs/harness-boundaries.md).
@@ -482,6 +482,37 @@ def local_suites():
     return sorted(found)
 
 
+def run_local_suites(number, pin):
+    """The exit of running `local_suites`, each as its own discover from the root, on a proved sync in a clean tree.
+
+    No argument names what runs, and the settings allow this script to every session, so the proof comes first and is
+    this function's own (docs/harness-boundaries.md). Each suite's output prints whole when it ends, under its path."""
+    failures, _ = verify(number, pin)
+    if failures:
+        print("\n".join(failures))
+        print("not a proved sync, so no suite ran")
+        return 1
+    here = read(["git", "rev-parse", "HEAD"]).strip()
+    if here != pin:
+        print(f"HEAD is {here}, not {pin}, so no suite ran")
+        return 1
+    if read(["git", "status", "--short"]).strip():
+        print("the tree is not clean, so no suite ran")
+        return 1
+    failed = []
+    for path in local_suites():
+        directory, _, name = path.rpartition("/")
+        done = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", directory or ".", "-p", name],
+                              cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8",
+                              errors="replace", check=False)
+        print(f"== {path}\n{done.stdout}")
+        if done.returncode:
+            failed.append(path)
+    for path in failed:
+        print(f"failed: {path}")
+    return 1 if failed else 0
+
+
 def _number(text):
     if not re.fullmatch(r"[1-9][0-9]{0,8}", text):
         raise argparse.ArgumentTypeError(f"{text!r} is not a pull request number")
@@ -506,6 +537,9 @@ def _parser():
     review.add_argument("out")
     review.add_argument("--head", type=_oid)
     sub.add_parser("local-suites")
+    suites = sub.add_parser("run-local-suites")
+    suites.add_argument("number", type=_number)
+    suites.add_argument("--head", type=_oid, required=True)
     return parser
 
 
@@ -535,6 +569,8 @@ def main(argv=None):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8", newline="\n")
             print(args.out)
+        elif args.command == "run-local-suites":
+            return run_local_suites(args.number, args.head)
         else:
             if suites := local_suites():
                 print("\n".join(suites))
@@ -545,4 +581,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # A tracked path is UTF-8 and a suite's decoded output can hold U+FFFD; a piped stdout on Windows would raise on them.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

@@ -223,6 +223,60 @@ class TheHint(unittest.TestCase):
                 self.assertEqual(b"", done.stdout.strip())
 
 
+class TheShipChainReadsTheIndex(unittest.TestCase):
+    """`/ship` says it itself, because the hint cannot read an issue number as a
+    question, and a full pass starts from the diff's blast radius. No index must
+    stop nothing: a target may have none, and a merge does not wait on one."""
+
+    CBX = "bash .claude/skills/codebase-index/scripts/cbx"
+
+    def setUp(self):
+        text = (CLAUDE / "commands" / "ship.md").read_text(encoding="utf-8")
+        _, self.front, self.body = text.split("---\n", 2)
+
+    def test_step_one_names_the_index_before_any_grep(self):
+        step = self.body.index("1. **`/branch`**")
+        search = self.body.find("`cbx search`", step)
+        self.assertLess(-1, search)
+        for line in ("`cbx refs`", "`cbx impact`"):
+            self.assertIn(line, self.body[step:])
+        self.assertLess(search, self.body.find("`Grep`", step))
+
+    def test_a_full_pass_starts_from_the_blast_radius(self):
+        review = self.body.index("5. **The local review.**")
+        item = self.body.find("\n   1. **", review)
+        base = self.body.find("git merge-base origin/main HEAD", review)
+        impact = self.body.find(f"{self.CBX} diff-impact --base <that sha> --json", review)
+        written = self.body.find("artifacts/review/<slug>-r<N>.impact", review)
+        spawn = self.body.find("spawn `branch-reviewer`", review)
+        self.assertTrue(-1 < item < base < impact < written < spawn, (item, base, impact, written, spawn))
+
+    def test_each_line_the_chain_runs_is_granted(self):
+        # A dispatched run's shell read is one command its grants name, and the skill's own grant holds only once loaded.
+        grants = [grant.strip() for grant in re.search(r"^allowed-tools:(.*)$", self.front, re.M).group(1).split(",")]
+        self.assertIn("Bash(git merge-base origin/main HEAD)", grants)
+        for sub in ("search", "refs", "impact", "diff-impact"):
+            with self.subTest(sub=sub):
+                self.assertIn(f"Bash({self.CBX} {sub}:*)", grants)
+
+    def test_only_the_reads_it_runs_are_granted(self):
+        # `update` and `index` write the cache, and the skill approves them only while it is loaded.
+        for sub in ("update", "index", "doctor"):
+            with self.subTest(sub=sub):
+                self.assertNotIn(f"cbx {sub}", self.front)
+
+    def test_an_index_that_cannot_answer_is_not_a_stop(self):
+        row = next(line for line in self.body.splitlines() if line.startswith("| A helper or a guarded git command"))
+        self.assertIn("`cbx` reads", row)
+
+    def test_the_reviewer_is_told_and_never_skips_it(self):
+        profile = " ".join((CLAUDE / "agents" / "branch-reviewer.md").read_text(encoding="utf-8").split())
+        self.assertIn("**The impact file**", profile)
+        self.assertIn("names no absences", profile)
+        # `skipped` naming anything but locality stops the chain, so a file that may be absent is never in it.
+        self.assertIn("its absence is no check you skipped", profile)
+
+
 class TheSkillAgrees(unittest.TestCase):
     """A hint naming a command the skill does not route, or does not approve,
     sends the session to a permission prompt instead of the index."""
@@ -234,7 +288,7 @@ class TheSkillAgrees(unittest.TestCase):
         rows = set(re.findall(r"^\|[^|]+\| `([^`]+)` \|$", self.skill, re.M))
         for _kind, _pattern, command in _module().ROUTES:
             with self.subTest(command=command):
-                self.assertIn(command.replace(" --limit 3", ""), rows)
+                self.assertIn(command, rows)
 
     def test_search_carries_the_limit_the_skill_sets(self):
         self.assertIn("**`search` takes `--limit 3`**", self.skill)

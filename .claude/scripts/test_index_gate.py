@@ -3,6 +3,7 @@
 and the CLI is not started when that refuses.
 """
 
+import errno
 import os
 import shutil
 import sqlite3
@@ -12,6 +13,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+from test_link_skips import skip_only_without_links
 
 SCRIPTS = Path(__file__).resolve().parent
 SKILL_SCRIPTS = SCRIPTS.parent / "skills" / "codebase-index" / "scripts"
@@ -35,9 +39,39 @@ def python_312():
     return False
 
 
+def link_directory(link, destination):
+    """A directory link, by whichever primitive this platform grants. Only a
+    host that grants none skips: any other error, a missing parent above all,
+    is this suite's setup failing, and a skip would hide that nothing ran."""
+    try:
+        os.symlink(destination, link, target_is_directory=True)
+    except (OSError, NotImplementedError) as refused:
+        if sys.platform != "win32":
+            skip_only_without_links(refused, "directory link")
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(destination)],
+                       check=True, capture_output=True)
+
+
 def git_environment():
     return {name: value for name, value in os.environ.items()
             if not name.upper().startswith("GIT_")}
+
+
+class OnlyAHostThatGrantsNoLinkSkips(unittest.TestCase):
+    def attempt(self, refused):
+        with mock.patch.object(os, "symlink", side_effect=refused), \
+                mock.patch.object(sys, "platform", "linux"):
+            link_directory("link", "destination")
+
+    def test_a_host_that_grants_no_link_skips(self):
+        for refused in (OSError(errno.EPERM, "no"), OSError(errno.ENOTSUP, "no"),
+                        OSError(errno.ENOSYS, "no"), NotImplementedError()):
+            with self.subTest(refused=refused), self.assertRaises(unittest.SkipTest):
+                self.attempt(refused)
+
+    def test_a_missing_parent_fails_rather_than_skips(self):
+        with self.assertRaises(FileNotFoundError):
+            self.attempt(FileNotFoundError(errno.ENOENT, "no parent"))
 
 
 @unittest.skipUnless(_bash() and shutil.which("git") and python_312(),
@@ -112,15 +146,11 @@ class TheCliIsNotStartedOverAnIndexTheHookRefuses(unittest.TestCase):
         elsewhere = self.scratch / "elsewhere"
         elsewhere.mkdir()
         (self.repo / ".claude" / "cache").mkdir(parents=True)
-        link = self.cache
-        try:
-            os.symlink(elsewhere, link, target_is_directory=True)
-        except (OSError, NotImplementedError):
-            if sys.platform != "win32":
-                self.skipTest("this host grants no directory link")
-            subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(elsewhere)],
-                           check=True, capture_output=True)
-        self.assertEqual(3, self.gate().returncode)
+        link_directory(self.cache, elsewhere)
+        done = self.gate()
+
+        self.assertEqual(3, done.returncode, done.stderr)
+        self.assertIn("refusing to open the index", done.stderr)
 
     def test_the_gate_asks_the_hooks_own_judgement(self):
         """One owner for the rule: the gate loads the hook beside it."""

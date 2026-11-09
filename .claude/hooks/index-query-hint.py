@@ -16,7 +16,7 @@ CBX = "bash .claude/skills/codebase-index/scripts/cbx"
 
 # Checked in order, so a prompt carrying two questions is routed by the one
 # that asks the most of the index. Each command is a row of SKILL.md's route
-# table, `search` with the `--limit 3` the paragraph under it sets.
+# table.
 ROUTES = (
     ("change-impact", r"\b(?:what (?:breaks|depends)|impact of)\b",
      f"{CBX} impact 'X' --json"),

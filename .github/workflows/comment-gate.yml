@@ -32,10 +32,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Test the proposed gate
-        working-directory: .github/comment-gate
-        run: python -m unittest
-
       # The judge comes out of the base commit, so a pull request cannot loosen
       # the rule it is judged by; the bootstrap branch is the locality gate's.
       - name: The comments this pull request adds keep the style guide's rule
@@ -66,3 +62,8 @@ jobs:
             cp "$GATE" "$judge"
           fi
           python "$judge" --base "$BASE_SHA" --head "$HEAD_SHA"
+
+      # Last, so head test code cannot steer the gate above (closure-gate.yml).
+      - name: Test the proposed gate
+        working-directory: .github/comment-gate
+        run: python -m unittest

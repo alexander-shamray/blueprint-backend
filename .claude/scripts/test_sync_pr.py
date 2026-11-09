@@ -4,7 +4,10 @@ import contextlib
 import hashlib
 import io
 import json
+import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -820,6 +823,105 @@ class LocalSuitesTests(SyncCase):
     def test_local_suites_without_a_config_is_a_refusal(self):
         (self.root / ".harness/config.json").unlink()
         self.assertEqual(2, self.cli("local-suites")[0])
+
+
+class RunLocalSuitesTests(SyncCase):
+    """The route that replaced a grant on `unittest discover`: nothing on its command line names what runs."""
+
+    PASSES = "import unittest\nclass T(unittest.TestCase):\n    def test_ok(self):\n        pass\n"
+    FAILS = "import unittest\nclass T(unittest.TestCase):\n    def test_no(self):\n        self.fail('boom')\n"
+    config = {**CONFIG, "local": ["docs/local.md", "tools/**"]}
+
+    def take(self, files):
+        """A sync proved as `/ship` takes one: the suites on the target's main, and the checkout at the head."""
+        self.write(files)
+        git(self.root, "add", "-A")
+        git(self.root, *SEED, "commit", "-q", "-m", "suites")
+        git(self.root, "push", "-q", "origin", "main")
+        self.main = git(self.root, "rev-parse", "HEAD").strip()
+        head = self.start()
+        git(self.root, "checkout", "-q", head)
+        return head
+
+    def test_every_listed_suite_runs_and_a_failure_is_exit_1_naming_it(self):
+        head = self.take({"tools/test_good.py": self.PASSES, "tools/sub/test_bad.py": self.FAILS})
+        code, out, err = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(1, code, out + err)
+        self.assertIn("== tools/test_good.py", out)
+        self.assertIn("== tools/sub/test_bad.py", out)
+        self.assertIn("boom", out, "the failing suite's own output is what the finding is filed from")
+        self.assertIn("failed: tools/sub/test_bad.py", out)
+        self.assertNotIn("failed: tools/test_good.py", out)
+
+    def test_all_green_is_exit_0(self):
+        head = self.take({"tools/test_good.py": self.PASSES})
+        code, out, err = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(0, code, out + err)
+        self.assertIn("Ran 1 test", out, "a zero exit over a run that discovered nothing would prove nothing")
+
+    def test_a_commit_no_sync_pull_request_holds_runs_nothing(self):
+        # The settings allow this script to every session, so a test file committed on a local branch, with that
+        # branch's own HEAD as the pin, must not run: such a file never has to appear in a pull request.
+        self.take({"tools/test_bad.py": self.FAILS})
+        self.write({"tools/test_planted.py": self.FAILS})
+        git(self.root, "add", "-A")
+        git(self.root, *SEED, "commit", "-q", "-m", "planted")
+        own = git(self.root, "rev-parse", "HEAD").strip()
+        for prs in ([], self.gh.prs):
+            with self.subTest(prs=len(prs)):
+                self.gh.prs = prs
+                code, out, _ = self.cli("run-local-suites", "7", "--head", own)
+                self.assertEqual(1, code)
+                self.assertIn("no suite ran", out)
+                self.assertNotIn("boom", out)
+
+    def test_a_checkout_that_is_not_the_proved_head_runs_nothing(self):
+        head = self.take({"tools/test_bad.py": self.FAILS})
+        git(self.root, "checkout", "-q", "main")
+        code, out, _ = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(1, code)
+        self.assertIn(f"HEAD is {self.main}", out)
+        self.assertNotIn("boom", out)
+
+    def test_a_tree_that_is_not_clean_runs_nothing(self):
+        # A tracked suite edited after the proof is not the code the proof vouches for.
+        head = self.take({"tools/test_bad.py": self.FAILS})
+        self.write({"tools/test_bad.py": self.FAILS + "# edited\n"})
+        code, out, _ = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(1, code)
+        self.assertIn("not clean", out)
+        self.assertNotIn("boom", out)
+
+    def test_it_takes_no_path_so_a_file_outside_the_tree_cannot_be_named(self):
+        for argv in (["run-local-suites"], ["run-local-suites", "7"], ["run-local-suites", "7", "--head", "x"],
+                     ["run-local-suites", "--head", "0" * 40],
+                     ["run-local-suites", "7", "--head", "0" * 40, "-s", "elsewhere"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(2, self.cli(*argv)[0])
+
+
+class TheScriptPrintsWhatAnAnsiStreamCannot(unittest.TestCase):
+    def test_a_path_outside_the_code_page_prints_rather_than_raises(self):
+        # Run as a script, since `cli` captures into a StringIO that never meets this. A raise here would leave the
+        # later suites unrun and report a passing target as a failing one.
+        name = "tools/test_→.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / ".claude" / "scripts"
+            scripts.mkdir(parents=True)
+            here = Path(__file__).resolve().parent
+            for script in ("sync_pr.py", "dispatch_board.py"):
+                shutil.copy(here / script, scripts / script)
+            (root / ".harness").mkdir()
+            (root / ".harness" / "config.json").write_text(json.dumps({"local": ["tools/**"]}), encoding="utf-8")
+            (root / "tools").mkdir()
+            (root / name).write_text("", encoding="utf-8")
+            git(root, "init", "-q")
+            git(root, "add", "tools", ".harness/config.json")
+            done = subprocess.run([sys.executable, str(scripts / "sync_pr.py"), "local-suites"], cwd=root,
+                                  capture_output=True, env={**os.environ, "PYTHONIOENCODING": "cp1252"}, check=False)
+        self.assertEqual(0, done.returncode, done.stderr.decode("utf-8", "replace"))
+        self.assertEqual(name, done.stdout.decode("utf-8").strip())
 
 
 if __name__ == "__main__":

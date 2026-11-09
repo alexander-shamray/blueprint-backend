@@ -141,7 +141,14 @@ if [ -e "$path" ]; then
       forget
       exit 0
     fi
-    echo "unregistered but not deleted: $path is still there; remove it by hand" >&2
+    # Empty and still refused is a process holding the directory, on Windows a
+    # session launched inside it: nothing there is lost, and a by-hand removal
+    # waits for that process to end.
+    if listing=$(ls -A "$path" 2>/dev/null) && [ -z "$listing" ]; then
+      echo "unregistered but not deleted: $path is empty and held by a process, such as a session launched in it; remove it once that process ends" >&2
+    else
+      echo "unregistered but not deleted: $path is still there; remove it by hand" >&2
+    fi
     exit 4
   fi
 fi
