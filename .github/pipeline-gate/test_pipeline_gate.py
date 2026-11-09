@@ -1915,6 +1915,21 @@ class CodeTests(unittest.TestCase):
         filters = pipeline_gate.read_filters_by_name(self.text)
         self.assertFalse(pipeline_gate.is_code(filters, "docs/?"))
 
+    def test_a_tracked_path_holding_a_line_break_is_caught(self) -> None:
+        for name in ("src/App/a\nb.cs", "src/App/a\rb.cs", "src/App/a b.cs", "src/App/a b.cs"):
+            with self.subTest(name=name):
+                problems = pipeline_gate.check_tracked_names(["src/App/Fine.cs", name])
+                self.assertEqual(len(problems), 1)
+                self.assertIn("holds a line break", problems[0])
+        self.assertEqual(pipeline_gate.check_tracked_names(["src/App/Fine.cs", "docs/Übersicht.md"]), [])
+
+    def test_a_tree_git_cannot_list_fails_rather_than_passing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for tree in ("src", "tests", "tools"):
+                (root / tree).mkdir()
+            self.assertIn("git ls-files read nothing", "\n".join(pipeline_gate.check_code(root, self.text)))
+
     def test_a_path_holding_a_newline_is_still_code(self) -> None:
         filters = pipeline_gate.read_filters_by_name(self.text)
         self.assertTrue(pipeline_gate.is_code(filters, "src/App/a\nb.cs"))

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
@@ -1395,17 +1396,28 @@ CODE_OUTPUT_TERMS = (
     "steps.changes.outputs.stage-inputs != 'false'",
 )
 GLOB_UNSUPPORTED = re.compile(r"[\[\]{}()+@?]")
+LINE_BREAK = re.compile("[\n\r  ]")
 # What the scan below can derive a search from: a whole tree, or a name at the root.
 EXCLUSION_SHAPE = re.compile(r"![^*/]+(?:/[^*/]+)*/\*\*|![^/]+")
 
 
 def _glob(pattern: str, path: str) -> bool:
-    """`**`, `*` and literals, as picomatch reads them; `check_code_filters` refuses anything more."""
+    """`**`, `*` and literals; `check_code_filters` refuses more, and `check_tracked_names` a line break."""
     expression = ""
     for token in re.split(r"(\*\*/|\*\*|\*)", pattern):
         expression += {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*"}.get(token, re.escape(token))
-    # DOTALL: a path may hold a newline, and `**` missing it would read as no stage reads it.
+    # DOTALL: wider than the action's picomatch, whose `**` stops at a line break, so this never skips one.
     return re.fullmatch(expression, path, flags=re.DOTALL) is not None
+
+
+def check_tracked_names(names: list[str]) -> list[str]:
+    """A path `changes` cannot match: its `**` stops at a line break, so `code` would say false for it."""
+    return [
+        f"the tracked path {name!r} holds a line break, which the paths-filter action's `**` does not match, "
+        "so a pull request adding only that file would skip every stage"
+        for name in names
+        if LINE_BREAK.search(name)
+    ]
 
 
 def is_code(filters: dict[str, list[str]], path: str) -> bool:
@@ -1542,6 +1554,18 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
                     f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}`, so a change no "
                     "stage reads still runs it, or fails it for want of what a skipped step would have left"
                 )
+
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        check=False,
+    )
+    if tracked.returncode != 0 or not tracked.stdout:
+        problems.append(f"git ls-files read nothing in {root}, so a path holding a line break would pass unseen")
+    problems.extend(check_tracked_names(tracked.stdout.split("\0")))
 
     named = read_tested_paths(root, filters[CODE_FILTER])
     if not named:
