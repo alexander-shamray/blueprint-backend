@@ -648,7 +648,8 @@ jobs:
               - '.claude/**'
               - '.github/workflows/ci.yml'
             # What the build and the test stages read, named by what they do
-            # not, so a new path costs a build rather than skipping one.
+            # not, so a new path costs a build rather than skipping one. Only
+            # `pipeline-gate code` and commit_builds.py read these beside the job.
             code:
               - '**'
               - '!.claude/**'
@@ -830,7 +831,8 @@ jobs:
   # head. A commit that does not compile costs a `git bisect` its whole range,
   # so each one before the head is built here; a red test in one costs a
   # single step, so tests are not run. A pull request of one commit has
-  # nothing to build and passes.
+  # nothing to build and passes. A commit whose diff from its parent no stage
+  # reads builds what that parent did, so it is skipped by name (commit_builds.py).
   commits:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -844,6 +846,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # Decided ahead of the loop, whose checkouts and clean take the script away,
+      # and through a file so that its failure stops the step rather than reading
+      # as no commits.
       - name: Every commit before the head builds
         shell: bash
         env:
@@ -851,9 +860,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          mapfile -t shas < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA" | grep -vx "$HEAD_SHA" || true)
-          echo "${#shas[@]} commit(s) besides the head"
-          for sha in "${shas[@]}"; do
+          python .github/pipeline-gate/commit_builds.py "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/commits.txt"
+          mapfile -t verdicts < "$RUNNER_TEMP/commits.txt"
+          echo "${#verdicts[@]} commit(s) besides the head"
+          for line in "${verdicts[@]}"; do
+            echo "$line"
+            read -r verdict sha _ <<< "$line"
+            [ "$verdict" = build ] || continue
             echo "::group::$sha"
             git checkout --quiet --detach "$sha"
             git clean -fdxq
