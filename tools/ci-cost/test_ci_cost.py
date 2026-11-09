@@ -146,11 +146,15 @@ class Measure(unittest.TestCase):
         self.assertEqual(ci_cost.measure(failing_full_pages, REPO, A, workers=1).jobs, 123)
 
     def test_a_refusal_on_a_full_page_is_not_read_again(self):
+        paths = []
+
         def refused(path):
+            paths.append(path)
             raise LookupError(f"{path}: gh: Not Found (HTTP 404)")
 
         with self.assertRaisesRegex(LookupError, "Not Found"):
             list(ci_cost.paged(refused, "repos/owner/repo/pulls"))
+        self.assertEqual(paths, [f"repos/owner/repo/pulls?per_page={ci_cost.PAGE}&page=1"])
 
     def test_a_package_name_with_a_slash_is_one_path_segment(self):
         api = FakeApi([], {}, packages={"blueprint-backend/gateway": 3})
