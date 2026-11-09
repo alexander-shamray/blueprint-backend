@@ -662,7 +662,7 @@ target*)
    #    ExitWorktree({action: "keep"})                  # 2. forked runs only — a tool, not bash
    bash .claude/scripts/git-switch-existing.sh main     # 3. in-place runs only
    git branch --show-current                            # 4. main, or a branch another session left here
-   git pull --ff-only                                   # 5. on main; elsewhere git fetch origin main:main
+   git pull --ff-only                                   # 5. on main; elsewhere git fetch origin refs/heads/main:main
    git merge-base --is-ancestor <merge-oid> main        # 6. and main really does contain it
    bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug> <branch>  # 7. forked runs only
    git worktree prune                                   # 8.

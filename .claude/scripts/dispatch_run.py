@@ -408,17 +408,17 @@ def launch(root, run, gid, tasks_path, branch, worktree, owned_source):
     save_state(directory, state)
 
 
-def sync_ready(root, run, pr):
+def sync_ready(root, run, pr, red_source):
     """Refuse a sync `sync-launch` would refuse whatever its tree holds, before there is a tree: a sync that only waits
     may be superseded before its turn, and the worktree and branch made for it would have no launch to end them."""
     directory = run_dir(root, run)
     state = load_state(directory)
     if not _number(pr):
         raise Refusal(f"{pr!r} is not a pull request number")
-    _sync_may_launch(directory, state.get("groups", {}), f"sync-{pr}")
+    _sync_may_launch(directory, state.get("groups", {}), f"sync-{pr}", red_source)
 
 
-def _sync_may_launch(directory, entries, gid):
+def _sync_may_launch(directory, entries, gid, red_source):
     if gid in entries:
         raise Refusal(f"{gid} is already in this run; a new take is a new group")
     if (directory / "STOP").exists():
@@ -434,9 +434,13 @@ def _sync_may_launch(directory, entries, gid):
     claimed = _claimed(entries)
     if claimed:
         raise Refusal(f"{claimed[0]}'s merge is claimed and not verified; a sync is launched alone")
+    # Its executor would stop at `/ship` step 6 on that issue as any other would, only after spending its round.
+    red = red_source()
+    if red:
+        raise Refusal(f"{'; '.join(red)}; a sync waits for a green main")
 
 
-def sync_launch(root, run, pr, branch, worktree, oid):
+def sync_launch(root, run, pr, branch, worktree, oid, red_source):
     """Record a proved sync as its group, first and alone: it holds no task-list row, so no list is read or written."""
     directory = run_dir(root, run)
     state = load_state(directory)
@@ -444,7 +448,7 @@ def sync_launch(root, run, pr, branch, worktree, oid):
         raise Refusal(f"{pr!r} is not a pull request number")
     gid = f"sync-{pr}"
     entries = state.setdefault("groups", {})
-    _sync_may_launch(directory, entries, gid)
+    _sync_may_launch(directory, entries, gid, red_source)
     if not SYNC_HEAD.fullmatch(branch):
         raise Refusal(f"{branch!r} is not a sync head")
     if not _oid(oid):
@@ -1396,7 +1400,8 @@ def take_reading(directory, source):
     return reading, failure
 
 
-def wake(root, run, tasks_path, today, body_source, open_source, branch_source, weekly_source, owned_source):
+def wake(root, run, tasks_path, today, body_source, open_source, branch_source, weekly_source, owned_source,
+         red_source):
     directory = run_dir(root, run)
     state = load_state(directory)
     entries = state.get("groups", {})
@@ -1450,6 +1455,10 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
     taken = [claim for claim, _ in _held(tasks, bodies, branch_source)]
     chosen = pick(candidates + running, ready_map, claims, [g.id for g in running], taken, slots, lifted)
     if chosen:
+        # An executor launched now would spend its session and stop at `/ship` step 6 on that issue.
+        red = red_source()
+        if red:
+            return out + red + ["launch: none"]
         named = {gid: lifted[gid] for gid in chosen if gid in lifted}
         # The report names what the flag released, so it is recorded from the one read that launched it.
         _note_released(directory, named)
@@ -1755,7 +1764,7 @@ def add_commands(sub):
     r.add_argument("--today")
 
 
-def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from, weekly_from, owned_from):
+def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from, weekly_from, owned_from, red_from):
     """Run one of add_commands' subcommands and return its exit code; a Refusal is the caller's to print."""
     root = args.root
     if args.command == "start":
@@ -1779,9 +1788,9 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
     elif args.command == "launch":
         launch(root, args.run, args.group, args.tasks, args.branch, args.worktree, owned_from)
     elif args.command == "sync-launch":
-        sync_launch(root, args.run, args.pr, args.branch, args.worktree, args.oid)
+        sync_launch(root, args.run, args.pr, args.branch, args.worktree, args.oid, red_from)
     elif args.command == "sync-ready":
-        sync_ready(root, args.run, args.pr)
+        sync_ready(root, args.run, args.pr, red_from)
     elif args.command == "sync-drop":
         for line in sync_drop(root):
             print(line, flush=True)
@@ -1799,7 +1808,7 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
         print(wait(root, args.run, args.group))
     elif args.command == "wake":
         print("\n".join(wake(root, args.run, args.tasks, today, bodies_from, open_from, branch_from, weekly_from,
-                              owned_from)))
+                              owned_from, red_from)))
     elif args.command == "filed":
         # The interview's filings and closes reach no `tasks place`, so Filed overnight learns of them here.
         issue = int(args.issue) if args.issue.isdecimal() and args.issue.isascii() else 0
