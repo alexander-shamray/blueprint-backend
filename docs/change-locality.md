@@ -271,7 +271,9 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
 - **Read before you edit**: the claim you are about to change is usually
   stated more than once.
 - **The `commits` job builds each commit but the head**, which `build`
-  covers, so `git bisect` meets only commits that compile.
+  covers, so `git bisect` meets only commits that compile; a commit changing
+  nothing a stage reads builds what its parent did, and is skipped by name
+  ([`pipeline-gate`](../.github/pipeline-gate/README.md)).
 - **`main` lands by rebase alone**
   ([ADR-155](backend-architecture/adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md)),
   and auto-merge stays off although the ruleset requires status checks
