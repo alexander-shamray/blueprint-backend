@@ -41,10 +41,10 @@ subcommands: `main-red.yml` runs it, and the suite here covers it and pins the
 path the workflow runs it by.
 
 `image_retry.sh` lives beside it for the same reason: the two image jobs run
-each step that calls an external service through it, once more after a failure
-and a wait, and `image-retry-report` posts what a leg recovered from on the
-flaky tests tracker. A shell command runs under it; an action cannot, so it
-takes `continue-on-error`, a `note` step and a second attempt, which `images`
+Build, SBOM, Sign, Provenance and SBOM attestation through it, once more after
+a failure and a wait, and `image-retry-report` posts what a leg recovered from
+on the flaky tests tracker. A shell command runs under it; an action cannot, so
+it takes `continue-on-error`, a `note` step and a second attempt, which `images`
 holds in that shape and the suite holds the real workflow to. Signing twice is
 safe, as checked against cosign's pinned release: a second attempt signs with a
 new key, so Rekor's 409 for an entry it already holds does not arise, and
