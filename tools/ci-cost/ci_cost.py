@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import math
+import os
 import re
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -43,7 +47,16 @@ EVENTS = ("pull_request", "push", "schedule", "workflow_dispatch")
 MAIN_WORKFLOW = "CI"
 WINDOW = re.compile(r"(?:([^=]+)=)?(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})")
 
+# The registry answers a manifest in whichever form it holds only when the request accepts that form.
+MANIFEST_TYPES = ", ".join(("application/vnd.oci.image.index.v1+json",
+                            "application/vnd.oci.image.manifest.v1+json",
+                            "application/vnd.docker.distribution.manifest.list.v2+json",
+                            "application/vnd.docker.distribution.manifest.v2+json"))
+REGISTRY = "https://ghcr.io"
+REGISTRY_TIMEOUT = 30
+
 Fetch = Callable[[str], object]
+Manifest = Callable[[str, str], dict]
 
 
 @dataclass(frozen=True)
@@ -74,15 +87,21 @@ class Usage:
     jobs: int = 0
     minutes: Counter = field(default_factory=Counter)
     minutes_by_workflow: Counter = field(default_factory=Counter)
+    linux_minutes_by_day: Counter = field(default_factory=Counter)
+    equivalent_by_day: Counter = field(default_factory=Counter)
     main_pr_runs: int = 0
     main_pr_heads: set = field(default_factory=set)
     main_conclusions: Counter = field(default_factory=Counter)
     main_minutes_by_conclusion: Counter = field(default_factory=Counter)
     main_minutes_by_job: Counter = field(default_factory=Counter)
+    main_runs_by_job: Counter = field(default_factory=Counter)
     prs: int | None = None
     pushes: int = 0
     label_events: int | None = None
     packages: dict | None = None
+    package_bytes: int | None = None
+    package_unread: int = 0
+    actions_storage: dict | None = None
     unavailable: list = field(default_factory=list)
 
     @property
@@ -97,13 +116,14 @@ class Usage:
         return value * 30 / self.window.days
 
 
-def gh(path: str) -> object:
+def gh(path: str, method: str = "GET") -> object:
     """One `gh api` call, so the repository's visibility and the token's scopes are gh's concern."""
     transient = 0
     while True:
-        done = subprocess.run(["gh", "api", path], capture_output=True, encoding="utf-8")
+        done = subprocess.run(["gh", "api", "--method", method, path], capture_output=True, encoding="utf-8")
         if done.returncode == 0:
-            return json.loads(done.stdout)
+            # A DELETE answers 204 with no body.
+            return json.loads(done.stdout) if done.stdout.strip() else None
         message = done.stderr.strip() or done.stdout.strip()
         if "rate limit" in message.lower():
             time.sleep(rate_limit_wait())
@@ -229,22 +249,94 @@ def count_label_events(fetch: Fetch, repo: str, window: Window) -> int:
     return count
 
 
-def packages(fetch: Fetch, repo: str) -> dict:
-    """Each container package's version count: the REST API reports no size, which only the billing report holds."""
-    owner, name = repo.split("/")
+def package_root(fetch: Fetch, repo: str) -> str:
+    owner = repo.split("/")[0]
     kind = fetch(f"users/{owner}")["type"]
-    root = f"{'orgs' if kind == 'Organization' else 'users'}/{owner}/packages"
-    found = {}
-    for package in paged(fetch, f"{root}?package_type=container"):
-        if (package.get("repository") or {}).get("full_name", repo) != repo:
-            continue
-        # A package named owner-repo/image is one path segment, so its slash is escaped.
-        versions = f"{root}/container/{quote(package['name'], safe='')}/versions"
-        found[package["name"]] = sum(1 for _ in paged(fetch, versions))
-    return found
+    return f"{'orgs' if kind == 'Organization' else 'users'}/{owner}/packages"
 
 
-def measure(fetch: Fetch, repo: str, window: Window, *, current: bool = False, workers: int = WORKERS) -> Usage:
+def versions_path(root: str, package: str) -> str:
+    # A package named owner-repo/image is one path segment, so its slash is escaped.
+    return f"{root}/container/{quote(package, safe='')}/versions"
+
+
+def package_versions(fetch: Fetch, repo: str) -> dict[str, list[dict]]:
+    """Each of the repository's container packages, with every version the listing holds."""
+    root = package_root(fetch, repo)
+    return {package["name"]: list(paged(fetch, versions_path(root, package["name"])))
+            for package in paged(fetch, f"{root}?package_type=container")
+            if (package.get("repository") or {}).get("full_name") == repo}
+
+
+def registry(repo: str) -> Manifest:
+    """A manifest reader over the registry API, anonymous but for GH_TOKEN: the REST API reports no size."""
+    owner = repo.split("/")[0].lower()
+    tokens: dict[str, str] = {}
+
+    def ask(url: str, headers: dict) -> dict:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=REGISTRY_TIMEOUT) as answer:
+            return json.load(answer)
+
+    def token(package: str) -> str:
+        if package not in tokens:
+            secret = os.environ.get("GH_TOKEN")
+            basic = base64.b64encode(f"token:{secret}".encode()).decode() if secret else None
+            tokens[package] = ask(f"{REGISTRY}/token?scope=repository:{owner}/{package}:pull",
+                                  {"Authorization": f"Basic {basic}"} if basic else {})["token"]
+        return tokens[package]
+
+    def manifest(package: str, reference: str) -> dict:
+        for attempt in range(1, TRANSIENT_TRIES + 1):
+            try:
+                return ask(f"{REGISTRY}/v2/{owner}/{package}/manifests/{reference}",
+                           {"Authorization": f"Bearer {token(package)}", "Accept": MANIFEST_TYPES})
+            except urllib.error.HTTPError as error:
+                # A registry token lasts minutes and a walk outlasts it.
+                if error.code == 401:
+                    tokens.pop(package, None)
+                elif error.code < 500:
+                    raise LookupError(f"{package}@{reference}: HTTP {error.code}") from error
+                failure = error
+            except (OSError, ValueError) as error:
+                failure = error
+            time.sleep(TRANSIENT_WAIT * attempt)
+        raise LookupError(f"{package}@{reference}: {failure}")
+
+    return manifest
+
+
+def registry_bytes(manifest: Manifest, versions: dict[str, list[dict]], workers: int = WORKERS) -> tuple[int, int]:
+    """The bytes of every blob the versions' manifests name, each counted once, and the manifests left unread."""
+
+    def read(pair: tuple[str, str]) -> dict | None:
+        try:
+            return manifest(*pair)
+        except LookupError:
+            return None
+
+    pairs = [(package, row["name"]) for package, rows in versions.items() for row in rows if "name" in row]
+    blobs: dict[str, int] = {}
+    unread = 0
+    with ThreadPoolExecutor(workers) as pool:
+        for body in pool.map(read, pairs):
+            if body is None:
+                unread += 1
+                continue
+            for blob in (body.get("config") or {}, *body.get("layers", [])):
+                if "digest" in blob:
+                    blobs[blob["digest"]] = blob.get("size", 0)
+    return sum(blobs.values()), unread
+
+
+def storage(fetch: Fetch, repo: str) -> dict:
+    """The live artifacts and the active caches, which Actions bills as a level."""
+    live = [row for row in paged(fetch, f"repos/{repo}/actions/artifacts", "artifacts") if not row.get("expired")]
+    return {"artifacts": len(live), "artifact_bytes": sum(row["size_in_bytes"] for row in live),
+            "cache_bytes": fetch(f"repos/{repo}/actions/cache/usage")["active_caches_size_in_bytes"]}
+
+
+def measure(fetch: Fetch, repo: str, window: Window, *, current: bool = False, workers: int = WORKERS,
+            manifest: Manifest | None = None) -> Usage:
     usage = Usage(window)
     runs = runs_between(fetch, repo, window.start, window.end)
     usage.runs = len(runs)
@@ -260,9 +352,14 @@ def measure(fetch: Fetch, repo: str, window: Window, *, current: bool = False, w
                 if run["event"] == "pull_request":
                     usage.main_pr_runs += 1
                     usage.main_pr_heads.add(run["head_sha"])
+                usage.main_runs_by_job.update({job["name"].split(" (")[0] for job in jobs if billed_minutes(job)})
             for job in jobs:
                 minutes = billed_minutes(job)
                 equivalent = minutes * RATES[runner_os(job)] / RATES["Linux"]
+                if minutes:
+                    day = parse(job["started_at"]).date().isoformat()
+                    usage.equivalent_by_day[day] += equivalent
+                    usage.linux_minutes_by_day[day] += minutes if runner_os(job) == "Linux" else 0
                 usage.jobs += 1
                 usage.minutes[runner_os(job)] += minutes
                 usage.minutes_by_workflow[run["name"]] += equivalent
@@ -277,14 +374,31 @@ def measure(fetch: Fetch, repo: str, window: Window, *, current: bool = False, w
     # Storage is a level, not a flow: only a window ending now can read it, since the API keeps no history.
     if current:
         try:
-            usage.packages = packages(fetch, repo)
+            versions = package_versions(fetch, repo)
+            usage.packages = {package: len(rows) for package, rows in versions.items()}
+            usage.package_bytes, usage.package_unread = registry_bytes(manifest or registry(repo), versions, workers)
         except LookupError as error:
             usage.unavailable.append(f"GHCR packages: {error}")
+        try:
+            usage.actions_storage = storage(fetch, repo)
+        except LookupError as error:
+            usage.unavailable.append(f"Actions storage: {error}")
     return usage
 
 
 def money(value: float) -> str:
     return f"${value:,.2f}"
+
+
+def gigabytes(value: float) -> str:
+    return f"{value / 1e9:,.2f} GB"
+
+
+def package_size(usage: Usage) -> str:
+    if usage.package_bytes is None:
+        return "n/a"
+    floor = f", a floor: {usage.package_unread:,} manifests unread" if usage.package_unread else ""
+    return gigabytes(usage.package_bytes) + floor
 
 
 def per(value: float, count: int | None) -> str:
@@ -321,6 +435,12 @@ def table(usages: list[Usage], plan: str) -> str:
     row("List price per PR", lambda u: per(u.dollars, u.prs))
     row("GHCR container versions, at the window's end",
         lambda u: "n/a" if u.packages is None else f"{sum(u.packages.values()):,} in {len(u.packages)} packages")
+    row("GHCR blobs, each counted once, at the window's end", package_size)
+    row("Actions artifacts live, at the window's end",
+        lambda u: "n/a" if u.actions_storage is None else
+        f"{u.actions_storage['artifacts']:,} holding {gigabytes(u.actions_storage['artifact_bytes'])}")
+    row("Actions caches, at the window's end",
+        lambda u: "n/a" if u.actions_storage is None else gigabytes(u.actions_storage["cache_bytes"]))
     row(f"{MAIN_WORKFLOW}'s runs on `pull_request`", lambda u: f"{u.main_pr_runs:,}")
     row(f"{MAIN_WORKFLOW}'s `pull_request` runs per head commit",
         lambda u: f"{u.main_pr_runs / len(u.main_pr_heads):.2f}" if u.main_pr_heads else "n/a")
@@ -338,10 +458,17 @@ def table(usages: list[Usage], plan: str) -> str:
     main_jobs = sorted({j for u in usages for j in u.main_minutes_by_job},
                        key=lambda j: -usages[0].main_minutes_by_job[j])
     lines += ["", f"| {MAIN_WORKFLOW}'s job | "
-              + " | ".join(f"{u.window.name} Linux-eq. minutes" for u in usages) + " |",
-              "|---" * (len(usages) + 1) + "|"]
+              + " | ".join(f"{u.window.name} Linux-eq. minutes | {u.window.name} runs it billed in" for u in usages)
+              + " |",
+              "|---" * (2 * len(usages) + 1) + "|"]
     for main_job in main_jobs:
-        lines.append(f"| {main_job} | " + " | ".join(f"{u.main_minutes_by_job[main_job]:,.0f}" for u in usages) + " |")
+        lines.append(f"| {main_job} | " + " | ".join(
+            f"{u.main_minutes_by_job[main_job]:,.0f} | {u.main_runs_by_job[main_job]:,}" for u in usages) + " |")
+    for usage in usages:
+        lines += ["", f"| {usage.window.name}'s day, by when a job started | Linux minutes | Linux-eq. minutes |",
+                  "|---|---|---|"]
+        for day in sorted(usage.equivalent_by_day):
+            lines.append(f"| {day} | {usage.linux_minutes_by_day[day]:,} | {usage.equivalent_by_day[day]:,.0f} |")
     notes = [f"{u.window.name}: {note}" for u in usages for note in u.unavailable]
     return "\n".join(lines + ([""] + [f"- {note}" for note in notes] if notes else []))
 
@@ -354,14 +481,19 @@ def as_json(usages: list[Usage], plan: str) -> str:
                            "by_workflow": dict(u.by_workflow), "jobs": u.jobs, "minutes": dict(u.minutes),
                            "linux_equivalent_by_workflow": {k: round(v, 1) for k, v in u.minutes_by_workflow.items()},
                            "linux_equivalent": round(u.linux_equivalent, 1), "dollars": round(u.dollars, 2),
+                           "linux_minutes_by_day": dict(u.linux_minutes_by_day),
+                           "linux_equivalent_by_day": {k: round(v, 1) for k, v in u.equivalent_by_day.items()},
                            "prs": u.prs, "pushes": u.pushes, "label_events": u.label_events,
                            "main_workflow": {
                                "name": MAIN_WORKFLOW, "pr_runs": u.main_pr_runs, "pr_heads": len(u.main_pr_heads),
                                "conclusions": dict(u.main_conclusions),
                                "minutes_by_conclusion": {
                                    k: round(v, 1) for k, v in u.main_minutes_by_conclusion.items()},
-                               "minutes_by_job": {k: round(v, 1) for k, v in u.main_minutes_by_job.items()}},
-                           "packages": u.packages, "unavailable": u.unavailable}
+                               "minutes_by_job": {k: round(v, 1) for k, v in u.main_minutes_by_job.items()},
+                               "runs_by_job": dict(u.main_runs_by_job)},
+                           "packages": u.packages, "package_bytes": u.package_bytes,
+                           "package_unread": u.package_unread, "actions_storage": u.actions_storage,
+                           "unavailable": u.unavailable}
                            for u in usages]}, indent=2)
 
 
@@ -384,7 +516,8 @@ def origin_repo() -> str:
     return match[1]
 
 
-def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = None) -> int:
+def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = None,
+         manifest: Manifest | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", help="owner/name; the origin remote's by default")
     parser.add_argument("--window", action="append", default=[],
@@ -399,7 +532,8 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = 
         parser.error(str(error))
     windows = windows or [Window("A", today - timedelta(days=14), today - timedelta(days=1))]
     repo = args.repo or origin_repo()
-    usages = [measure(fetch, repo, w, current=w.last >= today - timedelta(days=1)) for w in windows]
+    usages = [measure(fetch, repo, w, current=w.last >= today - timedelta(days=1), manifest=manifest)
+              for w in windows]
     print(as_json(usages, args.plan) if args.json else table(usages, args.plan))
     return 0
 

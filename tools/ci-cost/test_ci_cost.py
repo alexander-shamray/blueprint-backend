@@ -30,10 +30,10 @@ def run(run_id, created, name="CI", event="pull_request", sha="a", conclusion="s
 class FakeApi:
     """Answers the paths ci_cost asks for from in-memory runs, jobs and events, paging as GitHub does."""
 
-    def __init__(self, runs, jobs, events=(), prs=(), packages=None, cap=ci_cost.SEARCH_CAP):
+    def __init__(self, runs, jobs, events=(), prs=(), packages=None, cap=ci_cost.SEARCH_CAP, artifacts=None):
         self.runs, self.jobs, self.events = runs, jobs, list(events)
-        self.prs = [{"created_at": created} for created in prs]
-        self.packages, self.cap, self.paths = packages, cap, []
+        self.prs = [{"id": number, "created_at": created} for number, created in enumerate(prs)]
+        self.packages, self.cap, self.paths, self.artifacts = packages, cap, [], artifacts
 
     def __call__(self, path):
         self.paths.append(path)
@@ -54,13 +54,24 @@ class FakeApi:
             return window(self.prs)
         if "issues/events" in path:
             return window(self.events)
+        if "actions/artifacts" in path or "actions/cache/usage" in path:
+            if self.artifacts is None:
+                raise LookupError(f"{path}: HTTP 403")
+            if "cache/usage" in path:
+                return {"active_caches_size_in_bytes": 7_560_000_000}
+            return {"artifacts": window(self.artifacts)}
         if self.packages is None:
             raise LookupError(f"{path}: HTTP 403")
         if path.startswith("users/") and "/packages" not in path:
             return {"type": "User"}
         if "/versions" in path:
-            return window([{}] * self.packages[unquote(path.split("/container/")[1].split("/")[0])])
+            name = unquote(path.split("/container/")[1].split("/")[0])
+            return window([{"name": f"{name}@{n}"} for n in range(self.packages[name])])
         return window([{"name": name, "repository": {"full_name": REPO}} for name in self.packages])
+
+
+def no_manifests(package, reference):
+    return {}
 
 
 A = Window("A", date(2026, 10, 10), date(2026, 10, 11))
@@ -117,7 +128,24 @@ class Measure(unittest.TestCase):
         self.assertAlmostEqual(usage.main_minutes_by_conclusion["cancelled"], 2 * 0.062 / 0.006)
         text = ci_cost.table([usage], "Free")
         self.assertIn("| CI's `pull_request` runs per head commit | 2.00 |", text)
-        self.assertIn("| integration | 4 |", text)
+        self.assertIn("| integration | 4 | 1 |", text)
+
+    def test_a_job_counts_its_runs_once_however_many_legs_or_attempts_and_a_skipped_one_not_at_all(self):
+        started, ended = "2026-10-10T05:00:00Z", "2026-10-10T05:02:00Z"
+        api = FakeApi([run(1, started), run(2, started)], {
+            1: [job(started, ended, name="guard (windows)"), job(started, ended, name="guard (macos)")],
+            2: [job(started, started, name="guard (windows)")]})
+        self.assertEqual(ci_cost.measure(api, REPO, A, workers=1).main_runs_by_job, {"guard": 1})
+
+    def test_minutes_are_summed_by_the_day_a_job_started(self):
+        api = FakeApi([run(1, "2026-10-10T23:59:00Z"), run(2, "2026-10-11T01:00:00Z")], {
+            1: [job("2026-10-10T23:59:00Z", "2026-10-11T00:01:00Z")],
+            2: [job("2026-10-11T01:00:00Z", "2026-10-11T01:03:00Z"),
+                job("2026-10-11T01:00:00Z", "2026-10-11T01:01:00Z", ["windows-latest"])]})
+        usage = ci_cost.measure(api, REPO, A, workers=1)
+        self.assertEqual(usage.linux_minutes_by_day, {"2026-10-10": 2, "2026-10-11": 3})
+        self.assertAlmostEqual(usage.equivalent_by_day["2026-10-11"], 3 + 0.010 / 0.006)
+        self.assertIn("| 2026-10-10 | 2 | 2 |", ci_cost.table([usage], "Free"))
 
     def test_a_row_that_a_page_shift_repeats_is_counted_once(self):
         rows = [{"id": n, "created_at": "2026-10-10T08:00:00Z"} for n in range(ci_cost.PAGE + 5)]
@@ -169,9 +197,35 @@ class Measure(unittest.TestCase):
 
     def test_a_package_name_with_a_slash_is_one_path_segment(self):
         api = FakeApi([], {}, packages={"blueprint-backend/gateway": 3})
-        self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1).packages,
+        self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1, manifest=no_manifests).packages,
                          {"blueprint-backend/gateway": 3})
         self.assertTrue(any("/container/blueprint-backend%2Fgateway/versions" in path for path in api.paths))
+
+    def test_registry_bytes_counts_a_blob_two_images_share_once_and_owns_up_to_a_manifest_unread(self):
+        bodies = {"a@0": {"config": {"digest": "c1", "size": 1}, "layers": [{"digest": "shared", "size": 10}]},
+                  "b@0": {"config": {"digest": "c2", "size": 2}, "layers": [{"digest": "shared", "size": 10}]},
+                  "b@1": {"manifests": [{"digest": "child", "size": 99}]}}
+
+        def manifest(package, reference):
+            if reference == "b@2":
+                raise LookupError("timed out")
+            return bodies[reference]
+
+        api = FakeApi([], {}, packages={"a": 1, "b": 3})
+        usage = ci_cost.measure(api, REPO, A, current=True, workers=1, manifest=manifest)
+        self.assertEqual((usage.package_bytes, usage.package_unread), (13, 1))
+        self.assertIn("0.00 GB, a floor: 1 manifests unread", ci_cost.table([usage], "Free"))
+
+    def test_actions_storage_sums_live_artifacts_and_reads_the_caches(self):
+        artifacts = [{"id": 1, "size_in_bytes": 3_000_000_000, "expired": False},
+                     {"id": 2, "size_in_bytes": 960_000_000, "expired": False},
+                     {"id": 3, "size_in_bytes": 5_000_000_000, "expired": True}]
+        usage = ci_cost.measure(FakeApi([], {}, artifacts=artifacts), REPO, A, current=True, workers=1)
+        self.assertEqual(usage.actions_storage,
+                         {"artifacts": 2, "artifact_bytes": 3_960_000_000, "cache_bytes": 7_560_000_000})
+        text = ci_cost.table([usage], "Free")
+        self.assertIn("| Actions artifacts live, at the window's end | 2 holding 3.96 GB |", text)
+        self.assertIn("| Actions caches, at the window's end | 7.56 GB |", text)
 
     def test_label_events_are_counted_inside_the_window_only(self):
         events = [{"created_at": "2026-10-12T00:00:00Z", "event": "labeled"},
@@ -183,13 +237,15 @@ class Measure(unittest.TestCase):
     def test_packages_are_read_only_for_a_window_ending_now(self):
         api = FakeApi([], {}, packages={"catalog": 3, "ordering": 2})
         self.assertIsNone(ci_cost.measure(api, REPO, A, workers=1).packages)
-        self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1).packages,
+        self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1, manifest=no_manifests).packages,
                          {"catalog": 3, "ordering": 2})
 
     def test_a_refused_read_is_reported_rather_than_fatal(self):
         usage = ci_cost.measure(FakeApi([], {}), REPO, A, current=True, workers=1)
         self.assertIsNone(usage.packages)
+        self.assertIsNone(usage.actions_storage)
         self.assertTrue(any(note.startswith("GHCR packages") for note in usage.unavailable))
+        self.assertTrue(any(note.startswith("Actions storage") for note in usage.unavailable))
 
 
 class Gh(unittest.TestCase):
@@ -220,6 +276,11 @@ class Gh(unittest.TestCase):
                 mock.patch("time.sleep") as slept:
             ci_cost.gh("repos/owner/repo")
         slept.assert_called_once_with(60)
+
+    def test_a_delete_answers_no_body_and_names_its_method(self):
+        with mock.patch("subprocess.run", return_value=mock.Mock(returncode=0, stdout="", stderr="")) as called:
+            self.assertIsNone(ci_cost.gh("repos/owner/repo/thing", "DELETE"))
+        self.assertEqual(called.call_args.args[0][:4], ["gh", "api", "--method", "DELETE"])
 
     def test_a_rate_limit_read_that_fails_waits_a_minute_rather_than_crashing(self):
         replies = self.answers((1, "", "gh: API rate limit exceeded for user ID 1. (HTTP 403)"),
