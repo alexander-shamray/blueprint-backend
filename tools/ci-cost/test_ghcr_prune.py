@@ -160,10 +160,27 @@ class RolledTags(unittest.TestCase):
         self.assertIsNotNone(ghcr_prune.ROLLOUT_TITLE.fullmatch(written[1].format("catalog-api", "abc")))
 
 
+class ImagePackages(unittest.TestCase):
+    def test_the_shipped_matrix_names_each_image_under_the_repository(self):
+        packages = ghcr_prune.image_packages(REPO)
+        self.assertIn("repo/gateway", packages)
+        self.assertIn("repo/catalog-migrator", packages)
+        self.assertEqual(len(packages), len(set(packages)))
+        self.assertFalse([package for package in packages if "$" in package or "{" in package])
+
+    def test_the_count_is_the_matrix_s_own(self):
+        text = ghcr_prune.CI_WORKFLOW.read_text(encoding="utf-8")
+        strategy = text[text.index("&image-legs"):text.index("*image-legs")]
+        self.assertEqual(len(ghcr_prune.image_packages(REPO)), len(re.findall(r"\bdockerfile:", strategy)))
+
+    def test_a_workflow_that_names_no_image_refuses(self):
+        with self.assertRaisesRegex(LookupError, "names no image"):
+            ghcr_prune.image_packages(REPO, mock.Mock(read_text=lambda encoding: "jobs: {}\n"))
+
+
 class Main(unittest.TestCase):
     def setUp(self):
         self.versions = image_family("gone") + newer_images()
-        self.foreign = []
         self.deleted = []
 
     def fetch(self, path):
@@ -174,14 +191,18 @@ class Main(unittest.TestCase):
         if path.startswith("users/") and "/packages" not in path:
             return {"type": "User"}
         if "/versions" in path:
+            if "repo%2Fmissing" in path:
+                raise LookupError(f"{path}: gh: Package not found. (HTTP 404)")
             return self.versions if first else []
-        return ([{"name": "owner-repo/pkg", "repository": {"full_name": REPO}}] + self.foreign) if first else []
+        # What a job's GITHUB_TOKEN answered on 2026-11-09, in the first run that was not a person's.
+        raise LookupError(f"{path}: gh: Invalid argument. (HTTP 400)")
 
-    def run_main(self, *argv, registry=None, delete=None):
+    def run_main(self, *argv, registry=None, delete=None, packages=None):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             code = ghcr_prune.main(["--repo", REPO, *argv], fetch=self.fetch, manifest=registry or Registry("gone"),
-                                   now=NOW, delete=delete or self.deleted.append)
+                                   now=NOW, delete=delete or self.deleted.append,
+                                   packages=packages or ["repo/pkg"])
         return code, out.getvalue()
 
     def test_without_the_flag_it_reports_and_deletes_nothing(self):
@@ -193,21 +214,24 @@ class Main(unittest.TestCase):
     def test_with_the_flag_it_deletes_by_version_id_under_the_escaped_package(self):
         self.run_main("--delete")
         self.assertEqual(len(self.deleted), 5)
-        self.assertTrue(all("/packages/container/owner-repo%2Fpkg/versions/" in path for path in self.deleted))
+        self.assertTrue(all("/packages/container/repo%2Fpkg/versions/" in path for path in self.deleted))
 
     def test_a_capped_run_takes_the_image_and_leaves_its_children_for_a_later_one(self):
         self.versions = image_family("gone") + newer_images()
         with mock.patch.object(ghcr_prune, "MAX_DELETES", 1):
             self.run_main("--delete")
-        self.assertEqual(self.deleted, [f"users/owner/packages/container/owner-repo%2Fpkg/versions/"
+        self.assertEqual(self.deleted, [f"users/owner/packages/container/repo%2Fpkg/versions/"
                                         f"{version('gone')['id']}"])
 
-    def test_a_package_of_another_repository_or_of_none_is_not_touched(self):
-        self.foreign = [{"name": "other", "repository": {"full_name": "owner/other"}}, {"name": "unlinked"}]
-        code, out = self.run_main("--delete")
+    def test_only_the_packages_it_was_given_are_read_and_the_owners_listing_is_never_asked(self):
+        code, _ = self.run_main("--delete")
         self.assertEqual(code, 0)
-        self.assertNotIn("unlinked", out)
-        self.assertTrue(all("owner-repo%2Fpkg" in path for path in self.deleted))
+        self.assertTrue(all("repo%2Fpkg" in path for path in self.deleted))
+
+    def test_a_package_it_cannot_read_fails_the_run_and_the_others_are_still_judged(self):
+        code, out = self.run_main("--delete", packages=["repo/missing", "repo/pkg"])
+        self.assertEqual((code, len(self.deleted)), (1, 5))
+        self.assertIn("repo/missing: nothing judged", out)
 
     def test_a_run_deletes_no_more_than_the_cap(self):
         self.versions = [version(f"v{n}") for n in range(ghcr_prune.MAX_DELETES + 3)]

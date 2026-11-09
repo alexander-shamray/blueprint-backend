@@ -11,9 +11,10 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from ci_cost import (Fetch, Manifest, SEARCH_CAP, WORKERS, gh, origin_repo, package_root, package_versions, paged,
-                     parse, registry, versions_path)
+from ci_cost import (Fetch, Manifest, SEARCH_CAP, WORKERS, gh, origin_repo, package_root, paged, parse, registry,
+                     versions_path)
 
 KEEP_DAYS = 14
 KEEP_NEWEST = 10
@@ -24,6 +25,20 @@ REFERRER_TAG = re.compile(r"sha256-[0-9a-f]{64}")
 # deploy.yml's run-name, which is the one place the API keeps a dispatch's inputs.
 ROLLOUT_TITLE = re.compile(r"Roll \S+ to (.*)")
 ROLLOUT_RUNS = "actions/workflows/deploy.yml/runs?event=workflow_dispatch"
+CI_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
+IMAGE_LEG = re.compile(r"^\s+image: ([a-z0-9-]+)\s*$", re.MULTILINE)
+
+
+def image_packages(repo: str, workflow: Path = CI_WORKFLOW) -> list[str]:
+    """The packages `ci.yml`'s matrix pushes, under the repository's name, since `$REGISTRY` carries it.
+
+    Named here because a job's token answers 400 to the owner's package listing. An image dropped from the matrix is
+    never pruned again, which is the safe side.
+    """
+    images = IMAGE_LEG.findall(workflow.read_text(encoding="utf-8"))
+    if not images:
+        raise LookupError(f"{workflow} names no image, so the matrix's shape moved and this read is what is broken")
+    return sorted({f"{repo.split('/')[1]}/{image}" for image in images})
 
 
 def rolled_tags(fetch: Fetch, repo: str) -> set[str]:
@@ -98,7 +113,7 @@ def plan(manifest: Manifest, package: str, versions: list[dict], rolled: set[str
 
 
 def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | None = None,
-         now: datetime | None = None, delete: Fetch | None = None) -> int:
+         now: datetime | None = None, delete: Fetch | None = None, packages: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", help="owner/name; the origin remote's by default")
     parser.add_argument("--delete", action="store_true", help="delete what the report names")
@@ -111,11 +126,12 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
 
     failed = 0
     doomed: list[tuple[str, dict]] = []
-    for package, versions in package_versions(fetch, repo).items():
+    for package in packages or image_packages(repo):
         try:
+            versions = list(paged(fetch, versions_path(root, package)))
             going = plan(manifest, package, versions, rolled, now)
         except LookupError as error:
-            print(f"{package}: nothing judged, a manifest could not be read: {error}")
+            print(f"{package}: nothing judged, a read was refused: {error}")
             failed += 1
             continue
         print(f"{package}: {len(versions):,} versions, {len(going):,} not kept")
