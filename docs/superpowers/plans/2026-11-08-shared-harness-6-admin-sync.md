@@ -270,7 +270,7 @@ requests: the shard runner, the red-`main` helper, then the settings replay.
     `test_harness_helpers.py:10498-10501`.
   The harness, the fourth target (spec §5.1), files no red-`main` issue at
   all, so the same pull request gives it a `main-red` job in its `ci.yml`, in
-  backend's shape, titled `main is red: ci`. Confirm each of the four targets'
+  frontend's shape, titled `main is red: ci`. Confirm each of the four targets'
   workflows writes a title the rule matches, and record the four in the PR
   body.
 - [ ] **Step 4:** Mark the §8 rows `ported` in `IMPORT.md`.
