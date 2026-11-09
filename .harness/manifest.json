@@ -1,5 +1,5 @@
 {
-  "harness_commit": "c44f2e73102e1e107fe4c2ef6775b5ae906c09d1",
+  "harness_commit": "6dcee197078a40182e8d411e84c6a3c2729249c8",
   "files": {
     ".claude/agents/branch-reviewer.md": "eff7a6e0a4c531834b39dd4c43031a6120e0f385ce0d262f4cfabd78122647dd",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -15,7 +15,7 @@
     ".claude/commands/style-pass.md": "bb0d404f221b90acea83a5c0f9e11173b3c63602b50a0a7dc3f25d5958ba1c9c",
     ".claude/commands/team.md": "556ab31ac0dd5d8abfcb96893fecc274e82a29d1d0c74bb9d4a44a295e8e5cd0",
     ".claude/hooks/guard-edit-target.py": "271da74147cf87118cf9f0bc01c464c6a9d46725d2abead7aa686abedbca9a5c",
-    ".claude/hooks/guard-git-argv.py": "6656e69d0d24d5c116b110df6a2193c02546e11d5185aaae5ad16419b9e5ea82",
+    ".claude/hooks/guard-git-argv.py": "4a3a6d328bf5b081c04b9e0ff0df061f9513887fe5b9844fa43c610af291b0d1",
     ".claude/hooks/guard-helper-argv.py": "1c79864883c61e01db5616c4080ac2d4a4fee2a66552727b2fea500894f3b756",
     ".claude/hooks/guard-index-argv.py": "89ee78f9531539f42ad369e16a60ba0954aa090937beb61eea74dea8df741441",
     ".claude/hooks/guard-sed-crlf.py": "b9c4a0b94112efe27b8c1635580c1ac5bec7b75dd183099c578d25f379e9ca5f",
@@ -81,7 +81,7 @@
     ".claude/scripts/test_gh_issue_suppresses.py": "9cebfd3c8e2a197a3e87b042e73277e8d328dcf9d3f7f8bd3621f6a53e19113d",
     ".claude/scripts/test_gh_label_ensure.py": "5b593c11675b5d94e082fe3dbb27afca6d03b85cf7fe47bdfb71148d003bae4a",
     ".claude/scripts/test_gh_pr_create.py": "67daa1363616ec48e1373abd29ac42621adf6ac85bc209a89a84625de511b00c",
-    ".claude/scripts/test_git_argv_guard.py": "d82c24b22b6856510d01bd17cae434b019b51e2b36874917329e8ce7d255a00e",
+    ".claude/scripts/test_git_argv_guard.py": "244b551fd406f01c95c933cabbabfaa6badea937d4e785210fd5aaaac9a0a430",
     ".claude/scripts/test_git_branch_drop.py": "6cbe0a62817947a9abf8f05703c9dab124f2babd4d09be605fb3a54cb26c8341",
     ".claude/scripts/test_git_pr_trailer_helpers.py": "fd92d27e784454e7898f6cdda7ab74eb4f1ed9eddbeb0ef25e793bc0a8d68f21",
     ".claude/scripts/test_git_push_force.py": "2a7879bbd0c014c56fa810f18897b742609de58776b79702c98022f5a76dd585",
@@ -170,7 +170,7 @@
     "docs/commands/security-sweep.md": "12542108f11ae4f39a292b34ecfa1b6991645aadff3b6919f205c25b6cb1a8f6",
     "docs/commands/ship.md": "3a3ed1dadffbb46d4cb146920d5550073d4fd4337f8ff3b032f71b0782569259",
     "docs/commands/team.md": "1cdc4bcab8a82727ec98ab1a56d0420d115fc37e6f4b8075dad8c7cfdd8311b2",
-    "docs/harness-boundaries.md": "71301a4a0f47a8c1dbef6183c1a8d9d97575cd13195f6023d7291380eb27146c",
+    "docs/harness-boundaries.md": "cddfe958a95020848a54c52514bfa36e8becbde0692652b0e8b27e2271229348",
     "docs/harness/pitfalls.md": "5b40cf2c6ad25650264422649227e91e2c172a6c0d9d0ee5d6afa227b6d6dbf2",
     "docs/harness/token-rules.md": "cd83a078de693e468130242357b1eb6994df7e5beb0fad5c5dff510c6e4c7300",
     "docs/harness/working-rules.md": "f188c3851aeeb0d5ac80d298b804be5660f1ecf3fbba66d51e34fa1a0ac77479"
