@@ -156,6 +156,12 @@ The type is the one the commit will carry, so the branch and its commits
 agree. A roadmap PR's name derives from its title so the branch, the
 commit and the plan all read the same.
 
+**`git-` stays out of the summary** because Claude Code's isolation check
+refused `git push -u origin fix/git-helpers-from-admin` inside a worktree
+session as naming git more than once, so the name that holds it is the one
+thing about that push no retry changes (`docs/harness/pitfalls.md`, *Git and
+worktrees*).
+
 ## Step 4
 
 **The directory check runs only on the path that uses the directory** —
@@ -209,8 +215,10 @@ the whole point of those paths is to carry the state that is already in the
 tree. A base is not what they are short of.
 
 **`git-worktree-fork.sh` is the whole command, and it takes two arguments
-because everything else about it is fixed.** Its one git command that writes is
-`git worktree add --no-track -b <branch> <path> origin/main`, after which
+because everything else about it is fixed.** Its git commands that write, but
+for removing what they leave when the second fails, are
+`git branch --no-track <branch> origin/main` and
+`git worktree add <path> <branch>`, after which
 it starts the new worktree's index refresh — a `Bash(git worktree add:*)`
 grant would also buy `-B`, which does not create a branch but **resets**
 an existing one, the operation
@@ -263,32 +271,41 @@ So: fall back only when the message establishes that the path could not be
 created for permission reasons. Anything else stops the command and is
 reported verbatim, unnamed rather than misnamed.
 
-**Then check whether the branch survived, because it usually does.**
-`git worktree add -b` creates the branch *before* it creates the directory,
-so a failure at the directory leaves the branch behind — against an
-unwritable directory it prints `fatal: could not create leading
-directories`, and the branch stays in `git branch --list`. A blind
-create there fails with *branch already exists* — `git-branch-create.sh`
-refuses it on purpose — which would turn a handled fallback into a stop.
-Both post-failure states are ordinary and each has one command, in the
-runbook's table.
+**The helper removes the branch a failed fork made, so the fallback can
+create it.** The branch exists *before* the directory or any checkout, and
+git's cleanup of a failed add leaves it:
+against an unwritable directory it prints `fatal: could not create leading
+directories`, and the branch stays. Left there, it fails a retry with *branch
+already exists*, `git-branch-create.sh` refuses it on purpose, and
+`git-branch-drop.sh` refuses it as never landed, so nothing the session holds
+could remove it. The helper deletes it by compare-and-swap against the start
+point, so a branch that holds a commit stays, and only when no worktree holds
+it.
+
+**The helper makes the branch apart from the add so that it knows the branch
+is its own.** Two sessions can fork one name at once, both past the check that
+it is free. With `git worktree add -b`, the loser's one exit status cannot say
+whether its branch step failed, and the winner's branch sits at the start point
+with no worktree yet, which is exactly what the removal takes: the loser would
+delete it. A separate `git branch` fails first, so the loser stops there with
+git's own line and removes nothing, and the winner's add goes on. A branch still
+standing after a failed fork is therefore not this fork's to adopt, which is
+why the runbook's table stops there.
 
 Every git write goes through a helper because a prefix grant buys more than
 its operation; the flags each raw grant would license — `git switch`,
 `git worktree add -B`, `git checkout -b … -f` — are owned by
 `docs/harness-boundaries.md`, *Prefix grants and wildcard denies*.
 `git-worktree-fork.sh` and `git-branch-create.sh` fix their commands the same
-way — every flag decided in the file, both arguments shape-checked, and
-creation only, so a name that already exists is refused rather than reset.
-`git-switch-existing.sh` takes one shape-checked argument, requires the branch
-to exist, and passes no flags to git at all. `git worktree list` stays a raw
-grant because it reads and nothing else.
+way — every flag decided in the file, both arguments shape-checked, and a
+name that already exists refused rather than reset.
+`git worktree list` stays a raw grant because it reads and nothing else.
 
-The post-failure table's second row spells the base out for the reason
+The post-failure table's first row spells the base out for the reason
 the clean-`main` rows give:
 this path starts from a clean `main`, so it takes the fetched
-`origin/main` rather than whatever local `main` happens to be. Either way
-the run continues on the branch, in place, exactly as the
+`origin/main` rather than whatever local `main` happens to be. The run then
+continues on the branch, in place, exactly as the
 dirty-`main` path does. Both no-worktree states then look the
 same to everything downstream, and there is only one of them to describe —
 **including step 1's consequence, which is this path's too**: the branch

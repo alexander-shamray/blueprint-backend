@@ -53,8 +53,7 @@ BRANCH_GRANTS_BEFORE = (
     "Read", "Grep", "EnterWorktree", "Bash(git status:*)", "Bash(git diff:*)", "Bash(git branch --list:*)",
     "Bash(git branch --show-current)", "Bash(git branch -a)", "Bash(git log:*)", "Bash(git fetch origin:*)",
     "Bash(bash .claude/scripts/git-branch-create.sh:*)", "Bash(bash .claude/scripts/git-worktree-fork.sh:*)",
-    "Bash(bash .claude/scripts/git-switch-existing.sh:*)", "Bash(git rev-parse:*)", "Bash(git worktree list:*)",
-    "Bash(ls:*)",
+    "Bash(git rev-parse:*)", "Bash(git worktree list:*)", "Bash(ls:*)",
 )
 
 SKIP_WRITE = "Under --dispatched, skip this write"

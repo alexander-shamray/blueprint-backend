@@ -1,18 +1,8 @@
 #!/usr/bin/env bash
-# Switch the current checkout to an existing local branch, and nothing else.
-#
-# /branch step 5 needs this on one path: `git worktree add -b` creates the
-# branch before the directory, so a fork that fails on an unwritable parent
-# leaves the branch behind, and the in-place fallback has to get onto it. A
-# prefix grant on `git switch` also licenses `--discard-changes` and `-C`,
-# which discard work and force-move a branch past the denies on their other
-# spellings (`git reset --hard`, `git clean`, `git branch -D/-M`).
-#
-# A deny list cannot close that, because the flags combine:
-# `git switch -fC <name> <start>` matches no `git switch -C` rule. So no flags
-# reach git: `--` ends option parsing, the name is shape-checked, and the
-# branch must already exist. The only state changed is which branch is
-# checked out.
+# Switch the checkout to an existing local branch, as /ship does to reach `main`.
+# A prefix grant on `git switch` also licenses `-C` and `--discard-changes` past
+# the denies on their other spellings, and the flags combine (`-fC`) beyond what
+# a deny list can close, so no flags reach git: `--` ends option parsing.
 set -euo pipefail
 branch="${1:?usage: git-switch-existing.sh <branch>}"
 [ "$#" -eq 1 ] || { echo "exactly one argument: the branch name" >&2; exit 2; }

@@ -636,15 +636,19 @@ deletes only a branch a pull request merged into `main` at its tip, which
 worktree whose removal was refused keeps its branch, because the branch is
 still checked out there and the helper would refuse it in any case; an
 exit 4, a directory that holds something or that a process holds, keeps it
-too. Leaving a
-landed branch behind costs a line in `git branch` per run, which no one reads
-and no one clears; the drop is cheap and keeps the list to live work.
+too. An exit 0 is also git failing only to delete the empty directory it had
+unregistered, which the helper then removed: the worktree is gone, so the drop
+runs. Leaving a landed branch behind costs a line in `git branch` per run, which
+no one reads and no one clears; the drop is cheap and keeps the list to live
+work.
 
 **A refused drop is reported and is not a stop.** The helper refuses a branch
 that has not landed, and keeping that branch is exactly right; the merge is
-done and stopping would strand a finished run. Exit 6 (no local branch) means
-there is nothing to drop, which a reader of the report wants to know and
-nothing more.
+done and stopping would strand a finished run, so on any non-zero exit the
+merge stands. The branch is kept too, but for a branch already gone and the one
+residual *Grant inventory and push helpers* gives, where the helper exits 4 and
+names the tip. Exit 6 (no local branch) means there is nothing to drop, which a
+reader of the report wants to know and nothing more.
 
 ## Step 1: /branch
 

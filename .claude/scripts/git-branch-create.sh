@@ -24,7 +24,7 @@ case "$branch" in
 esac
 [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] ||
   { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
-# Creation only, like the fork helper: a name that already exists is refused
+# Creation only: a name that already exists is refused, as the fork helper does,
 # rather than reset, so no caller can reach -B/-B-like behaviour through here.
 ! git show-ref --verify --quiet "refs/heads/$branch" ||
   { echo "branch already exists: $branch" >&2; exit 3; }

@@ -91,7 +91,11 @@ when a step behaves unexpectedly.
   a variable set in a compound, even a path naming `.github/`. Symptom:
   *too complex to verify that it stays inside the worktree*. Safe: split
   the line into plain separate commands, or put a loop in a scratchpad
-  script and run it by path; never obfuscate the path it refused.
+  script and run it by path; never obfuscate the path it refused. A
+  branch name holding `git-` is one such word:
+  `git push -u origin fix/git-helpers-from-admin` was refused as naming
+  git more than once, so that branch was renamed before its first push.
+  Safe: keep the word out of the summary, as `/branch` step 3 says.
 - **`CLAUDE_PROJECT_DIR` is empty in the Bash tool.** Hooks get it, a
   session's own commands do not, so a fix that anchors a typed command to
   it cannot work. Safe: check `echo "$CLAUDE_PROJECT_DIR"` before proposing

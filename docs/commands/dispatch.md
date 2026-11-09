@@ -257,7 +257,11 @@ one.
 ## What an executor returns
 
 The executor writes `<group>.json` in its own worktree, and `result` copies
-it into the run and checks it as untrusted data: a missing, unparsable or
+it into the run and checks it as untrusted data. One written to the main
+checkout's run directory instead is read there, under the same checks: `run`
+removed any earlier copy before it started the executor, so what stands there
+is this launch's, and a hand-back's `reason` is not lost to a relaunch. A
+missing, unparsable or
 mis-shaped result is a crash, never a success (spec §6.3), unless GitHub shows
 the merge at the worktree's tip (*Waking*). A claimed merge is believed only
 once `verify` has read it from GitHub — merged, at that oid, from that branch,
@@ -318,9 +322,10 @@ executor returns*). A read that fails, or a predicate that does not hold,
 leaves the crash as it was, and so does a sync whose tip is not the head its
 proof bound (*The proof binds*). Run 20261108-071135 relaunched five groups of
 twenty-one: one had merged and written its result to the main checkout's run
-directory rather than its worktree's, which `result` does not read, and four
-had ended the turn on `/commit`'s report, before any merge, which only a
-relaunch can recover. A turn ended there ends a `claude -p` session, which is
+directory rather than its worktree's, which `result` did not read then and
+does now (*What an executor returns*), and four had ended the turn on
+`/commit`'s report, before any merge, which only a relaunch can recover. A turn
+ended there ends a `claude -p` session, which is
 why `/ship --dispatched` says a step's status is not a reply.
 
 A `Model` cell `launch` would refuse holds its group at `board` and `wake`,
@@ -402,6 +407,12 @@ branch for a launch that was never going to happen. `sync-drop`, before the
 report, offers `git-branch-drop.sh` every local branch named as a sync head:
 what merged goes, as does one whose pull request closed with origin's branch
 gone at this tip, which no merge can land and which a worktree does not hold.
+It first offers `git-sync-head-drop.sh` every branch on origin named as a sync
+head, since `harness_sync` deletes a superseded one and nothing deletes a merged
+one: the repository's delete-on-merge would, but that is the owner's setting.
+Each head costs GitHub reads and a push, so the first run over a backlog is
+slow, which is why step 3 gives it a ten-minute `timeout`; it is idempotent, and
+a run cut short leaves the rest for the next.
 
 **The proof binds.** The verify at step 0.3 and after each exit runs in the
 main checkout, because the executor runs that head's own copy of `sync_pr.py`,
