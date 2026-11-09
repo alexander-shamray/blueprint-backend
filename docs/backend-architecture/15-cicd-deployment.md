@@ -681,9 +681,10 @@ Helm command
 The job is path-filtered, so a dispatch of `ci.yml` builds and signs every image
 once.
 **Each image has a moving `main` tag.** A leg that signs an image also moves
-`$REGISTRY/<image>:main` to that digest, after the attestations, and a leg that
-built nothing leaves it alone, so the tag always names the newest signed build
-and the set of `:main` tags is a full, current set for a consumer
+`$REGISTRY/<image>:main` to that digest, after the attestations and only
+forward, and a leg that built nothing leaves it alone, so the tag names the
+newest signed build, but for a registry round trip's window, and the set of
+`:main` tags is a full, current set for a consumer
 ([ADR-134](adr/ADR-134-each-image-has-a-main-tag-that-names-its-newest-signed-build-and-compose-names-the-image-beside-its-build-1111-adding-to-adr-109.md)).
 **A verified digest is what a release will pull.** Every chart takes
 `image.digest` and `image.migratorDigest` and pins the reference to them when
