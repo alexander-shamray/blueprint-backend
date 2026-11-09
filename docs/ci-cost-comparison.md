@@ -275,12 +275,12 @@ a saving depends on what one unit of work is taken to be:
 | CI run, the whole bill | 81.0 minutes | 73.2 minutes | −9.6% |
 | PR opened | $2.00 | $1.59 | −20.1% |
 | Head commit on a PR | $0.67 | $0.55 | −18.1% |
-| Commit reaching `main` | $2.16 | $2.21 | +2.2% |
+| Push to `main` | $2.16 | $2.21 | +2.2% |
 | Run of any workflow | $0.072 | $0.052 | −28.6%, flattered by Main red's 622 near-free runs |
 
 **The change reaching `main` cost no less.** Each one took more CI: 3.4 CI runs
-on a pull request per commit reaching `main` in A, 4.0 in B, and 263 PRs opened
-for 190 commits landed against 303 for 280. Review loops and harness syncs
+on a pull request per push to `main` in A, 4.0 in B, and 263 PRs opened for 190
+pushes against 303 for 280. Review loops and harness syncs
 closed unmerged are the likely reason, which the run data cannot separate, so
 this document claims a saving per CI run and per PR, not per change delivered.
 
@@ -315,7 +315,7 @@ runs ended cancelled and spent 16% of the window's minutes doing so.
 ### Usage scenarios
 
 Per 30 days. Normal is Window B's rate; High is 1.5 times it, Window A's rate of
-commits reaching `main`; Low is a quarter of it, about B's quietest day,
+pushes to `main`; Low is a quarter of it, about B's quietest day,
 2026-11-04, kept up for a month. Low and High are assumptions scaled from B, not
 measurements. The days here and below are a one-off sum over the tool's job
 reads, which the tool does not print.
