@@ -5,8 +5,8 @@ windows either side of the cost changes, and what the difference says about
 the visibility and plan decision.**
 [`tools/ci-cost/`](../tools/ci-cost/README.md) produces every measured figure
 here but those a section names as one-off or by hand, and owns how each is
-computed; this file records what it reported, one dated section per window, and the
-comparison once both exist. Every figure is a record of its day, per the
+computed; this file records what it reported, one dated section per window, and
+the comparison once both exist. Every figure is a record of its day, per the
 contract's §2, and none is kept current.
 
 ## Method
