@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Delete a local branch once it has landed, by `/ship` step 0's predicate, or
-# is a superseded sync's: the only route, as raw `git branch` deletes stay
-# denied. Its guards, its compare-and-swap and its exit codes are
-# `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
+# is a superseded sync's; but for a failed fork's own, the only route, as raw
+# `git branch` deletes stay denied. Its guards, compare-and-swap and exit codes
+# are `docs/harness-boundaries.md`'s, *Grant inventory and push helpers*.
 set -euo pipefail
 
 [ "$#" -eq 1 ] || { echo "usage: git-branch-drop.sh <branch>" >&2; exit 2; }
