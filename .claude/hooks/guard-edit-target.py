@@ -4,6 +4,7 @@
 A link inside an allowed tree is a write no path deny sees, so a target not the file it spells is refused. An unentered
 worktree is judged by the target's denies, and the home's keys and control files by name (*The edit-target guard*)."""
 
+import functools
 import importlib.util
 import json
 import os
@@ -21,21 +22,6 @@ EDITING_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
 # carrying neither is refused rather than waved through — a write whose target
 # this file cannot see is one it has established nothing about.
 PATH_KEYS = ("file_path", "notebook_path")
-
-# Named rather than bounded by an allow-list, which would refuse sibling
-# checkouts and the task list. `CLAUDE.md` and `AGENTS.md` stay out of the
-# control set: they are the owner's rules, not a grant.
-HOME_TREES = frozenset({".ssh"})
-HOME_FILES = frozenset({
-    ".bash_login", ".bash_logout", ".bash_profile", ".bashrc", ".gitconfig",
-    ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
-})
-CONTROL_DIRECTORIES = frozenset({
-    "agents", "commands", "hooks", "plugins", "sandbox", "scripts", "skills",
-})
-CONTROL_FILES = frozenset({
-    ".credentials.json", "settings.json", "settings.local.json",
-})
 
 GIT_GUARD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "guard-git-argv.py")
@@ -264,6 +250,15 @@ def left_main_checkout(cwd, path):
     return owner
 
 
+@functools.lru_cache(maxsize=1)
+def git_guard():
+    """`guard-git-argv.py` as a module; it owns the denies and the home's names."""
+    spec = importlib.util.spec_from_file_location("guard_git_argv", GIT_GUARD)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def protected_in_worktree(path, root):
     """Which `Edit(...)` deny of this target holds `path` beneath `root`, or `None`.
 
@@ -275,10 +270,7 @@ def protected_in_worktree(path, root):
     except ValueError:
         return None
     try:
-        spec = importlib.util.spec_from_file_location("guard_git_argv", GIT_GUARD)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module.denied_path(relative)
+        return git_guard().denied_path(relative)
     except (OSError, ValueError, TypeError, AttributeError):
         return "this target's deny list, which cannot be read"
 
@@ -287,7 +279,7 @@ def home_offence(spelled, lexical, resolved):
     """The reason to refuse a target outside every checkout, or `None`.
 
     Spelling and resolution are both judged, so a link into `~/.ssh` is held.
-    Only `~/.claude`'s first component is control: below it is session state.
+    Only `~/.claude`'s first component is control. Unreadable names refuse.
     """
     home = os.path.abspath(os.path.expanduser("~"))
     traits = traits_of(home)
@@ -300,17 +292,22 @@ def home_offence(spelled, lexical, resolved):
             if not under(path, root, traits) or same(path, root, traits):
                 continue
             parts = os.path.relpath(path, root).replace("\\", "/").split("/")
-            if named(parts[0]) in HOME_TREES or (
-                    len(parts) == 1 and named(parts[0]) in HOME_FILES):
+            try:
+                place = git_guard().home_place([named(part) for part in parts])
+            except (OSError, ValueError, TypeError, AttributeError):
+                return (
+                    f"guard-edit-target: {spelled} is under the home directory, "
+                    "and the names that guard it cannot be read from "
+                    f"{GIT_GUARD} (docs/harness-boundaries.md)."
+                )
+            if place == "login":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
                     "which is outside every checkout and is a key, a shell "
                     "profile or git's own configuration: what runs at login, "
                     "under every session (docs/harness-boundaries.md)."
                 )
-            if named(parts[0]) == ".claude" and len(parts) > 1 and (
-                    named(parts[1]) in CONTROL_DIRECTORIES
-                    or (len(parts) == 2 and named(parts[1]) in CONTROL_FILES)):
+            if place == "control":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
                     f"inside the harness's own control surface: `{parts[1]}` "

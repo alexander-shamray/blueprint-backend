@@ -19,7 +19,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Destructive classes | One table of what the harness refuses, the layer that refuses each, and the test that holds the table to the deny list and the hooks. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
 | The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
-| Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers, the three lease-bound force-push helpers, the branch-drop helper and the sync-PR reader. |
+| Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers, the three lease-bound force-push helpers, the branch-drop and sync-head helpers and the sync-PR reader. |
 | Pull request reads and the locality verdict | Fixed-field PR helpers, the gh allow-list gate, #150, and pr-locality.sh's contract. |
 | Sweep push denies and chained commands | Push denies in the sweeps, and why a command /ship runs before it pushes never denies push. |
 | Output deny and shell-expansion residuals | The --output entry closed by the hook, expansion readings, locale quotes, process substitution, crashes and pipes. |
@@ -190,14 +190,14 @@ to require. **Measured in blueprint-admin** (its #291): on 2026-10-20, on
 Windows, in a turn whose `/ship` frontmatter was in force, a `Write` to each
 directory was refused with no prompt and one to `~/.claude/scratch/` succeeded,
 so the home-relative specifier binds the absolute path a tool is given. **The
-git guard does not back them (blueprint-harness#246):** `guard-git-argv.py`
-judges paths anchored at a checkout's root, so it admits a redirect, `rm`, `curl
--o` or `tar -x` writing under either directory, read at `99cc539` by running the
-guard over each. Whether the rule itself reaches such a command has not been
-measured in blueprint-harness; a path deny reaches a `Bash` command naming the
-path where it was (*A boundary an agent must keep across turns*), and a command
-that computes its path would not name it. Admit the shell as open until that is
-read.
+git guard backs them for a redirect and a writing verb, in every turn:**
+`guard-git-argv.py` refuses both under either directory, all but the removal of
+a named memory file (*The edit-target guard*). `curl -o`, `tar -x` and an
+interpreter are not on its list of verbs, so they stay open, the residual *Git
+argv guard hook* states. Whether a frontmatter deny reaches such a command has
+not been measured in blueprint-harness; a path deny reaches a `Bash` command
+naming the path where it was (*A boundary an agent must keep across turns*), and
+a command that computes its path would not name it.
 
 **The index skill's prefix grants are the same speed bump as `git *--output*`.**
 `Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)` matches the
@@ -773,6 +773,7 @@ about it:
 | `Bash(git worktree add:*)` | `-B`, which resets an existing branch rather than creating one |
 | `Bash(git checkout -b:*)` | the trailing flag — `git checkout -b <name> -f origin/main` discards tracked modifications |
 | `Bash(git branch:*)` | `git branch -fd <name>` — force and delete behind a spelling the `-d`/`-D`/`--delete` denies do not match |
+| `Bash(git branch --list:*)` | `--no-list`, abbreviated down to `--no-l`, which turns list mode off, so `git branch --list --no-list -D <name>` deletes and `-f`, `-m`, `-C` and `-u` work too. With list mode on each is git's usage error or a listing, and `--no-merged`, `--no-color` and `--no-column` are reads, so the deny is `Bash(git branch --list *--no-l*)` and the grant stays, `/branch` and `/ship` needing `git branch --list <name>` |
 | `Bash(git reset HEAD:*)` | `git reset HEAD --hard` — the `--hard` deny matches the other word order |
 | `Bash(git log:*)`, `Bash(git diff:*)`, `Bash(git show:*)` | `--output=<path>`, which is an arbitrary file write with `--format=` choosing the bytes. Reproduced: `git log -1 --format=%s --output=<scratch>` wrote the commit subject, silently |
 | `Bash(git fetch:*)`, `Bash(git pull --ff-only:*)` | a URL in the repository position, and `ext::<cmd>` is a git transport that **runs its argument as a command** |
@@ -1053,6 +1054,7 @@ row is therefore a spelling the deny list does not match.
 | Rename a branch, forced | `git branch -M feature other` | `deny` | `test_destructive_classes.py` |
 | Rename a branch, long option | `git branch --move feature other` | `deny` | `test_destructive_classes.py` |
 | Move a branch over another | `git branch --force feature HEAD~1` | `deny` | `test_destructive_classes.py` |
+| Turn list mode off behind the list grant | `git branch --list --no-list -D feature` | `deny` | `test_destructive_classes.py` |
 | Remove a worktree, discarding its work | `git worktree remove -f .claude/worktrees/x` | `deny` | `test_destructive_classes.py` |
 | Merge a pull request past its checks | `gh pr merge 7 --rebase --admin` | `deny` | `test_destructive_classes.py` |
 | Write a file through a read-only command | `git log --output=out.txt` | `deny` | `test_destructive_classes.py` |
@@ -1303,7 +1305,14 @@ in the first place.
 
 `Bash(git fetch origin:*)` **pins the remote**: a literal remote name occupies
 the repository position, so a URL never reaches it. That is the control the
-sentence describes, and it is real.
+sentence describes, and it is real. It says nothing about the refspec after
+the remote, whose destination writes a ref: `guard-git-argv.py`'s
+`refspec_offence` admits only `main:main`, a `refs/heads/<name>` of origin onto
+its own tracking ref and a tag onto itself, for a fetch and for a pull alike,
+and refuses `--refmap` on both and a fetch's `--stdin`. The tracking source is
+named in full because a short one takes origin's same-named tag first;
+`main:main` takes it too, as a fast-forward at most, and stays because `/ship`
+names it.
 
 `Bash(git pull --ff-only)` pins **nothing** — no remote name appears in it at
 all. What it does is drop the `:*`, so the grant is the documented
@@ -1405,8 +1414,9 @@ inventoried in a command file and not here is the same drift this paragraph
 warns about, running the other way.
 
 **A fifth was opened deliberately rather than found**: the force push, which
-three lease-bound helpers carry and nothing else does. Branch updates are
-rebases, so a branch's published commits are rewritten, and
+three lease-bound helpers carry and nothing else does to rewrite a branch;
+`git-sync-head-drop.sh` carries the flag only to lease a delete, below. Branch
+updates are rebases, so a branch's published commits are rewritten, and
 `.claude/settings.json` denies `git push --force` and `--force-with-lease`
 alike. **That deny is untouched**, for every raw spelling: the helpers relax
 the client's policy and the deny list does not move. What lets the client
@@ -1424,15 +1434,18 @@ out, which leaves a commit it never applied looking like one a resolution
 emptied), takes one branch name that has to equal the one checked out, refuses
 `main` by name before it reads the checkout at all, refuses a remote holding
 commits this checkout lacks, leases the push against the commit the same run
-read, and refuses (exit 7) an `origin` with more than one push URL, or whose
-one URL, after `pushurl`, `pushInsteadOf` and `insteadOf`, names another host
-or path than the URL the remote was added with. A protocol rewrite on one host
-passes, and a URL with no host and path to compare has no key and is refused:
-`file://`, `ext::`, a one-component hosted path, a dot or empty segment, a
-query or a fragment. **A rule could have bought none of that**: a permission
-pattern matches the text of a command, and every guard in that list is a fact
-about the checkout. Which is the general form — where the safety is a property
-of the state rather than of the words, the grant has to be a helper.
+read, and refuses (exit 7) an `origin` with more than one push URL or more
+than one `url`, or whose push or fetch URL, after `pushurl`, `pushInsteadOf`
+and `insteadOf`, names another host, port or path than the URL the remote was
+added with. A rewrite between https and ssh at their default ports on one host
+passes. A URL on any other scheme, `git://`, `http://`, `file://` or `ext::`
+among them, has no key and is refused, and so has one with no host and path to
+compare: a one-component hosted path, a dot or empty segment, a query or a
+fragment. That refusal is `git-push-url.sh`'s, which all three force helpers
+source, each at its own exit code. **A rule could have bought none of that**: a
+permission pattern matches the text of a command, and every guard in that list
+is a fact about the checkout. Which is the general form — where the safety is a
+property of the state rather than of the words, the grant has to be a helper.
 
 **A second helper rewrites published commits, and is a second force push.**
 `git-trailer-pr.sh` adds `PR: #<n>` to the commits of the branch checked out,
@@ -1442,7 +1455,10 @@ It takes one number and spells the `git rebase -x` command itself, so no
 folded as the rebase helper folds it, a pull request that is not an open,
 same-repository one into `main` for this branch, a dirty tree, a remote that
 differs from the checkout in either direction, a merge commit, and a commit
-that already names another pull request. A rewrite failing on `index.lock`, as
+that already names another pull request. It refuses the rebase helper's
+redirected or two-URL `origin` at exit 8, before anything is rewritten: its 7
+is a push that failed after the rewrite, whose answer is a rerun, and a rerun
+cannot answer a redirect. A rewrite failing on `index.lock`, as
 one does when a concurrent git reader holds the index, is aborted and tried
 once more; any other failure stops. Its residual is a push that fails
 after the rewrite: the local branch then carries the trailers and origin's
@@ -1455,8 +1471,9 @@ or reworded for a reason neither helper above covers had no route but the
 deny. `git-push-force.sh` publishes the branch checked out and takes no
 argument, so no name a caller passes can point it at another. It refuses
 `main` in any spelling, folded as the rebase helper folds it; a detached
-`HEAD`; and a branch origin lacks, asked of origin itself rather than of a
-tracking ref a deleted branch leaves behind. It fetches the branch fresh and
+`HEAD`; a redirected or two-URL `origin`, as the rebase helper does; and a
+branch origin lacks, asked of origin itself rather than of a tracking ref a
+deleted branch leaves behind. It fetches the branch fresh and
 leases the push against the tip it fetched, so a push landing in between is
 git's to refuse. And it refuses a remote tip the branch's own reflog does not
 hold, because a lease is not consent: once another session's commits have been
@@ -1471,7 +1488,8 @@ Its exit codes are the rebase helper's, those it can reach: 0 published, or
 nothing to force because origin already holds `HEAD`; 2 usage, an argument
 given; 3 the branch is `main`, however it is spelled; 4 a detached `HEAD`; 6
 origin has no such branch, so push it normally; 7 origin carries commits this
-checkout never held; 12 origin could not be asked where the branch is, or
+checkout never held, or would take the force at a second URL or a redirected
+one; 12 origin could not be asked where the branch is, or
 fetched from. A push origin refuses, a lease that no longer holds among them,
 exits with git's own status, as the rebase helper's does.
 
@@ -1513,6 +1531,30 @@ that name, so nothing to drop; 7 it has not landed, with no `MERGED` row into
 `main` at its tip, or the tip moved after it was checked; 12 its pull requests
 or its worktrees could not be read, so whether it landed or is in use is
 unknown.
+
+**A merged sync's branch goes from origin through a helper no setting grants.**
+`git push --delete` stays denied, and `dispatch_board.py sync-drop`, which
+`/dispatch` alone grants, is what runs `git-sync-head-drop.sh <branch>`. No
+setting auto-approves the helper, and none denies it, so that is no control: a
+session that names a head to it is bounded by the helper's own checks, which
+leave it nothing to delete but a merged sync's branch. It takes a sync head and
+no other name, in the one pattern `harness_sync` opens them under, reads
+origin's tip by the whole ref name, and deletes only when `pr-for-branch.sh`
+lists no `OPEN` row and a `MERGED` row into `main` whose head is that tip. The
+delete is leased to that tip, so a push made during the read is git's to refuse.
+The tip and the delete must reach one repository: `remote.origin.url` as added,
+the URL `get-url` fetches from and the one `get-url --push` pushes to have to be
+the same string,
+so a `pushurl`, a second URL or any `insteadOf` keeps the branch, the harmless
+protocol rewrite included. That costs a line in the morning report and the
+branch stays. Its residual is a sync head no `MERGED` row holds at its tip,
+which stays on origin for a human.
+
+Its exit codes: 0 deleted; 2 usage, or a name that is not a sync head; 6 origin
+has no such branch; 7 no merge into `main` at origin's tip, an open row, or a
+rewritten origin; 12 origin's URLs, origin or the pull requests could not be
+read. A push origin refuses, a lease that no longer holds among them, exits with
+git's own status.
 
 **A reader of pull requests is granted by its whole command line.** `Bash(py
 -3.12 .claude/scripts/sync_pr.py:*)` admits `list`, `verify <n>`, `review-diff
@@ -2097,6 +2139,25 @@ list, a false refusal under *The guards' threat model*. `~/.claude/CLAUDE.md`
 stays writable because it is the owner's rules rather than a grant, and a
 change to `~/.claude/settings.json` is the owner's to run from a script.
 
+**The git guard refuses the same names for a shell write**, and reads them from
+one list, `HOME_TREES` and its neighbours in `guard-git-argv.py`, which the edit
+guard loads; if it cannot load them it refuses a target under the home
+directory. A redirect and a writing verb's operand are judged by spelling and by
+resolution, with `HOME` and the process's own home both read as the root, and a
+checkout the session stands in is left to its denies. The shell also may not
+write `~/.claude/projects/` or `~/.claude/output-styles/`, which the edit guard
+admits: a `Write` there meets a command's deny in the turn that holds one, and a
+shell write meets none.
+
+**A replay narrowed it.** 79,469 commands of these repositories' sessions since
+2026-10-01 gave 34 new refusals, none under the login or control names. 30 wrote
+a memory or an output style with a redirect or `sed -i`, most appending a line
+to `MEMORY.md`; the refusal names the editing tool, which does the same. 3 were
+`rm` of a stale memory, which no editing tool can do and which plants nothing,
+so `rm` and `unlink` of a file named below a project's `memory/` are admitted. A
+`mv` stays refused, as the 1 typed was, since the same verb plants a file, and
+so does a glob there, or a removal of the directory or anything wider.
+
 ## Edit guard path resolution
 
 **Two properties of the resolution are load-bearing and were each found by
@@ -2312,7 +2373,8 @@ a worktree the next sweep's start can drop.
 `sweep-slices.sh` writes its slice lists to the worktree's path plus
 `.slices`, a name it derives from the same checked shape rather than takes,
 and `git-worktree-drop.sh` removes that directory once git has removed the
-worktree, a half-finished removal included: where git unregistered the worktree
+worktree, under `core.longpaths` as `git-worktree-remove.sh` does, a
+half-finished removal included: where git unregistered the worktree
 and failed to delete its tree, an empty directory goes and any other is named,
 exit 4, for the owner to remove, since no later sweep's start can see it.
 `sweep-mark.sh` moves `refs/sweeps/bug` or `refs/sweeps/security`
@@ -2320,7 +2382,10 @@ to a commit, and only to an existing one by its full SHA. The ref is local
 and a missing one means a full sweep, so the write can make a later sweep
 read less only by pointing at a commit that really was swept clean; a
 poisoned tree cannot reach it, because the parent runs it once, on a clean
-end, with `$pinned`.
+end, with `$pinned`, and `guard-git-argv.py` refuses the granted fetch's
+refspec that would write it without the helper. That is a guard's reach and no
+more: a `git update-ref` no grant holds still writes the ref, and *The guards'
+threat model* says what bounds it.
 
 ## The sed line-ending guard
 

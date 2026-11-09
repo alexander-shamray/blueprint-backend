@@ -1118,11 +1118,12 @@ def absorb(root, run, gid, run_refused=None):
     worktree = _field(entry, gid, "worktree", _path_text)
     source = Path(root) / worktree / "artifacts" / "dispatch" / run / f"{gid}.json"
     copy = directory / f"{gid}.json"
+    # With none in the worktree, a copy already here is this launch's: an executor wrote it to the main checkout's run
+    # directory, as H22 of run 20261108-071135 did, since the launch removed any earlier one before starting it and an
+    # unread record is proof that removal ran.
     try:
         if source.is_file():
             shutil.copyfile(source, copy)
-        else:
-            copy.unlink(missing_ok=True)
     except OSError as error:
         raise Refusal(f"could not copy {source}: {error}") from None
     issues = _field(entry, gid, "issues", _numbers_list)
@@ -1236,18 +1237,39 @@ def _worktree_kept(root, entry):
     return _path_text(worktree) and (Path(root) / worktree).is_dir()
 
 
-def sync_drop(root):
-    """One line for each local sync head offered to git-branch-drop.sh, which alone decides whether it goes."""
-    lines = []
-    for ref in git(root, "for-each-ref", "--format=%(refname)", "refs/heads/chore/harness-sync-*").splitlines():
+def _offer_sync_heads(root, drop, refs):
+    """One line for each sync head among `refs` offered to the `drop` helper, which alone decides whether it goes."""
+    for ref in refs:
         branch = ref.removeprefix("refs/heads/")
         if not SYNC_HEAD.fullmatch(branch):
             continue
         try:
-            lines.append(one_line(helper(root, "git-branch-drop.sh", branch)))
+            yield one_line(helper(root, drop, branch))
         except Refusal as kept:
-            lines.append(f"kept {branch}: {kept}")
-    return lines or ["no sync branch"]
+            yield f"kept {branch}: {kept}"
+
+
+def sync_drop(root):
+    """Origin's merged sync heads, then the local ones: an origin that cannot be read is a line, not the end of both.
+
+    Each line comes as its head is done, so a run the dispatcher's timeout cuts short still says what it deleted.
+    """
+    said = False
+    try:
+        listed = git(root, "ls-remote", "--heads", "origin", "refs/heads/chore/harness-sync-*")
+    except Refusal as unread:
+        listed = ""
+        said = True
+        yield f"origin's sync heads were not read: {one_line(str(unread), 200)}"
+    for line in _offer_sync_heads(root, "git-sync-head-drop.sh", [row.split()[-1] for row in listed.splitlines()]):
+        said = True
+        yield line
+    local = git(root, "for-each-ref", "--format=%(refname)", "refs/heads/chore/harness-sync-*")
+    for line in _offer_sync_heads(root, "git-branch-drop.sh", local.splitlines()):
+        said = True
+        yield line
+    if not said:
+        yield "no sync branch"
 
 
 def sync_close(root, run, gid):
@@ -1761,7 +1783,8 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
     elif args.command == "sync-ready":
         sync_ready(root, args.run, args.pr)
     elif args.command == "sync-drop":
-        print("\n".join(sync_drop(root)))
+        for line in sync_drop(root):
+            print(line, flush=True)
     elif args.command == "sync-close":
         sync_close(root, args.run, args.group)
     elif args.command == "run":

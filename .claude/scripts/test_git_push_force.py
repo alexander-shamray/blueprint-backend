@@ -194,6 +194,57 @@ class TheHelperRefusesBeforeItPushes(Fixture):
         self.assertEqual(12, result.returncode, result.stderr)
         self.assertIn("cannot ask origin", result.stderr)
 
+    def test_a_configured_push_redirect_is_refused_before_anything_is_forced(self):
+        # The refspec pins the ref and not the URL, and the lease stops a redirected force only where the other
+        # repository's branch is not at the leased commit, so the run refuses it first.
+        self.amend()
+        before = self.remote()
+        for key, value in (("remote.origin.pushurl", '"https://example.invalid/x.git"'),
+                           ("url.https://example.invalid/evil.git.pushinsteadof",
+                            '"$(git config --get remote.origin.url)"')):
+            with self.subTest(key=key):
+                self.at(f'git config --local "{key}" {value}')
+                result = self.helper()
+                self.assertEqual(7, result.returncode, result.stderr)
+                self.assertIn("a redirected force is not published", result.stderr)
+                self.assertEqual(before, self.remote(), "the branch was forced")
+                self.at(f'git config --local --unset-all "{key}"')
+
+    def test_a_remote_with_two_urls_is_refused_before_anything_is_forced(self):
+        # A remote with several `url` values pushes to each, and the second repository's tip was never read.
+        self.amend()
+        before = self.remote()
+        self.at('git config --local --add remote.origin.url "$(git config --get remote.origin.url)-second"')
+        result = self.helper()
+        self.assertEqual(7, result.returncode, result.stderr)
+        self.assertIn("origin has 2 push URLs", result.stderr)
+        self.assertEqual(before, self.remote(), "the branch was forced")
+
+    def test_a_second_url_behind_a_single_push_url_is_refused(self):
+        # `pushurl` names the second `url`, so one push URL matches the last `url` while the fetch and the lease read
+        # the first: the force would go to a repository its lease was never read from.
+        self.amend()
+        before = self.remote()
+        self.at('git config --local --add remote.origin.url "$(git config --get remote.origin.url)-second"')
+        self.at('git config --local remote.origin.pushurl "$(git config --get remote.origin.url)"')
+        result = self.helper()
+        self.assertEqual(7, result.returncode, result.stderr)
+        self.assertIn("origin has more than one url", result.stderr)
+        self.assertEqual(before, self.remote(), "the branch was forced")
+
+    def test_a_fetch_url_parted_from_the_push_url_is_refused(self):
+        # `insteadOf` moves the fetch to a copy and `pushInsteadOf` puts the push back, so the push URL is the one the
+        # remote was added with while the lease and the reflog check read another repository's tip.
+        self.amend()
+        before = self.remote()
+        self.at('git clone -q --bare "$R/remote.git" "$R/copy.git"')
+        self.at('git config --local "url.$R/copy.git.insteadof" "$(git config --get remote.origin.url)"')
+        self.at('u="$(git config --get remote.origin.url)"; git config --local "url.$u.pushinsteadof" "$u"')
+        result = self.helper()
+        self.assertEqual(7, result.returncode, result.stderr)
+        self.assertIn("origin fetches from", result.stderr)
+        self.assertEqual(before, self.remote(), "the branch was forced on a lease read elsewhere")
+
     def test_remote_commits_this_checkout_never_held_are_refused(self):
         # The lease alone passes this: the other session's commit has been
         # fetched, so the tracking ref names it and git would push over it.
@@ -245,6 +296,14 @@ class TheHelperPublishesTheBranchInHand(Fixture):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("published feat/x", result.stdout)
         self.assertNotEqual(before, self.head())
+        self.assertEqual(self.head(), self.remote())
+
+    def test_a_push_url_spelling_the_same_repository_differently_is_published(self):
+        # The control for the redirect's refusal: the comparison is of the repository named, not of two strings.
+        self.amend()
+        self.at('git config --local remote.origin.pushurl "$(git config --get remote.origin.url)/"')
+        result = self.helper()
+        self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(self.head(), self.remote())
 
     def test_a_tip_this_branch_held_earlier_is_published_over(self):
