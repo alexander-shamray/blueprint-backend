@@ -237,7 +237,7 @@ requests: the shard runner, the red-`main` helper, then the settings replay.
   if it names how a red `main` is seen, `.github/workflows/ci.yml` (the
   harness's own `payload-suites` ubuntu leg runs through the runner),
   `IMPORT.md`
-- Create (harness root): `.github/workflows/main-red.yml`
+- Create (harness root): a `main-red` job in `.github/workflows/ci.yml`
 - Modify (frontend, by an owner script): `.github/workflows/ci.yml`, the
   `main-red` job's title
 
@@ -269,7 +269,7 @@ requests: the shard runner, the red-`main` helper, then the settings replay.
   - `test_ship_runs_the_helper_bare`, admin's grant case from
     `test_harness_helpers.py:10498-10501`.
   The harness, the fourth target (spec §5.1), files no red-`main` issue at
-  all, so the same pull request gives it `.github/workflows/main-red.yml` in
+  all, so the same pull request gives it a `main-red` job in its `ci.yml`, in
   backend's shape, titled `main is red: ci`. Confirm each of the four targets'
   workflows writes a title the rule matches, and record the four in the PR
   body.
