@@ -15,7 +15,8 @@ It reads the Actions REST API through `gh api`, so it works against a public
 or a private repository with whatever token `gh` holds, and prints one
 column per window: runs per trigger, jobs, billed minutes per runner OS, the
 list price, PRs opened, commits pushed and label events, and each workflow's
-share in a second table. Days are whole UTC days, both ends inclusive.
+share in a second table, then `MAIN_WORKFLOW`'s jobs and each window's days.
+Days are whole UTC days, both ends inclusive.
 
 | | |
 |---|---|
@@ -24,8 +25,10 @@ share in a second table. Days are whole UTC days, both ends inclusive.
 | List price | `RATES` in the script, read from GitHub's runner pricing page on the date `RATES_READ` names; a public repository pays none of it on standard runners |
 | Linux-equivalent minutes | the list price divided by the Linux rate: how much of a plan's included minutes the usage spends, since the allowance is valued at that rate |
 | Per 30 days | the window's figure scaled from its own length |
-| `MAIN_WORKFLOW` | the workflow also broken down by job, by run conclusion and by `pull_request` runs per head commit, which is what tells the changes to it apart; matrix legs of one job are summed |
-| GHCR | container versions per package, read only for a window ending yesterday or later, since the API keeps no history of a level; the REST API reports no size, which only the billing usage report holds |
+| `MAIN_WORKFLOW` | the workflow also broken down by job, by run conclusion and by `pull_request` runs per head commit, which is what tells the changes to it apart; matrix legs of one job are summed, and a job's runs are those it billed a minute in, each counted once however many legs or attempts |
+| A window's days | Linux minutes and Linux-equivalent minutes, each job on the UTC day it started |
+| GHCR | container versions per package, and the bytes of every blob their manifests name, each counted once however many images share it, read through the registry API anonymously or with `GH_TOKEN`; a manifest it could not read makes the figure a floor, and says so. Read only for a window ending yesterday or later, since the API keeps no history of a level |
+| Actions storage | live artefacts and active caches, on the same condition |
 
 Three limits to know before reading a figure. **The runs endpoint answers at
 most 1,000 results to one query**, so the script halves a span until each query
@@ -37,9 +40,10 @@ minute for a secondary limit, and is retried; a dropped connection or a 5xx is
 retried three times before it counts as refused, and a full page still
 answering 5xx is read again in smaller pages. **A row arriving between two pages
 moves the rest down and repeats one**, so a listing drops a repeated id. A PRs,
-label-events or packages read the token is refused — the packages listing without `read:packages`,
-typically — is printed under the table rather than failing the run; a refused
-runs or jobs read ends it, because no figure stands without them.
+label-events, packages or storage read the token is refused — the packages
+listing without `read:packages`, typically — is printed under the table rather
+than failing the run; a refused runs or jobs read ends it, because no figure
+stands without them.
 
 Stdlib only, and the suite answers from a fake API:
 
