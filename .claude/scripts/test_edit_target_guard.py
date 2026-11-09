@@ -804,6 +804,13 @@ class AWorktreeTheSessionHasNotEntered(GuardCase):
         self.assertAdmitted(os.path.join(sibling, "docs", "note.md"),
                             cwd=here, project=here)
 
+    def test_a_sibling_refusal_does_not_say_no_rule_applies(self):
+        # A rule of one component reaches a worktree nested under the session's root (measured on 2.1.319), so the
+        # refusal claims only what holds: a rule anchored at the session's root misses the sibling.
+        reason = self.assertRefused(os.path.join(self.linked("sibling"), ".claude", "settings.json"))
+        self.assertIn("a rule anchored at the session's root does not reach", reason)
+        self.assertNotIn("none of its permission rules", reason)
+
     def test_the_main_checkout_is_judged_from_inside_a_worktree(self):
         # Its `.git` is a directory, so no gitdir names it; it is the common
         # git dir of the worktree the session stands in.

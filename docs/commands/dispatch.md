@@ -111,7 +111,8 @@ same list: a close comment is a comment on an issue, which the spec's
 `--dry-run` is the builder's flag the spec's §3 allows: it runs step 0's
 checks and `board`, says what the rebuild would change and what would
 launch, and writes nothing to the list or GitHub, so the owner can see a
-night before starting one.
+night before starting one. It does not read a red `main`, so what it names is
+what a green one would launch (*A red main*).
 
 ## The interview
 
@@ -366,6 +367,60 @@ that ran: a hand-back, the cautious side. Recording either writes
 `state.json` in the same directory, so a directory refusing every write
 still holds the slot; what this separates is a marker that only another
 process holds.
+
+## A red main
+
+An open `main is red` issue stops every dispatched executor at `/ship` step 6,
+whatever its own checks read, and a run's leading tag is not the argument that
+exempts the run answering it (`docs/commands/ship.md`, *Step 6: the gates*). A
+group launched beside one spends its session and goes back. On
+blueprint-backend's run 20261109-093606 a group stopped there after 15 million
+tokens and about $10.53, every check on its pull request green, and `wake` then
+named the next group to the same stop, which the dispatcher held by hand.
+
+So `wake` reads `main-red-open.sh` once it has a group to launch, and prints
+each open issue and `launch: none` in place of the launch. It reads nothing
+where no launch is at stake, so a drained night stays `end: drained` and a
+failed read cannot cost it that ending. A read that cannot say `main` is green
+is a refusal, which launches nothing, as a failed read of the open issues is.
+A held launch records no release, since *Decided without the owner* names what
+the flag released from the one read that launched it. `sync-ready` and
+`sync-launch` read it too: a sync's executor takes the same stop after its
+round, so its refusal waits for a later exit, as one naming a running group
+does.
+
+It holds and does not end the night. A running executor is left to its own step
+6, and each exit reads again, so a `main` turned green launches what was held.
+With nothing left to wake the session the night is over (*When the night
+ends*), and the report names each issue under *Needs a human*, because a backlog
+left unstarted would otherwise read as nothing being ready.
+
+**The answers are the owner's.** `docs/harness/working-rules.md`, *CI*, says a
+rerun comes first and an issue closes on its green run. The dispatcher does none
+of it: it holds no grant for `gh run rerun`, raw `gh issue close` is denied, and
+nothing the night does widens a grant (*Grants*), while a revert is a landing
+and which of a red `main`'s answers lands first is the owner's. So the owner
+reruns the failed jobs with `gh run rerun <run id> --failed`, comments on the
+flaky tests tracker and closes the issue on a green run, or reverts, and the
+next `wake` launches. Giving the dispatcher the rerun was the other answer, and
+it would save a night a flake holds; it is rejected because it needs a new write
+grant on a session nobody is watching.
+
+`launch` reads it too, so resume's `moved, never launched` cannot start a group
+an earlier `wake` named before `main` turned red: it refuses, and the
+dispatcher puts the group `tasks back` as for any refused launch, so its rows
+return marked `OWNER`, no later `wake` launches it, and its worktree stays for
+the owner. That group is not held for a green `main`; the alternative, leaving
+it moved so the next resume offers it again, is rejected because no `wake` line
+would launch it in the meantime. It reads after the group's own checks and
+before anything is written.
+
+Three residues are accepted. A relaunch reads nothing, since its group already
+holds its worktree and its session's work, and a hold would leave a running
+group that no `wake` line relaunches. `--dry-run` reads nothing either, since
+the dispatcher holds no grant on the helper and a read through
+`dispatch_board.py` would only preview what the night may hold. And the signal
+lags as step 6's does: the issue opens only once the push run has finished.
 
 ## Issue text stays off the command line
 
