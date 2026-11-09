@@ -159,7 +159,9 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   closes on that green run. That open issue, titled `main is red` or
   `main is red: <workflow>` and labelled `bug`, is the signal: `/ship` step 6
   reads it with `main-red-open.sh` and stops as on a red check, but for a run
-  started as `/ship #<n>` to answer it.
+  started as `/ship #<n>` to answer it. While it is open `/dispatch`'s `wake`
+  names no group and its sync launches refuse, and on a night the rerun and the
+  close are the owner's (`docs/commands/dispatch.md`, *A red main*).
 - **A check red on a pull request that touched none of it belongs to
   `main`**, whether or not `main` ran red: a fix can land before `main` runs
   again, and `closure-gate`, `comment-gate`, `commit-gate` and

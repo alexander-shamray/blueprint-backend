@@ -1309,8 +1309,10 @@ in that session's tree, fast-forwarding its branch under it if its upstream
 moved, and an ancestry check against `HEAD` would ask about that session's
 branch, so its answer would say nothing about `main`. So line 4 reads the
 branch first: on `main` line 5 pulls, and on any other branch it refreshes
-`main` with `git fetch origin main:main` and touches nothing of that branch,
-and line 6 asks `main`, not `HEAD`, on both paths.
+`main` with `git fetch origin refs/heads/main:main` and touches nothing of that
+branch, and line 6 asks `main`, not `HEAD`, on both paths. The source is named
+in full because a short one takes a tag named `main` on origin ahead of the
+branch, which would hand local `main` a commit no branch reviewed.
 
 **The in-place path is the mirror image.** There is no worktree to leave and
 none to remove, and the session *is* sitting on the merged branch in the
@@ -1495,8 +1497,8 @@ directory the session is standing in, which Windows holds open, so it exits
 4 naming it. Lines 3 to
 6 go with them: the main checkout holds `main` for the whole night, so the
 switch to `main` is refused, and from a linked worktree
-`git fetch origin main:main` is refused too, git declining to move a branch
-another worktree has checked out; local `main` is then not pulled, so the
+`git fetch origin refs/heads/main:main` is refused too, git declining to move a
+branch another worktree has checked out; local `main` is then not pulled, so the
 containment read has nothing true to ask. A refused line would end a merged
 run on a stop. So only lines 1 and 8 run: step 6 verifies the merge from
 the remote and prunes, which is safe from anywhere; the dispatcher

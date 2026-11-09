@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Is `main` red? Prints each open `main is red` issue and exits 3, prints nothing and exits 0, or exits 2 when it
 # cannot say. `/ship` step 6 reads it because a pull request's own checks never rerun when `main` moves
-# (docs/commands/ship.md, *Step 6: the gates*). It takes no argument and fixes its fields, so the grant reaches no
-# issue body.
+# (docs/commands/ship.md, *Step 6: the gates*), and `/dispatch` before spending an executor on that stop
+# (docs/commands/dispatch.md, *A red main*). No argument and fixed fields, so the grant reaches no issue body.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 
