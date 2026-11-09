@@ -25,9 +25,9 @@ permissions:
   # nothing and posts nothing.
   pull-requests: read
 
-# No concurrency group, for locality-gate.yml's reason: each run reads the
-# pull request as it is when it runs, and a run cancelled on the head stays
-# there as a failed required check that blocks the merge.
+# No concurrency group: each run reads the pull request as it is when it runs,
+# and a run cancelled on the head stays there as a failed required check that
+# blocks the merge.
 
 # Proposal and enforcement are two executions, and that split is the design of
 # this job. A bare checkout on `pull_request` gives the merge ref, so the gate
@@ -100,9 +100,8 @@ jobs:
           fi
           echo "enforcing with the gate as of $BASE_SHA"
 
-      # One `gh` call, and it is the only network in the check. The deciding
-      # takes JSON on stdin and is pure — deploy/canary/canary.py's split, for
-      # its reason: what is tested is the judgement, not the fetch.
+      # One `gh` call, the only network in the check. The deciding takes JSON on
+      # stdin and is pure: the suite tests the judgement, not the fetch.
       # `closingIssuesReferences` is GitHub's own parse of the body, which is
       # what makes this a comparison rather than a second implementation of a
       # linker nobody here has the spec for.

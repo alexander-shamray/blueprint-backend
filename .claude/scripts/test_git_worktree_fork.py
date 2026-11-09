@@ -12,6 +12,7 @@ from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
+    code_lines,
     setUpModule,
     temp_root,
     run_bash,
@@ -276,7 +277,15 @@ RESTORE_BLOB = """
 git -C "$root/origin" cat-file blob HEAD:payload.txt | git -C "$root/checkout" hash-object -w --stdin
 """
 
-WORKTREE_ADD = '[ "$1" = worktree ] && [ "$2" = add ]'
+WORKTREE_ADD = '[ "$1" = -c ] && [ "$3" = worktree ] && [ "$4" = add ]'
+
+
+class TheAddAsksForLongPaths(unittest.TestCase):
+    def test_the_add_spells_core_longpaths_in_a_code_line(self):
+        # Only a Windows run can fail on a path past 260 characters, so the spelling is held on every platform,
+        # against code lines a comment cannot satisfy.
+        self.assertIn("git -c core.longpaths=true worktree add",
+                      "\n".join(code_lines(FORK.read_text(encoding="utf-8"))))
 
 
 class FailedFork(unittest.TestCase):

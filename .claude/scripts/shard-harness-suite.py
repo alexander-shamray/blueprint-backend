@@ -6,6 +6,7 @@
 
 import contextlib
 import getpass
+import importlib
 import os
 import shutil
 import subprocess
@@ -27,24 +28,74 @@ ROOT = HERE.parents[2]
 # target's to run beside this, and `test_harness_shards.py` holds the list to it.
 ROOTS = ((".claude/scripts", "test_*.py"),)
 
+# The module a target keeps beside these suites, listed under `local`, to pin classes only it has: `SERIAL_CLASSES`, a
+# collection of class names, and `TOGETHER_CLASSES`, a dict of class name to group. It is `local_commands`, which the
+# payload's command suites read for the target's own commands, and a target with none pins nothing of its own.
+LOCAL_PINS = "local_commands"
+
+
+def local_pins(name=LOCAL_PINS):
+    """The target's own `(serial, together)` pins, refusing a shape that would read as something other than it says.
+
+    Absent the module, or either name in it, that pin is empty. A module whose own import fails is raised, since a
+    pin that silently stopped applying reads exactly like one that is working.
+    """
+    scripts = str(HERE.parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    try:
+        module = importlib.import_module(name)
+    except ModuleNotFoundError as error:
+        if error.name != name:
+            raise
+        return frozenset(), {}
+    serial = getattr(module, "SERIAL_CLASSES", ())
+    together = getattr(module, "TOGETHER_CLASSES", {})
+    if isinstance(serial, (str, bytes)) or not all(isinstance(n, str) for n in serial):
+        raise TypeError(f"SERIAL_CLASSES must be a collection of class names, not {serial!r}")
+    if not isinstance(together, dict) or not all(
+            isinstance(n, str) and isinstance(g, str) for n, g in together.items()):
+        raise TypeError(f"TOGETHER_CLASSES must map class names to group names, not {together!r}")
+    return frozenset(serial), dict(together)
+
+
+def pinned(serial, together, local):
+    """The runner's tables with a target's `local` pins added.
+
+    A class pinned both ways, or already pinned by the payload, is refused.
+    """
+    local_serial, local_together = local
+    regrouped = sorted((local_serial & serial) | (set(local_together) & set(together)))
+    if regrouped:
+        raise ValueError(f"{regrouped} already pinned by the payload; a target pins only a class of its own")
+    serial, together = serial | local_serial, {**together, **local_together}
+    both = sorted(serial & set(together))
+    if both:
+        raise ValueError(f"{both} pinned both serial and together; a serial class is in no unit to share")
+    return serial, together
+
+
 # Whose subject is elapsed time, and so cannot share a box with seven workers.
 # The wrapper's bound is the thing `HintBound` measures, its subclass runs the
 # same cases under the watchdog, and the third asserts a stalled `gh` read ends
 # inside twenty seconds, which it missed at thirty-two beside seven workers.
-SERIAL = frozenset({
+_SERIAL = frozenset({
     "test_hint_bound.HintBound",
     "test_hint_bound.HintBoundUnderTheWatchdog",
-    "test_pr_helpers.NoCommandReadsAPullRequestFeedUnfiltered",
+    "test_pr_helpers.AStalledGhReadEndsAtTheBound",
 })
 
 # Who shares state outside their own fixture, and therefore shares a unit. Each makes a detached sweep worktree of
 # this checkout in the shared temp root's `secsweep-*` namespace, and the first lists that namespace. Classes using
 # a repository and a temp root of their own, as `test_sweep_slices.ASmallRepository` does, run wherever dealt.
-TOGETHER = {
+_TOGETHER = {
     "test_git_worktree_detach.SweepWorktreeShape": "the checkout",
     "test_sweep_slices.TheCheckout": "the checkout",
     "test_sweep_slices.TheCheckoutReadsEachFileOnce": "the checkout",
 }
+
+# What the plan reads: the two tables above and the target's own, whose names `test_harness_shards.py` resolves.
+SERIAL, TOGETHER = pinned(_SERIAL, _TOGETHER, local_pins())
 
 # Seconds a class took in one queued run of the whole suite on one Windows host, timed whole beside seven workers.
 # They only order the queue, longest first, and a class dealt late still runs. Refresh the table whole from the
