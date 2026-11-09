@@ -1523,10 +1523,12 @@ jobs:
               Run $RUN_URL, image ${leg#image-retry-}, ref $REF_NAME; retried: $(paste -sd, "$f")."
           done
 
-  # ADR-149's two packages. Packed on every run once the test stages pass, so a
-  # project that cannot pack fails its own pull request. The pack runs the
-  # branch's MSBuild files, so this job holds no grant (ADR-197).
+  # ADR-149's two packages. Packed on every run a stage reads, once the test
+  # stages pass, so a project that cannot pack fails its own pull request
+  # (ADR-198). The pack runs the branch's MSBuild files, so this job holds no
+  # grant (ADR-197).
   packages:
+    if: needs.changes.outputs.code != 'false'
     needs: [changes, stage-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
