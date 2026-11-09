@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 """Which commits of a pull request the `commits` job builds; the README beside it owns why.
 
-    python .github/pipeline-gate/commit_builds.py <base-sha> <head-sha>
-
-One line per commit but the head, oldest first: `build <sha> <why>` or
-`skip <sha> <why>`. Anything it cannot read as a single-parent commit that
-changed only paths no stage reads is a build, and a failed git read is a non-zero
-exit, so nothing it does not understand becomes a skip.
+Prints `build <sha> <why>` or `skip <sha> <why>`, oldest first, for all but the head.
 """
 
 from __future__ import annotations
