@@ -14,6 +14,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from review_helpers import (
     SCRIPTS,
@@ -3578,6 +3579,86 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertAdmitted(command)
 
+    def test_a_refspec_writes_no_ref_a_plain_fetch_would_not(self):
+        # `sweep-slices.sh` narrows a sweep by `refs/sweeps/<kind>`, and `/ship`
+        # reads the review bar from `origin/main`: each spelling here asks for a
+        # ref, or a value of one, that a plain fetch would not write.
+        for command in (
+            "git fetch origin +main:refs/sweeps/security",
+            "git fetch origin main:refs/sweeps/security",
+            "git fetch -q --depth 1 origin main:refs/sweeps/bug",
+            "git -C sub fetch origin +main:refs/sweeps/security",
+            "git fetch origin main main:refs/sweeps/bug",
+            "git fetch origin +refs/heads/other:refs/remotes/origin/main",
+            "git fetch origin refs/heads/other:refs/remotes/origin/main",
+            "git fetch origin other:refs/remotes/origin/main",
+            # With a tag `main` on origin, this one wrote the tag's commit.
+            "git fetch origin main:refs/remotes/origin/main",
+            "git fetch origin +refs/heads/other:refs/tags/v1",
+            # Two names, which the raw reading sees though an expansion's may not.
+            'git fetch origin "+refs/heads/$A:refs/remotes/origin/$B"',
+            'git fetch origin "+refs/heads/$(a):refs/remotes/origin/$(b)"',
+            'git fetch origin "+refs/heads/main$X:refs/remotes/origin/main"',
+            "git fetch origin main:refs/sweeps/$B",
+            "git fetch origin +main:refs/heads/victim",
+            "git fetch origin main:refs/heads/victim",
+            "git fetch origin main:victim",
+            "git fetch origin :refs/sweeps/bug",
+            "git fetch ../other main:main",
+            "git fetch ../other +refs/heads/main:refs/remotes/origin/main",
+            "git pull --ff-only origin +main:refs/sweeps/security",
+            "git pull --ff-only origin main:refs/sweeps/security",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("a plain fetch would not", self.assertRefused(command))
+        for command in (
+            "git fetch origin --refmap=+refs/heads/other:refs/remotes/origin/main other",
+            "git fetch origin --refm=+refs/heads/other:refs/sweeps/security other",
+            "git fetch origin --refmap +refs/heads/other:refs/sweeps/security other",
+            "echo +main:refs/sweeps/security | git fetch origin --stdin",
+            "echo +main:refs/sweeps/security | git fetch origin --stdi",
+            "git pull --ff-only --refmap=+refs/heads/main:refs/sweeps/security origin main",
+            "git pull --ff-only --ref=+refs/heads/main:refs/sweeps/security origin main",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("no refspec operand names", self.assertRefused(command))
+        # Two more routes to the same refs, each refused by a check of its own.
+        self.assertIn("can move a local branch",
+                      self.assertRefused("git fetch -u origin +main:refs/heads/victim"))
+        self.assertIn("sets configuration", self.assertRefused(
+            "git -c remote.origin.fetch=+refs/heads/main:refs/sweeps/security fetch origin"))
+        # Only what origin holds there, and a colon that is not a refspec's.
+        for command in (
+            "git fetch origin main:main", "git fetch -q --depth 1 origin main:main",
+            "git fetch origin main:", "git fetch origin +main", "git fetch origin tag v1",
+            "git fetch origin +refs/heads/*:refs/remotes/origin/*",
+            "git fetch origin refs/heads/x:refs/remotes/origin/x",
+            "git fetch -q origin +refs/heads/$B:refs/remotes/origin/$B",
+            "git fetch git@github.com:alexander-shamray/blueprint-harness.git main",
+            "git fetch --filter blob:none origin main",
+            "git fetch origin main --filter blob:none",
+            "git fetch --filter=blob:none origin main",
+            "git fetch origin main -o a:b",
+            "git fetch --shallow-since '2026-01-01 10:00' origin main",
+            "git fetch origin main > C:/tmp/fetch.log 2>&1",
+            "git fetch --no-stdin origin main",
+            "git pull --ff-only origin main", "git pull --ff-only origin main:main",
+            "echo git fetch origin --stdin",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_forced_pull_that_discards_a_local_branch_is_refused(self):
+        # Run from another branch, the first moved local main to origin's and
+        # dropped the commit only main held.
+        for command in (
+            "git pull --ff-only -f origin main:main",
+            "git pull --ff-only --force origin main:main",
+            "git pull --ff-only --forc origin", "git pull -qf --ff-only",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("can move a local branch", self.assertRefused(command))
+
     def test_nothing_overrides_the_fast_forward_of_a_granted_pull(self):
         for command in (
             "git pull --ff-only --no-ff", "git pull --ff-only --ff",
@@ -3923,6 +4004,78 @@ class AWriteIntoWhatTheTargetDenies(unittest.TestCase):
                       'cp "$a" "$b"', 'mv "$a" "$b"', 'rm -f "$out"', 'tee "$log"',
                       env=env)
 
+    def real_home(self):
+        """A home directory that is no checkout, as a real one is, and its premise."""
+        home = temp_root(self)
+        self.assertFalse(os.path.exists(os.path.join(home, ".git")))
+        return home, {"HOME": home}
+
+    def test_what_runs_at_login_is_refused_in_a_home_that_is_no_checkout(self):
+        home, env = self.real_home()
+        for command in ("ls > ~/.gitconfig", "git show HEAD:x > ~/.gitconfig", "echo x >> ~/.bashrc",
+                        "ls > $HOME/.zshrc", 'ls > "$HOME/.profile"', "ls > ~/.ssh/authorized_keys",
+                        "tee ~/.gitconfig", "cp a ~/.bash_profile", "rm ~/.ssh/config",
+                        f"ls > {Path(home, '.gitconfig').as_posix()}"):
+            with self.subTest(command=command):
+                self.assertIn("No rule judges a shell write", self.assertRefused(command, env=env))
+
+    def test_what_the_home_claude_applies_is_refused_in_a_home_that_is_no_checkout(self):
+        # `test_a_tilde_and_a_known_variable…` sets `HOME` to a checkout, so it
+        # says nothing about these: there the checkout's denies refuse them.
+        _, env = self.real_home()
+        for command in ("ls > ~/.claude/settings.json", "ls > $HOME/.claude/settings.local.json",
+                        "ls > ~/.claude/.credentials.json", "ls > ~/.claude/hooks/x.py",
+                        "cp a ~/.claude/commands/x.md", "ls > ~/.claude/plugins/p/x",
+                        "echo x > ~/.claude/projects/p/memory/a.md",
+                        "echo x > $HOME/.claude/output-styles/a.md",
+                        "tee ~/.claude/output-styles/a.md", "rm ~/.claude/output-styles/a.md",
+                        "rm -rf ~/.claude", "rm -rf ~/.claude/*", "mv ~/.claude /tmp/x",
+                        "find ~/.claude/projects -delete"):
+            with self.subTest(command=command):
+                self.assertIn("No rule judges a shell write", self.assertRefused(command, env=env))
+
+    def test_a_memory_file_may_be_removed_and_nothing_wider(self):
+        # The replay's 3 `rm` of a stale memory: no editing tool removes a file.
+        # A `mv` is held, since the same verb plants one.
+        _, env = self.real_home()
+        self.admitted("rm ~/.claude/projects/p/memory/a.md", 'rm -f "$HOME/.claude/projects/p/memory/a.md"',
+                      "unlink ~/.claude/projects/p/memory/a.md", env=env)
+        for command in ("rm -rf ~/.claude/projects", "rm -rf ~/.claude/projects/p",
+                        "rm -rf ~/.claude/projects/p/memory", "rm -rf ~/.claude/projects/p/memory/*",
+                        "rm ~/.claude/projects/p/memory/*.md", "rm ~/.claude/projects/*/memory/a.md",
+                        "rm ~/.claude/projects/p/a.jsonl", "mv ~/.claude/projects/p/memory/a.md /tmp/a.md",
+                        "mv /tmp/a.md ~/.claude/projects/p/memory/a.md", "rm ~/.gitconfig"):
+            with self.subTest(command=command):
+                self.assertIn("No rule judges a shell write", self.assertRefused(command, env=env))
+
+    def test_a_link_into_the_home_keys_is_refused(self):
+        home, env = self.real_home()
+        os.makedirs(os.path.join(home, ".ssh"))
+        self.link(os.path.join(home, ".ssh"), os.path.join(self.root, "notes", "keys"))
+        self.assertIn("No rule judges a shell write",
+                      self.assertRefused("ls > notes/keys/authorized_keys", env=env))
+
+    def test_the_rest_of_the_home_stays_admitted(self):
+        _, env = self.real_home()
+        self.admitted("ls > ~/notes.md", "ls > ~/projects/.bashrc", "ls > ~/.ssh-notes",
+                      "ls > ~/.claude/CLAUDE.md", "ls > ~/.claude/scratch/x", "ls > ~/.claude/.last",
+                      "rm ~/.claude/scratch/x", "ls > '~/.gitconfig'", "ls ~/.ssh", "cat ~/.gitconfig",
+                      "ls > $HOME/.claude/scratch/x", env=env)
+
+    def test_a_home_the_session_stands_in_is_left_to_its_denies(self):
+        # As the edit guard's anchors leave it: a checkout at `~/.claude/plugins/p`
+        # is the project there, and its own files are not the control surface.
+        home, env = self.real_home()
+        plugin = os.path.join(home, ".claude", "plugins", "p")
+        os.makedirs(os.path.join(plugin, ".git"))
+        self.assertAdmitted("ls > notes.md", cwd=plugin, env=env)
+        self.assertIn("No rule judges a shell write", self.assertRefused("ls > ~/.gitconfig", cwd=plugin, env=env))
+        # Reached through a link, as macOS's `/var` is `/private/var`, it is still
+        # the session's: the write's resolution is judged, so the checkout's is too.
+        reached = os.path.join(self.root, "notes", "plugin")
+        self.link(plugin, reached)
+        self.assertAdmitted("ls > notes.md", cwd=reached, env=env)
+
     def test_a_redirection_through_a_link_into_a_protected_tree_is_refused(self):
         self.link(os.path.join(self.root, ".claude"),
                   os.path.join(self.root, "notes", "linked"))
@@ -4083,14 +4236,21 @@ class TheListsTheGuardReads(unittest.TestCase):
         self.assertGreater(len(module.edit_denies()), 9, "the deny list went empty")
         commands = self.managed_commands()
         self.assertGreater(len(commands), 5, "the managed commands went empty")
-        # A home-relative rule names no checkout path, and the guard reads none under the home directory.
-        denied = [rule for path in commands
-                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))
-                  if not rule.startswith("~/")]
+        rules = [rule for path in commands
+                 for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))]
+        denied = [rule for rule in rules if not rule.startswith("~/")]
         for rule in [*module.edit_denies(), *denied]:
             with self.subTest(rule=rule):
                 path = rule.removeprefix("./").removesuffix("/**")
                 self.assertIsNotNone(module.denied_path(path + "/x" if rule.endswith("/**") else path))
+        home_rules = sorted({rule for rule in rules if rule.startswith("~/")})
+        self.assertGreater(len(home_rules), 1, "the home-relative denies went empty")
+        home = temp_root(self)
+        for rule in home_rules:
+            with self.subTest(rule=rule):
+                path = os.path.join(home, *rule[2:].removesuffix("/**").split("/"), "x")
+                with mock.patch.dict(os.environ, {"HOME": home}):
+                    self.assertIsNotNone(module.home_target(path, home, ""), rule)
 
     def test_the_protected_files_cover_every_tracked_root_file(self):
         # The side of the boundary each root file is on is the target's config

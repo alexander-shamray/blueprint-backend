@@ -1,7 +1,7 @@
 ---
 description: Start a correctly named working branch — in its own worktree under .claude/worktrees/ from a clean main, in place when the tree is dirty or that directory is not writable
 argument-hint: "[what the change does] — omit to derive it from the uncommitted work"
-allowed-tools: Read, Grep, EnterWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*)
+allowed-tools: Read, Grep, EnterWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*)
 ---
 
 Create a branch for: $ARGUMENTS — if empty, derive it from the uncommitted
@@ -87,6 +87,7 @@ sweeps' `mktemp -d` ones.
 
    Match `docs/split-the-runbook`, `chore/repo-guidance-and-explicit-types`.
    Summarise the change: `docs/sql-sample-indentation`, not `docs/update-docs`.
+   Keep `git-` out of the summary, which a worktree session's push can refuse.
    For a PR the roadmap `docs/harness-local.md` *Documents* names lists,
    derive it from the title there:
    `chore: solution structure, SDK pin, central package management, CI skeleton`
@@ -141,14 +142,12 @@ sweeps' `mktemp -d` ones.
    reasons, as in `fatal: could not create leading directories of
    '<path>/.git': Permission denied`; report it and that the worktree could
    not be created. Any other failure stops the command, reported verbatim.
-   The branch usually survives:
+   The helper removes the branch it created, so the fallback creates it:
 
    | After the failed fork | Take |
    |---|---|
-   | `git branch --list <name>` prints it | `bash .claude/scripts/git-switch-existing.sh <name>` — it is already cut from `origin/main` and untracked, which is what the fork asked for |
-   | It prints nothing | `bash .claude/scripts/git-branch-create.sh <name> origin/main` |
-
-   Continue in place; step 1's forgone-worktree rule applies.
+   | `git branch --list <name>` prints nothing | `bash .claude/scripts/git-branch-create.sh <name> origin/main`, and continue in place; step 1's forgone-worktree rule applies |
+   | It prints it | Stop and report the helper's line saying why it kept it: the branch may not be this fork's |
 
    **If the session cannot enter a worktree that was created, stop and report
    the path**; never drive it with `git -C`, and leave it standing.

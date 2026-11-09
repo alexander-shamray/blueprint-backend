@@ -763,7 +763,8 @@ basename contains no `/`, so that cannot be talked past. Registration is not
 enough on its own — every sibling PR worktree is registered too, and a poisoned
 finding naming one could otherwise delete it. What each refuses beyond that
 differs and is worth naming rather than averaging: `git-worktree-drop.sh` passes
-no flags at all and additionally refuses the main worktree and any worktree
-outside this repository, while `git-worktree-detach.sh` embeds `--detach` by
+`git worktree remove` no flag at all, setting only `core.longpaths`, and
+additionally refuses the main worktree and any worktree outside this repository,
+while `git-worktree-detach.sh` embeds `--detach` by
 design, takes a resolved 40-character sha and nothing else, and makes the
 directory itself. `git worktree list` stays a raw grant; it reads.

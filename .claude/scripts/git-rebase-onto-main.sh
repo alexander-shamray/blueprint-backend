@@ -16,6 +16,7 @@
 # `start` spells, drops a commit a resolution emptied by itself; any other
 # commit a caller could skip holds content, and the chain is unattended.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/git-push-url.sh"
 
 [ "$#" -eq 2 ] ||
   { echo "usage: git-rebase-onto-main.sh <branch> <start|continue|publish|abort>" >&2; exit 2; }
@@ -147,44 +148,6 @@ require_remote_carries_nothing_new() {
       exit 7; }
 }
 
-# `host|path` of a remote URL, or non-zero when it has no such shape. The whole
-# path counts, since its last components alone let `https://h/evil/o/r` collide
-# with `https://h/o/r`. The host is empty for a local path and lower-cased
-# otherwise; a scheme, user, port, leading slash and trailing `.git` do not
-# count, so the https and ssh forms of one repository on one host agree.
-repo_key() {
-  local url=$1 host path
-  # A query or a fragment is not part of the path a server routes on, so the
-  # path of `https://host/x/y#/o/r` would read as `x/y#/o/r` and push to `x/y`.
-  [[ $url != *[\?#]* ]] || return 1
-  url=${url%/}
-  url=${url%.git}
-  if [[ $url =~ ^[A-Za-z][A-Za-z0-9+.-]*://([^@/]*@)?([^:/]+)(:[0-9]+)?/(.*)$ ]]; then
-    host=${BASH_REMATCH[2]}
-    path=${BASH_REMATCH[4]}
-  elif [[ $url =~ ^([^@/:]+@)?([A-Za-z0-9.-]{2,}):([^/:].*)$ ]]; then
-    host=${BASH_REMATCH[2]}
-    path=${BASH_REMATCH[3]}
-  else
-    # Only a plain or drive path may be hostless. Anything else with a colon is a
-    # scheme or scp-style address that fits neither form above (`ssh://h:o/r`,
-    # `git@h:/o/r`, `file:///o/r`, `ext::cmd`), and has no key.
-    [[ $url =~ ^([A-Za-z]:)?[^:]*$ ]] || return 1
-    host=
-    path=$url
-  fi
-  if [ -n "$host" ]; then
-    path=${path#/}
-    # A hosted path names an owner and a repository at least.
-    [[ $path == */* ]] || return 1
-  fi
-  # A dot or empty segment is a different path to the server than it reads here.
-  case "/${path#/}/" in
-    */./* | */../* | *//*) return 1 ;;
-  esac
-  printf '%s|%s' "$(printf '%s' "$host" | tr 'A-Z' 'a-z')" "$path"
-}
-
 # The lease names an expected value. `--force-with-lease` left bare trusts the
 # remote-tracking ref, which any fetch in the session may have moved, so the
 # `<ref>:<sha>` form names the commit this run read and a push landing in
@@ -192,27 +155,14 @@ repo_key() {
 # spelled, so no `remote.origin.push` mapping can send it to another ref the
 # lease does not name.
 publish() {
-  local current head lease pushes configured resolved
+  local current head lease
   current=$(git branch --show-current)
   [ "$current" = "$branch" ] ||
     { echo "the replay ended on ${current:-a detached HEAD} rather than $branch; nothing is published" >&2; exit 4; }
   lease="$approved_lease"
   [ -n "$lease" ] ||
     { echo "no lease was approved, so nothing here may force" >&2; exit 7; }
-  # A remote with several `url` values pushes to every one of them.
-  pushes=$(git remote get-url --push --all origin | wc -l)
-  pushes=$((pushes))  # BSD wc pads its count, and arithmetic reads it as a number
-  [ "$pushes" -eq 1 ] ||
-    { echo "origin has $pushes push URLs; a force goes to every one of them, so nothing is published" >&2; exit 7; }
-  # The refspec pins the ref and not the URL: `pushurl`, `pushInsteadOf` or
-  # `insteadOf` can point the force at another repository, so the URL git will
-  # push to must name the host and path the remote was added with. The lease
-  # backs that up and does not replace it. A protocol rewrite on one host passes;
-  # another host, another path or a transport with no host does not.
-  configured=$(repo_key "$(git config --get remote.origin.url)") || configured=
-  resolved=$(repo_key "$(git remote get-url --push origin)") || resolved=
-  [ -n "$configured" ] && [ "$configured" = "$resolved" ] ||
-    { echo "origin pushes to '$resolved' but was added as '$configured'; a redirected force is not published" >&2; exit 7; }
+  origin_pushes_where_added || exit 7
   head=$(git rev-parse HEAD)
   if [ "$head" = "$lease" ]; then
     rm -f "$pending"
@@ -428,6 +378,9 @@ case "$mode" in
           exit 5; }
     fi
 
+    # Ahead of the fetch, so a redirect reads nothing from where it points and the
+    # branch is not replayed; `publish` asks again, since `continue` comes later.
+    origin_pushes_where_added || exit 7
     git fetch origin
     git show-ref --verify --quiet refs/remotes/origin/main ||
       { echo "no refs/remotes/origin/main to rebase onto" >&2; exit 6; }
