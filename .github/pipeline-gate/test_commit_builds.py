@@ -186,7 +186,29 @@ class MainTests(ScratchRepository):
         self.assertEqual([line.split()[:2] for line in script], [["skip", first], ["build", second]])
 
     def test_a_workflow_with_no_filters_fails_rather_than_building_nothing(self) -> None:
-        self.assertTrue(pipeline_gate.check_code_filters({}))
+        # One commit, so nothing past the guard would read the filters and fail on its own.
+        head = self.commit({"docs/a.md": "a\n"})
+        gate = self.repo / ".github" / "pipeline-gate"
+        gate.mkdir(parents=True)
+        shutil.copy(HERE / "commit_builds.py", gate)
+        shutil.copy(HERE / "pipeline_gate.py", gate)
+        workflows = self.repo / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        text = pipeline_gate.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("            code:\n", text)
+        (workflows / "ci.yml").write_text(text.replace("            code:\n", "            renamed:\n"), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(gate / "commit_builds.py"), self.base, head],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("found no `code`", result.stderr)
+        self.assertEqual(result.stdout, "")
 
 
 class WorkflowStepTests(ScratchRepository):
