@@ -5,7 +5,10 @@ re-implementing are `review_helpers.py`'s.
 """
 
 import json
+import os
+import shutil
 import unittest
+from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
@@ -238,6 +241,118 @@ class ForkShape(unittest.TestCase):
         result = self.fork(temp_root(self), ".claude/worktrees/probe")
         self.assertEqual(2, result.returncode)
         self.assertIn("not in a git repository", result.stderr)
+
+
+# origin/main gains a file whose blob the checkout then loses, so `git branch`
+# still finds the commit and the checkout inside `git worktree add` cannot write
+# the file: a real checkout failure on every platform, and no path to shorten.
+LOSE_BLOB = """
+set -e
+printf payload > "$root/origin/payload.txt"
+git -C "$root/origin" add payload.txt
+git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m payload
+git -C "$root/checkout" fetch -q origin
+oid=$(git -C "$root/origin" rev-parse HEAD:payload.txt)
+rm -f "$root/checkout/.git/objects/$(printf %s "$oid" | cut -c1-2)/$(printf %s "$oid" | cut -c3-)"
+"""
+
+RESTORE_BLOB = """
+git -C "$root/origin" cat-file blob HEAD:payload.txt | git -C "$root/checkout" hash-object -w --stdin
+"""
+
+
+class FailedFork(unittest.TestCase):
+    """A fork that fails leaves no branch of its own behind; what it did not make it keeps."""
+
+    def fixture(self):
+        root = temp_root(self)
+        made = run_bash(FIXTURE, root=root, IGNORE="yes", HOOK="no", LINK="no")
+        self.assertEqual(0, made.returncode, made.stderr)
+        return root
+
+    def fork(self, root, shim=""):
+        # On PATH inside bash, and in bash's own form, as test_git_worktree_remove.py's shim says why.
+        return run_bash('cd "$root/checkout" && PATH="${SHIM:+$SHIM:}$PATH" '
+                        'bash "$FORK" .claude/worktrees/probe feat/probe',
+                        root=root, FORK=str(FORK), SHIM=shim)
+
+    def branch(self, root):
+        return run_bash('git -C "$root/checkout" branch --list feat/probe', root=root).stdout.strip()
+
+    def stub(self, root, body):
+        """A `git` whose `worktree add` runs `body` and exits 128: a state git's own failure does not leave."""
+        shim = Path(root) / "shim"
+        shim.mkdir()
+        real = Path(shutil.which("git")).as_posix()
+        (shim / "git").write_bytes(chr(10).join((
+            "#!/usr/bin/env bash",
+            f'real="{real}"',
+            'if [ "$1" = worktree ] && [ "$2" = add ]; then',
+            f"  {body}",
+            "  exit 128",
+            "fi",
+            'exec "$real" "$@"',
+            "")).encode("utf-8"))
+        os.chmod(shim / "git", 0o755)
+        resolved = shim.resolve()
+        if os.name == "nt":
+            return "/" + resolved.drive[0].lower() + resolved.as_posix()[2:]
+        return str(resolved)
+
+    def test_a_failed_checkout_removes_the_branch_and_a_retry_forks(self):
+        root = self.fixture()
+        broken = run_bash(LOSE_BLOB, root=root)
+        self.assertEqual(0, broken.returncode, broken.stderr)
+        result = self.fork(root)
+        self.assertNotEqual(0, result.returncode)
+        # The positive control: the failure is the checkout's, past the point
+        # `git worktree add -b` has made the branch.
+        self.assertIn("payload.txt", result.stderr)
+        self.assertEqual("", self.branch(root))
+        self.assertNotIn("probe", run_bash('git -C "$root/checkout" worktree list', root=root).stdout)
+        self.assertEqual(0, run_bash(RESTORE_BLOB, root=root).returncode)
+        again = self.fork(root)
+        self.assertEqual(0, again.returncode, again.stderr)
+        self.assertEqual("feat/probe", self.branch(root).lstrip("+* "))
+
+    def test_a_directory_that_cannot_be_made_removes_the_branch(self):
+        # `/branch`'s in-place fallback then creates the branch, which a
+        # survivor would refuse. A file where the directory goes fails the same
+        # step an unwritable one does, and a root user cannot bypass it.
+        root = self.fixture()
+        made = run_bash('printf ".claude/\\n" > "$root/checkout/.gitignore"; mkdir -p "$root/checkout/.claude"; '
+                        ': > "$root/checkout/.claude/worktrees"', root=root)
+        self.assertEqual(0, made.returncode, made.stderr)
+        result = self.fork(root)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("could not create leading directories", result.stderr)
+        self.assertEqual("", self.branch(root))
+
+    def test_a_branch_moved_off_the_start_point_is_kept(self):
+        # Its commit is on no other ref, so removing it would lose the commit.
+        root = self.fixture()
+        shim = self.stub(root, '"$real" branch feat/probe "$("$real" -c user.name=t -c user.email=t@t '
+                               'commit-tree -m moved -p HEAD "HEAD^{tree}")"')
+        result = self.fork(root, shim)
+        self.assertEqual(128, result.returncode, result.stderr)
+        self.assertIn("feat/probe", self.branch(root))
+        self.assertIn("is kept", result.stderr)
+
+    def test_a_branch_a_worktree_holds_is_kept(self):
+        # `update-ref` would delete it from under that worktree without asking.
+        root = self.fixture()
+        shim = self.stub(root, '"$real" worktree add -q -b feat/probe "$root/other" origin/main')
+        result = self.fork(root, shim)
+        self.assertEqual(128, result.returncode, result.stderr)
+        self.assertIn("feat/probe", self.branch(root))
+        self.assertIn("is kept", result.stderr)
+
+    def test_git_failing_before_the_branch_exists_says_nothing_of_one(self):
+        root = self.fixture()
+        result = self.fork(root, self.stub(root, ":"))
+        self.assertEqual(128, result.returncode, result.stderr)
+        self.assertEqual("", self.branch(root))
+        self.assertNotIn("feat/probe", result.stderr)
 
 
 if __name__ == "__main__":

@@ -190,14 +190,14 @@ to require. **Measured in blueprint-admin** (its #291): on 2026-10-20, on
 Windows, in a turn whose `/ship` frontmatter was in force, a `Write` to each
 directory was refused with no prompt and one to `~/.claude/scratch/` succeeded,
 so the home-relative specifier binds the absolute path a tool is given. **The
-git guard does not back them (blueprint-harness#246):** `guard-git-argv.py`
-judges paths anchored at a checkout's root, so it admits a redirect, `rm`, `curl
--o` or `tar -x` writing under either directory, read at `99cc539` by running the
-guard over each. Whether the rule itself reaches such a command has not been
-measured in blueprint-harness; a path deny reaches a `Bash` command naming the
-path where it was (*A boundary an agent must keep across turns*), and a command
-that computes its path would not name it. Admit the shell as open until that is
-read.
+git guard backs them for a redirect and a writing verb, in every turn:**
+`guard-git-argv.py` refuses both under either directory, all but the removal of
+a named memory file (*The edit-target guard*). `curl -o`, `tar -x` and an
+interpreter are not on its list of verbs, so they stay open, the residual *Git
+argv guard hook* states. Whether a frontmatter deny reaches such a command has
+not been measured in blueprint-harness; a path deny reaches a `Bash` command
+naming the path where it was (*A boundary an agent must keep across turns*), and
+a command that computes its path would not name it.
 
 **The index skill's prefix grants are the same speed bump as `git *--output*`.**
 `Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)` matches the
@@ -773,6 +773,7 @@ about it:
 | `Bash(git worktree add:*)` | `-B`, which resets an existing branch rather than creating one |
 | `Bash(git checkout -b:*)` | the trailing flag — `git checkout -b <name> -f origin/main` discards tracked modifications |
 | `Bash(git branch:*)` | `git branch -fd <name>` — force and delete behind a spelling the `-d`/`-D`/`--delete` denies do not match |
+| `Bash(git branch --list:*)` | `--no-list`, abbreviated down to `--no-l`, which turns list mode off, so `git branch --list --no-list -D <name>` deletes and `-f`, `-m`, `-C` and `-u` work too. With list mode on each is git's usage error or a listing, and `--no-merged`, `--no-color` and `--no-column` are reads, so the deny is `Bash(git branch --list *--no-l*)` and the grant stays, `/branch` and `/ship` needing `git branch --list <name>` |
 | `Bash(git reset HEAD:*)` | `git reset HEAD --hard` — the `--hard` deny matches the other word order |
 | `Bash(git log:*)`, `Bash(git diff:*)`, `Bash(git show:*)` | `--output=<path>`, which is an arbitrary file write with `--format=` choosing the bytes. Reproduced: `git log -1 --format=%s --output=<scratch>` wrote the commit subject, silently |
 | `Bash(git fetch:*)`, `Bash(git pull --ff-only:*)` | a URL in the repository position, and `ext::<cmd>` is a git transport that **runs its argument as a command** |
@@ -1053,6 +1054,7 @@ row is therefore a spelling the deny list does not match.
 | Rename a branch, forced | `git branch -M feature other` | `deny` | `test_destructive_classes.py` |
 | Rename a branch, long option | `git branch --move feature other` | `deny` | `test_destructive_classes.py` |
 | Move a branch over another | `git branch --force feature HEAD~1` | `deny` | `test_destructive_classes.py` |
+| Turn list mode off behind the list grant | `git branch --list --no-list -D feature` | `deny` | `test_destructive_classes.py` |
 | Remove a worktree, discarding its work | `git worktree remove -f .claude/worktrees/x` | `deny` | `test_destructive_classes.py` |
 | Merge a pull request past its checks | `gh pr merge 7 --rebase --admin` | `deny` | `test_destructive_classes.py` |
 | Write a file through a read-only command | `git log --output=out.txt` | `deny` | `test_destructive_classes.py` |
@@ -1303,7 +1305,14 @@ in the first place.
 
 `Bash(git fetch origin:*)` **pins the remote**: a literal remote name occupies
 the repository position, so a URL never reaches it. That is the control the
-sentence describes, and it is real.
+sentence describes, and it is real. It says nothing about the refspec after
+the remote, whose destination writes a ref: `guard-git-argv.py`'s
+`refspec_offence` admits only `main:main`, a `refs/heads/<name>` of origin onto
+its own tracking ref and a tag onto itself, for a fetch and for a pull alike,
+and refuses `--refmap` on both and a fetch's `--stdin`. The tracking source is
+named in full because a short one takes origin's same-named tag first;
+`main:main` takes it too, as a fast-forward at most, and stays because `/ship`
+names it.
 
 `Bash(git pull --ff-only)` pins **nothing** — no remote name appears in it at
 all. What it does is drop the `:*`, so the grant is the documented
@@ -2097,6 +2106,25 @@ list, a false refusal under *The guards' threat model*. `~/.claude/CLAUDE.md`
 stays writable because it is the owner's rules rather than a grant, and a
 change to `~/.claude/settings.json` is the owner's to run from a script.
 
+**The git guard refuses the same names for a shell write**, and reads them from
+one list, `HOME_TREES` and its neighbours in `guard-git-argv.py`, which the edit
+guard loads; if it cannot load them it refuses a target under the home
+directory. A redirect and a writing verb's operand are judged by spelling and by
+resolution, with `HOME` and the process's own home both read as the root, and a
+checkout the session stands in is left to its denies. The shell also may not
+write `~/.claude/projects/` or `~/.claude/output-styles/`, which the edit guard
+admits: a `Write` there meets a command's deny in the turn that holds one, and a
+shell write meets none.
+
+**A replay narrowed it.** 79,469 commands of these repositories' sessions since
+2026-10-01 gave 34 new refusals, none under the login or control names. 30 wrote
+a memory or an output style with a redirect or `sed -i`, most appending a line
+to `MEMORY.md`; the refusal names the editing tool, which does the same. 3 were
+`rm` of a stale memory, which no editing tool can do and which plants nothing,
+so `rm` and `unlink` of a file named below a project's `memory/` are admitted. A
+`mv` stays refused, as the 1 typed was, since the same verb plants a file, and
+so does a glob there, or a removal of the directory or anything wider.
+
 ## Edit guard path resolution
 
 **Two properties of the resolution are load-bearing and were each found by
@@ -2320,7 +2348,10 @@ to a commit, and only to an existing one by its full SHA. The ref is local
 and a missing one means a full sweep, so the write can make a later sweep
 read less only by pointing at a commit that really was swept clean; a
 poisoned tree cannot reach it, because the parent runs it once, on a clean
-end, with `$pinned`.
+end, with `$pinned`, and `guard-git-argv.py` refuses the granted fetch's
+refspec that would write it without the helper. That is a guard's reach and no
+more: a `git update-ref` no grant holds still writes the ref, and *The guards'
+threat model* says what bounds it.
 
 ## The sed line-ending guard
 
