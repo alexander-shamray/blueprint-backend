@@ -5,8 +5,8 @@ windows either side of the cost changes, and what the difference says about
 the visibility and plan decision.**
 [`tools/ci-cost/`](../tools/ci-cost/README.md) produces every measured figure
 here but those a section names as one-off or by hand, which it did not print on
-that section's day and prints for any later window, and owns how each is
-computed; this file records what it reported, one dated section per window, and
+that section's day and now does, a level only for a window ending about when it
+is read, and owns how each is computed; this file records what it reported, one dated section per window, and
 the comparison once both exist. Every figure is a record of its day, per the
 contract's §2, and none is kept current.
 
@@ -326,7 +326,7 @@ Per 30 days. Normal is Window B's rate; High is 1.5 times it, Window A's rate of
 pushes to `main`; Low is a quarter of it, about B's quietest day,
 2026-11-04, kept up for a month. Low and High are assumptions scaled from B, not
 measurements. The days here and below are a one-off sum over the tool's job
-reads, which the tool does not print.
+reads, which the tool did not print that day.
 
 | | Low | Normal | High |
 |---|---|---|---|
