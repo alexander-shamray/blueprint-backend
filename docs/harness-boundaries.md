@@ -2,8 +2,8 @@
 
 ## Index
 
-**Read the section you need, not the file**: each is under 3.5k tokens and
-the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
+**Read the section you need, not the file**: each is under 7k tokens and
+the whole is about 46k. `Grep -n "^## <title>"` gives its first line.
 
 | Section | What it covers |
 |---|---|
@@ -26,7 +26,7 @@ the whole is about 31k. `Grep -n "^## <title>"` gives its first line.
 | Agent-type and push entries | Agent-type deny enumeration and the inverted push check. |
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
-| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, and their slice lists and ref. |
+| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the deny matcher's case folding, the .. admission, out-of-tree residual, how the sweeps share worktrees, and their slice lists and ref. |
 | The sed line-ending guard | guard-sed-crlf.py refusing `sed -i` on a tracked CRLF file: what it reads, what a crafted path makes it run, where it fails open, and its residuals. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop. |
 | The suite's shard runner | shard-harness-suite.py dealing the `.claude/scripts` classes to parallel workers, what it may never stop placing, its tables, and its one-run-per-user lock. |
@@ -163,6 +163,18 @@ to anything under `.harness/` is the owner's, as one to
 `.claude/settings.json` is; the deny names the whole directory rather than
 the config alone, because a sweep able to narrow its own rows has audited
 less than it reports.
+
+**It is spelled `Edit(/.harness/**)`, once, because the two usual spellings
+reach too far.** A rule of one component reaches any depth with or without
+`./` (*Normalisation, residuals and the sweeps*), and in the repository that
+develops this harness those two refused the base settings' own copy under
+its `payload` tree, which is where they are changed. Measured on Claude Code
+2.1.319 and Windows, in a nested session at the root, one that entered a
+worktree and one launched in a worktree: the old spellings refused that path in
+all three, and this one admitted it in all three and refused `.harness/` itself
+in each (#333). `test_harness_denies.py` holds the spelling, and holds every
+directory rule of one component in the base off a tree a checkout tracks below
+its root.
 
 **`.claude/skills/**` is the same argument one directory over.** A skill's
 `allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
@@ -703,8 +715,9 @@ that blanket would deny a main-checkout session every edit to a live worktree.
 A test pins both halves: every loaded settings file denied, and the
 worktree root never denied.
 
-**Every rule here anchors at the session's permission root, and
-`EnterWorktree` moves it.** Measured with nested `claude -p` sessions: once a
+**A rule of more than one component anchors at the session's permission root,
+and `EnterWorktree` moves it** (*Normalisation, residuals and the sweeps* has
+the shapes that do not). Measured with nested `claude -p` sessions: once a
 session has entered `.claude/worktrees/<slug>`, `Edit(.claude/commands/**)`
 and `Edit(.claude/hooks/**)` refuse the worktree's own `.claude/` and `docs/`
 stays writable. From the main checkout the same paths sit under
@@ -981,7 +994,8 @@ holds the row, which the suite checks exists (a `ruleset` row names
   entry follows Claude Code's prefix reading: `Bash(x:*)` matches `x` and
   `x …`, and a `*` inside a rule matches any run. An `Edit` entry is
   matched by an example spelled `Edit(<path>)`, with the `./` stripped from
-  both sides, so one row holds a rule and its `./`-prefixed twin.
+  both sides and a leading `/` from the rule, so one row holds a rule and its
+  `./`-prefixed twin.
 - `guard-git-argv` — the example is a command, fed to
   `.claude/hooks/guard-git-argv.py` as the JSON a PreToolUse call carries.
   The hook exits 0 and its stdout holds `permissionDecision` `deny`.
@@ -2113,12 +2127,14 @@ stale as those change, and the PR that lifts a deny to edit a helper is not
 refused by the guard on its way past. A test pins that control: a denied tree
 spelled as itself is **admitted** here.
 
-**Two things a path deny cannot reach are judged here all the same, and
-neither takes a copy of a list.** Every rule anchors at the session's
-permission root, so a worktree of this repository that the session has not
-entered, the main checkout seen from a linked one included, launched there or
-entered with the project left at main, is reached by none
-of them: its `.claude/scripts/x` and its `.git`
+**Two things a path deny may not reach are judged here all the same, and
+neither takes a copy of a list.** A rule of more than one component anchors at
+the session's permission root (*Normalisation, residuals and the sweeps* has
+the shapes that do not), so a worktree of this repository that the session has
+not entered, the main checkout seen from a linked one included, launched there
+or entered with the project left at main, is reached by none
+of those, and by a rule of one component only where it sits under that root.
+So its `.claude/scripts/x` and its `.git`
 are judged by this target's own `Edit(...)` denies, read from
 `.claude/settings.json` through `guard-git-argv.py`'s `denied_path`, anchored at
 that worktree's root and folded for case, and a link inside it is judged as in
@@ -2297,6 +2313,50 @@ missing-leaf case was the other suggestion, and it is refused on this guard's
 own rule**: `expected` rarely exists when a `Write` creates a file, so refusing
 there would fire on the commonest innocent call the hook sees, and a guard that
 fires on innocent traffic is one somebody turns off.
+
+**An edit in the session's own project meets no list of this guard's, so what
+holds another casing of a denied name there is the harness's own matcher, and
+on Windows it folds.** A build tool loads `Nuget.config`,
+`directory.build.targets` and `Msbuild.rsp` as it loads the listed spellings on
+a filesystem that folds, a config can only enumerate spellings, and
+`guard-edit-target.py` asks `denied_path`, which folds, only for a checkout the
+session is not standing in (#316). Measured on Claude Code 2.1.319, Windows 11
+and NTFS, in 62 nested `claude -p` sessions, each in a scratch project whose
+only settings were the denies under test: every other casing was refused, 34
+of 34, under `Edit(<name>)`, `Edit(./<name>)`, `Edit(**/<name>)`,
+`blueprint-admin`'s own rules and `Edit(.harness/**)`, by `Write` on an absent
+file and by `Edit` on one seeded in the listed casing, with the harness's own
+*"denied by your permission settings"*. The 18 deny controls were refused and
+the 10 allow controls written, and no refused file changed. **The fold is in
+the comparison, not the filesystem**: `Nuget.config` is refused with nothing on
+disk, by a rule that names one casing. So this guard does not ask `denied_path`
+for the session's own project. Raised by the security-guidance plugin, on
+`blueprint-admin`'s first sync.
+
+**Its residual is macOS, which is read and not measured, and the next release,
+which is neither.** No other platform was to hand to measure on, and a fold
+conditioned on the platform would pass on Windows and miss on APFS. The binary
+bundles the `ignore` library, whose constructor defaults `ignorecase` to true,
+and its strings name that library beside the permission rules; the call site is
+bytecode, so neither the options it passes nor a branch on the platform was
+seen. That makes macOS likely to fold and does not establish it. If it is ever
+measured not to, the answer is this guard asking `denied_path` for the session's
+own project too, with a replay of the edits it would newly refuse.
+
+**What a rule anchors to depends on its shape, and `./` does not decide it.**
+Measured the same way, one form denied per session. `Edit(NuGet.Config)` and
+`Edit(./NuGet.Config)` refused `src/NuGet.Config`, and `Edit(.harness/**)` and
+`Edit(./.harness/**)` refused `sub/.harness/config.json`, so a rule of one
+component reaches that name at any depth, a nested worktree's included, and
+refuses a same-named directory anywhere below the root (#333).
+`Edit(src/app.txt)` and a directory rule of two components, each with and
+without `./`, admitted the same path under `sub/`, so a rule of more than one
+component anchors at the root. `Edit(/.harness/**)` admitted
+`sub/.harness/config.json`, so a leading `/` anchors a rule of one component.
+`denied_path` matches every
+rule from the checkout's root, so a rule's `**/` twin is not redundant: it is
+`Edit(**/NuGet.Config)` that makes `denied_path` hold the nested file, in a
+worktree the session has not entered.
 
 **A `..` that traverses no link is admitted, and the reason is a measurement
 of the harness rather than a judgement about paths.** The case for refusing it
