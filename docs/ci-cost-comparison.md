@@ -414,10 +414,11 @@ has been compared with one.
 
 ### The recommendation
 
-**#1439: stay public.** Every private option that keeps the safeguards costs at
-least $51 a month plus a machine large enough for all of CI, and that needs a
-runner, an organisation and a required-check fallback none of which exists; left
-on GitHub's runners it costs about $650 a month at Normal. Pro looks cheap only
+**#1439: stay public.** At Normal or High, a private option that keeps the
+safeguards costs at least $51 a month plus a machine large enough for all of CI,
+and that needs a runner, an organisation and a required-check fallback none of
+which exists; left on GitHub's runners it costs about $650 a month at Normal. At
+Low, a quarter of Window B's activity, $51 alone covers it. Pro looks cheap only
 with every Linux job self-hosted, at $35.15 plus the machine, and gives up the
 signed-image rollout, the `production` reviewers and CodeQL for it. Public keeps
 all of that for nothing. Going private would also not recall the one fork's
