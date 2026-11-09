@@ -228,10 +228,9 @@ class Main(unittest.TestCase):
             raise LookupError(f"{path}: HTTP 403")
 
         code, out = self.run_main("--delete", delete=refuse)
-        self.assertEqual((code, len(tried)), (1, 2))
+        self.assertEqual((code, len(tried)), (1, 1))
         self.assertIn("not deleted", out)
-        self.assertEqual({path.rsplit("/", 1)[1] for path in tried},
-                         {str(version("gone")["id"]), str(version("gone-referrers")["id"])})
+        self.assertEqual(tried[0].rsplit("/", 1)[1], str(version("gone")["id"]))
 
 
 if __name__ == "__main__":

@@ -132,7 +132,7 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
     # A tag that would not go keeps what it names until a later run gets past it.
     blocked: set[str] = set()
     for package, version in doomed[:MAX_DELETES]:
-        if package in blocked and not tags_of(version):
+        if package in blocked and not any(COMMIT_TAG.fullmatch(tag) for tag in tags_of(version)):
             continue
         try:
             remove(f"{versions_path(root, package)}/{version['id']}")
