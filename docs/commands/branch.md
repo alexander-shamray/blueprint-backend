@@ -156,6 +156,12 @@ The type is the one the commit will carry, so the branch and its commits
 agree. A roadmap PR's name derives from its title so the branch, the
 commit and the plan all read the same.
 
+**`git-` stays out of the summary** because Claude Code's isolation check
+refused `git push -u origin fix/git-helpers-from-admin` inside a worktree
+session as naming git more than once, so the name that holds it is the one
+thing about that push no retry changes (`docs/harness/pitfalls.md`, *Git and
+worktrees*).
+
 ## Step 4
 
 **The directory check runs only on the path that uses the directory** —
@@ -200,8 +206,8 @@ Step 1 fetched for the reason spelled out under the fork below — local
 `main` is whatever it was when it was last pulled — and that reason does not
 weaken because the branch is being made in place. The two rows that carry
 no worktree are still starting a PR from a base, and a stale one costs the
-same there as anywhere. `--no-track` travels with `origin/main` for the same
-reason it does on the fork: it is a remote-tracking ref, so without it the
+same there as anywhere. `--no-track` travels with `origin/main` in
+`git-branch-create.sh`: it is a remote-tracking ref, so without the flag the
 upstream lands on `origin/main` and `/pr` never sets the right one.
 
 The dirty and detached rows are the exception and stay on `HEAD`, because
@@ -209,8 +215,10 @@ the whole point of those paths is to carry the state that is already in the
 tree. A base is not what they are short of.
 
 **`git-worktree-fork.sh` is the whole command, and it takes two arguments
-because everything else about it is fixed.** Its one git command that writes is
-`git worktree add --no-track -b <branch> <path> origin/main`, after which
+because everything else about it is fixed.** Its git commands that write, but
+for removing what they leave when the second fails, are
+`git branch <branch> <oid>`, the oid being `origin/main` read once, and
+`git worktree add <path> <branch>`, after which
 it starts the new worktree's index refresh — a `Bash(git worktree add:*)`
 grant would also buy `-B`, which does not create a branch but **resets**
 an existing one, the operation
@@ -218,19 +226,24 @@ an existing one, the operation
 a branch that already exists, which is what makes the missing `-B` harmless
 rather than merely unavailable.
 
-**`--no-track` inside it is load-bearing, not tidiness.** The start point is
-a remote-tracking ref, so without it git sets the new branch's upstream to
-`origin/main` — "branch '<name>' set up to track 'origin/main'". `/pr` then
-reads `git status -sb`, finds an upstream, classifies the branch as
-*tracking, ahead*, and pushes without `-u`, leaving the PR branch pointed at
-`origin/main` for every later status and resume read. With `--no-track` there
-is no upstream, `/pr` takes its **no upstream** row, and
-`git push -u origin <branch>` sets the right one.
+**The oid is load-bearing, not tidiness, and twice over.** Cut from the name
+`origin/main`, git would set the new branch's upstream to it — "branch
+'<name>' set up to track 'origin/main'". `/pr` then reads `git status -sb`,
+finds an upstream, classifies the branch as *tracking, ahead*, and pushes
+without `-u`, leaving the PR branch pointed at `origin/main` for every later
+status and resume read. An oid names no branch to track, so there is no
+upstream whatever `branch.autoSetupMerge` says, no `--no-track` is needed, `/pr`
+takes its **no upstream** row, and `git push -u origin <branch>` sets the right
+one. And a second read of the name would see another session's fetch: the
+branch would then sit past the oid a failed add's cleanup compares, so it would
+be kept, and `/branch` would stop on a branch nothing the session holds can
+remove.
 
 `origin/main` is the base rather than `HEAD`, for the reason step 1 fetched:
 local `main` here is whatever it was when it was last pulled, and a review
 diffed against a stale base reads changes the branch never made. Cutting the
-worktree from the remote-tracking ref is where that is cheapest to get right.
+worktree from what the remote-tracking ref holds is where that is cheapest to
+get right.
 
 Then switch the session into it with **`EnterWorktree`**, passing the new
 directory as `path` — the worktree exists and `git worktree list` reports
@@ -263,32 +276,41 @@ So: fall back only when the message establishes that the path could not be
 created for permission reasons. Anything else stops the command and is
 reported verbatim, unnamed rather than misnamed.
 
-**Then check whether the branch survived, because it usually does.**
-`git worktree add -b` creates the branch *before* it creates the directory,
-so a failure at the directory leaves the branch behind — against an
-unwritable directory it prints `fatal: could not create leading
-directories`, and the branch stays in `git branch --list`. A blind
-create there fails with *branch already exists* — `git-branch-create.sh`
-refuses it on purpose — which would turn a handled fallback into a stop.
-Both post-failure states are ordinary and each has one command, in the
-runbook's table.
+**The helper removes the branch a failed fork made, so the fallback can
+create it.** The branch exists *before* the directory or any checkout, and
+git's cleanup of a failed add leaves it:
+against an unwritable directory it prints `fatal: could not create leading
+directories`, and the branch stays. Left there, it fails a retry with *branch
+already exists*, `git-branch-create.sh` refuses it on purpose, and
+`git-branch-drop.sh` refuses it as never landed, so nothing the session holds
+could remove it. The helper deletes it by compare-and-swap against the start
+point, so a branch that holds a commit stays, and only when no worktree holds
+it.
+
+**The helper makes the branch apart from the add so that it knows the branch
+is its own.** Two sessions can fork one name at once, both past the check that
+it is free. With `git worktree add -b`, the loser's one exit status cannot say
+whether its branch step failed, and the winner's branch sits at the start point
+with no worktree yet, which is exactly what the removal takes: the loser would
+delete it. A separate `git branch` fails first, so the loser stops there with
+git's own line and removes nothing, and the winner's add goes on. A branch still
+standing after a failed fork is therefore not this fork's to adopt, which is
+why the runbook's table stops there.
 
 Every git write goes through a helper because a prefix grant buys more than
 its operation; the flags each raw grant would license — `git switch`,
 `git worktree add -B`, `git checkout -b … -f` — are owned by
 `docs/harness-boundaries.md`, *Prefix grants and wildcard denies*.
 `git-worktree-fork.sh` and `git-branch-create.sh` fix their commands the same
-way — every flag decided in the file, both arguments shape-checked, and
-creation only, so a name that already exists is refused rather than reset.
-`git-switch-existing.sh` takes one shape-checked argument, requires the branch
-to exist, and passes no flags to git at all. `git worktree list` stays a raw
-grant because it reads and nothing else.
+way — every flag decided in the file, both arguments shape-checked, and a
+name that already exists refused rather than reset.
+`git worktree list` stays a raw grant because it reads and nothing else.
 
-The post-failure table's second row spells the base out for the reason
+The post-failure table's first row spells the base out for the reason
 the clean-`main` rows give:
 this path starts from a clean `main`, so it takes the fetched
-`origin/main` rather than whatever local `main` happens to be. Either way
-the run continues on the branch, in place, exactly as the
+`origin/main` rather than whatever local `main` happens to be. The run then
+continues on the branch, in place, exactly as the
 dirty-`main` path does. Both no-worktree states then look the
 same to everything downstream, and there is only one of them to describe —
 **including step 1's consequence, which is this path's too**: the branch

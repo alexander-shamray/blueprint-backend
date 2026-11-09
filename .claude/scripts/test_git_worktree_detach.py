@@ -13,6 +13,7 @@ from review_helpers import (
     COMMANDS,
     SCRIPTS,
     BASH,
+    code_lines,
     setUpModule,
     temp_root,
     run_bash,
@@ -216,16 +217,27 @@ class StaleSweepWorktrees(unittest.TestCase):
 
 GIT_LEAVING_A_DIRECTORY = """\
 git() {
-  if [ "$1" = worktree ] && [ "$2" = remove ]; then
-    command git worktree remove "$3" || return
+  if [ "$1" = -c ] && [ "$3" = worktree ] && [ "$4" = remove ]; then
+    command git -c "$2" worktree remove "$5" || return
     case "$SHIM_LEAVES" in
-      directory) mkdir -p "$3" ;;
-      file) mkdir -p "$3" && : > "$3/held" ;;
+      directory) mkdir -p "$5" ;;
+      file) mkdir -p "$5" && : > "$5/held" ;;
     esac
     return "$SHIM_EXIT"
   fi
   command git "$@"
 }
+"""
+
+# A file at $F, past Windows' 260 characters once checked out, committed by its index alone, so nothing writes the deep
+# path in the repository itself, then a sweep-shaped worktree at $P holding it.
+DEEP = """
+set -e
+long() { git -c core.longpaths=true "$@"; }
+blob=$(printf 'deep\\n' | git -C "$R" hash-object -w --stdin)
+git -C "$R" update-index --add --cacheinfo "100644,$blob,$F"
+git -C "$R" -c user.name=t -c user.email=t@example.invalid commit -q -m deep
+long -C "$R" worktree add -q --detach "$P" HEAD
 """
 
 
@@ -319,6 +331,24 @@ class ARemovalGitLeftHalfDone(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.exists(path))
         self.assert_the_lists_are_gone(path)
+
+    def test_a_worktree_holding_a_path_past_260_characters_is_removed(self):
+        # Windows' limit: without long paths git refuses a worktree it cannot read, or fails to delete the deep file
+        # and leaves the directory unregistered. Long paths are set off above every config file, which only the
+        # helper's -c outranks. Only a Windows run can fail on the removal itself, so the spelling is held everywhere.
+        path = f"{self.root}/secsweep-deep00"
+        deep = "/".join(["d" * 60] * 5) + "/deep.txt"
+        made = run_bash(DEEP, R=self.repo, P=path, F=deep)
+        self.assertEqual(0, made.returncode, made.stderr)
+        self.assertGreater(len(f"{path}/{deep}"), 260)
+        result = run_bash(
+            'cd "$R" && bash "$DROP" "$P"', R=self.repo, DROP=str(DROP), P=path, TMPDIR=self.root,
+            GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="core.longpaths", GIT_CONFIG_VALUE_0="false")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.exists(path))
+        self.assertFalse(self.registered(path))
+        self.assertIn("git -c core.longpaths=true worktree remove",
+                      "\n".join(code_lines(DROP.read_text(encoding="utf-8"))))
 
     def test_a_tree_git_refused_keeps_its_work_and_its_lists_and_git_says_why(self):
         # Untracked work is git's refusal: still registered, so nothing here deletes anything.

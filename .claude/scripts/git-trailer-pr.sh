@@ -4,6 +4,7 @@
 # would take any command (`docs/harness-boundaries.md`); this takes a number and spells the exec itself.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/git-push-url.sh"
 
 [ "$#" -eq 1 ] || { echo "usage: git-trailer-pr.sh <pr-number>" >&2; exit 2; }
 pr="$1"
@@ -41,6 +42,10 @@ IFS=$'\t' read -r state head_branch base cross <<<"${row%$'\r'}"
 [ "$state" = OPEN ] || { echo "pull request #$pr is $state, not OPEN" >&2; exit 3; }
 [ "$head_branch" = "$branch" ] || { echo "pull request #$pr is for $head_branch, not $branch" >&2; exit 3; }
 [ "$base" = main ] && [ "$cross" = false ] || { echo "pull request #$pr is not a same-repository one into main" >&2; exit 3; }
+
+# Ahead of the rewrite, so a refusal leaves the commits as they were, and at its own exit: 7 below is a push that failed
+# after the rewrite, whose answer is a rerun, and a rerun cannot answer this.
+origin_pushes_where_added || exit 8
 
 # Rewriting is only safe over what origin already holds: an unpushed commit would be published by the lease, and an
 # unseen one discarded by it.

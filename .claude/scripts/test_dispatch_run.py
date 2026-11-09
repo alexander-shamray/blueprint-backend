@@ -488,7 +488,11 @@ class LaunchTests(InRoot):
         stale = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
         stale.parent.mkdir(parents=True)
         stale.write_text(json.dumps(MERGED_S1), encoding="utf-8")
+        # `absorb` takes what stands in the run directory as this launch's, so an earlier launch's has to go here.
+        earlier = state_dir() / "S1.json"
+        earlier.write_text(json.dumps(MERGED_S1), encoding="utf-8")
         raw = run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"))
+        self.assertFalse(earlier.exists())
         seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
         self.assertEqual(["-p", "--output-format", "json", "--model", "opus"], seen["argv"])
         for flag in ("--dangerously-skip-permissions", "--permission-mode"):
@@ -855,9 +859,15 @@ class ClassifyTests(InRoot):
 
 
 class ResultCommandTests(InRoot):
-    def absorb(self, data, envelope=SUCCESS, code=0, crashes=0, **fields):
+    def absorb(self, data, envelope=SUCCESS, code=0, crashes=0, in_run_directory=None, **fields):
         record(RUN, "S1", **{"status": "running", "branch": BRANCH, "worktree": WORKTREE, "crashes": crashes,
                              **fields})
+        # Each call stands for a launch and its session, and a launch removes what the session before it left here.
+        copy = state_dir() / "S1.json"
+        copy.unlink(missing_ok=True)
+        if in_run_directory is not None:
+            copy.write_text(in_run_directory if isinstance(in_run_directory, str) else json.dumps(in_run_directory),
+                            encoding="utf-8")
         target = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         if data is None:
@@ -874,6 +884,26 @@ class ResultCommandTests(InRoot):
     def test_result_records_the_prs_title(self):
         self.assertEqual("S1: merged-claimed pr #1690", self.absorb(MERGED_S1)[0])
         self.assertEqual(MERGED_S1["title"], group_state(RUN, "S1")["title"])
+
+    def test_a_result_written_to_the_run_directory_is_read_rather_than_relaunched(self):
+        # H22 of run 20261108-071135 wrote to the main checkout's run directory; a hand-back there read as a crash,
+        # and its reason was lost with the file.
+        for outcome in ("handed-back", "stopped"):
+            with self.subTest(outcome=outcome):
+                result = {**HANDED_S1, "outcome": outcome, "reason": "needs a key"}
+                self.assertEqual(f"S1: {outcome} - needs a key", self.absorb(None, in_run_directory=result)[0])
+                self.assertEqual("needs a key", group_state(RUN, "S1")["reason"])
+
+    def test_a_merge_written_to_the_run_directory_is_a_claim(self):
+        self.assertEqual("S1: merged-claimed pr #1690", self.absorb(None, in_run_directory=MERGED_S1)[0])
+
+    def test_a_bad_result_in_the_run_directory_is_still_a_crash(self):
+        self.assertIn("S1: relaunch - invalid result: ", self.absorb(None, in_run_directory="not json")[0])
+
+    def test_the_worktrees_result_wins_over_one_in_the_run_directory(self):
+        other = {**HANDED_S1, "reason": "the run directory's"}
+        self.assertEqual("S1: merged-claimed pr #1690", self.absorb(MERGED_S1, in_run_directory=other)[0])
+        self.assertEqual(MERGED_S1, json.loads((state_dir() / "S1.json").read_text(encoding="utf-8")))
 
     def test_usage_sums_every_session_the_group_ran(self):
         earlier = {"input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 50}
