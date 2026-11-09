@@ -4,7 +4,7 @@
 `tools/ci-cost/ghcr_prune.py`, which deletes a container version of this
 repository's packages unless it is kept for itself or a kept version needs it.
 A version is kept for itself when it was touched within `KEEP_DAYS`, is among
-the `KEEP_NEWEST` newest images of its package, carries a tag a dispatch of
+the `KEEP_NEWEST` newest images of its package, carries a commit a dispatch of
 `deploy.yml` named, or carries a tag that is neither a commit nor a referrers
 tag, `main` among them. A kept version that carries a tag needs its index's
 children and each one's signature and attestations, read from the registry. A
