@@ -206,8 +206,7 @@ Each round is the review done once, end to end:
      composed, every line of the payload is checked against it**; a payload
      containing it gets a different one.
    - **A title must never begin with `/` or `#`**; name a command or
-     directive after a leading word and never in backticks, which the
-     heredoc's shell would run — `Honour the #nullable directive`.
+     directive after a leading word — `Honour the #nullable directive`.
 
    (why: docs/commands/security-sweep.md, *File*)
 

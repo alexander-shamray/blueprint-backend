@@ -100,6 +100,11 @@ REFUSED_SUBCOMMANDS = {
     "daemon": "starts a server that runs the services it is told to",
     "http-backend": "is a CGI program that runs git for whoever calls it",
     "web--browse": "starts the browser program it is given",
+    "difftool": "runs the program `diff.tool` names, the `--ext-diff` act by another verb",
+    "mergetool": "runs the program `merge.tool` names, the `--ext-diff` act by another verb",
+    "send-pack": "updates a remote ref past every check a `git push` gets",
+    "http-push": "updates a remote ref past every check a `git push` gets",
+    "receive-pack": "takes a push into a repository past every check a `git push` gets",
 }
 REPOSITORY_SUBCOMMANDS = {
     "fetch", "clone", "pull", "push", "remote", "submodule", "ls-remote",
@@ -110,8 +115,7 @@ REPOSITORY_SUBCOMMANDS = {
 # letter means something else on another: `cherry-pick -x` records a trailer.
 # `archive -o` and `format-patch -o` only write a named file, so stay admitted.
 EXECUTING_SHORT_FLAGS = {
-    "rebase": "xs", "pull": "s", "difftool": "x", "clone": "u",
-    "ls-remote": "u", "grep": "O",
+    "rebase": "xs", "pull": "s", "clone": "u", "ls-remote": "u", "grep": "O",
 }
 
 # A flag that runs something on one subcommand only: `commit --template` only
@@ -127,8 +131,7 @@ EXECUTING_FORMS = {"bisect": "run", "submodule": "foreach",
 
 # Letters after which the rest of a word is a value, so `-Xours` holds no `-s`.
 GLUED_VALUE_LETTERS = {
-    "rebase": "X", "pull": "Xo", "difftool": "t", "clone": "bcjo",
-    "grep": "efABCm", "fetch": "jo",
+    "rebase": "X", "pull": "Xo", "clone": "bcjo", "grep": "efABCm", "fetch": "jo",
 }
 
 # Git's own options, which sit before the subcommand, taken from git's synopsis.
@@ -185,8 +188,8 @@ def edit_denies():
 def denied_path(relative, whole=False):
     """The deny that holds `relative`, a path from a checkout's root, or `None`.
 
-    Anchored at the root and folded: `.CLAUDE/hooks/x` is held, `.claude/worktrees/x`
-    is not. With `whole`, a write to a tree, a parent of a deny's prefix counts.
+    Anchored at the root and folded. With `whole`, a parent of a deny's prefix counts.
+    `fnmatchcase` wants a `/` before `**/`, so such a rule is asked again without it.
     """
     parts = [part for part in re.split(r"[\\/]+", relative)
              if part not in ("", ".")]
@@ -196,6 +199,7 @@ def denied_path(relative, whole=False):
     for rule in edit_denies():
         literal = re.split(r"[*?\[]", rule, maxsplit=1)[0].rstrip("/")
         if fnmatch.fnmatchcase(path, rule) or (
+                rule.startswith("**/") and fnmatch.fnmatchcase(path, rule[3:])) or (
                 rule.endswith("/**") and path == rule[:-3]) or (
                 whole and literal.startswith(path + "/")):
             return f"`Edit({rule})`"
@@ -792,7 +796,8 @@ def expansion_end(command, start):
     if not command.startswith("$", start):
         return None
     if command.startswith("${", start):
-        close = _closing_brace(command, start + 2)
+        # A `#` straight after the brace is a length, and read afresh a comment.
+        close = _closing_brace(command, start + (3 if command.startswith("#", start + 2) else 2))
         return None if close is None else close + 1
     if command[start + 1:start + 2] in ("@", "*", "!"):
         return start + 2
@@ -1724,6 +1729,13 @@ def program_name(token):
 # of `X+=1 printf 'git p%ssh origin +HEAD:main' u | bash`.
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=")
 
+# A shell given a helper that reads stdin as a title and a body, in the spelling
+# the grants use: nothing here is a quote, an expansion or a `..`, and a
+# redirection before the helper is what `bash < a.sh <<EOF` runs the text with.
+ISSUE_HELPER_RUN = re.compile(
+    r"\s*(?:bash|sh)[ \t]+(?:\./)?\.claude/scripts/"
+    r"gh-issue-(?:create|hand|harness|mutation|sweep)\.sh(?=[\s<>]|$)")
+
 # Reserved words the next word of a run is a command word after. `done`, `fi`
 # and `}` end a construct and lead nothing.
 COMMAND_PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then",
@@ -1880,11 +1892,21 @@ def forwards_to_evaluator(command, position, ordinary):
     return False
 
 
+def _helper_reads_stdin_as_data(command, start):
+    """Whether the run at `start` is a shell handed an issue helper as its script file.
+
+    A shell handed a file reads stdin as data. Only this literal shape: an
+    assignment, a wrapper or a `cd` before it runs the text or moves the path.
+    """
+    return not command[:start].strip() and ISSUE_HELPER_RUN.match(command, start) is not None
+
+
 def _consumes_as_script(command, position, ordinary):
     """Whether the script at `position` is executed by its own run or a later
     one in the same pipeline."""
     start, end = _run_bounds(command, position, ordinary)
-    return (reads_stdin_as_script(_run_words(command, start, end, ordinary))
+    return ((reads_stdin_as_script(_run_words(command, start, end, ordinary))
+             and not _helper_reads_stdin_as_data(command, start))
             or forwards_to_evaluator(command, position, ordinary))
 
 
@@ -2152,7 +2174,7 @@ def evaluated_scripts(tokens):
 DATA_ONLY_COMMANDS = {"echo", "printf", ":", "true", "false"}
 
 # A run led by one of these reads or lists the words after it, and cannot run
-# them: `grep -n tee .claude/x` writes nothing, and `git rm` is git's business.
+# them: `grep -n tee .claude/x` writes nothing, and `git rm` is `git_path_offence`'s.
 READING_COMMANDS = frozenset({
     "cat", "diff", "file", "git", "grep", "head", "ls", "stat", "tail", "wc",
 })
@@ -2365,19 +2387,32 @@ REMOTE_RESET = (
 )
 STDIN_DATA_ROUTE = (
     " If the shell runs a script file and this text is that script's input, "
-    "as an issue body for `gh-issue-hand.sh` is, write the text to a file "
-    "with `Write` and pass it as `< <path>`: this guard reads a shell's stdin "
-    "as a script, quoted delimiter or not, since it cannot see what the "
-    "script does with it. Where `Write` is denied, as in a sweep filing "
-    "through `gh-issue-sweep.sh`, the quoted heredoc stays the route and the "
-    "text is reworded to read as a script: no backtick or `$(`, an even "
-    "count of apostrophes outside double quotes, and a push or any other "
-    "command this guard refuses described in prose rather than spelled; "
+    "write the text to a file with `Write` and pass it as `< <path>`: this "
+    "guard reads a shell's stdin as a script, quoted delimiter or not, since "
+    "it cannot see what the script does with it. An issue helper is read as "
+    "taking data only as the first thing the command does, spelled "
+    "`bash .claude/scripts/gh-issue-sweep.sh <args> <<'DELIM'`, which is the "
+    "route where `Write` is denied, as in a sweep; "
     "`docs/harness/pitfalls.md`, *Shell and encoding*, lists the shapes "
     "another check refuses there too."
 )
 CACHEINFO_MODE = re.compile(r"^[0-7]{6}(?:,|$)")
 REMOTE_TRACKING = re.compile(r"^(?:refs/remotes/)?origin/")
+
+# A subset by hand of the keys a written value runs a program from, `git -c`
+# outliving the command. `core.editor`, `credential.helper` and the rest stay
+# admitted, with a read and a removal, or `rerere.enabled` is refused with them.
+RUNNING_CONFIG_KEY = re.compile(
+    r"(?i)^(?:alias\..+|core\.pager|core\.hookspath|core\.sshcommand|diff\.external|.+\.cmd)$")
+CONFIG_VALUE_OPTIONS = frozenset({"-f", "--file", "--blob", "--type", "--default",
+                                  "--comment", "--value"})
+CONFIG_WRITE_OPTIONS = frozenset({"--add", "--replace-all"})
+CONFIG_OTHER_OPTIONS = frozenset({
+    "--edit", "-e", "--get", "--get-all", "--get-color", "--get-colorbool",
+    "--get-regexp", "--get-urlmatch", "--list", "-l", "--remove-section",
+    "--rename-section", "--unset", "--unset-all"})
+CONFIG_OTHER_ACTIONS = frozenset({"edit", "get", "list", "remove-section",
+                                  "rename-section", "unset"})
 
 
 def _is_push(segment):
@@ -2497,6 +2532,36 @@ def pull_offence(segment):
     return None
 
 
+def config_offence(segment):
+    """The refusal for a `git config` writing a key that runs a program, or None."""
+    stripped = after_global_options(segment)
+    if not stripped or stripped[0] != "config":
+        return None
+    operands, options, position = [], set(), 1
+    while position < len(stripped):
+        word = stripped[position]
+        position += 1
+        if not word.startswith("-"):
+            operands.append(word)
+            continue
+        options.add(word.split("=", 1)[0])
+        if word in CONFIG_VALUE_OPTIONS:
+            position += 1
+    if options & CONFIG_OTHER_OPTIONS or (operands and operands[0] in CONFIG_OTHER_ACTIONS):
+        return None
+    if operands[:1] == ["set"]:
+        operands = operands[1:] + [""]
+    if len(operands) < 2 and not options & CONFIG_WRITE_OPTIONS:
+        return None
+    if not operands or not RUNNING_CONFIG_KEY.match(operands[0]):
+        return None
+    return (
+        f"`git config {operands[0]}` writes a key git runs a program from, the "
+        "`git -c` this guard refuses, in a file that outlives this command. "
+        "Hand it to the owner if it is wanted; other keys stay admitted."
+    )
+
+
 def trap_offence(segment):
     """The refusal for a git command whose text shows it losing work, or None."""
     stripped = after_global_options(segment)
@@ -2554,6 +2619,8 @@ WRITING_VERBS = {
 TARGET_OPTION_VERBS = frozenset({"cp", "install", "ln", "mv"})
 # Verbs that remove, move or fill a directory whole, so its parent is a write.
 TREE_VERBS = frozenset({"cp", "install", "mv", "rm", "rmdir", "shred"})
+# Verbs whose operand goes away, so a parent of the checkout goes with it.
+REMOVING_VERBS = frozenset({"mv", "rm", "rmdir", "shred", "unlink"})
 
 # Options that take a value, so their value is not read as an operand.
 SHORT_VALUE_OPTIONS = {
@@ -2570,6 +2637,8 @@ LONG_VALUE_OPTIONS = {
     "truncate": ("--reference", "--size"),
 }
 FIND_EXECUTORS = frozenset({"-exec", "-execdir", "-ok", "-okdir"})
+FIND_OUTPUT_FILES = frozenset({"-fls", "-fprint", "-fprint0", "-fprintf"})
+FIND_VALUE_OPTIONS = frozenset({"-D"})
 DIRECTORY_CHANGES = frozenset({"cd", "pushd", "popd"})
 DIRECTORY_WRAPPERS = frozenset({"builtin", "command"})
 
@@ -2631,7 +2700,9 @@ def written_path(word, cwd, command):
         if literal is None:
             return None
     if os.name == "nt":
-        literal = DRIVE_SPELLING.sub(r"\1:", literal)
+        # `abspath("C:")` is that drive's working directory, not the drive.
+        literal = DRIVE_SPELLING.sub(lambda match: match.group(1) + ":" + (
+            os.sep if match.end() == len(literal) else ""), literal)
     if not (os.path.isabs(literal) or literal.startswith(("/", "\\"))):
         if cwd is None:
             return None
@@ -2658,6 +2729,14 @@ def checkout_relative(path):
     relative = os.path.relpath(path, root)
     worktree = WORKTREE_BELOW.match(relative)
     return worktree.group(1) if worktree else relative
+
+
+def in_linked_worktree(path):
+    """Whether `path` is in a linked worktree, removed from disk or not."""
+    root = checkout_of(path)
+    return root is not None and (
+        os.path.isfile(os.path.join(root, ".git"))
+        or WORKTREE_BELOW.match(os.path.relpath(path, root) + os.sep) is not None)
 
 
 def beneath(path, root):
@@ -2705,6 +2784,36 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None):
         "binds the editing tools alone, so this writes straight past it. Use "
         "an editing tool, where the rule judges the path, or hand it to the "
         "owner."
+    )
+
+
+def removal_offence(word, cwd, command, writer):
+    """The reason to refuse removing the place shell `word` names, or `None`.
+
+    The filesystem's root, the home directory and a strict parent of the checkout
+    the command starts in or has moved to; `rm -rf .` is the checkout itself.
+    """
+    path = written_path(word, cwd, command)
+    if path is None:
+        return None
+    # `rm -rf ../*` takes the checkout with the rest of what the star holds.
+    if os.path.basename(path) == "*":
+        path = os.path.dirname(path)
+    place = None
+    if os.path.dirname(path) == path:
+        place = "the filesystem's root"
+    elif os.path.normcase(path) == os.path.normcase(written_path("~", cwd, command) or ""):
+        place = "the home directory"
+    for start in (EVENT_CWD or os.getcwd(), cwd):
+        root = checkout_of(os.path.abspath(start)) if start else None
+        if place is None and root is not None and beneath(root, path) and (
+                os.path.normcase(root) != os.path.normcase(path)):
+            place = f"a parent of the checkout `{root}`"
+    if place is None:
+        return None
+    return (
+        f"{writer} would remove `{path}`, {place}, and this checkout or every "
+        "session's home with it. Name what is below it."
     )
 
 
@@ -2924,6 +3033,62 @@ def landings(destination, sources, into, cwd, command):
     return names or [None]
 
 
+def find_offence(words, cwd, command):
+    """The reason to refuse `find`'s own words: `-delete` from a start, an output file.
+
+    `-delete` is `rm -r` from each start, so `.`, no start and `-files0-from` are
+    the checkout at most. What an `-exec` runs is that verb's own to answer for.
+    """
+    literals = [target_literal(word) for word in words]
+    position, starts, files, deleting = 0, [], [], False
+    while position < len(words) and (literals[position] or "") in (
+            "-H", "-L", "-P", *FIND_VALUE_OPTIONS) or (
+            position < len(words) and (literals[position] or "").startswith("-O")):
+        position += 2 if literals[position] in FIND_VALUE_OPTIONS else 1
+    while position < len(words) and not (
+            literals[position] and literals[position][0] in "-(!),"):
+        starts.append(words[position])
+        position += 1
+    while position < len(words):
+        literal = literals[position]
+        position += 1
+        if literal == "-delete":
+            deleting = True
+        elif literal in FIND_OUTPUT_FILES and position < len(words):
+            files.append(words[position])
+            position += 1
+        elif literal in FIND_EXECUTORS:
+            while position < len(words) and literals[position] not in (";", "+"):
+                position += 1
+    for start in starts if deleting else ():
+        refusal = (removal_offence(start, cwd, command, "`find -delete`")
+                   or destination_offence(start, cwd, command, "`find -delete`", True))
+        if refusal is not None:
+            return refusal
+    for word in files:
+        refusal = destination_offence(word, cwd, command, "`find`")
+        if refusal is not None:
+            return refusal
+    return None
+
+
+def verb_offence(verb, operands, cwd, command, writer):
+    """The reason to refuse writing verb `verb` with `operands`, or `None`."""
+    for word, sources, into in verb_destinations(verb, operands):
+        refusal = removal_offence(word, cwd, command, writer) if (
+            sources is None and verb in REMOVING_VERBS) else None
+        if refusal is not None:
+            return refusal
+        names = [None] if sources is None or verb not in TREE_VERBS else (
+            landings(word, sources, into, cwd, command))
+        for name in names:
+            refusal = destination_offence(word, cwd, command, writer,
+                                          verb in TREE_VERBS, name)
+            if refusal is not None:
+                return refusal
+    return None
+
+
 def writing_verb_offence(words, cwd, command):
     """The reason to refuse a writing verb in the run `words`, or `None`.
 
@@ -2938,6 +3103,10 @@ def writing_verb_offence(words, cwd, command):
         if literal is None or ASSIGNMENT.match(words[index]):
             continue
         verb = program_name(literal)
+        if verb == "find":
+            refusal = find_offence(words[index + 1:], cwd, command)
+            if refusal is not None:
+                return refusal
         if verb not in WRITING_VERBS:
             continue
         operands = words[index + 1:]
@@ -2946,14 +3115,106 @@ def writing_verb_offence(words, cwd, command):
                 if word in (";", "+"):
                     operands = operands[:cut]
                     break
-        for word, sources, into in verb_destinations(verb, operands):
-            names = [None] if sources is None or verb not in TREE_VERBS else (
-                landings(word, sources, into, cwd, command))
-            for name in names:
-                refusal = destination_offence(word, cwd, command, f"`{verb}`",
-                                              verb in TREE_VERBS, name)
-                if refusal is not None:
-                    return refusal
+        refusal = verb_offence(verb, operands, cwd, command, f"`{verb}`")
+        if refusal is not None:
+            return refusal
+    return None
+
+
+def _git_operands(words, literals, value_options):
+    """`(options, before, after)` of a git verb's words: `after` follows a `--`."""
+    options, before, after, position = [], [], None, 0
+    while position < len(words):
+        raw, literal = words[position], literals[position]
+        position += 1
+        # A word holding a substitution has no literal, and is an option all the same.
+        spelled = literal if literal is not None else raw.strip("\"'")
+        if after is not None:
+            after.append(raw)
+        elif literal == "--":
+            after = []
+        elif spelled.startswith("-") and spelled != "-":
+            options.append(spelled)
+            if literal in value_options:
+                if position < len(words):
+                    options.append(literals[position] or "$")
+                position += 1
+        else:
+            before.append(raw)
+    return options, before, after or []
+
+
+def _has_short_letter(options, letter):
+    """Whether a short cluster in `options` carries `letter`."""
+    return any(re.fullmatch(rf"-[A-Za-z]*{letter}[A-Za-z]*", option) for option in options)
+
+
+def _restore_source(options):
+    """The `--source` of `git restore`'s `options`, spelled any way git takes it."""
+    for index, option in enumerate(options):
+        name, equals, value = option.partition("=")
+        if name.startswith("--") and len(name) > 3 and "--source".startswith(name):
+            return value if equals else (options[index + 1] if index + 1 < len(options) else "")
+        cluster = re.fullmatch(r"-[A-Za-z]*s(.*)", option)
+        if cluster and not option.startswith("--"):
+            return cluster.group(1) or (options[index + 1] if index + 1 < len(options) else "")
+    return None
+
+
+def git_path_offence(words, cwd, command):
+    """The reason to refuse a git verb writing a denied path, or `None`.
+
+    `git rm`, `git mv` and a restore from another commit, from a literal `-C`. A
+    restore from `HEAD` puts the file back, and a worktree's write is in its diff.
+    """
+    literals = [target_literal(word) for word in words]
+    lead = leading_command([word or "" for word in literals])
+    if program_name(lead) != "git":
+        return None
+    position = literals.index(lead) + 1
+    while position < len(words) and (literals[position] or "").startswith("-"):
+        if literals[position] == "-C" and position + 1 < len(words):
+            cwd = written_path(words[position + 1], cwd, command)
+        position += 2 if literals[position] in GLOBAL_VALUE_FLAGS else 1
+    if position >= len(words) or cwd is None or in_linked_worktree(os.path.abspath(cwd)):
+        return None
+    verb, words, literals = literals[position], words[position + 1:], literals[position + 1:]
+    if verb in ("rm", "mv"):
+        options, _, _ = _git_operands(words, literals, ())
+        if set(options) & {"--cached", "--dry-run"} or _has_short_letter(options, "n"):
+            return None
+        return verb_offence(verb, words, cwd, command, f"`git {verb}`")
+    if verb == "checkout":
+        options, before, after = _git_operands(
+            words, literals, {"-b", "-B", "--orphan", "--conflict", "--pathspec-from-file"})
+        if set(options) & {"-b", "-B", "--orphan"}:
+            return None
+        # A source nothing can read is judged by its paths, which can be read.
+        source = (target_literal(before[0]) or "$") if before else None
+        # As git disambiguates: with no `--`, a first word naming a path is one.
+        first = written_path(before[0], cwd, command) if before and not after else None
+        if first is not None and os.path.lexists(first):
+            source = None
+        paths = after or before[1:]
+    elif verb == "restore":
+        options, before, after = _git_operands(
+            words, literals, {"-s", "--source", "--conflict", "--pathspec-from-file", "-U", "--unified"})
+        source = _restore_source(options)
+        # What follows a short `s` is its value: `-sStaging` is no `--staged`.
+        letters = [option.split("s", 1)[0] for option in options]
+        staged = "--staged" in options or _has_short_letter(letters, "S")
+        worktree = "--worktree" in options or _has_short_letter(letters, "W")
+        if staged and not worktree:
+            return None
+        paths = before + after
+    else:
+        return None
+    if source is None or source in ("HEAD", "@"):
+        return None
+    for word in paths:
+        refusal = destination_offence(word, cwd, command, f"`git {verb}` from `{source}`", True)
+        if refusal is not None:
+            return refusal
     return None
 
 
@@ -3004,7 +3265,8 @@ def write_offence(command):
                 target, cwd, command, f"`{match.group('operator')}`")
             if refusal is not None:
                 return refusal
-        refusal = writing_verb_offence(words, cwd, command)
+        refusal = (git_path_offence(words, cwd, command)
+                   or writing_verb_offence(words, cwd, command))
         if refusal is not None:
             return refusal
         cwd = directory_after(words, cwd, command)
@@ -3200,7 +3462,8 @@ def _offence(command, depth, judged, reading):
 
     for segment in git_segments(tokens):
         refusal = (push_offence(segment) or trap_offence(segment)
-                   or fetch_offence(segment) or pull_offence(segment))
+                   or fetch_offence(segment) or pull_offence(segment)
+                   or config_offence(segment))
         if refusal is not None:
             return refusal
 
@@ -3231,6 +3494,11 @@ def _offence(command, depth, judged, reading):
             return (
                 f"`git {subcommand} {operand}` runs the command it is given, "
                 "which no flag check can see, and nothing here runs it."
+            )
+        if subcommand == "subtree" and "push" in after_global_options(segment)[1:]:
+            return (
+                "`git subtree push` updates a remote ref past every check a "
+                "`git push` gets, and nothing here runs it."
             )
         value_flags = VALUE_FLAGS_BY_SUBCOMMAND.get(subcommand, frozenset())
         skip = False

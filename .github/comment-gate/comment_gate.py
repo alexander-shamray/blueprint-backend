@@ -949,7 +949,9 @@ def added_lines(diff):
         line = lines[i]
         i += 1
         if line.startswith("+++ "):
-            name = line[4:]
+            # Git ends a name holding a space with a tab, and quotes any name
+            # holding a tab, so this tab is never part of the name.
+            name = line[4:].removesuffix("\t")
             if name.startswith('"'):
                 raise Unreadable(f"a path git quotes: {name}")
             if name.startswith("b/"):

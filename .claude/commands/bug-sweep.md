@@ -253,9 +253,8 @@ Each round is the review done once, end to end:
    composed, every line of the payload — title, body, quoted lines — is checked
    against it**, and a payload that contains it gets a different one. **A title
    must never begin with `/` or `#`**; name a command or directive after a
-   leading word and never in backticks, which the heredoc's shell would run —
-   `Fix the /bug-sweep filing`. (why: docs/commands/bug-sweep.md, *The round:
-   file*)
+   leading word — `Fix the /bug-sweep filing`. (why:
+   docs/commands/bug-sweep.md, *The round: file*)
 
 5. **Summarise the round.** The helper's `mode` line and the pinned commit,
    new issues filed (with numbers), candidates dropped at each gate and why,

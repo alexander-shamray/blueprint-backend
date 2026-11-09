@@ -1485,6 +1485,9 @@ class TheGitArgvGuard(unittest.TestCase):
             "git log ${BRANCH}",
             "git log ${BRANCH:-main}",
             "echo ${#arr[@]}",
+            'echo "${#X}"',
+            'echo "(length ${#arr[@]})"',
+            '[ -n "$X" ] && echo "set (length ${#X})" || echo no',
             "git log ${BRANCH//x/y}",
         ):
             with self.subTest(command=command):
@@ -2393,20 +2396,66 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertAdmitted("git commit -F - <<\"EOF\"\na message\nEOF")
         self.assertAdmitted("git commit -F - <<'EOF'\na message\nEOF")
 
-    def test_a_refused_sweep_body_names_the_route_a_sweep_can_take(self):
-        # A sweep denies `Write`, so the file route the refusal opens with
-        # cannot be taken there; the refusal names the heredoc rewording and
-        # the pitfalls entry that lists the shapes another check refuses.
+    def test_a_helper_script_reads_its_heredoc_as_data(self):
+        # A shell handed a script file reads stdin as data, and a sweep denies
+        # `Write`, so the file route cannot be taken there: this guard refused
+        # 134 of admin's commands for a body's backtick, 42 of them in sweeps.
+        for helper in ("gh-issue-create", "gh-issue-hand", "gh-issue-harness",
+                       "gh-issue-mutation", "gh-issue-sweep"):
+            for body in ("the parent's tree", "The `foo` call.", "$(git status)",
+                         "then git push origin +HEAD:main ran"):
+                with self.subTest(helper=helper, body=body):
+                    self.assertAdmitted(
+                        f"bash .claude/scripts/{helper}.sh bug low code "
+                        f"<<'ISSUE_BODY_END'{NEWLINE}Title{NEWLINE}{NEWLINE}"
+                        f"{body}{NEWLINE}ISSUE_BODY_END")
+        for command in ("bash ./.claude/scripts/gh-issue-sweep.sh bug low code <<<'a `b`'",
+                        "sh .claude/scripts/gh-issue-hand.sh bug low code <<'D'\nT\n\nsee `x`\nD"):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_only_that_spelling_reads_a_heredoc_as_data(self):
+        body = "<<'D'\ngit push origin +HEAD:main\nD"
+        helper = ".claude/scripts/gh-issue-sweep.sh"
+        for command in (
+            f"bash {body}",
+            f"bash /dev/stdin {body}",
+            f"bash - {body}",
+            f"bash -s {helper} {body}",
+            f"bash $X {helper} {body}",
+            f"bash < {helper} {body}",
+            f"bash '{helper}'$X {body}",
+            f"bash .claude/scripts/../../x.sh {body}",
+            f"bash X=1 {helper} {body}",
+            f"env bash {helper} {body}",
+            f"bash .claude/scripts/gh-pr-create.sh {body}",
+            f"python -c 'import sys; exec(sys.stdin.read())' bash {helper} {body}",
+            f"bash() {{ source /dev/stdin; }}; bash {helper} {body}",
+            f"BASH_ENV=/dev/stdin bash {helper} {body}",
+            f"PATH=/tmp/evil:$PATH bash {helper} {body}",
+            f"cd /tmp && bash {helper} {body}",
+            f"/tmp/evil/bash {helper} {body}",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+
+    def test_a_helper_heredoc_still_has_its_substitutions_judged(self):
+        # An unquoted body expands before the helper starts, in this shell.
+        self.assertRefused("bash .claude/scripts/gh-issue-hand.sh bug low code <<D\n"
+                           "T\n\n$(git push origin +HEAD:main)\nD")
+
+    def test_a_refused_stdin_script_names_the_route_a_sweep_can_take(self):
+        # Before the helper's own run the data reading does not hold, and the
+        # refusal names the helper's spelling and the pitfalls entry.
         for body in ("the parent's tree", "The `foo` call.",
                      "then git push origin +HEAD:main ran"):
             with self.subTest(body=body):
                 reason = self.assertRefused(
-                    "bash .claude/scripts/gh-issue-sweep.sh bug low code "
+                    "cd docs && bash .claude/scripts/gh-issue-sweep.sh bug low code "
                     f"<<'ISSUE_BODY_END'{NEWLINE}Title{NEWLINE}{NEWLINE}"
                     f"{body}{NEWLINE}ISSUE_BODY_END")
                 self.assertIn("handed to a shell on stdin", reason)
-                self.assertIn("Where `Write` is denied", reason)
-                self.assertIn("even count of apostrophes", reason)
+                self.assertIn("first thing the command does", reason)
                 self.assertIn(
                     "`docs/harness/pitfalls.md`, *Shell and encoding*", reason)
 
@@ -3206,7 +3255,7 @@ class TheGitArgvGuard(unittest.TestCase):
 
     def test_a_heredoc_fed_to_a_script_names_the_file_route(self):
         reason = self.assertRefused(
-            "bash .claude/scripts/gh-issue-hand.sh bug low harness <<'EOF'\nsee `x` here\nEOF")
+            "bash .claude/scripts/gh-pr-body.sh bug low harness <<'EOF'\nsee `x` here\nEOF")
         self.assertIn("with `Write`", reason)
         self.assertIn("< <path>", reason)
 
@@ -3411,6 +3460,81 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertAdmitted(command)
 
+    def test_the_programs_listed_as_readers_cannot_be_made_to_run_one(self):
+        # Each runs what `diff.tool` or `merge.tool` names, the `--ext-diff`
+        # act by another verb.
+        for command in ("git difftool", "git difftool HEAD~1", "git mergetool",
+                        "git -C sub mergetool", "git --no-pager difftool -y"):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+        for command in ("git log -- difftool", "git diff --stat",
+                        "echo git mergetool", "git show mergetool"):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_the_plumbing_that_updates_a_remote_ref_without_push_is_refused(self):
+        # The protected-branch, force and delete checks key off the verb `push`.
+        for command in (
+            "git send-pack origin HEAD:main",
+            "git send-pack --force origin HEAD:refs/heads/main",
+            "git http-push origin HEAD:main",
+            "git -C /tmp/x send-pack origin HEAD:main",
+            "git --no-pager send-pack origin HEAD:heads/main",
+            "git receive-pack /tmp/x",
+            "git subtree push --prefix=x origin main",
+            "git -C sub subtree push --prefix=x origin main",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+
+    def test_a_ref_named_send_pack_is_data_for_another_verb(self):
+        for command in (
+            "git log send-pack", "git show http-push", "git diff send-pack..HEAD",
+            "git --no-pager log remote-fix", "git -C d log subtree",
+            "git --git-dir=.git log receive-pack", "git remote -v",
+            "git subtree split --prefix=x", "git log --grep=push",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
+    def test_a_persistent_key_that_runs_a_program_is_refused(self):
+        # The `git -c` this guard refuses, written where it outlives the command.
+        for command in (
+            "git config alias.p push",
+            "git config --global alias.p push",
+            "git config --add alias.p push",
+            "git config --replace-all alias.p push",
+            "git config set alias.p push",
+            "git config core.pager ./tools/run",
+            "git config core.hooksPath /tmp/hooks",
+            "git config CORE.SSHCOMMAND ./tools/run",
+            "git config --local core.sshCommand ./tools/run",
+            "git config diff.external ./tools/run",
+            "git config difftool.x.cmd ./tools/run",
+            "git config -f other alias.p push",
+            "git config --file=other alias.p push",
+            "git -C sub config alias.p push",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command)
+
+    def test_a_key_that_runs_nothing_and_a_read_stay_admitted(self):
+        for command in (
+            "git config rerere.enabled true", "git config user.email a@example.invalid",
+            "git config remote.origin.prune true", "git config --local rebase.backend apply",
+            "git config user.name", "git config alias.p", "git config core.pager",
+            "git config --get core.hooksPath", "git config --get-all alias.p",
+            "git config --get-regexp alias", "git config --list", "git config -l",
+            "git config get alias.p", "git config list",
+            "git config --type=bool core.sparseCheckout",
+            "git config --unset alias.p", "git config --unset-all core.hooksPath",
+            "git config --remove-section alias", "git config unset alias.p",
+            'git config --local "$key" value',
+            "git log --grep='git config alias.p push'", "echo git config alias.p push",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+
     def test_xargs_cannot_supply_a_push(self):
         for command in (
             "echo +HEAD:main | xargs git push origin some-branch",
@@ -3597,6 +3721,138 @@ class AWriteIntoWhatTheTargetDenies(unittest.TestCase):
         self.admitted("ls > notes/package.json", "ls > .claude/settings.json",
                       hook=hook)
 
+    def test_a_double_star_deny_holds_a_file_at_the_root(self):
+        # `fnmatchcase` wants a `/` before `**/`, so the root's own file passed
+        # a rule that names it at every depth.
+        hook = self.hook_denying("**/package.json", "**/Directory.Build.*",
+                                 "**/obj/**", "**/*.csproj.user")
+        self.refused("ls > package.json", "ls > PACKAGE.JSON", "ls > Directory.Build.props",
+                     "ls > notes/package.json", "ls > obj/x", "ls > notes/obj/x",
+                     "cp /tmp/a a.csproj.user", "rm -rf obj/x", hook=hook)
+        # The tree itself is what an `obj` at a depth has always been.
+        self.admitted("ls > package.json.bak", "ls > notes/x.md", "rm -rf obj",
+                      "rm -rf notes/obj", hook=hook)
+
+    def test_a_find_is_judged_by_the_starts_it_deletes_and_the_files_it_prints(self):
+        self.refused("find .claude/hooks -delete", "find .claude -name x -delete",
+                     "find -L .claude/hooks -delete", "find ./.claude/hooks -type f -delete",
+                     "sudo find .claude/hooks -delete", "cd .claude && find hooks -delete",
+                     "find . -fprint .claude/settings.json", "find . -fprint0 .claude/hooks/x",
+                     "find . -fls .claude/hooks/x", "find . -fprintf .claude/hooks/x %p")
+        self.admitted("find . -delete", "find -name x -delete", "find docs -name '*.pyc' -delete",
+                      "find .claude/worktrees/x -delete", "find .claude/hooks -name x",
+                      "find .claude/hooks -print", "find . -fprint notes/out.txt",
+                      "find . -files0-from list -delete", "find /tmp/x -delete",
+                      'find "$dir" -delete', "find . -name '*.md' -exec echo {} \\;",
+                      "find .claude/hooks -name x -exec cat {} \\;")
+
+    def test_a_find_delete_started_above_the_checkout_is_refused(self):
+        self.refused(f"find {self.spelled('..')} -name x -delete", "find .. -delete",
+                     "find / -name x -delete", "find ~ -name x -delete")
+
+    def test_removing_what_holds_the_checkout_is_refused(self):
+        env = {"HOME": os.path.join(self.root, "notes")}
+        self.refused("rm -rf ..", "rm -rf ../", "rm -rf ../..", "rmdir ..", "unlink ..",
+                     "mv .. /tmp/x", "shred -u ..", "rm -rf /", "rm -rf ~", "rm -rf ~/",
+                     "rm -rf $HOME", 'rm -rf "$HOME"', f"rm -rf {self.spelled('..')}",
+                     "cd notes && rm -rf ../..", "rm -rf ../*", "rm -rf ~/*", "rm -rf /*",
+                     "cd .. && rm -rf *", env=env)
+        self.refused("rm -rf ../..", cwd=os.path.join(self.root, "notes"), env=env)
+        self.admitted("rm -rf ..", "rm -rf ../*", cwd=os.path.join(self.root, "notes"), env=env)
+        if os.name == "nt":
+            drive = self.root[0].lower()
+            self.refused(f"rm -rf /{drive}", f"rm -rf /{drive}/", env=env)
+
+    def test_removing_what_only_sits_near_the_checkout_stays_admitted(self):
+        env = {"HOME": os.path.join(self.root, "notes")}
+        self.admitted("rm -rf .", "rm -rf *", "rm -rf ./*", "rm -rf docs/*", "rm -rf ~/scratch/*",
+                      f"rm -rf {self.spelled()}", "rm -rf ~/scratch", "rm -rf /tmp/x",
+                      "rm -rf ../sibling", "mv notes.md ..", "mv a.md b.md ..", "mv *.md ..",
+                      "cp notes.md ..", "cp notes.md ~", "ls ..", "cat ..", "rm -rf '~'",
+                      'rm -rf "$dir"', env=env)
+
+    def test_a_worktree_is_the_checkout_whose_parents_are_held(self):
+        worktree = os.path.join(self.root, ".claude", "worktrees", "linked")
+        os.makedirs(worktree)
+        with open(os.path.join(worktree, ".git"), "w", encoding="utf-8") as handle:
+            handle.write("gitdir: elsewhere\n")
+        self.refused("rm -rf ..", "rm -rf ../..", f"rm -rf {self.spelled()}", cwd=worktree)
+        self.admitted("rm -rf ../other", "rm -rf .", cwd=worktree)
+
+    def test_git_restore_checkout_rm_and_mv_are_judged_by_the_paths_they_write(self):
+        self.refused(
+            "git checkout origin/main -- .claude/settings.json",
+            "git checkout HEAD~1 -- .claude/hooks/x",
+            "git checkout origin/main .claude/settings.json",
+            "git checkout origin/main -- .claude",
+            "git restore --source=HEAD~1 .claude/settings.json",
+            "git restore --source HEAD~1 .claude/settings.json",
+            "git restore -s origin/main -- .claude/hooks/x",
+            "git restore -sorigin/main .claude/hooks/x",
+            "git restore --source=x --staged --worktree .claude/settings.json",
+            "git restore -SW -s x .claude/settings.json",
+            "git restore -sStaging .claude/settings.json",
+            "git restore -Ws x .claude/settings.json",
+            "git checkout no-such-ref .claude/settings.json",
+            # A source nothing can read: the path can be, so it is what is judged.
+            'git restore -s "$ref" .claude/settings.json',
+            'git restore --source="$ref" .claude/settings.json',
+            "git restore --source $(pick) .claude/settings.json",
+            "git restore --source=$(pick) .claude/settings.json",
+            '"git" restore "--source=$(pick)" .claude/settings.json',
+            "git restore -s$(pick) .claude/settings.json",
+            'git checkout "$ref" -- .claude/settings.json',
+            "git checkout $(pick) -- .claude/settings.json",
+            "git rm .claude/hooks/x", "git rm -f .claude/settings.json", "git rm -r .claude",
+            "git mv .claude/settings.json x.json", "git mv notes/a .claude/hooks/a",
+            "git -C .claude rm -f settings.json",
+            "git -C .claude/hooks checkout origin/main -- x",
+            "cd .claude && git rm settings.json",
+            "bash -c 'git rm .claude/hooks/x'",
+        )
+
+    def test_a_first_word_naming_a_path_is_a_path_as_git_reads_it(self):
+        os.makedirs(os.path.join(self.root, ".claude", "hooks"))
+        with open(os.path.join(self.root, ".claude", "settings.json"), "w", encoding="utf-8") as handle:
+            handle.write("{}")
+        self.admitted("git checkout .claude/settings.json .claude/hooks/x")
+
+    def test_a_git_path_write_that_restores_or_leaves_a_denied_file_stays_admitted(self):
+        self.admitted(
+            "git checkout -- .claude/settings.json", "git checkout HEAD -- .claude/settings.json",
+            "git checkout @ -- .claude/settings.json", "git checkout .claude/settings.json",
+            "git checkout --theirs -- .claude/settings.json",
+            "git restore .claude/settings.json", "git restore --source=HEAD .claude/settings.json",
+            "git restore --staged .claude/settings.json", "git restore -S -s x .claude/settings.json",
+            "git rm --cached .claude/settings.json", "git rm -n .claude/hooks/x",
+            "git rm --dry-run .claude/hooks/x", "git mv -n .claude/settings.json x.json",
+            "git checkout main", "git checkout -b x origin/main", "git checkout -B x origin/main",
+            "git checkout origin/main -- docs/a.md", "git checkout origin/main -- .",
+            "git rm notes/a", "git rm -r payload/.claude/hooks/x", "git mv notes/a notes/b",
+            "git mv notes.md .claude/", "git log -- .claude/settings.json",
+            "git diff origin/main -- .claude/settings.json", "git show origin/main:.claude/settings.json",
+            'git -C "$d" rm .claude/hooks/x', "git -C /tmp/elsewhere rm .claude/hooks/x",
+            "git checkout $ref -- docs/a.md",
+            "git checkout $(pick) -- docs/a.md", 'git restore -s "$ref" docs/a.md',
+            "git restore --source=$(pick) docs/a.md",
+        )
+
+    def test_a_linked_worktree_writes_a_denied_path_in_its_own_diff(self):
+        # The replay's four: a sync's local files, a config moved, a review's
+        # restore and misplaced inputs removed, each in a pull request's diff.
+        worktree = os.path.join(self.root, ".claude", "worktrees", "linked")
+        os.makedirs(worktree)
+        with open(os.path.join(worktree, ".git"), "w", encoding="utf-8") as handle:
+            handle.write("gitdir: elsewhere\n")
+        written = ("git checkout chore/prep -- .claude/scripts/x.py",
+                   "git checkout 39772d4 -- .harness/config.json",
+                   "git rm -q -r .claude/scripts/artifacts", "git mv .harness/a .harness/b",
+                   "git restore --source=x .claude/settings.json")
+        self.admitted(*written, cwd=worktree)
+        self.admitted(*written, cwd=os.path.join(self.root, ".claude", "worktrees", "gone"))
+        self.admitted("cd .claude/worktrees/linked && git rm .claude/hooks/x")
+        self.refused(*written)
+
     def test_a_rule_is_read_in_the_permission_grammar(self):
         # `/x` is the project root's, `//x` absolute and `~/x` the home's.
         hook = self.hook_denying("/package.json", "/.github/**", "//notes/**", "~/notes/**")
@@ -3776,7 +4032,7 @@ class AWriteIntoWhatTheTargetDenies(unittest.TestCase):
             "ln -s .claude/settings.json notes/alias",
             "sed -n 1p .claude/settings.json", "sed s/a/b/ .claude/settings.json",
             "perl -pe 1 .claude/settings.json", "grep -n tee .claude/settings.json",
-            "git rm .claude/hooks/x", "git mv .claude/hooks/x notes/x",
+            "git rm notes/x", "git mv notes/x notes/y", "git log .claude/hooks/x",
             "echo rm .claude/settings.json", "cat .claude/settings.json | head",
             "ls | tee notes/out", "git ls-files .claude | xargs rm -f",
             "dd if=.claude/settings.json of=notes/x", "touch notes/x",
@@ -3816,8 +4072,10 @@ class TheListsTheGuardReads(unittest.TestCase):
         self.assertGreater(len(module.edit_denies()), 9, "the deny list went empty")
         commands = self.managed_commands()
         self.assertGreater(len(commands), 5, "the managed commands went empty")
+        # A home-relative rule names no checkout path, and the guard reads none under the home directory.
         denied = [rule for path in commands
-                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))]
+                  for rule in self.command_edit_paths(path.read_text(encoding="utf-8"))
+                  if not rule.startswith("~/")]
         for rule in [*module.edit_denies(), *denied]:
             with self.subTest(rule=rule):
                 path = rule.removeprefix("./").removesuffix("/**")
