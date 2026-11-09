@@ -54,7 +54,7 @@ start=$(git rev-parse refs/remotes/origin/main)
 # another fork took after the check above stops here, its branch left alone.
 git branch "$branch" "$start"
 added=0
-git worktree add "$path" "$branch" || added=$?
+git -c core.longpaths=true worktree add "$path" "$branch" || added=$?
 if [ "$added" -ne 0 ]; then
   # Git's cleanup of a failed add leaves the branch, where a retry exits 3 above
   # and nothing the session holds can remove it. Only a branch at the start

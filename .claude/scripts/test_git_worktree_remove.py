@@ -16,6 +16,7 @@ from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
+    code_lines,
     setUpModule,
     temp_root,
     run_bash,
@@ -167,7 +168,8 @@ class RemoveShape(unittest.TestCase):
         # and leaves the directory unregistered. The fixture's git commands ask for long paths, so only the helper's
         # removal is tested, with long paths set off above every config file, which only the helper's -c outranks. Only
         # a Windows run can fail on the removal itself, so the helper's spelling is held on every platform too.
-        self.assertIn("git -c core.longpaths=true worktree remove", REMOVE.read_text(encoding="utf-8"))
+        self.assertIn("git -c core.longpaths=true worktree remove",
+                      "\n".join(code_lines(REMOVE.read_text(encoding="utf-8"))))
         root, _ = self.fixture()
         deep = "/".join(["d" * 60] * 5) + "/deep.txt"
         made = run_bash(DEEP, C=f"{root}/checkout", O=f"{root}/origin", F=deep)
