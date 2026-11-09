@@ -19,14 +19,16 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 # USD per minute of a standard runner, from docs.github.com/en/billing/reference/actions-runner-pricing as read on
 # RATES_READ; that page names no self-hosted charge, so none is applied. Public repositories pay none of it.
-RATES_READ = "2026-10-24"
+RATES_READ = "2026-11-09"
 RATES = {"Linux": 0.006, "Windows": 0.010, "macOS": 0.062, "self-hosted": 0.0}
 # Included minutes a month, per plan, from the same documentation; they are spent at the Linux rate's value.
 ALLOWANCES = {"Free": 2000, "Pro": 3000, "Team": 3000, "Enterprise": 50000}
 PAGE = 100
+SMALL_PAGE = 20
 # The runs endpoint returns at most this many results for one query, whatever the pages say.
 SEARCH_CAP = 1000
 WORKERS = 16
@@ -37,6 +39,8 @@ SECONDARY_WAIT = 60
 TRANSIENT_TRIES = 4
 TRANSIENT_WAIT = 10
 EVENTS = ("pull_request", "push", "schedule", "workflow_dispatch")
+# The workflow broken down by job and conclusion, which is what tells the changes to it apart: most of the bill.
+MAIN_WORKFLOW = "CI"
 WINDOW = re.compile(r"(?:([^=]+)=)?(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})")
 
 Fetch = Callable[[str], object]
@@ -70,6 +74,11 @@ class Usage:
     jobs: int = 0
     minutes: Counter = field(default_factory=Counter)
     minutes_by_workflow: Counter = field(default_factory=Counter)
+    main_pr_runs: int = 0
+    main_pr_heads: set = field(default_factory=set)
+    main_conclusions: Counter = field(default_factory=Counter)
+    main_minutes_by_conclusion: Counter = field(default_factory=Counter)
+    main_minutes_by_job: Counter = field(default_factory=Counter)
     prs: int | None = None
     pushes: int = 0
     label_events: int | None = None
@@ -120,10 +129,25 @@ def rate_limit_wait() -> int:
 def paged(fetch: Fetch, path: str, key: str | None = None):
     """Every item of a listing, paged by number: the proxy some sessions run behind refuses gh's Link URLs."""
     separator = "&" if "?" in path else "?"
+
+    def read(size: int, number: int) -> list:
+        body = fetch(f"{path}{separator}per_page={size}&page={number}")
+        return body[key] if key else body
+
     page = 1
     while True:
-        body = fetch(f"{path}{separator}per_page={PAGE}&page={page}")
-        items = body[key] if key else body
+        try:
+            items = read(PAGE, page)
+        except LookupError as error:
+            if "(HTTP 5" not in str(error):
+                raise
+            # A run re-run twice holds over 100 jobs, whose full page answered 502 on every try on 2026-11-09.
+            items = []
+            for small in range((page - 1) * PAGE // SMALL_PAGE + 1, page * PAGE // SMALL_PAGE + 1):
+                chunk = read(SMALL_PAGE, small)
+                items += chunk
+                if len(chunk) < SMALL_PAGE:
+                    break
         yield from items
         if len(items) < PAGE:
             return
@@ -207,7 +231,9 @@ def packages(fetch: Fetch, repo: str) -> dict:
     for package in paged(fetch, f"{root}?package_type=container"):
         if (package.get("repository") or {}).get("full_name", repo) != repo:
             continue
-        found[package["name"]] = sum(1 for _ in paged(fetch, f"{root}/container/{package['name']}/versions"))
+        # A package named owner-repo/image is one path segment, so its slash is escaped.
+        versions = f"{root}/container/{quote(package['name'], safe='')}/versions"
+        found[package["name"]] = sum(1 for _ in paged(fetch, versions))
     return found
 
 
@@ -220,11 +246,22 @@ def measure(fetch: Fetch, repo: str, window: Window, *, current: bool = False, w
     usage.pushes = len({run["head_sha"] for run in runs if run["event"] == "push"})
     with ThreadPoolExecutor(workers) as pool:
         for run, jobs in zip(runs, pool.map(lambda run: jobs_of(fetch, repo, run), runs)):
+            main = run["name"] == MAIN_WORKFLOW
+            conclusion = run.get("conclusion") or "unfinished"
+            if main:
+                usage.main_conclusions[conclusion] += 1
+                if run["event"] == "pull_request":
+                    usage.main_pr_runs += 1
+                    usage.main_pr_heads.add(run["head_sha"])
             for job in jobs:
                 minutes = billed_minutes(job)
+                equivalent = minutes * RATES[runner_os(job)] / RATES["Linux"]
                 usage.jobs += 1
                 usage.minutes[runner_os(job)] += minutes
-                usage.minutes_by_workflow[run["name"]] += minutes * RATES[runner_os(job)] / RATES["Linux"]
+                usage.minutes_by_workflow[run["name"]] += equivalent
+                if main:
+                    usage.main_minutes_by_conclusion[conclusion] += equivalent
+                    usage.main_minutes_by_job[job["name"].split(" (")[0]] += equivalent
     for name, read, target in (("PRs", count_prs, "prs"), ("label events", count_label_events, "label_events")):
         try:
             setattr(usage, target, read(fetch, repo, window))
@@ -277,6 +314,12 @@ def table(usages: list[Usage], plan: str) -> str:
     row("List price per PR", lambda u: per(u.dollars, u.prs))
     row("GHCR container versions, at the window's end",
         lambda u: "n/a" if u.packages is None else f"{sum(u.packages.values()):,} in {len(u.packages)} packages")
+    row(f"{MAIN_WORKFLOW}'s runs on `pull_request`", lambda u: f"{u.main_pr_runs:,}")
+    row(f"{MAIN_WORKFLOW}'s `pull_request` runs per head commit",
+        lambda u: f"{u.main_pr_runs / len(u.main_pr_heads):.2f}" if u.main_pr_heads else "n/a")
+    for conclusion in sorted({c for u in usages for c in u.main_conclusions}):
+        row(f"{MAIN_WORKFLOW}'s runs that ended `{conclusion}`, and their Linux-equivalent minutes",
+            lambda u, c=conclusion: f"{u.main_conclusions[c]:,}, {u.main_minutes_by_conclusion[c]:,.0f}")
 
     workflows = sorted({w for u in usages for w in u.by_workflow}, key=lambda w: -usages[0].minutes_by_workflow[w])
     lines += ["", "| Workflow | " + " | ".join(f"{u.window.name} runs | {u.window.name} Linux-eq. minutes"
@@ -285,6 +328,13 @@ def table(usages: list[Usage], plan: str) -> str:
     for workflow in workflows:
         lines.append(f"| {workflow} | " + " | ".join(
             f"{u.by_workflow[workflow]:,} | {u.minutes_by_workflow[workflow]:,.0f}" for u in usages) + " |")
+    main_jobs = sorted({j for u in usages for j in u.main_minutes_by_job},
+                       key=lambda j: -usages[0].main_minutes_by_job[j])
+    lines += ["", f"| {MAIN_WORKFLOW}'s job | "
+              + " | ".join(f"{u.window.name} Linux-eq. minutes" for u in usages) + " |",
+              "|---" * (len(usages) + 1) + "|"]
+    for main_job in main_jobs:
+        lines.append(f"| {main_job} | " + " | ".join(f"{u.main_minutes_by_job[main_job]:,.0f}" for u in usages) + " |")
     notes = [f"{u.window.name}: {note}" for u in usages for note in u.unavailable]
     return "\n".join(lines + ([""] + [f"- {note}" for note in notes] if notes else []))
 
@@ -298,6 +348,12 @@ def as_json(usages: list[Usage], plan: str) -> str:
                            "linux_equivalent_by_workflow": {k: round(v, 1) for k, v in u.minutes_by_workflow.items()},
                            "linux_equivalent": round(u.linux_equivalent, 1), "dollars": round(u.dollars, 2),
                            "prs": u.prs, "pushes": u.pushes, "label_events": u.label_events,
+                           "main_workflow": {
+                               "name": MAIN_WORKFLOW, "pr_runs": u.main_pr_runs, "pr_heads": len(u.main_pr_heads),
+                               "conclusions": dict(u.main_conclusions),
+                               "minutes_by_conclusion": {
+                                   k: round(v, 1) for k, v in u.main_minutes_by_conclusion.items()},
+                               "minutes_by_job": {k: round(v, 1) for k, v in u.main_minutes_by_job.items()}},
                            "packages": u.packages, "unavailable": u.unavailable}
                            for u in usages]}, indent=2)
 

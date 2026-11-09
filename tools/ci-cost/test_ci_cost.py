@@ -10,6 +10,7 @@ import re
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest import mock
+from urllib.parse import unquote
 
 import ci_cost
 from ci_cost import Window
@@ -17,12 +18,13 @@ from ci_cost import Window
 REPO = "owner/repo"
 
 
-def job(started, completed, labels=("ubuntu-latest",)):
-    return {"started_at": started, "completed_at": completed, "labels": list(labels)}
+def job(started, completed, labels=("ubuntu-latest",), name="build"):
+    return {"name": name, "started_at": started, "completed_at": completed, "labels": list(labels)}
 
 
-def run(run_id, created, name="CI", event="pull_request", sha="a"):
-    return {"id": run_id, "created_at": created, "name": name, "event": event, "head_sha": sha}
+def run(run_id, created, name="CI", event="pull_request", sha="a", conclusion="success"):
+    return {"id": run_id, "created_at": created, "name": name, "event": event, "head_sha": sha,
+            "conclusion": conclusion}
 
 
 class FakeApi:
@@ -57,7 +59,7 @@ class FakeApi:
         if path.startswith("users/") and "/packages" not in path:
             return {"type": "User"}
         if "/versions" in path:
-            return window([{}] * self.packages[path.split("/container/")[1].split("/")[0]])
+            return window([{}] * self.packages[unquote(path.split("/container/")[1].split("/")[0])])
         return window([{"name": name, "repository": {"full_name": REPO}} for name in self.packages])
 
 
@@ -99,6 +101,24 @@ class Measure(unittest.TestCase):
         self.assertAlmostEqual(usage.dollars, 5 * 0.006 + 2 * 0.010 + 0.062)
         self.assertAlmostEqual(usage.minutes_by_workflow["CI"], usage.linux_equivalent)
 
+    def test_the_main_workflow_is_broken_down_by_head_conclusion_and_job(self):
+        started, ended = "2026-10-10T05:00:00Z", "2026-10-10T05:02:00Z"
+        api = FakeApi([run(1, started, sha="a"), run(2, started, sha="a", conclusion="cancelled"),
+                       run(3, started, sha="b", event="push"), run(4, started, name="Helm", sha="c")], {
+            1: [job(started, ended, name="integration (1)"), job(started, ended, name="integration (2)")],
+            2: [job(started, ended, ["macos-latest"], name="edit-target-guard (macos-latest)")],
+            3: [job(started, ended, name="build")],
+            4: [job(started, ended, name="template")]})
+        usage = ci_cost.measure(api, REPO, A, workers=1)
+        self.assertEqual((usage.main_pr_runs, usage.main_pr_heads), (2, {"a"}))
+        self.assertEqual(usage.main_conclusions, {"success": 2, "cancelled": 1})
+        self.assertEqual(usage.main_minutes_by_job["integration"], 4)
+        self.assertNotIn("template", usage.main_minutes_by_job)
+        self.assertAlmostEqual(usage.main_minutes_by_conclusion["cancelled"], 2 * 0.062 / 0.006)
+        text = ci_cost.table([usage], "Free")
+        self.assertIn("| CI's `pull_request` runs per head commit | 2.00 |", text)
+        self.assertIn("| integration | 4 |", text)
+
     def test_runs_outside_the_window_are_not_counted(self):
         api = FakeApi([run(1, "2026-10-09T23:59:59Z"), run(2, "2026-10-12T00:00:00Z")], {})
         self.assertEqual(ci_cost.measure(api, REPO, A, workers=1).runs, 0)
@@ -113,6 +133,30 @@ class Measure(unittest.TestCase):
         api = FakeApi(runs, {})
         self.assertEqual(ci_cost.measure(api, REPO, A, workers=1).runs, ci_cost.PAGE + 1)
         self.assertTrue(any("page=2" in path for path in api.paths))
+
+    def test_a_full_page_the_server_keeps_failing_is_read_again_in_smaller_pages(self):
+        started = "2026-10-10T01:00:00Z"
+        api = FakeApi([run(1, started)], {1: [job(started, "2026-10-10T01:01:00Z")] * 123})
+
+        def failing_full_pages(path):
+            if f"jobs?filter=all&per_page={ci_cost.PAGE}&" in path:
+                raise LookupError(f"{path}: gh: Server Error (HTTP 502)")
+            return api(path)
+
+        self.assertEqual(ci_cost.measure(failing_full_pages, REPO, A, workers=1).jobs, 123)
+
+    def test_a_refusal_on_a_full_page_is_not_read_again(self):
+        def refused(path):
+            raise LookupError(f"{path}: gh: Not Found (HTTP 404)")
+
+        with self.assertRaisesRegex(LookupError, "Not Found"):
+            list(ci_cost.paged(refused, "repos/owner/repo/pulls"))
+
+    def test_a_package_name_with_a_slash_is_one_path_segment(self):
+        api = FakeApi([], {}, packages={"blueprint-backend/gateway": 3})
+        self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1).packages,
+                         {"blueprint-backend/gateway": 3})
+        self.assertTrue(any("/container/blueprint-backend%2Fgateway/versions" in path for path in api.paths))
 
     def test_label_events_are_counted_inside_the_window_only(self):
         events = [{"created_at": "2026-10-12T00:00:00Z", "event": "labeled"},

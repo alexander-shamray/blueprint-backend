@@ -24,6 +24,7 @@ share in a second table. Days are whole UTC days, both ends inclusive.
 | List price | `RATES` in the script, read from GitHub's runner pricing page on the date `RATES_READ` names; a public repository pays none of it on standard runners |
 | Linux-equivalent minutes | the list price divided by the Linux rate: how much of a plan's included minutes the usage spends, since the allowance is valued at that rate |
 | Per 30 days | the window's figure scaled from its own length |
+| `MAIN_WORKFLOW` | the workflow also broken down by job, by run conclusion and by `pull_request` runs per head commit, which is what tells the changes to it apart; matrix legs of one job are summed |
 | GHCR | container versions per package, read only for a window ending yesterday or later, since the API keeps no history of a level; the REST API reports no size, which only the billing usage report holds |
 
 Three limits to know before reading a figure. **The runs endpoint answers at
@@ -33,7 +34,8 @@ header, because the proxy cloud sessions run behind refuses the numeric-id URLs
 it carries. **A 14-day window takes more requests than a user token's 5,000 an
 hour**, so a call refused for a rate limit waits for the hour's reset, or a
 minute for a secondary limit, and is retried; a dropped connection or a 5xx is
-retried three times before it counts as refused. A PRs, label-events or packages
+retried three times before it counts as refused, and a full page still
+answering 5xx is read again in smaller pages. A PRs, label-events or packages
 read the token is refused — the packages listing without `read:packages`,
 typically — is printed under the table rather than failing the run; a refused
 runs or jobs read ends it, because no figure stands without them.
