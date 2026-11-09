@@ -454,7 +454,8 @@ def check_retries(workflow_text: str) -> list[str]:
         for index, step in enumerate(steps):
             if "continue-on-error" not in step or step.get("uses", "").strip().startswith(NOTE_ARTIFACT_ACTION):
                 continue
-            subject = f"the {job} job's step {index + 1} may fail ({step.get('uses', step.get('run', '')).strip()[:60]!r})"
+            command = step.get("uses", step.get("run", "")).strip()[:60]
+            subject = f"the {job} job's step {index + 1} may fail ({command!r})"
             identifier = step.get("id", "").strip()
             if not identifier:
                 problems.append(f"{subject} and has no `id`, so no second attempt can read its outcome")

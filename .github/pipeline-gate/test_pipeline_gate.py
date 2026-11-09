@@ -626,8 +626,9 @@ class RetryTests(Fixture):
         """The defect a retry can bring: the step's failure passes, and the main
         tag moves onto an image with no signature or attestation behind it."""
         first = SBOM_STEP.replace("        uses:", "        id: sbom\n        continue-on-error: true\n        uses:", 1)
+        self.write(WORKFLOW.replace(SBOM_STEP, first))
 
-        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, first))
+        problems = pipeline_gate.check_images(self.root)
 
         self.assertEqual(len(problems), 1)
         self.assertIn("no note", problems[0])
@@ -650,6 +651,16 @@ class RetryTests(Fixture):
 
         self.assertTrue(any("no note" in problem for problem in problems), problems)
 
+    def test_a_note_guarded_on_another_step_is_caught(self) -> None:
+        """It would not run when this step failed, so the retry would go unrecorded."""
+        guard = "${{ steps.sbom.outcome == 'failure' }}"
+        wrong = RETRIED_SBOM.replace(guard, "${{ steps.push.outcome == 'failure' }}", 1)
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, wrong))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no note", problems[0])
+
     def test_a_second_attempt_guarded_on_another_step_is_caught(self) -> None:
         """It would not run when this step failed, so the failure would pass."""
         head, second = RETRIED_SBOM.rsplit("        if: ", 1)
@@ -666,7 +677,7 @@ class RetryTests(Fixture):
 
         problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, wrong))
 
-        self.assertTrue(any("second attempt" in problem for problem in problems), problems)
+        self.assertTrue(any("fails the job when it fails too" in problem for problem in problems), problems)
 
     def test_a_second_attempt_doing_something_else_is_caught(self) -> None:
         """What is signed or inventoried has to be the same whichever attempt ran."""
