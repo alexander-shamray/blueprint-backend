@@ -33,8 +33,9 @@ tag, so that title names the commit whose image it verified. The schedule's
 guard is [ADR-043](ADR-043-the-deployed-realm-is-checked-between-rollouts.md)'s
 form, and a dispatch needs its own input instead, because a deletion is the one
 step here no later run can undo and the first report is what a person reads
-before allowing it. An image goes before its children so that a capped run
-leaves orphans and never a tag that no longer pulls.
+before allowing it. A tagged version goes before what it names, and what a tag
+that would not go still names stays, so that neither a capped run nor a refused
+delete leaves a tag that no longer pulls.
 **Consequences.** The prune knows tags and a release pins a digest. A rolled tag
 rebuilt with other bytes protects only its new digest, so the digest a release
 pinned goes after the window, and a pod rescheduled on it fails to pull. So does

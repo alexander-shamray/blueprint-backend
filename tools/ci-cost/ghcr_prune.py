@@ -79,9 +79,10 @@ def closure(manifest: Manifest, package: str, version: dict, referrers: dict[str
     return needed
 
 
-def deletion_order(version: dict) -> tuple[bool, datetime]:
-    """Images before what they name, so a capped run leaves orphans and never a tag that no longer pulls."""
-    return (not any(COMMIT_TAG.fullmatch(tag) for tag in tags_of(version)), touched(version))
+def deletion_order(version: dict) -> tuple[int, datetime]:
+    """Images, then other tags, then what they name, so a capped run never leaves a tag that no longer pulls."""
+    tags = tags_of(version)
+    return (0 if any(COMMIT_TAG.fullmatch(tag) for tag in tags) else 1 if tags else 2, touched(version))
 
 
 def plan(manifest: Manifest, package: str, versions: list[dict], rolled: set[str], now: datetime,
@@ -128,13 +129,18 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
 
     remove = delete or (lambda path: gh(path, "DELETE"))
     deleted = 0
+    # A tag that would not go keeps what it names until a later run gets past it.
+    blocked: set[str] = set()
     for package, version in doomed[:MAX_DELETES]:
+        if package in blocked and not tags_of(version):
+            continue
         try:
             remove(f"{versions_path(root, package)}/{version['id']}")
             deleted += 1
         except LookupError as error:
             print(f"{package}@{version['name']} not deleted: {error}")
             failed += 1
+            blocked.add(package)
     print(f"{deleted:,} versions deleted")
     return 1 if failed else 0
 

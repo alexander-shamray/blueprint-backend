@@ -113,12 +113,14 @@ class Plan(unittest.TestCase):
         with self.assertRaisesRegex(LookupError, "HTTP 500"):
             self.going(versions, Registry("kept", refuse=[digest("kept-platform")]))
 
-    def test_an_image_goes_before_its_children_however_much_older_they_are_and_oldest_first(self):
-        child = version("child", when="2026-09-01T00:00:00Z")
+    def test_an_image_goes_before_its_referrers_and_they_before_their_bundles_oldest_first(self):
+        bundle = version("bundle", when="2026-09-01T00:00:00Z")
+        referrers = version("referrers", [referrer_tag("newer")], "2026-09-02T00:00:00Z")
         newer, older = (version(name, [commit(name)], when) for name, when in (
             ("newer", "2026-10-02T00:00:00Z"), ("older", "2026-10-01T00:00:00Z")))
-        order = sorted([child, newer, older], key=ghcr_prune.deletion_order)
-        self.assertEqual([row["name"] for row in order], [digest("older"), digest("newer"), digest("child")])
+        order = sorted([bundle, referrers, newer, older], key=ghcr_prune.deletion_order)
+        self.assertEqual([row["name"] for row in order],
+                         [digest("older"), digest("newer"), digest("referrers"), digest("bundle")])
 
 
 class RolledTags(unittest.TestCase):
@@ -218,7 +220,7 @@ class Main(unittest.TestCase):
         self.assertEqual((code, self.deleted), (1, []))
         self.assertIn("nothing judged", out)
 
-    def test_a_refused_delete_fails_the_run_and_the_rest_are_still_tried(self):
+    def test_a_refused_delete_fails_the_run_and_keeps_what_the_tag_still_names(self):
         tried = []
 
         def refuse(path):
@@ -226,8 +228,10 @@ class Main(unittest.TestCase):
             raise LookupError(f"{path}: HTTP 403")
 
         code, out = self.run_main("--delete", delete=refuse)
-        self.assertEqual((code, len(tried)), (1, 5))
+        self.assertEqual((code, len(tried)), (1, 2))
         self.assertIn("not deleted", out)
+        self.assertEqual({path.rsplit("/", 1)[1] for path in tried},
+                         {str(version("gone")["id"]), str(version("gone-referrers")["id"])})
 
 
 if __name__ == "__main__":
