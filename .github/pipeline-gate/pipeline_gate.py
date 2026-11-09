@@ -1577,7 +1577,7 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
         if not is_code(filters, path):
             problems.append(
                 f"{source} names {path}, which the `{CODE_FILTER}` filter excludes and "
-                f"`{STAGE_INPUTS_FILTER}` does not list, so a pull request changing it skips the test that reads it"
+                f"`{STAGE_INPUTS_FILTER}` does not list, so a pull request changing it skips the stage that reads it"
             )
     return problems
 
