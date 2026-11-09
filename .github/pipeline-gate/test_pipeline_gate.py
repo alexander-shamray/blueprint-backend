@@ -13,6 +13,7 @@ which every other check passes over an inventory it never read.
 """
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -587,6 +588,154 @@ class SbomTests(Fixture):
         self.assertIn("--label org.opencontainers.image.revision=${{ github.sha }} .", steps[1]["run"])
         self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
         self.assertNotIn("comment", " ".join(steps[1].values()))
+
+
+def retried(step: str, step_id: str, label: str) -> str:
+    """One action step as its first attempt, the note and its second attempt."""
+    guard = f"${{{{ steps.{step_id}.outcome == 'failure' }}}}"
+    first = step.replace("        uses:", f"        id: {step_id}\n        continue-on-error: true\n        uses:", 1)
+    note = (
+        f"      - name: Note the failed {label}\n"
+        f"        if: {guard}\n"
+        f'        run: bash {pipeline_gate.RETRY_HELPER} note "{label}"\n'
+    )
+    second = re.sub(r"        if: .*", f"        if: {guard}", step, count=1)
+    return first + "\n" + note + "\n" + second
+
+
+RETRIED_SBOM = retried(SBOM_STEP, "sbom", "SBOM")
+
+
+class RetryTests(Fixture):
+    """A step that may fail is followed by its noted second attempt, and the
+    duplicate leaves every other images check true."""
+
+    def test_a_retried_workflow_is_clean(self) -> None:
+        """Its subject is the duplicate: every reader takes the first attempt
+        for the step, and the helper in front of a command hides neither."""
+        workflow = WORKFLOW.replace(SBOM_STEP, RETRIED_SBOM)
+        helper = f'bash {pipeline_gate.RETRY_HELPER} run'
+        workflow = workflow.replace("          docker build\n", f'          {helper} "Build"\n          docker build\n')
+        workflow = workflow.replace('run: cosign sign', f'run: {helper} "Sign" cosign sign')
+        self.assertIn(pipeline_gate.RETRY_HELPER, workflow)
+        self.write(workflow)
+
+        self.assertEqual(pipeline_gate.check_images(self.root), [])
+
+    def test_a_first_attempt_with_no_second_is_caught(self) -> None:
+        """The defect a retry can bring: the step's failure passes, and the main
+        tag moves onto an image with no signature or attestation behind it."""
+        first = SBOM_STEP.replace("        uses:", "        id: sbom\n        continue-on-error: true\n        uses:", 1)
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, first))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no note", problems[0])
+
+    def test_a_first_attempt_with_no_id_is_caught(self) -> None:
+        """Nothing can read the outcome of a step with no id."""
+        workflow = WORKFLOW.replace(SBOM_STEP, RETRIED_SBOM.replace("        id: sbom\n", ""))
+
+        problems = pipeline_gate.check_retries(workflow)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no `id`", problems[0])
+
+    def test_a_retry_nothing_notes_is_caught(self) -> None:
+        """A retry hides the failure it recovered from unless something records it."""
+        note, _, rest = RETRIED_SBOM.partition("      - name: Note the failed SBOM\n")
+        kept = rest.split("\n\n", 1)[1]
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, note + kept))
+
+        self.assertTrue(any("no note" in problem for problem in problems), problems)
+
+    def test_a_second_attempt_guarded_on_another_step_is_caught(self) -> None:
+        """It would not run when this step failed, so the failure would pass."""
+        head, second = RETRIED_SBOM.rsplit("        if: ", 1)
+        wrong = head + "        if: ${{ steps.push.outcome == 'failure' }}\n" + second.split("\n", 1)[1]
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, wrong))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("second attempt", problems[0])
+
+    def test_a_second_attempt_that_may_fail_too_is_caught(self) -> None:
+        head, second = RETRIED_SBOM.rsplit("        uses:", 1)
+        wrong = head + "        continue-on-error: true\n        uses:" + second
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, wrong))
+
+        self.assertTrue(any("second attempt" in problem for problem in problems), problems)
+
+    def test_a_second_attempt_doing_something_else_is_caught(self) -> None:
+        """What is signed or inventoried has to be the same whichever attempt ran."""
+        head, second = RETRIED_SBOM.rsplit("          output-file: sbom-", 1)
+        wrong = head + "          output-file: other-" + second
+
+        problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, wrong))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not what the first attempt does", problems[0])
+
+    def test_keeping_the_note_may_fail_alone(self) -> None:
+        """Losing the record of a retry is no reason to fail the leg it recovered."""
+        keep = (
+            "      - name: Keep what a retry recovered from\n"
+            "        continue-on-error: true\n"
+            "        uses: actions/upload-artifact@v7\n"
+        )
+
+        self.assertEqual(pipeline_gate.check_retries(WORKFLOW + keep), [])
+
+    def test_this_repositorys_image_steps_are_retried(self) -> None:
+        """The subject is the real workflow: `check_retries` only holds the
+        retries there are, so a step that loses its retry is caught here."""
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertEqual(pipeline_gate.check_retries(workflow), [])
+
+        run = f"{pipeline_gate.RETRY_HELPER} run"
+        for job, actions in (
+            ("images", (pipeline_gate.SBOM_ACTION,)),
+            (pipeline_gate.PUBLISH_JOB, (
+                pipeline_gate.SBOM_ACTION,
+                pipeline_gate.PROVENANCE_ACTION,
+                pipeline_gate.SBOM_ATTESTATION_ACTION,
+            )),
+        ):
+            steps = pipeline_gate.read_job_steps(workflow, job)
+            builds = [step for step in steps if pipeline_gate.DOCKER_BUILD.search(step.get("run", ""))]
+            self.assertTrue(builds)
+            self.assertTrue(all(run in step["run"] for step in builds), job)
+            for action in actions:
+                attempts = [step for step in steps if step.get("uses", "").strip().startswith(action)]
+                self.assertEqual(len(attempts), 2, f"{job}: {action}")
+                self.assertIn("continue-on-error", attempts[0])
+            keep = [step for step in steps if "image-retries.txt" in step.get("path", "")]
+            self.assertEqual(len(keep), 1, job)
+            self.assertTrue(keep[0]["uses"].startswith(pipeline_gate.NOTE_ARTIFACT_ACTION))
+
+        signs = [
+            step for step in pipeline_gate.read_job_steps(workflow, pipeline_gate.PUBLISH_JOB)
+            if "cosign sign" in step.get("run", "")
+        ]
+        self.assertEqual(len(signs), 1)
+        self.assertIn(run, signs[0]["run"])
+
+    def test_what_a_retry_recovered_from_reaches_the_tracker(self) -> None:
+        """The artifacts' names and the job that posts them agree only by text,
+        so a rename would leave every retry unposted and nothing red."""
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        report = pipeline_gate.read_job_steps(workflow, "image-retry-report")
+
+        patterns = [step.get("pattern", "").strip() for step in report]
+        self.assertIn("image-retry-*", patterns)
+        self.assertTrue(any("gh issue comment 1406" in step.get("run", "") for step in report))
+        for job in ("images", pipeline_gate.PUBLISH_JOB):
+            names = [step.get("name", "") for step in pipeline_gate.read_job_steps(workflow, job)]
+            self.assertIn("image-retry-${{ matrix.image }}", [name.strip() for name in names])
 
 
 GRANTED = """\

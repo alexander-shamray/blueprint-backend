@@ -296,6 +296,7 @@ def check_images(root: Path = ROOT) -> list[str]:
             )
 
     problems.extend(check_sboms(text))
+    problems.extend(check_retries(text))
     try:
         deploy_text = DEPLOY.read_text(encoding="utf-8")
     except OSError as error:
@@ -427,6 +428,56 @@ def check_sboms(workflow_text: str) -> list[str]:
                     "pinned to a commit reads that reference after it under the same "
                     "`if:`. ADR-071 gives every image the pipeline builds an SBOM, and "
                     "a leg without one ships an image nothing has inventoried"
+                )
+    return problems
+
+
+RETRY_HELPER = ".github/pipeline-gate/image_retry.sh"
+NOTE_ARTIFACT_ACTION = "actions/upload-artifact@"
+# The keys that say when an attempt runs; every other key says what it does.
+ATTEMPT_KEYS = {"name", "id", "if", "continue-on-error"}
+
+
+def _what_it_does(step: dict[str, str]) -> dict[str, str]:
+    return {key: value.strip() for key, value in step.items() if key not in ATTEMPT_KEYS}
+
+
+def check_retries(workflow_text: str) -> list[str]:
+    """A step of an image job may fail only with a noted second attempt behind it.
+
+    `continue-on-error` alone lets the main tag move onto an image with no
+    signature or attestation, and nothing after the step would say so.
+    """
+    problems: list[str] = []
+    for job in ("images", PUBLISH_JOB):
+        steps = read_job_steps(workflow_text, job)
+        for index, step in enumerate(steps):
+            if "continue-on-error" not in step or step.get("uses", "").strip().startswith(NOTE_ARTIFACT_ACTION):
+                continue
+            subject = f"the {job} job's step {index + 1} may fail ({step.get('uses', step.get('run', '')).strip()[:60]!r})"
+            identifier = step.get("id", "").strip()
+            if not identifier:
+                problems.append(f"{subject} and has no `id`, so no second attempt can read its outcome")
+                continue
+
+            guard = f"${{{{ steps.{identifier}.outcome == 'failure' }}}}"
+            note, second = (steps[index + 1:index + 3] + [{}, {}])[:2]
+            if note.get("if", "").strip() != guard or f"{RETRY_HELPER} note" not in note.get("run", ""):
+                problems.append(
+                    f"{subject} and no note under `if: {guard}` follows it. Either its failure passes "
+                    "with no second attempt, or a retry hides the failure it recovered from"
+                )
+                continue
+            if second.get("if", "").strip() != guard or "continue-on-error" in second:
+                problems.append(
+                    f"{subject} and the step after its note is no second attempt under `if: {guard}` "
+                    "that fails the job when it fails too, so the first attempt's failure can pass"
+                )
+                continue
+            if _what_it_does(second) != _what_it_does(step):
+                problems.append(
+                    f"{subject} and its second attempt is not what the first attempt does, so what "
+                    "the image carries would depend on which attempt ran"
                 )
     return problems
 

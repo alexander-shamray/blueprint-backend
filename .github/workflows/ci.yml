@@ -1167,6 +1167,7 @@ jobs:
       - name: Build ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         run: >
+          bash .github/pipeline-gate/image_retry.sh run "Build"
           docker build
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
@@ -1179,13 +1180,40 @@ jobs:
       # artefact. A third party's action reads the image, so it is pinned to a
       # commit and not a tag.
       - name: SBOM for ${{ matrix.image }}
+        id: sbom
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        continue-on-error: true
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
           format: spdx-json
           output-file: sbom-${{ matrix.image }}.spdx.json
           artifact-name: sbom-${{ matrix.image }}.spdx.json
+
+      - name: Note the failed SBOM for ${{ matrix.image }}
+        if: ${{ steps.sbom.outcome == 'failure' }}
+        run: bash .github/pipeline-gate/image_retry.sh note "SBOM"
+
+      - name: SBOM for ${{ matrix.image }}, second attempt
+        if: ${{ steps.sbom.outcome == 'failure' }}
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.image }}.spdx.json
+          artifact-name: sbom-${{ matrix.image }}.spdx.json
+
+      # A retry hides the failure it recovered from, so image-retry-report posts it.
+      # Only after success, since a leg still red says so itself,
+      # and a lost record is no reason to fail a leg that recovered.
+      - name: Keep what a retry recovered from
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-retry-${{ matrix.image }}
+          path: ${{ runner.temp }}/image-retries.txt
+          if-no-files-found: ignore
 
   # What main alone does (ADR-109). The job's own condition is what keeps its
   # grants off a pull request, since a job holds them from its first step and
@@ -1222,6 +1250,7 @@ jobs:
       - name: Build ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         run: >
+          bash .github/pipeline-gate/image_retry.sh run "Build"
           docker build
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
@@ -1233,7 +1262,22 @@ jobs:
       # The artefact is also the file the attestation below reads, so the two
       # cannot differ (ADR-071).
       - name: SBOM for ${{ matrix.image }}
+        id: sbom
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        continue-on-error: true
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.image }}.spdx.json
+          artifact-name: sbom-${{ matrix.image }}.spdx.json
+
+      - name: Note the failed SBOM for ${{ matrix.image }}
+        if: ${{ steps.sbom.outcome == 'failure' }}
+        run: bash .github/pipeline-gate/image_retry.sh note "SBOM"
+
+      - name: SBOM for ${{ matrix.image }}, second attempt
+        if: ${{ steps.sbom.outcome == 'failure' }}
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
@@ -1272,15 +1316,31 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # Keyless: the identity is this workflow on main, vouched for by the
-      # job's OIDC token and recorded in Sigstore's public log (ADR-071).
+      # job's OIDC token and recorded in Sigstore's public log (ADR-071). A second
+      # attempt signs with a new key, so Rekor takes a new entry, and deploy.yml's
+      # verifier passes on any one signature that verifies.
       - name: Sign ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
-        run: cosign sign --yes "$REGISTRY/${{ matrix.image }}@$DIGEST"
+        run: bash .github/pipeline-gate/image_retry.sh run "Sign" cosign sign --yes "$REGISTRY/${{ matrix.image }}@$DIGEST"
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
 
       - name: Provenance for ${{ matrix.image }}
+        id: provenance
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Note the failed Provenance for ${{ matrix.image }}
+        if: ${{ steps.provenance.outcome == 'failure' }}
+        run: bash .github/pipeline-gate/image_retry.sh note "Provenance"
+
+      - name: Provenance for ${{ matrix.image }}, second attempt
+        if: ${{ steps.provenance.outcome == 'failure' }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
@@ -1288,7 +1348,22 @@ jobs:
           push-to-registry: true
 
       - name: SBOM attestation for ${{ matrix.image }}
+        id: sbom_attestation
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom-${{ matrix.image }}.spdx.json
+          push-to-registry: true
+
+      - name: Note the failed SBOM attestation for ${{ matrix.image }}
+        if: ${{ steps.sbom_attestation.outcome == 'failure' }}
+        run: bash .github/pipeline-gate/image_retry.sh note "SBOM attestation"
+
+      - name: SBOM attestation for ${{ matrix.image }}, second attempt
+        if: ${{ steps.sbom_attestation.outcome == 'failure' }}
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
@@ -1332,6 +1407,52 @@ jobs:
           fi
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
+
+      # A retry hides the failure it recovered from, so image-retry-report posts it.
+      # Only after success, since a leg still red says so itself,
+      # and a lost record is no reason to fail a leg that recovered.
+      - name: Keep what a retry recovered from
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-retry-${{ matrix.image }}
+          path: ${{ runner.temp }}/image-retries.txt
+          if-no-files-found: ignore
+
+  # The grant to comment, in a job with no checkout (ADR-197), as integration-report.
+  # It runs past a red leg, since the other legs' records are still true.
+  image-retry-report:
+    needs: [images, publish-images]
+    if: ${{ !cancelled() && (needs.images.result != 'skipped' || needs.publish-images.result != 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: image-retry-*
+          path: retries
+
+      # Where flakes are counted, as the sightings are (docs/harness/working-rules.md, CI).
+      - name: "Post what the image retries recovered from on #1406"
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          for f in retries/image-retry-*/image-retries.txt; do
+            leg=$(basename "$(dirname "$f")")
+            gh issue comment 1406 --body \
+              "An image step failed and its retry recovered, so the leg stayed green.
+              Run $RUN_URL, image ${leg#image-retry-}, ref $REF_NAME; retried: $(paste -sd, "$f")."
+          done
 
   # ADR-149's two packages. Packed on every run once the test stages pass, so a
   # project that cannot pack fails its own pull request. The pack runs the
