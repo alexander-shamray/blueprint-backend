@@ -1406,7 +1406,8 @@ def _glob(pattern: str, path: str) -> bool:
     expression = ""
     for token in re.split(r"(\*\*/|\*\*|\*)", pattern):
         expression += {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*"}.get(token, re.escape(token))
-    return re.fullmatch(expression, path) is not None
+    # DOTALL: a path may hold a newline, and `**` missing it would read as no stage reads it.
+    return re.fullmatch(expression, path, flags=re.DOTALL) is not None
 
 
 def is_code(filters: dict[str, list[str]], path: str) -> bool:

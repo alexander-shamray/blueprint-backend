@@ -1876,6 +1876,11 @@ class CodeTests(unittest.TestCase):
         filters = pipeline_gate.read_filters_by_name(self.text)
         self.assertFalse(pipeline_gate.is_code(filters, "docs/?"))
 
+    def test_a_path_holding_a_newline_is_still_code(self) -> None:
+        filters = pipeline_gate.read_filters_by_name(self.text)
+        self.assertTrue(pipeline_gate.is_code(filters, "src/App/a\nb.cs"))
+        self.assertFalse(pipeline_gate.is_code(filters, "docs/a\nb.md"))
+
     def test_the_globs_read_as_picomatch_reads_them(self) -> None:
         for pattern, path, expected in (
             ("**", "a/b/c.cs", True),
