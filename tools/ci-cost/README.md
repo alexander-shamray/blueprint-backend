@@ -49,19 +49,17 @@ stands without them.
 
 `ghcr_prune.py` deletes what
 [ADR-199](../../docs/backend-architecture/adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)
-does not keep, and that ADR owns the rule and its limits. Without `--delete` it
-only reports, so this reads the registry and changes nothing:
+does not keep, from the packages
+[ADR-200](../../docs/backend-architecture/adr/ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md)
+names, and those two ADRs own the rule and its limits. Without `--delete` it only
+reports, so this reads the registry and changes nothing:
 
 ```bash
 py -3.12 tools/ci-cost/ghcr_prune.py
 ```
 
 A run takes minutes, since it lists every version and reads the manifests of
-the tagged ones it keeps. It takes its packages from `ci.yml`'s image matrix,
-because a job's token answers 400 to the owner's package listing, so an image
-dropped from the matrix is never pruned again. A job's token deletes a version
-only where the repository holds the Admin role on that package, under the
-package's *Manage Actions access*.
+the tagged ones it keeps.
 
 Stdlib only, and the suite answers from a fake API:
 

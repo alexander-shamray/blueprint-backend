@@ -30,11 +30,7 @@ IMAGE_LEG = re.compile(r"^\s+image: ([a-z0-9-]+)\s*$", re.MULTILINE)
 
 
 def image_packages(repo: str, workflow: Path = CI_WORKFLOW) -> list[str]:
-    """The packages `ci.yml`'s matrix pushes, under the repository's name, since `$REGISTRY` carries it.
-
-    Named here because a job's token answers 400 to the owner's package listing. An image dropped from the matrix is
-    never pruned again, which is the safe side.
-    """
+    """The packages `ci.yml`'s matrix pushes (ADR-200), under the repository's name, since `$REGISTRY` carries it."""
     images = IMAGE_LEG.findall(workflow.read_text(encoding="utf-8"))
     if not images:
         raise LookupError(f"{workflow} names no image, so the matrix's shape moved and this read is what is broken")

@@ -697,7 +697,8 @@ tag.
 the container versions outside what
 [ADR-199](adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md)
 keeps, walking the manifests so that an image's untagged children, signature
-and attestations go only after it.
+and attestations go only after it. Its packages are the image matrix's
+([ADR-200](adr/ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md)).
 
 ## 15.3 Deployment
 

@@ -58,6 +58,10 @@ whose artefact now lives for `ARTIFACT_RETENTION_DAYS`, and
 whose `<sha>` set and pinned digest hold for a consumer only while this rule
 keeps them, once the prune is opted in.
 
+**Amended by
+[ADR-200](ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md)**,
+which takes the packages from the image matrix.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
