@@ -6,9 +6,9 @@ the visibility and plan decision.**
 [`tools/ci-cost/`](../tools/ci-cost/README.md) produces every measured figure
 here but those a section names as one-off or by hand, which it did not print on
 that section's day and now does, a level only for a window ending about when it
-is read, and owns how each is computed; this file records what it reported, one dated section per window, and
-the comparison once both exist. Every figure is a record of its day, per the
-contract's §2, and none is kept current.
+is read, and owns how each is computed; this file records what it reported, one
+dated section per window, and the comparison once both exist. Every figure is a
+record of its day, per the contract's §2, and none is kept current.
 
 ## Method
 
