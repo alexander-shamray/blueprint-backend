@@ -695,9 +695,26 @@ class RetryTests(Fixture):
             "      - name: Keep what a retry recovered from\n"
             "        continue-on-error: true\n"
             "        uses: actions/upload-artifact@v7\n"
+            "        with:\n"
+            f"          path: ${{{{ runner.temp }}}}/{pipeline_gate.RETRY_RECORD}\n"
         )
 
         self.assertEqual(pipeline_gate.check_retries(WORKFLOW + keep), [])
+
+    def test_another_upload_that_may_fail_is_caught(self) -> None:
+        """The exemption is the record's: any other upload's failure would pass with no retry."""
+        keep = (
+            "      - name: Keep the inventory\n"
+            "        continue-on-error: true\n"
+            "        uses: actions/upload-artifact@v7\n"
+            "        with:\n"
+            "          path: sbom.spdx.json\n"
+        )
+
+        problems = pipeline_gate.check_retries(WORKFLOW + keep)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no `id`", problems[0])
 
     def test_this_repositorys_image_steps_are_retried(self) -> None:
         """The subject is the real workflow: `check_retries` only holds the

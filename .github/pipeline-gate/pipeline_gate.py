@@ -434,12 +434,17 @@ def check_sboms(workflow_text: str) -> list[str]:
 
 RETRY_HELPER = ".github/pipeline-gate/image_retry.sh"
 NOTE_ARTIFACT_ACTION = "actions/upload-artifact@"
+RETRY_RECORD = "image-retries.txt"
 # The keys that say when an attempt runs; every other key says what it does.
 ATTEMPT_KEYS = {"name", "id", "if", "continue-on-error"}
 
 
 def _what_it_does(step: dict[str, str]) -> dict[str, str]:
     return {key: value.strip() for key, value in step.items() if key not in ATTEMPT_KEYS}
+
+
+def _keeps_the_retry_record(step: dict[str, str]) -> bool:
+    return step.get("uses", "").strip().startswith(NOTE_ARTIFACT_ACTION) and RETRY_RECORD in step.get("path", "")
 
 
 def check_retries(workflow_text: str) -> list[str]:
@@ -452,7 +457,7 @@ def check_retries(workflow_text: str) -> list[str]:
     for job in ("images", PUBLISH_JOB):
         steps = read_job_steps(workflow_text, job)
         for index, step in enumerate(steps):
-            if "continue-on-error" not in step or step.get("uses", "").strip().startswith(NOTE_ARTIFACT_ACTION):
+            if "continue-on-error" not in step or _keeps_the_retry_record(step):
                 continue
             command = step.get("uses", step.get("run", "")).strip()[:60]
             subject = f"the {job} job's step {index + 1} may fail ({command!r})"
