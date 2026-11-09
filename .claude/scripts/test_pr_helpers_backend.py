@@ -37,12 +37,18 @@ class TheShippedClassMapIsTheGatesOwn(unittest.TestCase):
             ".claude/scripts/x.sh", ".github/workflows/x.yml", "deploy/compose/x.yml",
             "tools/new-service/x.py", "Directory.Packages.props", "Platform.slnx",
             "src/Services/Ordering/Ordering.Api/Ordering.Api.csproj", "CLAUDE.md",
+            # Paths the grammar admits beyond letters: an at sign and a plus, which both readers take literally.
+            "src/app/@types/a.ts", "tools/c++/x.py", "docs/@notes/a+b.md",
         ]
+        # The cell both readers take: a reason-bearing token (the comma inside its parenthesis is the reason's,
+        # not a separator), tokens holding `@` and `+`, then bare paths.
+        touch = ("`docs/x.md` (the reason, with a comma), `src/app/@types/**`, `tools/c++/*.py`, "
+                 "docs/@notes/a+b.md, " + ", ".join(paths[:6]))
         root = SCRIPTS.parent.parent
         gate = root / ".github" / "locality-gate" / "locality_gate.py"
         for cls in ("A", "B", "C", "D", "E", "C+E", "A+D+E"):
             with self.subTest(cls=cls):
-                body = f"| Class | {cls} |\n| Touch set | {', '.join(paths[:6])} |\n"
+                body = f"| Class | {cls} |\n| Touch set | {touch} |\n"
                 r = run_locality(self, printing(body, "\n".join(paths) + "\n"))
                 self.assertEqual(0, r.returncode, r.stderr)
                 ours = {line.split(" ", 1)[1] for line in r.stdout.splitlines()
