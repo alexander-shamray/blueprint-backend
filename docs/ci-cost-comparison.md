@@ -4,8 +4,8 @@
 windows either side of the cost changes, and what the difference says about
 the visibility and plan decision.**
 [`tools/ci-cost/`](../tools/ci-cost/README.md) produces every measured figure
-here but those a section names as read by hand, and owns how each is computed;
-this file records what it reported, one dated section per window, and the
+here but those a section names as one-off or by hand, and owns how each is
+computed; this file records what it reported, one dated section per window, and the
 comparison once both exist. Every figure is a record of its day, per the
 contract's §2, and none is kept current.
 
@@ -290,7 +290,7 @@ Per 14 days, at Window B's activity, in Linux-equivalent minutes and list price:
 
 | Change | Effect | At list price | How it was read |
 |---|---|---|---|
-| #1435, `edit-target-guard`'s Windows and macOS legs | **−7,750**, measured | −$46.50 | The job is exactly those two legs, in both windows: 12.12 minutes per CI run became 4.00, over B's 955 runs. It still ran on about one run in four, because the harness files its path filter watches were much of what the window changed |
+| #1435, `edit-target-guard`'s Windows and macOS legs | **−7,750**, measured | −$46.50 | The job is exactly those two legs, in both windows: 12.12 minutes per CI run became 4.00, over B's 955 runs. It still ran on about one run in four, a one-off count of its job rows, because the harness files its path filter watches were much of what the window changed |
 | #1437, no CI run on `labeled` or `unlabeled` | **At most −2,700**, bounded | At most −$16.20 | A label's run repeats its head commit. A had 58 runs over its 905 heads, 6.4%, and B none over its 766, so the trigger is gone. 49 runs at B's 54.9 Linux minutes is a ceiling: a re-push or a reopen also repeats a head, and a label's run could be cancelled early |
 | #1461, `build`, `integration` and `scaffold-build` waiting on the sub-minute checks | **About −2,100, or −2,900 with `images` behind them**, not isolated | −$12.60 to −$17.40 | Those jobs' minutes per CI run, which also move with what a window changes. No saving shows on failing runs, 60.5 minutes each in A and 62.2 in B, and a cancelled run fell from 42.7 to 27.3, of which the guard's legs explain up to 8.1 |
 | #1436, `realm.yml`'s schedule | None: left out | | Realm's fall from 154 to 16 is not this change, which never landed |
