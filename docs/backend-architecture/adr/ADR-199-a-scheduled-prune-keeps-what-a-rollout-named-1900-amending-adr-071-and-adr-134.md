@@ -11,8 +11,8 @@ children and each one's signature and attestations, read from the registry. A
 run deletes at most `MAX_DELETES`, images before what they name and oldest
 first, and a package with a manifest it cannot read loses nothing and fails the
 run. A dispatch whose title it cannot read stops every package, so a dispatch of
-a `deploy.yml` without that title is cleared by hand: its image is given a tag of
-its own and the run is deleted.
+a `deploy.yml` without that title is cleared by hand: its image is given a tag
+of its own and the run is deleted.
 **Nothing deletes until it is opted in**: a schedule runs only when the
 repository variable `GHCR_PRUNE_SCHEDULED` is `enabled`, and a dispatch reports
 unless its `delete` input is set. `ci.yml`'s artefacts and SBOMs are kept for
