@@ -119,6 +119,17 @@ class Measure(unittest.TestCase):
         self.assertIn("| CI's `pull_request` runs per head commit | 2.00 |", text)
         self.assertIn("| integration | 4 |", text)
 
+    def test_a_row_that_a_page_shift_repeats_is_counted_once(self):
+        rows = [{"id": n, "created_at": "2026-10-10T08:00:00Z"} for n in range(ci_cost.PAGE + 5)]
+
+        # Five PRs open between the first page and the second, so the second starts five rows back.
+        def shifted(path):
+            if path.endswith("&page=1"):
+                return rows[:ci_cost.PAGE]
+            return rows[ci_cost.PAGE - 5:]
+
+        self.assertEqual(ci_cost.count_prs(shifted, REPO, A), ci_cost.PAGE + 5)
+
     def test_runs_outside_the_window_are_not_counted(self):
         api = FakeApi([run(1, "2026-10-09T23:59:59Z"), run(2, "2026-10-12T00:00:00Z")], {})
         self.assertEqual(ci_cost.measure(api, REPO, A, workers=1).runs, 0)

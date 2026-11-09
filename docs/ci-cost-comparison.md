@@ -182,8 +182,15 @@ with the method's command, so the two columns are one read.
 
 **Window A reproduced.** Its runs, jobs, minutes, list price and label events
 equal the section above to the digit. PRs opened read 303 where that section
-reads 298, and nothing here says why; the per-PR figures below use 303, so A's
-list price per PR is $2.00 here and $2.03 there.
+reads 298, and the 298 is the true count: the listing read again on 2026-11-09
+held 298 rows in A, none repeated, and 263 in B. The 303 is most likely five
+rows counted twice. `pulls` lists newest first and is read after thousands of
+job reads, so it can wait out a rate limit between two pages, and each PR opened
+meanwhile moves the rows down one and repeats one at the boundary. The wait was
+not logged, so that is the mechanism and not a measurement of it, and `paged`
+now drops a repeated row. The figures below keep
+what that run read, so A's list price per PR is $2.00 here and $2.03 there, and
+PRs opened fell 11.7% rather than the 13.2% below.
 
 Events inside Window B or between the windows, none of them an optimisation:
 
