@@ -76,7 +76,7 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
 
 
 class ValidateBlueprintDispatchesTheCheckAuditor(unittest.TestCase):
-    """Its passes read the branch under review, so read-only is the profile's tool list, not the brief's word (#1786).
+    """Its passes read the branch under review, so read-only is the profile's tool list, not the brief's word.
 
     The payload's `test_every_other_exact_agent_grant_denies_every_other_profile` holds the denies once the grant is
     there; this case holds the grant and the dispatch that uses it, so a revert to an ungranted agent is a red build.
