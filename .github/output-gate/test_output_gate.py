@@ -15,7 +15,8 @@ import output_gate
 
 
 def tree(root: Path, projects: dict[str, str], restored: list[str] | None = None,
-         built: list[str] | None = None, listed: list[str] | None = None) -> None:
+         built: list[str] | None = None, listed: list[str] | None = None,
+         solution: str = "Platform.slnx") -> None:
     """A repository in miniature: some projects, a solution, some output.
 
     `projects` maps a project to its directory; `restored`, `built`, `listed`
@@ -37,7 +38,7 @@ def tree(root: Path, projects: dict[str, str], restored: list[str] | None = None
 
     entries = "".join(
         f'  <Project Path="{projects[name]}/{name}.csproj" />\n' for name in listed)
-    (root / "Platform.slnx").write_text(
+    (root / solution).write_text(
         f"<Solution>\n{entries}</Solution>\n", encoding="utf-8")
 
 
@@ -263,6 +264,73 @@ class Subject(TemporaryRepository):
         code, output = run(self.root)
 
         self.assertEqual(code, 0, output)
+
+
+class Solution(TemporaryRepository):
+    """The solution is found at the root, not named, and only one is taken."""
+
+    def test_a_solution_with_another_name_is_reconciled(self) -> None:
+        """A target's solution is called what it is called there."""
+        tree(self.root, {"Admin.Api": "src/Admin.Api"}, solution="BlueprintAdmin.slnx")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 0, output)
+        self.assertIn("1 project(s)", output)
+
+    def test_the_found_solution_is_the_one_its_findings_name(self) -> None:
+        tree(self.root,
+             {"Admin.Api": "src/Admin.Api", "Admin.Web": "src/Admin.Web"},
+             listed=["Admin.Api"], solution="BlueprintAdmin.slnx")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("src/Admin.Web/Admin.Web.csproj is on disk and absent from "
+                      "BlueprintAdmin.slnx", output)
+        self.assertNotIn("Platform.slnx", output)
+
+    def test_the_build_it_asks_for_is_of_the_found_solution(self) -> None:
+        tree(self.root, {"Admin.Api": "src/Admin.Api"}, restored=[], built=[],
+             solution="BlueprintAdmin.slnx")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("`dotnet restore BlueprintAdmin.slnx`", output)
+        self.assertIn("`dotnet build BlueprintAdmin.slnx`", output)
+
+    def test_no_solution_at_the_root_is_refused_rather_than_crashing(self) -> None:
+        tree(self.root, {"Admin.Api": "src/Admin.Api"})
+        (self.root / "Platform.slnx").unlink()
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("1 finding(s)", output)
+        self.assertIn("no .slnx at the repository root", output)
+
+    def test_a_solution_below_the_root_is_not_taken_for_the_root_s(self) -> None:
+        """Only the root's: a sample or a fixture solution deeper down is not CI's."""
+        tree(self.root, {"Admin.Api": "src/Admin.Api"})
+        (self.root / "Platform.slnx").rename(self.root / "src" / "Platform.slnx")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("no .slnx at the repository root", output)
+
+    def test_several_solutions_at_the_root_are_refused_by_name(self) -> None:
+        """Which one CI builds is not the gate's to guess."""
+        tree(self.root, {"Admin.Api": "src/Admin.Api"}, solution="BlueprintAdmin.slnx")
+        tree(self.root, {"Admin.Api": "src/Admin.Api"}, solution="Other.slnx")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("1 finding(s)", output)
+        self.assertIn("2 .slnx files at the repository root "
+                      "(BlueprintAdmin.slnx, Other.slnx)", output)
 
 
 class DuplicateNames(TemporaryRepository):

@@ -120,7 +120,8 @@ must not judge, each pattern with its innocent neighbour, and runs the whole
 gate over a throwaway git repository, so the diff half is observed rather
 than assumed. It also reads every tracked file in a language the gate reads
 for comments, so a file the lexers cannot parse fails the suite before it
-fails a pull request; `.md` is read in diff mode only.
+fails a pull request; it reads no `.md`, which no lexer parses, the gate
+judging only its prose width.
 
 ## What it reports, and the ratio it refuses
 
@@ -147,8 +148,9 @@ the run.
 
 **`--tree` judges every line of the tracked files under the paths it is
 given**, as the working tree holds them, instead of a diff, and prints the
-same two lines for the whole tree, failing neither. It is how a sweep shows
-that a tree is under the rule; CI does not run it.
+same two lines for the whole tree, failing neither. It reads the files `--base`
+reads, Markdown prose at its width included. It is how a sweep shows that a
+tree is under the rule; CI does not run it.
 
 ## How it runs
 
@@ -160,6 +162,6 @@ judges is read out of the base commit**, on the closure gate's design, so a pull
 request cannot loosen the rule it is judged by. The suite runs the head copy
 only after that gate has judged, so head test code cannot alter the run ahead
 of it, and a red gate leaves the suite unrun. A base with no gate directory is
-judged by the head copy under a warning, as the locality gate's bootstrap is,
-because the pull request that lands the gate has no base copy. The testing
+judged by the head copy under a warning, the bootstrap, because the pull
+request that lands the gate has no base copy. The testing
 document `docs/harness-local.md` *Documents* names has the local invocation.

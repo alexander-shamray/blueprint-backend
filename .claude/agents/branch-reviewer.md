@@ -83,6 +83,7 @@ JSON and nothing around it, at most about 2k tokens:
 scope you could not reach shows as one you did not cover. `skipped` may name
 `locality`, when the verdict file is missing or empty, and `bar`, when the
 bar is no bar, and nothing else: it is empty when you ran both. On a
-recheck, carry each given `id` with its new `status` and add new findings
-only where the fix itself introduced them. An empty `findings` list is a
+recheck, carry each given `id` with its new `status` and the `severity` it
+was handed, never relabelled, and add new findings only where the fix itself
+introduced them. An empty `findings` list is a
 clean round; say nothing else.

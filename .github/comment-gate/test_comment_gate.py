@@ -820,6 +820,14 @@ class TheGateOnARepository(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("--tree reads no diff", result.stderr)
 
+    def test_the_tree_mode_judges_prose_width_as_the_base_mode_does(self):
+        self.write("README.md", "x " * 41 + "\n")
+        self.commit("change")
+        result = self.run_tree("README.md")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("README.md:1: a prose line runs 82 columns, over 80",
+                      result.stdout)
+
     def test_the_tree_mode_reads_the_working_tree(self):
         self.write("Moved.cs", "x();\n")
         result = self.run_tree("Moved.cs")
