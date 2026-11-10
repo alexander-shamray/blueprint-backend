@@ -44,5 +44,5 @@ while IFS= read -r tests; do
     dotnet tool run dotnet-stryker --config-file "$here/stryker-config.json" \
       --target-framework "$framework" --output "$out/$name" --skip-version-check >&2) ||
     { echo "Stryker failed on $name" >&2; exit 3; }
-done <<<"$plan"
+done < <(printf '%s\n' "$plan")
 exec $python -I "$here/mutation_survivors.py" report "$out" "$resolved"
