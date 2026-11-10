@@ -48,7 +48,7 @@ beside the two checks above.
 
 The required checks, which `/ship` step 6's wait holds the list to, as the
 `main` ruleset requires them: `changes`, `build`, `closure-gate`,
-`locality-gate`, `commits` and `commit-gate`.
+`locality-gate`, `commits`, `commit-gate` and `harness-drift`.
 
 ## Residuals
 
