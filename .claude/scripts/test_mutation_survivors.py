@@ -145,6 +145,12 @@ class TheConfiguration(unittest.TestCase):
         self.assertIn('"$here/mutation_survivors.py" plan', text)
         self.assertIn('"$here/mutation_survivors.py" report', text)
 
+    def test_the_plan_is_fed_by_process_substitution_never_a_here_string(self):
+        # Git Bash hangs for good on a here-string of about 64 KiB; process substitution feeds the same bytes.
+        code = [line for line in RUN.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+        self.assertEqual([], [line for line in code if "<<<" in line])
+        self.assertIn("done < <(printf '%s\\n' \"$plan\")", code)
+
 
 class TheHelper(unittest.TestCase):
     """mutation-run.sh against a small repository, with a `dotnet` that records any call and refuses it."""
