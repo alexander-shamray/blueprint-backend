@@ -114,9 +114,12 @@ with `+`, as `C+E`, for a change the contract says needs both, or the one
 three it admits, `A+D+E`, with the touch set as the union. `Touch set` is
 the paths that class allows and this branch actually edited, as globs or files
 on one line. A widened token takes its reason after its closing backtick, as
-`` `docs/x.md` (added: why) ``, in plain text; a bare token takes none. A file
-in the diff outside the set is a finding for the
-review, and the answer is a narrower diff, a row widened with its
+`` `docs/x.md` (added: why) ``, in plain text; a bare token takes none. The
+reason's grammar is `docs/harness-boundaries.md`'s, *Pull request reads and
+the locality verdict*. A reason that does not fit that grammar or one line
+goes in the body beside the table, a line under it, never in the row, which
+`pr-locality.sh` refuses. A file in the diff outside the set is a finding for
+the review, and the answer is a narrower diff, a row widened with its
 reason beside it, or a different class — never a row widened silently.
 
 ### What the branch closes
@@ -140,6 +143,13 @@ and a commit message is not, which is why withdrawing a closure from the body
 reads as sufficient and is not. If a commit already closes an issue the branch
 has since decided to leave open, name it in the description, let it close, and
 reopen it with the reason on the issue itself.
+
+**A pull request that takes only part of an issue names it without a closing
+keyword**: `Refs #n`, or `Part of #n`, in the body and the commits. A
+`Closes` on the part closes the issue with the rest of its work undone. The
+one pull request of a set that carries the set's closing keyword is the
+exception, once every other one has landed (`docs/harness/working-rules.md`,
+*Pull requests*).
 
 **A keyword the body only *discusses* still links.** GitHub's linker does not
 read markdown, so a `` `Closes #30` `` quoted inside an argument about closures

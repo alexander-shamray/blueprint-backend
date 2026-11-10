@@ -15,8 +15,12 @@ outcome true and carries none of that reasoning.
   The negative half alone is weak — a checkout nobody has touched has no
   `obj/` under `src/` either — so the gate proves a restore and a build both
   ran: a restore alone creates every `obj` entry and no `bin` entry.
-- `Platform.slnx`, reconciled in both directions with the projects found on
-  disk, because a walk that finds no project satisfies every assertion above.
+- The solution, the one `.slnx` at the repository's root, reconciled in both
+  directions with the projects found on disk, because a walk that finds no
+  project satisfies every assertion above. It is found rather than named,
+  since each target calls its solution something of its own, and none or more
+  than one at the root is refused before anything else is read: either leaves
+  no single inventory to reconcile against.
   They are reconciled by path, and a duplicate `.csproj` stem is refused
   before anything is looked up by name, because `UseArtifactsOutput` keys a
   project's output on the stem and two projects sharing one share an entry.

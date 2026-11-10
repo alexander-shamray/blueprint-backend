@@ -513,7 +513,8 @@ target*)
       branch by name.
    3. **Choose the next round.** A recheck reads the diff since the round
       before and the findings still open, and nothing else. A **full pass**
-      runs instead when a fix closed a `bug`-severity finding, or when the
+      runs instead when a fix closed a finding the round that raised it labelled
+      `bug` (a recheck carries that label), or when the
       fixes since the last full pass change more than 400 lines
       (`git diff --stat`).
 
@@ -662,7 +663,7 @@ target*)
    #    ExitWorktree({action: "keep"})                  # 2. forked runs only — a tool, not bash
    bash .claude/scripts/git-switch-existing.sh main     # 3. in-place runs only
    git branch --show-current                            # 4. main, or a branch another session left here
-   git pull --ff-only                                   # 5. on main; elsewhere git fetch origin main:main
+   git pull --ff-only                                   # 5. on main; elsewhere git fetch origin refs/heads/main:main
    git merge-base --is-ancestor <merge-oid> main        # 6. and main really does contain it
    bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug> <branch>  # 7. forked runs only
    git worktree prune                                   # 8.

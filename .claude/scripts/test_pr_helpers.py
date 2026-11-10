@@ -57,7 +57,30 @@ def code_lines(text):
     return re.sub(r"\s*\\\n\s*", " ", code).splitlines()
 
 
-class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
+class GhShim:
+    """A `gh` shim on PATH for a helper under test, shared by the classes that stub one."""
+
+    def _run_helper_with_gh(self, helper, arg, script, bound=None, scripts=SCRIPTS, timeout_program=None):
+        # A `gh` shim on PATH, the shape every stubbed helper test here uses. `timeout_program` names the program
+        # gh-read-bound.sh looks for, so one that is not there takes the watchdog a host without `timeout` runs.
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        gh = Path(d) / "gh"
+        gh.write_text("#!/usr/bin/env bash\n" + script, encoding="utf-8")
+        gh.chmod(0o755)
+        env = dict(os.environ)
+        env["PATH"] = d + os.pathsep + env["PATH"]
+        if bound is not None:
+            env["GH_READ_BOUND_SECONDS"] = bound
+        if timeout_program is not None:
+            env["GH_READ_TIMEOUT"] = timeout_program
+        return subprocess.run(
+            [BASH, str(scripts / helper), arg],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+        )
+
+
+class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
     """A command reads a pull request through a helper whose field set is fixed."""
 
 
@@ -222,51 +245,10 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             (d / ".github" / "locality-gate" / "classes.yml").write_text(text, encoding="utf-8")
         return scripts
 
-    def _run_helper_with_gh(self, helper, arg, script, bound=None, scripts=SCRIPTS, timeout_program=None):
-        # A `gh` shim on PATH, the shape every stubbed helper test here uses. `timeout_program` names the program
-        # gh-read-bound.sh looks for, so one that is not there takes the watchdog a host without `timeout` runs.
-        d = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
-        gh = Path(d) / "gh"
-        gh.write_text("#!/usr/bin/env bash\n" + script, encoding="utf-8")
-        gh.chmod(0o755)
-        env = dict(os.environ)
-        env["PATH"] = d + os.pathsep + env["PATH"]
-        if bound is not None:
-            env["GH_READ_BOUND_SECONDS"] = bound
-        if timeout_program is not None:
-            env["GH_READ_TIMEOUT"] = timeout_program
-        return subprocess.run(
-            [BASH, str(scripts / helper), arg],
-            capture_output=True, text=True, encoding="utf-8", env=env,
-        )
-
     def test_a_comment_ending_in_a_backslash_swallows_no_call(self):
         # The pin above reads code lines; a backslash ending a comment continues
         # nothing to bash, so the call after it must still be one of them.
         self.assertEqual(["x=$(gh_read api y)"], code_lines("# a comment \\\nx=$(gh_read api y)\n"))
-
-    def test_a_stalled_gh_read_fails_at_the_bound_in_every_helper(self):
-        # An unbounded `gh pr view` held pr-locality.sh, and every step behind
-        # it, with nothing printed. The stub outlives the bound by far, so a
-        # return inside it is the bound firing, and the message tells that
-        # from an ordinary `gh` failure. The glob is the subject, so a helper
-        # added later is held to the bound without being named here.
-        helpers = sorted(p.name for p in SCRIPTS.glob("pr-*.sh"))
-        # Named, so a glob that stopped finding one fails rather than passing on fewer.
-        self.assertLessEqual(
-            {"pr-closure-input.sh", "pr-for-branch.sh", "pr-locality.sh", "pr-state.sh"},
-            set(helpers),
-        )
-        # Under GNU `timeout`, and under the watchdog a host without it runs, as macOS, which ships none.
-        for helper, program in itertools.product(helpers, (None, "no-such-timeout")):
-            arg = "some-branch" if helper == "pr-for-branch.sh" else "187"
-            with self.subTest(helper=helper, timeout=program or "timeout"):
-                start = time.monotonic()
-                r = self._run_helper_with_gh(helper, arg, "exec sleep 30\n", bound="1", timeout_program=program)
-                self.assertLess(time.monotonic() - start, 20, helper)
-                self.assertNotEqual(0, r.returncode, r.stderr)
-                self.assertIn("did not answer within 1 s", r.stderr)
 
     def test_the_watchdog_passes_a_quick_read_through_whole(self):
         # Its answer must be gh's: the output, the status and the stdin, none read as the bound firing. The stub
@@ -824,6 +806,32 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
 # associative array, and the case-changing expansions.
 BASH_4 = re.compile(
     r"\b(?:mapfile|readarray)\b|\b(?:declare|local|typeset)\s+-[a-zA-Z]*A|\$\{\w+(?:\[[^]]*\])?(?:,|\^)")
+
+
+class AStalledGhReadEndsAtTheBound(GhShim, unittest.TestCase):
+    """Whose subject is elapsed time, so `shard-harness-suite.py` runs it in the serial tail, apart from its sibling."""
+
+    def test_a_stalled_gh_read_fails_at_the_bound_in_every_helper(self):
+        # An unbounded `gh pr view` held pr-locality.sh, and every step behind
+        # it, with nothing printed. The stub outlives the bound by far, so a
+        # return inside it is the bound firing, and the message tells that
+        # from an ordinary `gh` failure. The glob is the subject, so a helper
+        # added later is held to the bound without being named here.
+        helpers = sorted(p.name for p in SCRIPTS.glob("pr-*.sh"))
+        # Named, so a glob that stopped finding one fails rather than passing on fewer.
+        self.assertLessEqual(
+            {"pr-closure-input.sh", "pr-for-branch.sh", "pr-locality.sh", "pr-state.sh"},
+            set(helpers),
+        )
+        # Under GNU `timeout`, and under the watchdog a host without it runs, as macOS, which ships none.
+        for helper, program in itertools.product(helpers, (None, "no-such-timeout")):
+            arg = "some-branch" if helper == "pr-for-branch.sh" else "187"
+            with self.subTest(helper=helper, timeout=program or "timeout"):
+                start = time.monotonic()
+                r = self._run_helper_with_gh(helper, arg, "exec sleep 30\n", bound="1", timeout_program=program)
+                self.assertLess(time.monotonic() - start, 20, helper)
+                self.assertNotEqual(0, r.returncode, r.stderr)
+                self.assertIn("did not answer within 1 s", r.stderr)
 
 
 class NoHelperNeedsBash4(unittest.TestCase):

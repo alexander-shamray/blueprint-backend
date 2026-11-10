@@ -8,6 +8,7 @@ import unittest
 
 from review_helpers import (
     SCRIPTS,
+    code_lines,
     setUpModule,
     temp_root,
     run_bash,
@@ -63,6 +64,12 @@ class SyncShape(unittest.TestCase):
         self.assertEqual(f"origin/{BRANCH}\none", read.stdout.strip())
         status = run_bash('git -C "$C" status --porcelain', C=f"{root}/checkout")
         self.assertNotIn(".claude", status.stdout)
+
+    def test_the_add_spells_core_longpaths_in_a_code_line(self):
+        # Only a Windows run can fail on a path past 260 characters, so the spelling is held on every platform,
+        # against code lines a comment cannot satisfy.
+        self.assertIn("git -c core.longpaths=true worktree add",
+                      "\n".join(code_lines(SYNC.read_text(encoding="utf-8"))))
 
     def test_only_a_sync_head_is_accepted(self):
         root = self.fixture()
