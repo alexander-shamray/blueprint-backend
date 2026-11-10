@@ -11,13 +11,20 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import dispatch_board as db
 from review_helpers import BASH, COMMANDS, SCRIPTS, setUpModule  # noqa: F401
 
 HELPER = SCRIPTS / "main-red-open.sh"
 STUB = (
     "#!/usr/bin/env bash\n"
     'echo "$*" >> "$STUB_LOG"\n'
+    'if [ "$2" = view ]; then\n'
+    '  [ -z "${STUB_VIEW_FAIL:-}" ] || exit 1\n'
+    '  case " ${STUB_CLOSED:-} " in *" $3 "*) echo CLOSED;; *) echo "${STUB_STATE-OPEN}";; esac\n'
+    '  exit 0\n'
+    'fi\n'
     '[ -z "${STUB_FAIL:-}" ] || exit 1\n'
     'printf "%s" "$STUB_ROWS"\n'
 )
@@ -62,6 +69,29 @@ class MainRedOpen(unittest.TestCase):
         self.assertEqual(3, result.returncode, result.stderr)
         self.assertEqual("main is red: #1 u1\nmain is red: #2 u2\n", result.stdout)
 
+    def test_an_issue_the_search_lists_but_is_closed_exits_0(self):
+        # The search index lags a closure: the listing still has the issue, its own state says CLOSED.
+        result = self.run_helper(rows("main is red"), STUB_CLOSED="1")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stdout)
+
+    def test_only_the_still_open_one_is_named(self):
+        result = self.run_helper(rows("main is red: CI", "main is red: Helm"), STUB_CLOSED="1")
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertEqual("main is red: #2 u2\n", result.stdout)
+
+    def test_a_failed_state_read_exits_2(self):
+        result = self.run_helper(rows("main is red"), STUB_VIEW_FAIL="1")
+        self.assertEqual(2, result.returncode)
+        self.assertIn("cannot read the state of #1", result.stderr)
+        self.assertEqual("", result.stdout)
+
+    def test_a_state_that_is_neither_open_nor_closed_exits_2(self):
+        result = self.run_helper(rows("main is red"), STUB_STATE="")
+        self.assertEqual(2, result.returncode)
+        self.assertIn("state of #1 reads ''", result.stderr)
+        self.assertEqual("", result.stdout)
+
     def test_a_title_that_only_contains_the_phrase_exits_0(self):
         # The search is full text, so it returns these. The last has the words and no separator.
         result = self.run_helper(rows("why main is red yesterday", "Fix: main is red", "main is reddish", "main is red:"))
@@ -103,6 +133,31 @@ class MainRedOpen(unittest.TestCase):
         for part in ("issue list ", "--state open", "--label bug", "--json number,title,url"):
             with self.subTest(part=part):
                 self.assertIn(part, call)
+
+    def board_read(self, listing="[]", **env_extra):
+        # `dispatch_board.main_red` over the real helper at its real path, as a `wake` runs it in a target.
+        env = {"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "STUB_LOG": str(self.log),
+               "STUB_ROWS": listing, **env_extra}
+        with mock.patch.dict(os.environ, env):
+            return db.main_red(str(SCRIPTS.parent.parent))
+
+    def test_the_board_reads_a_green_main_as_no_line(self):
+        self.assertEqual([], self.board_read(rows("other")))
+
+    def test_the_board_reads_each_open_one_as_a_line(self):
+        self.assertEqual(["main is red: #1 u1", "main is red: #2 u2"],
+                         self.board_read(rows("main is red: CI", "main is red: Helm")))
+
+    def test_the_board_refuses_on_exit_2_and_never_reads_it_green(self):
+        with self.assertRaisesRegex(db.Refusal, "main-red-open.sh exited 2: cannot list the open issues"):
+            self.board_read(STUB_FAIL="1")
+
+    def test_the_board_refuses_any_other_answer_too(self):
+        # A stubbed child stands for a helper a later edit changes: only 0 with nothing and 3 with a line are answers.
+        for answer in ((0, "main is red: #1 u", ""), (3, "", ""), (1, "", "boom"), (127, "", "no such file")):
+            with self.subTest(answer=answer), mock.patch.object(db, "_child", return_value=answer):
+                with self.assertRaisesRegex(db.Refusal, f"main-red-open.sh exited {answer[0]}"):
+                    db.main_red(".")
 
 
 class ShipReadsIt(unittest.TestCase):

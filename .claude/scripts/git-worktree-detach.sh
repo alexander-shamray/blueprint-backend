@@ -91,7 +91,7 @@ esac
 # Redirected because stdout is this script's return value, and
 # `git worktree add` writes "HEAD is now at <sha> <subject>" to stdout, which a
 # caller capturing the output would take as part of the directory name.
-git worktree add --detach "$resolved" "$commit" >&2 ||
+git -c core.longpaths=true worktree add --detach "$resolved" "$commit" >&2 ||
   refuse "git worktree add refused $resolved at $commit" 3
 # The path, and it is the POSIX spelling — the one the shell and this helper
 # share. The caller still reads `git worktree list --porcelain` for the

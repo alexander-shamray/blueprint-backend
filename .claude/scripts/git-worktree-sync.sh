@@ -38,4 +38,4 @@ git fetch -q origin "$branch" ||
   { echo "origin has no such branch: $branch" >&2; exit 4; }
 # `--track` sets the upstream, which a sync run reads only as `git status -sb`'s
 # ahead/behind; the start point is origin's tip, not the local `main` a bare name is.
-git worktree add --track -b "$branch" "$path" "origin/$branch"
+git -c core.longpaths=true worktree add --track -b "$branch" "$path" "origin/$branch"

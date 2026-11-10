@@ -991,7 +991,8 @@ def tree(roots):
         for root in roots:
             listed = _git("ls-files", "-z", "--full-name", "--",
                           root).decode("utf-8", errors="strict")
-            read = [p for p in listed.split("\0") if p and reader_for(p)]
+            read = [p for p in listed.split("\0")
+                    if p and (reader_for(p) or is_prose(p))]
             if not read:
                 raise Unreadable(f"no file it reads under {root}")
             paths.update(read)
@@ -1002,6 +1003,10 @@ def tree(roots):
                 text = (top / path).read_bytes().decode("utf-8-sig")
             except UnicodeDecodeError:
                 raise Unreadable(f"{path} is not UTF-8") from None
+            if is_prose(path):
+                found.extend(prose_width(
+                    path, text, set(range(1, text.count("\n") + 2))))
+                continue
             try:
                 lines = scan(path, text)
             except Unreadable as error:

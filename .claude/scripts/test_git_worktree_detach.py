@@ -146,6 +146,14 @@ class SweepWorktreeShape(unittest.TestCase):
         self.assertRegex(run_bash('basename "$P"', P=path).stdout.strip(), r"^secsweep-.{6}$")
 
 
+class TheAddAsksForLongPaths(unittest.TestCase):
+    def test_the_add_spells_core_longpaths_in_a_code_line(self):
+        # A checkout holding a path past Windows' 260 characters cannot be created without it, and only a Windows run
+        # can fail on that, so the spelling is held on every platform, against code lines a comment cannot satisfy.
+        self.assertIn("git -c core.longpaths=true worktree add --detach",
+                      "\n".join(code_lines(DETACH.read_text(encoding="utf-8"))))
+
+
 class StaleSweepWorktrees(unittest.TestCase):
     """A sweep's start drops the sweep worktrees interrupted sweeps left.
 

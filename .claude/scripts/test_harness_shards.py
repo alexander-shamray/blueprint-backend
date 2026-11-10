@@ -7,12 +7,15 @@ discovery too. Each way of reporting a pass over tests that never ran has a case
 import contextlib
 import importlib.util
 import io
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import types
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -297,6 +300,72 @@ class TheRunnerRefusesRatherThanReportingAPass(unittest.TestCase):
                              timeout=120)
         self.assertEqual(2, out.returncode, out.stdout)
         self.assertIn("takes no arguments", out.stderr)
+
+
+class ATargetPinsItsOwnClasses(unittest.TestCase):
+    """A class only one target has is pinned from that target's `local` module, never from the managed tables."""
+
+    def declared(self, body):
+        """A `local_commands` module holding `body`, on a path of its own, and the runner's read of it."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        name = "local_pins_fixture_" + uuid.uuid4().hex
+        (Path(tmp) / f"{name}.py").write_text(body, encoding="utf-8")
+        sys.path.insert(0, tmp)
+        self.addCleanup(sys.path.remove, tmp)
+        self.addCleanup(sys.modules.pop, name, None)
+        return SHARD.local_pins(name)
+
+    def test_a_target_with_no_module_pins_nothing(self):
+        self.assertEqual((frozenset(), {}), SHARD.local_pins("no_such_local_module_here"))
+
+    def test_its_pins_reach_the_plan(self):
+        serial, together = self.declared(
+            'SERIAL_CLASSES = ["t_a.Timed"]\nTOGETHER_CLASSES = {"t_b.One": "g", "t_b.Two": "g"}\n')
+        ids = ["t_a.Timed.x", "t_b.One.x", "t_b.Two.x", "t_c.Free.x"]
+        with mock.patch.object(SHARD, "SERIAL", frozenset(serial)), mock.patch.object(SHARD, "TOGETHER", together):
+            units, tail = SHARD.plan(ids)
+        self.assertEqual(["t_a.Timed.x"], tail)
+        self.assertIn(["t_b.One.x", "t_b.Two.x"], units)
+        self.assertIn(["t_c.Free.x"], units)
+
+    def test_a_module_naming_only_one_table_pins_the_other_empty(self):
+        self.assertEqual((frozenset({"t_a.Timed"}), {}), self.declared('SERIAL_CLASSES = {"t_a.Timed"}\n'))
+
+    def test_the_payloads_tables_keep_their_names_beside_the_targets(self):
+        serial, together = SHARD.pinned(frozenset({"a.A"}), {"b.B": "g"}, (frozenset({"c.C"}), {"d.D": "g"}))
+        self.assertEqual(frozenset({"a.A", "c.C"}), serial)
+        self.assertEqual({"b.B": "g", "d.D": "g"}, together)
+
+    def test_a_class_the_payload_already_pins_is_refused(self):
+        with self.assertRaises(ValueError):
+            SHARD.pinned(frozenset({"a.A"}), {"b.B": "g"}, (frozenset({"a.A"}), {}))
+        with self.assertRaises(ValueError):
+            SHARD.pinned(frozenset({"a.A"}), {"b.B": "g"}, (frozenset(), {"b.B": "other"}))
+
+    def test_the_tables_the_plan_reads_hold_what_a_fresh_load_reads_from_the_target(self):
+        # Reverting the module's own `pinned(...)` line would leave every case above green and a target's pins
+        # silently unapplied, so the runner is loaded afresh over a declaration module and its tables read.
+        fixture = types.SimpleNamespace(SERIAL_CLASSES=["t_x.Timed"], TOGETHER_CLASSES={"t_x.Shared": "g"})
+        with mock.patch("importlib.import_module", return_value=fixture):
+            fresh = loaded()
+        self.assertIn("t_x.Timed", fresh.SERIAL)
+        self.assertEqual("g", fresh.TOGETHER["t_x.Shared"])
+        self.assertLessEqual(set(SHARD._SERIAL), set(fresh.SERIAL))
+
+    def test_a_class_pinned_both_ways_is_refused(self):
+        with self.assertRaises(ValueError):
+            SHARD.pinned(frozenset({"a.A"}), {}, (frozenset(), {"a.A": "g"}))
+
+    def test_a_shape_that_would_read_as_something_else_is_refused(self):
+        for body in ('SERIAL_CLASSES = "t_a.Timed"\n', "SERIAL_CLASSES = [1]\n", 'TOGETHER_CLASSES = ["t_a.A"]\n',
+                     'TOGETHER_CLASSES = {"t_a.A": 3}\n'):
+            with self.subTest(body=body), self.assertRaises(TypeError):
+                self.declared(body)
+
+    def test_a_module_whose_own_import_fails_is_raised(self):
+        with self.assertRaises(ModuleNotFoundError):
+            self.declared("import a_module_nobody_has\n")
 
 
 class Worker:
