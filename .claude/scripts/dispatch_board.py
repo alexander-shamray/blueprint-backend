@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -55,6 +56,8 @@ NOT_OWNERS = "not opened by the repository owner"
 PLACED = ("task", "labels", "depends", "model", "conflicts")
 BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/()-]*")
 CHILD_TIMEOUT = 120
+# How long a timed-out child's output may take to close once its tree is ended.
+DRAIN_TIMEOUT = 10
 # The checkout this file is in, whose directory names say which backticked slash tokens are paths.
 ROOT = Path(__file__).resolve().parents[2]
 UNWALKED = {".git", "worktrees", "artifacts", "bin", "obj", "node_modules", "testresults", "__pycache__"}
@@ -811,17 +814,111 @@ def git_bash():
     return _no_relay(_bash_beside(path_which("git") or "") if os.name == "nt" else path_which("bash"))
 
 
+@functools.cache
+def _kernel32():
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    kernel32.TerminateJobObject.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    ntdll = ctypes.WinDLL("ntdll")
+    ntdll.NtResumeProcess.argtypes = (wintypes.HANDLE,)
+    ntdll.NtResumeProcess.restype = wintypes.LONG
+    return kernel32, ntdll
+
+
+# Popen's creationflags for a child that runs nothing until it is resumed.
+CREATE_SUSPENDED = 0x00000004
+
+
+def _start(argv, cwd, env):
+    """(process, job): the child, and on Windows the job holding it from its first instruction, so each process it
+    starts joins the job whatever its parent. Parentage cannot do this: msys's `exec` leaves its process under a parent
+    that has exited, which `taskkill /T` cannot walk past. The job is None off Windows, or where none can be made."""
+    pipes = {"cwd": cwd, "stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "env": env}
+    if os.name != "nt":
+        return subprocess.Popen(argv, start_new_session=True, **pipes), None
+    try:
+        kernel32, ntdll = _kernel32()
+        job = kernel32.CreateJobObjectW(None, None)
+    except (OSError, AttributeError):
+        job = None
+    if not job:
+        return subprocess.Popen(argv, **pipes), None
+    try:
+        process = subprocess.Popen(argv, creationflags=CREATE_SUSPENDED, **pipes)
+    except BaseException:
+        kernel32.CloseHandle(job)
+        raise
+    if not kernel32.AssignProcessToJobObject(job, int(process._handle)):
+        kernel32.CloseHandle(job)
+        job = None
+    if ntdll.NtResumeProcess(int(process._handle)) != 0:
+        _end_tree(process, job)
+        if job:
+            kernel32.CloseHandle(job)
+        raise OSError(f"could not resume {Path(argv[0]).name} after starting it suspended")
+    return process, job
+
+
+def _end_tree(process, job):
+    """End `process` and every process it started: its job on Windows, `taskkill /T` where it has none, and its
+    session elsewhere. `kill` alone ends the direct child, which for Git's `bin/bash.exe` is a launcher."""
+    if job:
+        with contextlib.suppress(OSError):
+            _kernel32()[0].TerminateJobObject(job, 1)
+    elif os.name == "nt":
+        taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "taskkill.exe")
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run([taskkill, "/F", "/T", "/PID", str(process.pid)], capture_output=True,
+                           timeout=DRAIN_TIMEOUT, check=False)
+    else:
+        with contextlib.suppress(OSError):
+            os.killpg(process.pid, signal.SIGKILL)
+    with contextlib.suppress(OSError):
+        process.kill()
+
+
+def run_bounded(argv, cwd, timeout, env=None):
+    """(code, stdout, stderr) as bytes, or subprocess.TimeoutExpired once `timeout` has passed and the child's tree is
+    ended. `subprocess.run`'s own timeout kills the direct child and then, on Windows, waits with no limit for pipes a
+    grandchild still holds, so the wait after the kill is bounded here too (docs/harness/pitfalls.md)."""
+    process, job = _start(argv, cwd, env)
+    try:
+        out, err = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _end_tree(process, job)
+        # Output already read is dropped: the caller refuses the read either way.
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.communicate(timeout=DRAIN_TIMEOUT)
+        raise subprocess.TimeoutExpired(argv, timeout) from None
+    except BaseException:
+        # An interrupt leaves the child running otherwise, and on POSIX its own session keeps Ctrl-C from it.
+        _end_tree(process, job)
+        raise
+    finally:
+        if job:
+            _kernel32()[0].CloseHandle(job)
+    return process.returncode, out, err
+
+
 def _child(argv, cwd):
     # A hung gh or git would stall the wake the dispatcher is waiting on; an executor never runs through here.
     try:
-        done = subprocess.run(argv, cwd=cwd, capture_output=True, timeout=CHILD_TIMEOUT)
+        code, out, err = run_bounded(argv, cwd, CHILD_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise Refusal(f"{' '.join(Path(a).name if i == 0 else a for i, a in enumerate(argv))} "
                       f"took over {CHILD_TIMEOUT} s") from None
     except OSError as error:
         raise Refusal(f"could not start {Path(argv[0]).name}: {error}") from None
     # Never text=True: on Windows that is cp1252, which drops an em dash or Cyrillic from the output.
-    return done.returncode, done.stdout.decode("utf-8", errors="replace"), done.stderr.decode("utf-8", errors="replace")
+    return code, out.decode("utf-8", errors="replace"), err.decode("utf-8", errors="replace")
 
 
 def helper(root, script, *args):

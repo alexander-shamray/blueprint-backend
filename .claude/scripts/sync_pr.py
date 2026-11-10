@@ -12,7 +12,7 @@ import sys
 import types
 from pathlib import Path
 
-from dispatch_board import path_which
+from dispatch_board import path_which, run_bounded
 
 # harness_sync/pr.py writes these; harness_sync/tests/test_sync_pr_constants.py holds them equal.
 HARNESS_REPO = "alexander-shamray/blueprint-harness"
@@ -54,13 +54,17 @@ def run(argv, cwd=None, timeout=GH_TIMEOUT):
     if not exe:
         raise Refusal(f"no {argv[0]} on PATH")
     try:
-        done = subprocess.run([exe, *argv[1:]], cwd=cwd or ROOT, capture_output=True, encoding="utf-8",
-                              errors="replace", timeout=timeout, check=False)
+        code, out, err = run_bounded([exe, *argv[1:]], cwd or ROOT, timeout)
     except subprocess.TimeoutExpired:
         raise Refusal(f"{argv[0]} {' '.join(argv[1:3])} took over {timeout} s") from None
     except OSError as error:
         raise Refusal(f"could not start {argv[0]}: {error}") from None
-    return done.returncode, done.stdout, done.stderr
+    return code, _text(out), _text(err)
+
+
+def _text(data):
+    """Bytes as text mode reads them: UTF-8, with line endings folded to `\\n`, which the readers here expect."""
+    return data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _line(text, cap=200):

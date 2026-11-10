@@ -1,9 +1,13 @@
 import contextlib
+import ctypes
 import hashlib
 import io
 import json
+import os
 import re
 import tempfile
+import threading
+import time
 import unittest
 from datetime import date
 from pathlib import Path
@@ -11,6 +15,7 @@ from unittest import mock
 
 import dispatch_board as db
 import dispatch_run as dr
+from review_helpers import BASH
 
 TODAY = date(2026, 11, 1)
 RUN = "20261101-220000"
@@ -1149,6 +1154,89 @@ class OnlyTheOwnersIssuesRun(unittest.TestCase):
                 db.owned_issues(".")
         with mock.patch.object(db, "helper", lambda *a: "[7, 9]\n"):
             self.assertEqual(frozenset({7, 9}), db.owned_issues("."))
+
+
+def hung_child(directory):
+    """A bash script that hangs while a background grandchild holds its stdout, the shape that outlived the timeout:
+    `subprocess.run` killed the direct child and then waited on the grandchild's pipe with no limit."""
+    script = Path(directory) / "hang.sh"
+    with open(script, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("#!/usr/bin/env bash\nsleep 300 &\necho started\nsleep 300\n")
+    return script
+
+
+class ChildTimeout(unittest.TestCase):
+    LIMIT = 90
+    # Far above the timeout, so only an ended tree returns in time: a kill of the direct child alone leaves the
+    # grandchild's pipe open, and the bounded drain would still refuse the call, only at DRAIN.
+    DRAIN = 45
+
+    def call_in_thread(self, call):
+        """Run `call` where a hang fails the case at LIMIT rather than holding the suite."""
+        outcome = {}
+
+        def target():
+            try:
+                outcome["value"] = call()
+            except Exception as error:  # noqa: BLE001 - the case asserts on what arrived
+                outcome["error"] = error
+
+        worker = threading.Thread(target=target, daemon=True)
+        started = time.monotonic()
+        worker.start()
+        worker.join(self.LIMIT)
+        self.assertFalse(worker.is_alive(), f"the timeout did not arrive within {self.LIMIT} s")
+        return outcome, time.monotonic() - started
+
+    def test_a_hung_child_with_a_grandchild_on_its_stdout_is_refused_in_time(self):
+        with (tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory,
+              mock.patch.object(db, "CHILD_TIMEOUT", 2), mock.patch.object(db, "DRAIN_TIMEOUT", self.DRAIN)):
+            outcome, took = self.call_in_thread(lambda: db._child([BASH, str(hung_child(directory))], directory))
+        self.assertIsInstance(outcome.get("error"), db.Refusal, outcome)
+        self.assertIn("took over 2 s", str(outcome["error"]))
+        self.assertLess(took, self.DRAIN - 15, "the call waited out the drain, so the grandchild outlived the timeout")
+
+    @unittest.skipUnless(os.name == "nt", "the job is Windows'")
+    def test_the_child_starts_suspended_inside_its_job(self):
+        # Started running and assigned after, the launcher could start its bash outside the job in between.
+        flags, popen = [], db.subprocess.Popen
+
+        def spy(*args, **kwargs):
+            flags.append(kwargs.get("creationflags", 0))
+            return popen(*args, **kwargs)
+
+        with mock.patch.object(db.subprocess, "Popen", spy):
+            process, job = db._start([BASH, "-c", "exit 0"], ".", None)
+        kernel32 = db._kernel32()[0]
+        self.addCleanup(kernel32.CloseHandle, job)
+        self.addCleanup(process.communicate)
+        self.assertTrue(job)
+        self.assertTrue(flags[0] & db.CREATE_SUSPENDED, flags)
+        inside = ctypes.c_int(0)
+        self.assertTrue(ctypes.WinDLL("kernel32").IsProcessInJob(
+            ctypes.c_void_p(int(process._handle)), ctypes.c_void_p(job), ctypes.byref(inside)))
+        self.assertTrue(inside.value)
+
+    def test_an_interrupt_ends_the_tree_too(self):
+        ended = []
+        real = db._end_tree
+
+        def spy(process, job):
+            ended.append(process.pid)
+            real(process, job)
+
+        with (tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory,
+              mock.patch.object(db.subprocess.Popen, "communicate", side_effect=KeyboardInterrupt),
+              mock.patch.object(db, "_end_tree", spy)):
+            with self.assertRaises(KeyboardInterrupt):
+                db.run_bounded([BASH, str(hung_child(directory))], directory, self.LIMIT)
+        self.assertEqual(1, len(ended))
+
+    def test_a_child_that_returns_is_read_whole(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            script = Path(directory) / "ok.sh"
+            script.write_bytes("#!/usr/bin/env bash\nprintf 'один\\n'; echo err >&2; exit 3\n".encode("utf-8"))
+            self.assertEqual((3, "один\n", "err\n"), db._child([BASH, str(script)], directory))
 
 
 if __name__ == "__main__":

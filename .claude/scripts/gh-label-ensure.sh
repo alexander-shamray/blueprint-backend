@@ -52,13 +52,13 @@ labels_matching() {
   local out
   out=$(gh label list --repo "$repo" --search "$label" --limit "$LABEL_LIMIT" \
           --json name --jq '.[].name') || return 1
-  [ "$(grep -c . <<<"$out" || true)" -lt "$LABEL_LIMIT" ] ||
+  [ "$(grep -c . < <(printf '%s\n' "$out") || true)" -lt "$LABEL_LIMIT" ] ||
     { echo "the listing for $label in $repo holds $LABEL_LIMIT rows, so it may be truncated" >&2; exit 3; }
   printf '%s' "$out"
 }
 existing=$(labels_matching) ||
   { echo "cannot list $repo's labels" >&2; exit 3; }
-if grep -qx -- "$label" <<<"$existing"; then
+if grep -qx -- "$label" < <(printf '%s\n' "$existing"); then
   echo "label $label already exists in $repo"
   exit 0
 fi
@@ -74,7 +74,7 @@ if ! gh label create "$label" \
   --description "$description"; then
   again=$(labels_matching) ||
     { echo "cannot confirm whether $label exists in $repo after a failed create" >&2; exit 3; }
-  grep -qx -- "$label" <<<"$again" ||
+  grep -qx -- "$label" < <(printf '%s\n' "$again") ||
     { echo "could not create label $label in $repo" >&2; exit 3; }
   echo "label $label was created concurrently in $repo"
 fi
