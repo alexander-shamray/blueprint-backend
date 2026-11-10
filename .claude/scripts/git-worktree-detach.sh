@@ -50,7 +50,7 @@ while IFS= read -r line; do
   [ -n "$(find "$old" -maxdepth 0 -mmin +1440 2>/dev/null)" ] || continue
   bash "$(dirname "${BASH_SOURCE[0]}")/git-worktree-drop.sh" "$old" >&2 ||
     echo "left a stale sweep worktree standing: $old" >&2
-done <<<"$registered"
+done < <(printf '%s\n' "$registered")
 git worktree prune >&2
 
 tmproot=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) ||

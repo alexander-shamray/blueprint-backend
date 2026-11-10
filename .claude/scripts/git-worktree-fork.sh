@@ -64,7 +64,7 @@ if [ "$added" -ne 0 ]; then
   if git show-ref --verify --quiet "refs/heads/$branch"; then
     if ! worktrees=$(git worktree list --porcelain); then
       echo "$branch is kept: the worktrees cannot be read, so whether one holds it is unknown" >&2
-    elif grep -qxF -- "branch refs/heads/$branch" <<<"${worktrees//$'\r'/}"; then
+    elif grep -qxF -- "branch refs/heads/$branch" < <(printf '%s\n' "${worktrees//$'\r'/}"); then
       echo "$branch is kept: a worktree holds it" >&2
     elif git update-ref --no-deref -d "refs/heads/$branch" "$start" 2>/dev/null; then
       echo "removed $branch, which this failed fork created" >&2

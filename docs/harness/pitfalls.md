@@ -62,6 +62,22 @@ when a step behaves unexpectedly.
   the WSL launcher, before `PATH`. Safe: run the path
   `shutil.which("bash")` returns, Git's, as the hygiene test requires
   under `.claude/`.
+- **Git Bash hangs on a here-string of about 64 KiB.** `bash 5.2.26` from
+  Git for Windows blocks for good on `cmd <<<"$s"` when `$s` holds 65,536
+  to about 65,650 bytes, with no output and no error; smaller and larger
+  ones return. `gh-issue-list.sh` met it the night its list reached 65,541
+  bytes and held `/dispatch` at step 0 for 56 minutes. Safe: feed a
+  variable as `cmd < <(printf '%s\n' "$s")`, the here-string's exact
+  input; `test_here_string_band.py` refuses a here-string in a shell
+  script under `.claude/scripts/` or `.claude/hooks/`.
+- **A Python `timeout=` does not end a hung Git Bash.** On Windows
+  `subprocess.run(…, capture_output=True, timeout=…)` kills only the
+  direct child, which for Git's `bin/bash.exe` is a launcher, and then
+  waits with no limit for pipes a grandchild still holds; a 120-second
+  limit ran for 56 minutes. `taskkill /T` does not reach them either: an
+  msys `exec` leaves its process under a parent that has exited. Safe:
+  `dispatch_board.run_bounded`, which holds the child in a Windows job,
+  ends the job, and bounds the wait for its output.
 - **A `cd` persists.** A `cd` into a subdirectory makes the next relative
   `mkdir` or `git add -A` land there, and a line that both changes
   directory and writes a relative path is refused whole. Safe: run the

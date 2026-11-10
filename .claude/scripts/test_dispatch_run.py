@@ -1571,7 +1571,7 @@ class WakeTests(InRoot):
         self.assertIn("refused: S2's record in state.json is not an object", run_cli(["resume", RUN]))
 
     def test_a_helper_that_hangs_is_a_refusal(self):
-        with mock.patch.object(db.subprocess, "run", side_effect=subprocess.TimeoutExpired(["gh"], 120)):
+        with mock.patch.object(db, "run_bounded", side_effect=subprocess.TimeoutExpired(["gh"], 120)):
             with self.assertRaisesRegex(db.Refusal, "took over 120 s"):
                 db.git(".", "worktree", "list")
         self.assertEqual(120, db.CHILD_TIMEOUT)

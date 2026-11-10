@@ -35,7 +35,7 @@ head=$(gh pr view "$pr" --repo "$repo" \
   --json headRefName,headRefOid,isCrossRepository,baseRefName \
   --jq '[.headRefName, .headRefOid, (.isCrossRepository|tostring), .baseRefName] | @tsv') ||
   { echo "cannot read pull request #$pr" >&2; exit 3; }
-IFS=$'\t' read -r head_branch head_oid cross base <<<"${head%$'\r'}"
+IFS=$'\t' read -r head_branch head_oid cross base < <(printf '%s\n' "${head%$'\r'}")
 [ "$base" = main ] ||
   { echo "pull request #$pr targets $base, not main" >&2; exit 3; }
 [ "$cross" = false ] ||

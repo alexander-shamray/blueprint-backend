@@ -75,9 +75,9 @@ while IFS=$'\t' read -r number existing; do
     printf '%s' "$body" | bounded 60 gh issue comment "$number" --repo "$repo" --body-file -
     exit 0
   fi
-done <<<"$open"
+done < <(printf '%s\n' "$open")
 area_labels=()
-IFS=, read -r -a areas <<<"$area"
+IFS=, read -r -a areas < <(printf '%s\n' "$area")
 for label in "${areas[@]}"; do area_labels+=(--label "$label"); done
 printf '%s' "$body" | MSYS2_ARG_CONV_EXCL='*' bounded 60 gh issue create \
   --repo "$repo" \

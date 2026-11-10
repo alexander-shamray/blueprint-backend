@@ -272,12 +272,12 @@ require_no_merge_invented_anything() {
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       printf '%s\n' "$conflicted" | grep -qxF -- "$path" || kept="$kept$merge $path"$'\n'
-    done <<< "$changed"
+    done < <(printf '%s\n' "$changed")
     base=$(git merge-base --all "$2" "$3") || base=""
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       ! dropped_a_clean_hunk "$merge" "$2" "$3" "$base" "$path" || kept="$kept$merge $path"$'\n'
-    done <<< "$conflicted"
+    done < <(printf '%s\n' "$conflicted")
   done
   [ -z "$invented" ] && [ -z "$kept" ] ||
     { echo "a merge on $branch carries content git's own merge of its parents would not," >&2

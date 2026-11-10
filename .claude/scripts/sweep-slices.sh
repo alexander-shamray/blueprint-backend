@@ -172,7 +172,7 @@ awk -F'\t' -v kind="$kind" -v since="$since" '
 ' "$rows" "$out/text.txt" "$out/changed.txt" "$out/oids.txt" "$out/tree.txt" > "$out/plan.raw"
 
 totals=$(grep '^T' "$out/plan.raw")
-IFS=$'\t' read -r _ tracked unowned unchanged empty binary record mirrored <<<"$totals"
+IFS=$'\t' read -r _ tracked unowned unchanged empty binary record mirrored < <(printf '%s\n' "$totals")
 [ "$unowned" -eq 0 ] || { echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
 # No auditor reads a binary file, so each is named in a list the plan points at:
 # a NUL byte is all it takes to make a script one.
