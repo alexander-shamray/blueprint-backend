@@ -467,8 +467,9 @@ Harness session, then one pull request per target. Spec §7 step 4.
 
 - [ ] **Step 1:** Confirm `harness-drift` has run green on every pull request
   of the last week in backend, frontend and admin, by `gh run list
-  --workflow harness-drift`. A red one is read first: a local edit is moved to
-  the payload or declared local before the check is required.
+  --workflow harness-drift.yml`, the file's name, since the workflow's name is
+  `Harness drift`. A red one is read first: a local edit is moved to the
+  payload or declared local before the check is required.
 - [ ] **Step 2:** Add `harness-drift` to backend's list in `rulesets/main.json`
   and its *Ship checks*, as Task 8 Step 4 did for admin. The owner runs
   `ruleset-apply`; `ruleset-check --effective` reads `matches` for all four
