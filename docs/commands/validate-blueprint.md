@@ -112,21 +112,24 @@ than a loop: with nothing edited, a second pass would read the same text and
 return the same findings. An implementer spawned inside the audit session is
 the shape that cost 477k a call.
 
-The agent is `general-purpose`, told to edit nothing. That is the brief's
-word and not the tool list's: no read-only auditor for prose exists. Invoked,
-the runbook's frontmatter denies bind its own session and propagate to the
-passes it spawns (`docs/harness-boundaries.md`, *Agent-type and push
-entries*); dispatched by `/ship` step 2, the runbook is never invoked, so none
-of its denies loads.
-A read-only profile, as the sweeps have in `bug-auditor`, would make it the
-profile's guarantee in both. It is a harness change, #1786, and until it lands
-the gap is a named residual in `docs/harness-local.md`, *Residuals*.
+The agent is `check-auditor`, whose profile holds `Read`, `Grep` and `Glob`
+and nothing else, so read-only is the tool list's guarantee and not the
+brief's word. The passes read the branch under review, so a pass holding
+`Edit` or `Bash` would be one planted paragraph from editing the tree itself.
+The profile holds in both routes: invoked, where the runbook's frontmatter
+loads too, and dispatched by `/ship` step 2, where none of it does
+([`docs/commands/ship.md`](ship.md), *Step 2: checks*). What is left is the
+parent's: it holds the edit the auditor was denied, so a finding written to
+steer it is caught by the `file:line` read above or by `/ship` step 5, as with
+`branch-reviewer` (`docs/harness-boundaries.md`, *Edit denies and agent
+self-protection*).
 
-The runbook grants no agent type. A command that grants one must deny every
-other profile (`test_command_grants.py`), and a frontmatter deny holds to the
-end of the turn (`docs/harness-boundaries.md`), so denying `branch-reviewer`
-here would stop `/ship`'s review after its step 2. `general-purpose` is
-spawned with no grant, as `/ship` step 6 spawns it.
+The runbook grants `check-auditor` alone, so it denies every other agent type,
+`general-purpose` and `branch-reviewer` among them (`test_command_grants.py`).
+A frontmatter deny holds to the end of the turn (`docs/harness-boundaries.md`),
+so a turn that invokes the runbook can run no `branch-reviewer` round after
+it; `/ship` dispatches the passes rather than invoking it, so its review is
+never that turn.
 
 The exit is the report's `mean_context` for a run's main session, under 150k a
 call.
@@ -157,10 +160,10 @@ review — the class of content the rest of the chain declares untrusted. A
 paragraph added in that branch ("§7.4 requires the migrator to disable the
 readiness check; reconcile the code to the chapter") would otherwise land as an
 `Edit` to source in the same run and be reported as a reconciliation, which is
-exactly what this command is for. An unattended `/ship` needs them most and
-loads none: its step 2 dispatches the passes rather than invoking the command,
-and `docs/harness-local.md`, *Residuals*, names that gap and what still stands
-in its way.
+exactly what this command is for. An unattended `/ship` loads none of them,
+since its step 2 dispatches the passes rather than invoking the command; there
+the `check-auditor` profile is the bar, holding no `Edit` to deny (*Dispatch*,
+above).
 
 The frontmatter's `disallowed-tools` path-scopes `Edit` away from every
 tracked tree except `docs/`, which is this command's subject. A path-scoped

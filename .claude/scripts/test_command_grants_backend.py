@@ -75,5 +75,30 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
                     self.assertIn(required, rules)
 
 
+class ValidateBlueprintDispatchesTheCheckAuditor(unittest.TestCase):
+    """Its passes read the branch under review, so read-only is the profile's tool list, not the brief's word (#1786).
+
+    The payload's `test_every_other_exact_agent_grant_denies_every_other_profile` holds the denies once the grant is
+    there; this case holds the grant and the dispatch that uses it, so a revert to an ungranted agent is a red build.
+    """
+
+    TEXT = (payload.COMMANDS / "validate-blueprint.md").read_text(encoding="utf-8")
+
+    def test_it_grants_the_check_auditor_by_exact_type_and_nothing_broader(self):
+        allowed = payload.frontmatter_list(self.TEXT, "allowed-tools")
+        self.assertEqual(["Agent(check-auditor)"], [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
+
+    def test_it_denies_the_unrestricted_agent(self):
+        self.assertIn("Agent(general-purpose)", payload.frontmatter_list(self.TEXT, "disallowed-tools"))
+
+    def test_its_dispatch_spawns_the_check_auditor_and_no_agent_told_to_edit_nothing(self):
+        body = self.TEXT.split("---", 2)[2]
+        dispatch = body[body.index("## Dispatch"):body.index("## Report")]
+        self.assertIn("one `check-auditor` per pass", dispatch)
+        for retired in ("general-purpose", "told to edit nothing"):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, dispatch)
+
+
 if __name__ == "__main__":
     unittest.main()
