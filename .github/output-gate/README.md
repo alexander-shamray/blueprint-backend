@@ -1,11 +1,12 @@
 # The output gate
 
 **The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`, and
-every project's output is under `artifacts/` instead.** It checks
-[§4.1](../../docs/backend-architecture/04-solution-structure.md)'s rule that
-those trees hold source and nothing a build wrote. `Directory.Build.props`
-makes the rule true, and its `Output` comment argues how; this gate keeps the
-outcome true and carries none of that reasoning.
+every project's output is under `artifacts/` instead.** It checks the rule
+that those trees hold source and nothing a build wrote, which backend's
+architecture states as its §4.1 and every target the gate is delivered to
+holds. A target's `Directory.Build.props` makes the rule true, and its
+`Output` comment argues how; this gate keeps the outcome true and carries
+none of that reasoning.
 
 ## What it reads
 
@@ -27,20 +28,24 @@ outcome true and carries none of that reasoning.
 
 ## What it does not claim
 
-§4.1's rule is wider than `bin/` and `obj/`: nothing a build wrote. Checking
+The rule is wider than `bin/` and `obj/`: nothing a build wrote. Checking
 that needs a before to compare against, so it is not this gate's. CI has one
-— the checkout — and a step beside this one asks git instead; there is no
-local equivalent, because run on a working tree it would report whatever is
-in flight.
+— the checkout — so a target can ask git in a step beside this one; there is
+no local equivalent, because run on a working tree it would report whatever
+is in flight.
 
 ## How it runs
 
-Its suite runs in the fast job of backend's CI workflow and the
-gate runs behind the solution build — not behind `scaffold-build`'s, which
-compiles a rendered service and takes no gate. The split is one the gate
-cannot avoid, because it reads what a build left. Run on its own it needs a
-restore and a build in front of it; `docs/testing.md` has the commands.
+The suite and the gate run apart, a split the gate cannot avoid, because it
+reads what a build left. The suite needs no build, so a target runs it in a
+CI job that builds nothing; the gate runs behind a restore and a build of the
+root solution, in whichever job of the target's CI does those, and a target
+that runs only the suite has the gate's own cases proved and its own tree not
+yet read. `py -3.12 .github/output-gate/output_gate.py` runs the gate on the
+repository it sits in, or on the one `--repo` names.
 
 `py -3.12 -m unittest discover -s .github/output-gate` runs the suite. A tree
-this gate does not walk is invisible to every test that builds its own, so a
-target with a solution also reads its real repository, in a suite of its own.
+this gate does not walk is invisible to every test that builds its own, and
+the suite builds every tree it reads, so it never reads the target's real
+one; a target that wants its real repository read keeps a suite of its own
+beside it, as backend does.

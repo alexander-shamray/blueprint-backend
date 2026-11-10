@@ -83,7 +83,7 @@ holder() {
   worktrees=$(git worktree list --porcelain) || return 12
   # Held apart from the count, whose `|| true` for no match would swallow this.
   worktrees=$(printf '%s\n' "$worktrees" | tr -d '\r' | tr '[:upper:]' '[:lower:]') || return 12
-  held=$(grep -cxF -- "branch refs/heads/$lowered" <<<"$worktrees" || true)
+  held=$(grep -cxF -- "branch refs/heads/$lowered" < <(printf '%s\n' "$worktrees") || true)
   [ "$held" = 0 ] || { echo "checked out in a worktree (git worktree list)"; return 0; }
 
   # A worktree mid-rebase or mid-bisect has HEAD detached while the branch is
@@ -107,7 +107,7 @@ holder() {
     # match on the name is the test; an oid line never reads as a ref name.
     if [ -f "$gitdir/rebase-merge/update-refs" ]; then
       text=$(named "$gitdir/rebase-merge/update-refs") || return 12
-      if grep -qxF -- "refs/heads/$lowered" <<<"$text"; then
+      if grep -qxF -- "refs/heads/$lowered" < <(printf '%s\n' "$text"); then
         echo "to be updated by a rebase in a worktree ($gitdir/rebase-merge)"; return 0
       fi
     fi

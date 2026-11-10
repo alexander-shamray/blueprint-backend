@@ -332,16 +332,42 @@ write is skipped, because `/dispatch` is the list's one writer for the night and
 moved the row itself when it forked the worktree (`docs/commands/ship.md`,
 *Dispatched: the one token /dispatch passes*).
 
-**The step names the row's cells because `dispatch_board.py` refuses any
-others.** When it listed only what the row holds, sessions wrote a six-column
-header and a dash in the `#` cell; the board refuses both, `/dispatch` stops on
-that list, and *In progress* is never rebuilt, so a human had to repair it. The
-step therefore spells the five cells of `HEADERS`, with the branch and worktree
-sharing `Branch or PR`. `row_branch` reads the first name in backticks as the
-branch, so the branch comes first and each name has its own pair: a cell with no
-backticks, or one pair round both names with a comma between them, parses but
-names no branch, and `/dispatch` then leaves what that branch changed out of the
-row's claim, with nothing refused to say so. A row with no issue takes the
+**The row is written by `dispatch_board.py tasks start`, not by hand,
+because a hand edit leaves a list the board refuses.** When the step listed
+only what the row holds, sessions wrote a six-column header and a dash in the
+`#` cell; when it spelled the cells, they still left the *Remaining* row behind
+beside the new one, put two issues in one row, wrote a *Remaining* row with no
+group and a wave as a word: five such defects in three targets' lists on
+2026-11-10 alone (#384). The board refuses each, `/dispatch` stops on that list
+at its step 0, and *In progress* is never rebuilt, so a human had to repair it.
+The helper is the run-less twin of the dispatcher's `move`, keyed by issue
+number since a day session has no run: it takes the issue's row out of
+*Remaining* in the same write that adds it to *In progress*, one row per issue;
+it parses the list it would leave with the parser `board` uses and writes
+nothing that fails, naming the defect; it writes nothing on a second `start`
+from the same branch and refuses one from another; and it compares the file
+with what it read before replacing it, starting again from the fresh copy when
+another session wrote in between, since three or four sessions write one list
+at once. That narrows the window a concurrent edit is lost in to the instant
+between the compare and the replace rather than closing it: a lock would close
+it only for writers that take it, and `/dispatch`'s run actions and any hand
+edit take none. It keeps the *Remaining* line it took beside the list, under
+`<list>.started/`, so that `tasks back` puts the whole row back with its
+labels, depends, model and conflicts, which the five *In progress* cells do
+not hold. With no saved line, a row started with `--what` or written by hand,
+`back` refuses and the row stays *In progress*: an open issue goes back to its
+wave, and no cell says which wave that is. A row a `/dispatch` run
+moved is that run's to end, so the day actions refuse it. `/pr` changes only
+the *State* cell with `tasks state`, and `/ship` step 6 ends the rows with
+`tasks done` or `tasks back` (`docs/commands/ship.md`, *Step 6: the
+teardown*). Work with no issue has no number to key by, so its `owed (not
+filed)` row is still written by hand, and the step spells the five cells of
+`HEADERS` for it, with the branch and worktree sharing `Branch or PR`.
+`row_branch` reads the first name in backticks as the branch, so the branch
+comes first and each name has its own pair: a cell with no backticks, or one
+pair round both names with a comma between them, parses but names no branch,
+and `/dispatch` then leaves what that branch changed out of the row's claim,
+with nothing refused to say so. A row with no issue takes the
 spelling in `docs/harness/working-rules.md`, *Issues and the task list*, and a
 suite case holds the step's wording to `HEADERS` and `OWED`.
 

@@ -1,7 +1,7 @@
 ---
 description: Open a pull request with a body in the house form
 argument-hint: "[title — omit to derive it from the commits]"
-allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(bash .claude/scripts/gh-pr-create.sh:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh)
+allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(bash .claude/scripts/gh-pr-create.sh:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(bash .claude/scripts/git-push-force.sh), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks state:*)
 disallowed-tools: Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
 ---
 
@@ -208,6 +208,16 @@ bash .claude/scripts/git-trailer-pr.sh <n>
 It adds `PR: #<n>` to each commit lacking it and publishes under a lease,
 so the SHAs change once, here, and no review round has to be repeated for
 it. A branch whose commits all carry it is left alone.
+
+Then mark each issue's *In progress* row:
+
+```bash
+py -3.12 .claude/scripts/dispatch_board.py tasks state <issue> 'PR #<n> open'
+```
+
+Exit 2 is reported, not a stop, and never routed round by hand. Under
+`/ship --dispatched`, skip this write (why: docs/commands/branch.md,
+*Step 5*).
 
 ## Report
 

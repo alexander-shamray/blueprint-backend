@@ -254,7 +254,11 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   | Closed issue; merged or closed pull request | No row, and no note of what landed, which git and the closed issues already keep |
 
   A row with no issue reads `owed (not filed)` in its `#` cell, the form
-  `dispatch_board.py` parses beside a number. Work that ends with its issue
+  `dispatch_board.py` parses beside a number. Outside `/dispatch` an
+  issue's *In progress* row moves only through `dispatch_board.py tasks
+  start <n>`, `state`, `done` and `back`, which take no run: `/branch`,
+  `/pr` and `/ship` call them, and each writes nothing `board` would refuse
+  (`docs/commands/branch.md`, *Step 5*). Work that ends with its issue
   still open (a claim abandoned, a pull request closed unmerged, or one merged
   without closing its issue) leaves its row to the table: *In progress* while
   a branch remains, which holds its paths and which `/dispatch` names to the

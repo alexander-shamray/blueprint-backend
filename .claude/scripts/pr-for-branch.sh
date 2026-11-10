@@ -42,7 +42,7 @@ repo=$(gh_read repo view --json nameWithOwner --jq .nameWithOwner) ||
 limit=1000
 rows=$(gh_read pr list --state all --head "$branch" --limit "$limit" \
          --json number,state,url,headRepository,headRefOid,baseRefName,mergeCommit)
-count=$(jq length <<<"$rows" | tr -d '\r') || count=""
+count=$(jq length < <(printf '%s\n' "$rows") | tr -d '\r') || count=""
 [[ "$count" =~ ^[0-9]+$ ]] ||
   { echo "the listing for $branch did not arrive as a JSON array" >&2; exit 3; }
 [ "$count" -lt "$limit" ] ||
@@ -50,7 +50,7 @@ count=$(jq length <<<"$rows" | tr -d '\r') || count=""
 # Only pull requests into main are this chain's: every one it opens targets main.
 mine=$(jq --arg repo "$repo" \
   '[ .[] | select((.headRepository.nameWithOwner // "") == $repo)
-         | select(.baseRefName == "main") ]' <<<"$rows")
+         | select(.baseRefName == "main") ]' < <(printf '%s\n' "$rows"))
 # A MERGED row whose merge commit the local branch carries is an earlier
 # incarnation of a reused name, and goes. Without that branch or commit locally
 # the row stays: stopping is the answer when the drop cannot be shown.
@@ -62,8 +62,8 @@ if [ -n "$tip" ]; then
     [ -z "$oid" ] || ! git merge-base --is-ancestor "$oid" "$tip" 2>/dev/null ||
       dropped="$dropped${number%$'\r'},"
   done < <(jq -r '.[] | select(.state == "MERGED")
-                  | [.number, (.mergeCommit.oid // "")] | @tsv' <<<"$mine")
+                  | [.number, (.mergeCommit.oid // "")] | @tsv' < <(printf '%s\n' "$mine"))
 fi
 jq --argjson dropped "[${dropped%,}]" \
   '[ .[] | select(.number as $n | $dropped | index($n) | not)
-         | {number, state, url, headRefOid, baseRefName} ]' <<<"$mine"
+         | {number, state, url, headRefOid, baseRefName} ]' < <(printf '%s\n' "$mine")

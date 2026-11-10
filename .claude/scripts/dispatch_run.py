@@ -307,10 +307,54 @@ def _task_text(directory, gid):
         raise Refusal(f"could not read {gid}'s task text: {error}") from None
 
 
-def _prompt_for(directory, gid, entry, run, flag=False):
+def _prompt_for(directory, gid, entry, run, flag=False, left=""):
     if entry.get("kind") == "sync":
         return sync_prompt(_field(entry, gid, "pr", _number), run)
-    return prompt(_entry_group(gid, entry), _task_text(directory, gid), run, flag)
+    return prompt(_entry_group(gid, entry), _task_text(directory, gid) + left, run, flag)
+
+
+def _plural(count, noun):
+    return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
+def _left_behind(root, entry):
+    """What a relaunched group's earlier session left in its worktree, as a clause for the prompt.
+
+    Each read is best effort: one that fails or answers out of shape drops its part, and /ship's own state read
+    still decides what is owed. A sync is held to its proved head instead; a first launch left nothing.
+    """
+    branch, worktree = entry.get("branch"), entry.get("worktree")
+    if entry.get("kind") == "sync" or entry.get("status") not in RELAUNCHED:
+        return ""
+    if not isinstance(branch, str) or not BRANCH_NAME.fullmatch(branch) or not isinstance(worktree, str):
+        return ""
+    tree = Path(root) / worktree
+    if not tree.is_dir():
+        return ""
+    parts = []
+    try:
+        ahead = int(git(tree, "rev-list", "--count", "origin/main..HEAD").strip())
+        if ahead > 0:
+            parts.append(f"{branch} {_plural(ahead, 'commit')} ahead of origin/main")
+    except (Refusal, ValueError):
+        pass
+    try:
+        if git(tree, "status", "--porcelain").strip():
+            parts.append("uncommitted work in its tree")
+    except Refusal:
+        pass
+    try:
+        rows = json.loads(helper(root, "pr-for-branch.sh", branch))
+        opened = next((r["number"] for r in rows if isinstance(r, dict) and r.get("state") == "OPEN"
+                       and _number(r.get("number"))), None)
+        if opened:
+            parts.append(f"PR #{opened} open")
+    except (Refusal, ValueError, TypeError):
+        pass
+    if not parts:
+        return ""
+    return (" (relaunched: the previous session ended with no result the dispatcher accepted, and left "
+            f"{', '.join(parts)}; resume from there, and end the turn only on the result)")
 
 
 def _same_path(path):
@@ -515,7 +559,7 @@ def _launch(root, directory, run, gid, entry, flag=False):
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
         raise Refusal("stop file: the owner ended the night, so nothing more launches")
-    text = _prompt_for(directory, gid, entry, run, flag)
+    text = _prompt_for(directory, gid, entry, run, flag, _left_behind(root, entry))
     flag = model_flag(entry.get("model"))
     worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
     if not worktree.is_dir():
