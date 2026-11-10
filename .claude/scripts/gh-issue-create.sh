@@ -91,7 +91,7 @@ here=$(dirname "$0")
 [ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
 bash "$here/gh-label-ensure.sh" "$severity" >/dev/null
 area_labels=()
-IFS=, read -r -a areas <<<"$area"
+IFS=, read -r -a areas < <(printf '%s\n' "$area")
 for label in "${areas[@]}"; do
   bash "$here/gh-label-ensure.sh" "$label" >/dev/null
   area_labels+=(--label "$label")

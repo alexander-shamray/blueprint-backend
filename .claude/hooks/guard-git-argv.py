@@ -2562,22 +2562,32 @@ def fetch_offence(segment):
     return None
 
 
-# A fetch's or a pull's long options that take the next word as their value,
-# each with the shortest prefix git reads as it: `git fetch --dep` answers that
-# `depth` requires a value, and `--de` that it is ambiguous. One this misses has
-# its value read as an operand, usually a false refusal. `EXECUTING_LONG_FLAGS`
-# refuses every word shorter than `--strategy` on a pull, hence its prefix here.
+# The long options taking the next word as their value, each with the shortest
+# prefix git reads as it on that subcommand: a fetch's `--negotiate-only` makes
+# it `--negotiati`, a pull's `--ne`. One missed has its value read as an operand,
+# which can hide the remote. `EXECUTING_LONG_FLAGS` refuses every word shorter
+# than `--strategy` on a pull, hence its prefix here.
 FETCH_VALUE_OPTIONS = {
-    "--deepen": "--dee", "--depth": "--dep", "--filter": "--fi", "--jobs": "--j",
-    "--negotiation-tip": "--negotiati", "--server-option": "--ser",
-    "--shallow-exclude": "--shallow-e", "--shallow-since": "--shallow-s",
-    "--strategy-option": "--strategy",
+    "fetch": {
+        "--deepen": "--dee", "--depth": "--dep", "--filter": "--fi", "--jobs": "--j",
+        "--negotiation-tip": "--negotiati",
+        "--recurse-submodules-default": "--recurse-submodules-",
+        "--server-option": "--ser", "--shallow-exclude": "--shallow-e",
+        "--shallow-since": "--shallow-s", "--submodule-prefix": "--su",
+    },
+    "pull": {
+        "--cleanup": "--cl", "--deepen": "--dee", "--depth": "--dep",
+        "--negotiation-tip": "--ne", "--server-option": "--ser",
+        "--shallow-exclude": "--shallow-e", "--shallow-since": "--shallow-s",
+        "--strategy-option": "--strategy",
+    },
 }
-FETCH_VALUE_LETTERS = frozenset("Xjos")
-# What may stand ahead of one in a cluster, by allow-list: `-Sj` ends in a value
-# letter and is `-S` with the key `j`, so reading the next word as its value
-# would hide the refspec after it.
-FETCH_CLUSTER_FLAGS = frozenset("qv")
+FETCH_VALUE_LETTERS = {"fetch": frozenset("jo"), "pull": frozenset("Xos")}
+# What may stand ahead of one in a cluster: each letter of that subcommand that
+# takes no value. `-Sj` is `-S` with the key `j`, so a letter whose value is
+# optional is not one, and `-ao` is `-a` then `-o`, so leaving one out hides a remote.
+FETCH_CLUSTER_FLAGS = {"fetch": frozenset("46Pafkmnpqtuv"),
+                       "pull": frozenset("46afknpqtv")}
 
 # `/ship`'s fast-forward of a `main` it is not standing on. The source is named
 # in full because `main:main` takes origin's same-named tag first.
@@ -2592,16 +2602,16 @@ ORIGIN_OWN_REF = re.compile(
     r"|tags/(?P<tag>[^:]+):refs/tags/(?P=tag))$")
 
 
-def takes_next_word(word):
-    """Whether this option word of a fetch or a pull takes the next as its value.
+def takes_next_word(word, kind):
+    """Whether this option word of a `kind`, a fetch or a pull, takes the next.
 
     A short letter does only at the end of its cluster, since in `-j4` the value
     is glued; a `=` is too, so `--depth=1` is no prefix of anything."""
     if word.startswith("--"):
         return any(word.startswith(shortest) and option.startswith(word)
-                   for option, shortest in FETCH_VALUE_OPTIONS.items())
-    return (word.startswith("-") and word[-1] in FETCH_VALUE_LETTERS
-            and set(word[1:-1]) <= FETCH_CLUSTER_FLAGS)
+                   for option, shortest in FETCH_VALUE_OPTIONS[kind].items())
+    return (word.startswith("-") and word[-1] in FETCH_VALUE_LETTERS[kind]
+            and set(word[1:-1]) <= FETCH_CLUSTER_FLAGS[kind])
 
 
 def refspec_offence(segment):
@@ -2618,7 +2628,7 @@ def refspec_offence(segment):
         word = stripped[position]
         name = word.split("=", 1)[0]
         position += 1
-        if takes_next_word(word):
+        if takes_next_word(word, stripped[0]):
             position += 1
         elif not word.startswith("-"):
             operands.append(word)
@@ -2732,7 +2742,10 @@ EXPANDABLE_VARIABLES = frozenset({
 VARIABLE_REFERENCE = re.compile(
     r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 
-# A worktree removed or not yet forked has no `.git`, and is still one.
+# A worktree's directory, by its place. A write under it is judged as that
+# worktree's path whether a `.git` is left there or not, since it lands in that
+# directory and not in the main checkout's files. Git is another matter: run in
+# such a directory with no `.git` left, it resolves up to the main checkout.
 WORKTREE_BELOW = re.compile(r"(?i)^\.claude[\\/]worktrees[\\/][^\\/]+[\\/](.*)$")
 
 # Bash on Windows spells `C:\x` as `/c/x`, which `abspath` reads as `C:\c\x`.
@@ -2864,11 +2877,12 @@ def checkout_relative(path):
 
 
 def in_linked_worktree(path):
-    """Whether `path` is in a linked worktree, removed from disk or not."""
+    """Whether git run from `path` acts on a linked worktree: its `.git` file is there now.
+
+    A directory under `.claude/worktrees/` with none acts on the main checkout,
+    and one not yet on disk may be made bare by an earlier `mkdir` in the line."""
     root = checkout_of(path)
-    return root is not None and (
-        os.path.isfile(os.path.join(root, ".git"))
-        or WORKTREE_BELOW.match(os.path.relpath(path, root) + os.sep) is not None)
+    return root is not None and os.path.isfile(os.path.join(root, ".git"))
 
 
 def beneath(path, root):

@@ -523,6 +523,63 @@ class LaunchTests(InRoot):
         self.assertEqual(SUCCESS, json.loads(raw["stdout"]))
         self.assertTrue(int((state_dir() / "S1.pid").read_text(encoding="utf-8")) > 0)
 
+    def test_a_relaunch_is_told_what_the_earlier_session_left(self):
+        # Night 20261109-205859: three executors ended on /commit's or /pr's report, leaving a branch and a PR.
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE, crashes=1)
+        reads = []
+
+        def fake_git(root, *args):
+            reads.append(args)
+            return {"rev-list": "3\n", "status": " M payload/x.py\n"}.get(args[0], "")
+
+        rows = [{"number": 356, "state": "OPEN"}, {"number": 300, "state": "CLOSED"}]
+        with mock.patch.object(dr, "git", fake_git), mock.patch.object(dr, "helper", lambda root, *a: json.dumps(rows)):
+            run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"), description="Narrow")
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertEqual("/ship #S1-1682+1683 Narrow (relaunched: the previous session ended with no result the "
+                         f"dispatcher accepted, and left {BRANCH} 3 commits ahead of origin/main, uncommitted work in its tree, PR #356 open; "
+                         "resume from there, and end the turn only on the result) --dispatched "
+                         f"artifacts/dispatch/{RUN}", seen["stdin"])
+        self.assertIn(("rev-list", "--count", "origin/main..HEAD"), reads)
+
+    def test_a_first_launch_reads_nothing_it_left(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        read = mock.Mock(side_effect=AssertionError("a first launch has no earlier session to read"))
+        with mock.patch.object(dr, "helper", read):
+            run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"), description="Narrow")
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertEqual(f"/ship #S1-1682+1683 Narrow --dispatched artifacts/dispatch/{RUN}", seen["stdin"])
+        read.assert_not_called()
+
+    def test_what_a_relaunch_is_told_drops_each_read_that_fails(self):
+        make_worktree(WORKTREE)
+        entry = {"status": "window", "branch": BRANCH, "worktree": WORKTREE}
+
+        def refuse(*args):
+            raise dr.Refusal("not a git repository")
+
+        opened = json.dumps([{"number": 356, "state": "OPEN"}])
+        with mock.patch.object(dr, "git", refuse), mock.patch.object(dr, "helper", lambda root, *a: opened):
+            self.assertEqual(" (relaunched: the previous session ended with no result the dispatcher accepted, and "
+                             "left PR #356 open; resume from there, and end the turn only on the result)",
+                             dr._left_behind(".", entry))
+        with mock.patch.object(dr, "git", lambda root, *a: "1\n" if a[0] == "rev-list" else ""), \
+                mock.patch.object(dr, "helper", refuse):
+            self.assertIn(f"left {BRANCH} 1 commit ahead of origin/main;", dr._left_behind(".", entry))
+        # Nothing left, or out of shape, is no clause: the relaunch reads its own state as any /ship does.
+        for answer in ("0\n", "not a count"):
+            with self.subTest(answer=answer), \
+                    mock.patch.object(dr, "git", lambda root, *a: answer if a[0] == "rev-list" else ""), \
+                    mock.patch.object(dr, "helper", lambda root, *a: '{"not": "rows"}'):
+                self.assertEqual("", dr._left_behind(".", entry))
+
+    def test_a_sync_relaunch_is_told_nothing(self):
+        # A sync is held to its proved head and never committed to, so there is nothing of its own to resume.
+        make_worktree(WORKTREE)
+        entry = {"kind": "sync", "status": "relaunch", "branch": "chore/harness-sync-1234567", "worktree": WORKTREE}
+        with mock.patch.object(dr, "git", mock.Mock(side_effect=AssertionError("read"))):
+            self.assertEqual("", dr._left_behind(".", entry))
+
     def test_run_gives_each_executor_its_own_temp_directory_outside_every_checkout(self):
         # Two executors sharing the system temp directory ran each other's scratch scripts.
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
@@ -1571,7 +1628,7 @@ class WakeTests(InRoot):
         self.assertIn("refused: S2's record in state.json is not an object", run_cli(["resume", RUN]))
 
     def test_a_helper_that_hangs_is_a_refusal(self):
-        with mock.patch.object(db.subprocess, "run", side_effect=subprocess.TimeoutExpired(["gh"], 120)):
+        with mock.patch.object(db, "run_bounded", side_effect=subprocess.TimeoutExpired(["gh"], 120)):
             with self.assertRaisesRegex(db.Refusal, "took over 120 s"):
                 db.git(".", "worktree", "list")
         self.assertEqual(120, db.CHILD_TIMEOUT)

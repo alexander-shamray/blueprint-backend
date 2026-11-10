@@ -329,6 +329,22 @@ does now (*What an executor returns*), and four had ended the turn on
 ended there ends a `claude -p` session, which is
 why `/ship --dispatched` says a step's status is not a reply.
 
+A relaunch is told what its earlier session left. Night 20261109-205859 lost
+three executors that way again, two of them after a commit and one after
+opening its PR (blueprint-harness#378). `/ship`'s resume rows read that
+state already, but the relaunch's prompt was the first launch's word for
+word, and nothing in it said a session had run and stopped short. So `run`,
+on a group whose
+status is a relaunch's, reads the worktree — commits ahead of
+`origin/main`, an uncommitted tree, and an `OPEN` row from
+`pr-for-branch.sh` — and adds what it found to the task as one clause
+saying to resume from there and to end the turn only on the result. Each
+read is best effort: one that fails drops its part, and `/ship`'s own state
+read still decides what is owed, so a missing clause costs only the hint.
+A sync's relaunch carries none, since its tree is held to its proved head
+and never committed to, and the clause is built from the branch name, a
+commit count and a PR number, never issue text.
+
 A `Model` cell `launch` would refuse holds its group at `board` and `wake`,
 since `launch` comes after the fork and `tasks move`, and a refusal there
 leaves an empty worktree behind.
@@ -429,7 +445,8 @@ write one. On a command line that text meets a shell, which runs a backtick
 pair or a `$(…)` inside double quotes, on a line a prefix grant has already
 approved. So it reaches the helpers as files under the run, written with the
 `artifacts/dispatch/` grant: `run` reads `<g>.task.txt` and takes no text
-argument, which also keeps a relaunch's task the first launch's, and `tasks
+argument, which also keeps a relaunch's task file the first launch's, with
+only `run`'s own relaunch clause after it (*Waking*), and `tasks
 place` reads `place-<n>.json`. The task is written before `tasks move`, so a
 resumed night finds it wherever the dispatcher stopped. `--refused` carries
 the helper's own line, in single quotes. `guard-helper-argv.py` is the
@@ -454,11 +471,12 @@ Holding a slot for it would stall the backlog for a change nobody is waiting
 on, so nothing reserves one: the morning's list shows it, and the next
 `/dispatch` that starts with no group active takes it first.
 
-**A wait leaves nothing behind.** A `blueprint-harness` merge touching the
-payload opens a new sync and closes the one before it, and a sync that waits may
-be superseded that way ten times a night, so `sync-ready` asks `sync-launch`'s
-checks that read no tree before `git-worktree-sync.sh` makes a worktree and a
-branch for a launch that was never going to happen. `sync-drop`, before the
+**A wait leaves nothing behind.** A `blueprint-harness` sync run, every four
+hours or on dispatch, opens a new sync where the payload moved and closes the
+one before it, so a sync that waits may be superseded overnight. `sync-ready`
+therefore asks `sync-launch`'s checks that read no tree before
+`git-worktree-sync.sh` makes a worktree and a branch for a launch that was
+never going to happen. `sync-drop`, before the
 report, offers `git-branch-drop.sh` every local branch named as a sync head:
 what merged goes, as does one whose pull request closed with origin's branch
 gone at this tip, which no merge can land and which a worktree does not hold.

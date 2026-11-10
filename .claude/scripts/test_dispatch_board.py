@@ -1,9 +1,13 @@
 import contextlib
+import ctypes
 import hashlib
 import io
 import json
+import os
 import re
 import tempfile
+import threading
+import time
 import unittest
 from datetime import date
 from pathlib import Path
@@ -11,6 +15,7 @@ from unittest import mock
 
 import dispatch_board as db
 import dispatch_run as dr
+from review_helpers import BASH
 
 TODAY = date(2026, 11, 1)
 RUN = "20261101-220000"
@@ -1016,6 +1021,222 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(1, len(db.parse_tasks(text).in_progress))
 
 
+class DayTests(unittest.TestCase):
+    """A day session's `tasks start|state|done|back <issue>`: no run, one issue's row, and a list `board` reads."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+        self.path = self.dir / "todo.md"
+        self.saved = self.dir / "todo.started"
+        self.write(FIXTURE)
+
+    def write(self, text):
+        with open(self.path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+
+    def read(self):
+        with open(self.path, encoding="utf-8", newline="") as handle:
+            return handle.read()
+
+    def cli(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                mock.patch.object(db, "task_list", lambda _root: self.path):
+            code = db.main(["tasks", *args])
+        return code, out.getvalue() + err.getvalue()
+
+    def start(self, number, branch="feat/x", *more):
+        return self.cli("start", str(number), "--branch", branch, "--worktree", ".claude/worktrees/x", *more)
+
+    def row(self, number):
+        tasks = db.parse_tasks(self.read())
+        return next((r for r in tasks.in_progress + tasks.remaining if r.number == number), None)
+
+    def test_start_moves_the_row_to_in_progress_keeping_its_group(self):
+        self.assertEqual(0, self.start(1681)[0])
+        row = self.row(1681)
+        self.assertEqual(("In progress", "S3"), (row.section, row.group))
+        self.assertEqual("| S3 | #1681 | Bind only the switch keys in `src/Gateway/Program.cs` | "
+                         "`feat/x`, `.claude/worktrees/x` | started |", row.line)
+        self.assertNotIn("| 1681 |", section(self.read(), "Remaining"))
+        db.groups(db.parse_tasks(self.read()))
+
+    def test_start_of_an_issue_with_no_row_takes_the_dash_group_and_needs_its_text(self):
+        code, out = self.start(1700)
+        self.assertEqual(2, code)
+        self.assertIn("give --what", out)
+        self.assertEqual(FIXTURE, self.read())
+        self.assertEqual(0, self.start(1700, "feat/x", "--what", "Do `x/y.py`")[0])
+        row = self.row(1700)
+        self.assertEqual(("In progress", None, "Do `x/y.py`"), (row.section, row.group, row.cells[2]))
+
+    def test_a_second_start_changes_nothing_and_another_branchs_is_refused(self):
+        self.start(1681)
+        before = self.read()
+        code, out = self.start(1681)
+        self.assertEqual((0, before), (code, self.read()))
+        self.assertIn("nothing written", out)
+        code, out = self.start(1681, "fix/other")
+        self.assertEqual((2, before), (code, self.read()))
+        self.assertIn("already in progress", out)
+
+    def test_done_deletes_the_row_and_a_second_done_writes_nothing(self):
+        self.start(1681)
+        self.assertTrue((self.saved / "1681.md").is_file())
+        self.assertEqual(0, self.cli("done", "1681")[0])
+        self.assertIsNone(self.row(1681))
+        self.assertFalse((self.saved / "1681.md").exists())
+        before = self.read()
+        code, out = self.cli("done", "1681")
+        self.assertEqual((0, before), (code, self.read()))
+        self.assertIn("nothing written", out)
+
+    def test_back_puts_the_whole_row_back_in_its_wave(self):
+        # S1 holds two rows; one leaves and returns, and its labels, depends, model and conflicts come back with it.
+        self.start(1683)
+        self.assertEqual(0, self.cli("back", "1683")[0])
+        self.assertEqual(FIXTURE, self.read())
+        self.assertFalse((self.saved / "1683.md").exists())
+
+    def test_back_with_no_saved_line_keeps_the_row_in_progress(self):
+        # An open issue goes back to its wave; a --what start or a row written by hand leaves none to go back to.
+        self.start(1700, "feat/x", "--what", "Do it")
+        started = self.read()
+        code, out = self.cli("back", "1700")
+        self.assertEqual((2, started), (code, self.read()))
+        self.assertIn("its wave is unknown", out)
+        by_hand = FIXTURE.replace("| started |\n", "| started |\n| S3 | #1681 | Bind | `fix/b` | started |\n", 1)
+        self.write(by_hand.replace("| 1 | S3 | 1681 | Bind only the switch keys in `src/Gateway/Program.cs` | "
+                                   "security, code | none | Opus | none |\n", ""))
+        written = self.read()
+        code, out = self.cli("back", "1681")
+        self.assertEqual((2, written), (code, self.read()))
+        self.assertIn("its wave is unknown", out)
+
+    def test_state_changes_only_the_state_cell(self):
+        self.start(1681)
+        before = self.read()
+        self.assertEqual(0, self.cli("state", "1681", "PR #1701, under review")[0])
+        mine = "`feat/x`, `.claude/worktrees/x` |"
+        self.assertEqual(before.replace(f"{mine} started |", f"{mine} PR #1701, under review |"), self.read())
+        for args, why in ((("state", "1682", "x"), "no In progress row"), (("state", "1681", "a | b"), "pipe")):
+            with self.subTest(args=args):
+                code, out = self.cli(*args)
+                self.assertEqual(2, code)
+                self.assertIn(why, out)
+
+    def test_a_row_a_dispatch_run_moved_is_left_to_it(self):
+        moved = db.move_to_in_progress(FIXTURE, next(g for g in db.groups(db.parse_tasks(FIXTURE)) if g.id == "S3"),
+                                       "chore/dispatch-s3", "wt", TODAY)
+        self.write(moved)
+        for args in (("done", "1681"), ("back", "1681"), ("state", "1681", "x")):
+            with self.subTest(args=args):
+                code, out = self.cli(*args)
+                self.assertEqual((2, moved), (code, self.read()))
+                self.assertIn("/dispatch run", out)
+
+    def test_each_defect_board_refuses_is_refused_and_named(self):
+        held = "| S3 | #1681 | Bind | `fix/b` | started |\n"
+        defects = {
+            "in both tables": (FIXTURE.replace("| started |\n", "| started |\n" + held, 1),
+                               "#1681 is in In progress and Remaining"),
+            "two issues in one row": (FIXTURE.replace("| started |\n", "| started |\n| — | #1690, #1691 | x | `b` | "
+                                                      "started |\n", 1), "names no issue number"),
+            "no group": (tasks_of(*REMAINING_ROWS.splitlines(), line(gid="")), "with no group"),
+            "a wave that is a word": (tasks_of(*REMAINING_ROWS.splitlines(), line(wave="Blocked")),
+                                      "has wave 'Blocked'"),
+            "six columns": (FIXTURE.replace("| Group | # | What | Branch or PR | State |\n|---|---|---|---|---|",
+                                            "| Group | # | What | Branch or PR | State | Notes |\n"
+                                            "|---|---|---|---|---|---|"), "In progress header"),
+        }
+        for name, (text, why) in defects.items():
+            with self.subTest(defect=name):
+                self.write(text)
+                code, out = self.start(1686)
+                self.assertEqual((2, text), (code, self.read()))
+                self.assertIn(why, out)
+                self.assertFalse((self.saved / "1686.md").exists())
+
+    def test_a_write_between_the_read_and_the_replace_is_kept(self):
+        other = FIXTURE.replace("| 2 | J1 | 1440 |", "| 3 | J1 | 1440 |")
+        real, calls = db._read, []
+
+        def read(path):
+            text = real(path)
+            if Path(path) == self.path:
+                calls.append(text)
+                if len(calls) == 1:
+                    self.write(other)
+            return text
+        with mock.patch.object(db, "_read", read):
+            self.assertEqual(0, self.start(1681)[0])
+        text = self.read()
+        self.assertIn("| 3 | J1 | 1440 |", text)
+        self.assertEqual("In progress", self.row(1681).section)
+        self.assertGreater(len(calls), 2)
+
+    def test_a_list_that_never_holds_still_is_not_written(self):
+        real, count = db._read, [0]
+
+        def read(path):
+            text = real(path)
+            if Path(path) == self.path:
+                count[0] += 1
+                self.write(FIXTURE + "\n" * count[0])
+            return text
+        with mock.patch.object(db, "_read", read):
+            code, out = self.start(1681)
+        self.assertEqual(2, code)
+        self.assertIn("changed under another writer", out)
+        self.assertIsNone(re.search(r"#1681", self.read()))
+        self.assertFalse((self.saved / "1681.md").exists())
+
+    def test_the_list_is_the_one_the_config_names_beside_the_main_checkout(self):
+        main = self.dir / "main"
+        (main / ".harness").mkdir(parents=True)
+        (main / ".harness" / "config.json").write_text('{"task_list": "lists/todo.md"}', encoding="utf-8")
+        (self.dir / "lists").mkdir()
+        (self.dir / "lists" / "todo.md").write_text(FIXTURE, encoding="utf-8")
+        asked = []
+
+        def git(root, *args):
+            # A linked worktree's answer: the common directory is the main checkout's, wherever the session stands.
+            asked.append((root, args))
+            return f"{main.as_posix()}/.git\n"
+        with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(db, "git", git):
+            code = db.main(["tasks", "start", "1681", "--branch", "b", "--worktree", "w"])
+        self.assertEqual(0, code)
+        self.assertEqual([(".", ("rev-parse", "--path-format=absolute", "--git-common-dir"))], asked)
+        self.assertIn("| S3 | #1681 |", (self.dir / "lists" / "todo.md").read_text(encoding="utf-8"))
+
+    def test_a_day_action_takes_no_path_and_no_checkout_from_its_command_line(self):
+        # Every session holds these grants, so a line naming its own file would write wherever it pointed.
+        for args in (("done", "1681", "--tasks", str(self.path)), ("back", "1681", "--root", str(self.dir)),
+                     ("start", "1681", "--branch", "b", "--worktree", "w", "--root", str(self.dir)),
+                     ("state", "1681", "x", "--root", str(self.dir))):
+            with self.subTest(args=args):
+                code, out = self.cli(*args)
+                self.assertEqual((2, FIXTURE), (code, self.read()))
+                self.assertIn("takes no --tasks or --root", out)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            db.main(["tasks", "start", "1681", "--branch", "b", "--worktree", "w", "--tasks", str(self.path)])
+
+    def test_a_saved_row_that_cannot_be_kept_is_a_refusal_and_writes_nothing(self):
+        self.saved.write_text("not a directory", encoding="utf-8")
+        code, out = self.start(1681)
+        self.assertEqual((2, FIXTURE), (code, self.read()))
+        self.assertIn("could not make", out)
+
+    def test_a_crlf_list_stays_crlf(self):
+        self.write(FIXTURE.replace("\n", "\r\n"))
+        self.start(1683)
+        self.cli("state", "1683", "PR open")
+        self.cli("back", "1683")
+        self.assertEqual(FIXTURE.replace("\n", "\r\n"), self.read())
+
+
 class BoardTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -1149,6 +1370,89 @@ class OnlyTheOwnersIssuesRun(unittest.TestCase):
                 db.owned_issues(".")
         with mock.patch.object(db, "helper", lambda *a: "[7, 9]\n"):
             self.assertEqual(frozenset({7, 9}), db.owned_issues("."))
+
+
+def hung_child(directory):
+    """A bash script that hangs while a background grandchild holds its stdout, the shape that outlived the timeout:
+    `subprocess.run` killed the direct child and then waited on the grandchild's pipe with no limit."""
+    script = Path(directory) / "hang.sh"
+    with open(script, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("#!/usr/bin/env bash\nsleep 300 &\necho started\nsleep 300\n")
+    return script
+
+
+class ChildTimeout(unittest.TestCase):
+    LIMIT = 90
+    # Far above the timeout, so only an ended tree returns in time: a kill of the direct child alone leaves the
+    # grandchild's pipe open, and the bounded drain would still refuse the call, only at DRAIN.
+    DRAIN = 45
+
+    def call_in_thread(self, call):
+        """Run `call` where a hang fails the case at LIMIT rather than holding the suite."""
+        outcome = {}
+
+        def target():
+            try:
+                outcome["value"] = call()
+            except Exception as error:  # noqa: BLE001 - the case asserts on what arrived
+                outcome["error"] = error
+
+        worker = threading.Thread(target=target, daemon=True)
+        started = time.monotonic()
+        worker.start()
+        worker.join(self.LIMIT)
+        self.assertFalse(worker.is_alive(), f"the timeout did not arrive within {self.LIMIT} s")
+        return outcome, time.monotonic() - started
+
+    def test_a_hung_child_with_a_grandchild_on_its_stdout_is_refused_in_time(self):
+        with (tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory,
+              mock.patch.object(db, "CHILD_TIMEOUT", 2), mock.patch.object(db, "DRAIN_TIMEOUT", self.DRAIN)):
+            outcome, took = self.call_in_thread(lambda: db._child([BASH, str(hung_child(directory))], directory))
+        self.assertIsInstance(outcome.get("error"), db.Refusal, outcome)
+        self.assertIn("took over 2 s", str(outcome["error"]))
+        self.assertLess(took, self.DRAIN - 15, "the call waited out the drain, so the grandchild outlived the timeout")
+
+    @unittest.skipUnless(os.name == "nt", "the job is Windows'")
+    def test_the_child_starts_suspended_inside_its_job(self):
+        # Started running and assigned after, the launcher could start its bash outside the job in between.
+        flags, popen = [], db.subprocess.Popen
+
+        def spy(*args, **kwargs):
+            flags.append(kwargs.get("creationflags", 0))
+            return popen(*args, **kwargs)
+
+        with mock.patch.object(db.subprocess, "Popen", spy):
+            process, job = db._start([BASH, "-c", "exit 0"], ".", None)
+        kernel32 = db._kernel32()[0]
+        self.addCleanup(kernel32.CloseHandle, job)
+        self.addCleanup(process.communicate)
+        self.assertTrue(job)
+        self.assertTrue(flags[0] & db.CREATE_SUSPENDED, flags)
+        inside = ctypes.c_int(0)
+        self.assertTrue(ctypes.WinDLL("kernel32").IsProcessInJob(
+            ctypes.c_void_p(int(process._handle)), ctypes.c_void_p(job), ctypes.byref(inside)))
+        self.assertTrue(inside.value)
+
+    def test_an_interrupt_ends_the_tree_too(self):
+        ended = []
+        real = db._end_tree
+
+        def spy(process, job):
+            ended.append(process.pid)
+            real(process, job)
+
+        with (tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory,
+              mock.patch.object(db.subprocess.Popen, "communicate", side_effect=KeyboardInterrupt),
+              mock.patch.object(db, "_end_tree", spy)):
+            with self.assertRaises(KeyboardInterrupt):
+                db.run_bounded([BASH, str(hung_child(directory))], directory, self.LIMIT)
+        self.assertEqual(1, len(ended))
+
+    def test_a_child_that_returns_is_read_whole(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            script = Path(directory) / "ok.sh"
+            script.write_bytes("#!/usr/bin/env bash\nprintf 'один\\n'; echo err >&2; exit 3\n".encode("utf-8"))
+            self.assertEqual((3, "один\n", "err\n"), db._child([BASH, str(script)], directory))
 
 
 if __name__ == "__main__":

@@ -642,6 +642,11 @@ runs. Leaving a landed branch behind costs a line in `git branch` per run, which
 no one reads and no one clears; the drop is cheap and keeps the list to live
 work.
 
+**A finished branch's task-list rows are ended here too**, with step 6's
+`tasks done` and `back`, because a merge another route made, the owner's after
+a refused one above all, reaches no step 6: left to it, the row would read as
+work still in progress after the PR landed (*Step 6: the teardown*).
+
 **A refused drop is reported and is not a stop.** The helper refuses a branch
 that has not landed, and keeping that branch is exactly right; the merge is
 done and stopping would strand a finished run, so on any non-zero exit the
@@ -700,11 +705,18 @@ frontmatter can deny `Edit` on the trees it reads, and a frontmatter deny
 holds to the end of the turn (`docs/harness-boundaries.md`). `/ship` runs the
 whole chain in one turn, so a run that invoked it could make no code fix in a
 later review round, and would have to stop or route round the deny. The step
-spawns the passes *Ship checks* names, as `general-purpose` agents told to
-edit nothing and handed the scope and method it gives each, and reads their
-JSON as step 5 reads a finding. That is the
-brief's guarantee and not the tool list's; the denies stay on the command for
-a person who invokes it alone.
+spawns the passes *Ship checks* names as `check-auditor` agents, handed the
+scope and method it gives each, and reads their JSON as step 5 reads a
+finding. Read-only is the profile's tool list, `Read`, `Grep` and `Glob`, and
+not the brief's word: the passes read the branch under review, so a pass
+holding `Edit` or `Bash` under a dispatched run's auto mode would be one
+planted paragraph from editing the tree itself, and the audit command's own
+denies never load when it is dispatched (blueprint-backend#1786). `/ship`
+therefore denies `general-purpose` too, which nothing else in its chain
+spawns. What is left is the parent's: it holds the edit the auditor was
+denied, so a finding written to steer one is caught by step 5's verification
+or not at all, as with `branch-reviewer`. The audit command's denies stay on
+it for a person who invokes it alone.
 
 **One check holds whatever the class: a fix to a script under
 `.claude/` carries its case.** `docs/harness/working-rules.md`'s
@@ -1320,17 +1332,28 @@ main checkout — so line 3 is the only thing that makes the pull mean `main`.
 Running line 7 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
-**The task-list rows of this change are re-derived when the nine lines end**, at
-line 9 or at a line that stops them after the verified merge, which deletes
-the row `/branch` added unless its issue stays open, by the file's own path,
-which `.harness/agent-rules.md`, *Working in a target*, puts outside every
-checkout so that the isolation refuses it to no workspace. Nothing else removes
+**The task-list rows of this change are ended when the nine lines end**, at
+line 9 or at a line that stops them after the verified merge: `tasks done`
+deletes the row `/branch`'s `tasks start` added for each issue the PR closes,
+and `tasks back` returns the row of one it leaves open, through the helper
+rather than by hand, since a hand edit leaves a list `/dispatch` stops on
+(`docs/commands/branch.md`, *Step 5*). The helper finds the file by the path
+`.harness/agent-rules.md`, *Working in a target*, puts outside every checkout,
+so that the isolation refuses it to no workspace, and a refusal is reported
+rather than stopping a chain whose merge is already done. Nothing else removes
 it: a row left behind reads as work still in progress after the PR has landed,
 which is what *In progress* exists not to say. An issue the merge left open, one
 a later pull request of a set closes, is still open work, so its row goes where
 `docs/harness/working-rules.md`, *Issues and the task list*, puts it rather than
 off the list. It reads the branch as those lines left it, since read earlier
-the branch still stands and the row stays *In progress* naming one about to go.
+the branch still stands and the row stays *In progress* naming one about to go:
+`back` waits for line 9's drop, and a branch a refused removal kept keeps its
+row *In progress*, which that table allows while a branch remains. A row
+`tasks start` saved nothing for, one started with `--what` or written by hand,
+is the exception the helper cannot place: its wave is in no cell, so `back`
+refuses, the row stays *In progress* with no branch behind it, and the report
+hands it to the owner to put in its wave, rather than the session guessing one
+(`docs/commands/branch.md`, *Step 5*).
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
@@ -1535,7 +1558,14 @@ missing result reads as a crash, and the relaunch ends the same way. So the
 runbook says the session keeps its turn until the result is written, a
 step's status carries neither, and the next step follows in the same turn;
 a memory file is the owner's and is not the runbook, so the rule cannot
-rest on one. The same absence shapes the shell: a command the grants do not
+rest on one. The rule names `/commit`'s and `/pr`'s closing reports because
+saying only "a step's status" did not hold: on night 20261109-205859 three
+of seventeen executors still ended their turn on one of those two reports
+(blueprint-harness#378), each shaped as a command's final reply, which a
+session running them as `/ship`'s steps took for its own end. So the
+result is named as the turn's one end, and
+`test_ship_dispatched.py` pins both halves of the sentence. The same
+absence shapes the shell: a command the grants do not
 name is the auto classifier's to approve or refuse
 (`docs/harness-boundaries.md`, *Headless dispatched sessions*), and a
 refusal hands the change back, so each read is one command its grants name,

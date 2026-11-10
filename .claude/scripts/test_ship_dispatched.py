@@ -18,9 +18,11 @@ BRANCH = ROOT / ".claude" / "commands" / "branch.md"
 
 # The grants as they stood before the token: one that needed a new grant would
 # be a wider change than section 6.2's, so these are literals, not a read. The create grant is the helper's since
-# plan 5 Task 3 withdrew the raw `gh pr create`: a swap in place, not a grant the token added.
+# plan 5 Task 3 withdrew the raw `gh pr create`: a swap in place, not a grant the token added. So is the
+# check-auditor's: step 2's audits ran as an ungranted, undenied `general-purpose` before it.
 GRANTS_BEFORE = (
-    "Read", "Grep", "Glob", "Write", "Skill", "Agent(branch-reviewer)", "EnterWorktree", "ExitWorktree",
+    "Read", "Grep", "Glob", "Write", "Skill", "Agent(branch-reviewer)", "Agent(check-auditor)", "EnterWorktree",
+    "ExitWorktree",
     "Bash(git status:*)", "Bash(git diff:*)", "Bash(git branch --list:*)", "Bash(git branch --show-current)",
     "Bash(git branch -a)", "Bash(git log:*)", "Bash(git fetch origin:*)",
     "Bash(bash .claude/scripts/git-branch-create.sh:*)", "Bash(bash .claude/scripts/git-worktree-fork.sh:*)",
@@ -55,6 +57,10 @@ BRANCH_GRANTS_BEFORE = (
     "Bash(bash .claude/scripts/git-branch-create.sh:*)", "Bash(bash .claude/scripts/git-worktree-fork.sh:*)",
     "Bash(git rev-parse:*)", "Bash(git worktree list:*)", "Bash(ls:*)",
 )
+
+# The run-less task-list moves: /branch starts a row, /pr marks it, /ship ends it; each skips under the token.
+TASK_GRANTS = tuple(f"Bash(py -3.12 .claude/scripts/dispatch_board.py tasks {action}:*)"
+                    for action in ("start", "state", "done", "back"))
 
 SKIP_WRITE = "Under --dispatched, skip this write"
 WHY = "(why: docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)"
@@ -121,7 +127,7 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
     def test_both_task_list_writes_are_skipped(self):
         # The skip follows the write it names, so it cannot be read as about another line.
         for name, text, write in (
-                ("ship.md step 6", flat(ship_step_6()), "re-derive this change's rows by state"),
+                ("ship.md step 6", flat(ship_step_6()), "end this change's *In progress* rows"),
                 ("branch.md step 5", flat(branch_step_5()), "add the change to *In progress*")):
             with self.subTest(where=name):
                 self.assertIn(SKIP_WRITE, text)
@@ -139,8 +145,9 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
         # A headless session exits when its turn ends, so a step report sent as a reply is the last thing it does.
         rule = between(flat(between(ship(), "## It runs to the end", "## Resume, don't restart")),
                        "Under the standalone token --dispatched <run-dir>", "(why:")
-        self.assertIn("It keeps its turn until the result is written", rule)
-        self.assertIn("a step's status is not a reply, so it carries no status table and no apply line", rule)
+        self.assertIn("It keeps its turn until the result is written, the turn's one end", rule)
+        self.assertIn("a step's status, the report /commit or /pr closes on included, is not a reply, so it carries no "
+                      "status table and no apply line", rule)
         self.assertIn("the next step follows in the same turn", rule)
         self.assertIn("each shell read is one command its grants name", rule)
 
@@ -250,16 +257,31 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
         self.assertEqual(len(rows), 7)
 
     def test_the_grants_did_not_change(self):
-        self.assertEqual(grants(SHIP), GRANTS_BEFORE + SYNC_GRANTS + DROP_GRANTS + MAIN_RED_GRANTS + INDEX_GRANTS)
-        self.assertEqual(grants(BRANCH), BRANCH_GRANTS_BEFORE)
+        self.assertEqual(grants(SHIP), GRANTS_BEFORE + SYNC_GRANTS + DROP_GRANTS + MAIN_RED_GRANTS + INDEX_GRANTS
+                         + TASK_GRANTS)
+        self.assertEqual(grants(BRANCH), BRANCH_GRANTS_BEFORE + TASK_GRANTS[:1])
         self.assertIn("Write", GRANTS_BEFORE, "the result is written with a tool the command already holds")
 
     def test_the_in_progress_row_carries_its_group(self):
         step = flat(branch_step_5())
-        self.assertIn("the issue's group from *Remaining* or —; #n, or owed (not filed) with no issue; what; "
-                      "branch, then worktree, in one cell, each in backticks; started", step)
+        self.assertIn("py -3.12 .claude/scripts/dispatch_board.py tasks start <n> --branch <name> --worktree "
+                      ".claude/worktrees/<slug>", step)
+        self.assertIn("moves the issue's row out of *Remaining* keeping its group", step)
+        self.assertIn("the list is never edited by hand round it", step)
+        self.assertIn("—; owed (not filed); what; branch, then worktree, in one cell, each in backticks; started",
+                      step)
         self.assertEqual(dispatch_board.HEADERS["In progress"][:2], ("Group", "#"),
                          "the row's description follows the table's column order")
+
+    def test_pr_and_ship_end_the_row_through_the_helper(self):
+        pr = flat((ROOT / ".claude" / "commands" / "pr.md").read_text(encoding="utf-8"))
+        self.assertIn("py -3.12 .claude/scripts/dispatch_board.py tasks state <issue> 'PR #<n> open'", pr)
+        self.assertIn("Under /ship --dispatched, skip this write", pr)
+        self.assertIn(TASK_GRANTS[1], grants(ROOT / ".claude" / "commands" / "pr.md"))
+        step = flat(ship_step_6())
+        for action in ("done", "back"):
+            with self.subTest(action=action):
+                self.assertIn(f"py -3.12 .claude/scripts/dispatch_board.py tasks {action} <n>", step)
 
     def test_the_in_progress_row_is_the_one_the_board_parses(self):
         # A session writes what this step says and /dispatch never rebuilds the section, so a row the board refuses

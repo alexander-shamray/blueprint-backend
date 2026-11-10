@@ -1,7 +1,7 @@
 ---
 description: Start a correctly named working branch — in its own worktree under .claude/worktrees/ from a clean main, in place when the tree is dirty or that directory is not writable
 argument-hint: "[what the change does] — omit to derive it from the uncommitted work"
-allowed-tools: Read, Grep, EnterWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*)
+allowed-tools: Read, Grep, EnterWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks start:*)
 ---
 
 Create a branch for: $ARGUMENTS — if empty, derive it from the uncommitted
@@ -124,14 +124,21 @@ sweeps' `mktemp -d` ones.
    bash .claude/scripts/git-worktree-fork.sh .claude/worktrees/<slug> <name>
    ```
 
-   Whichever row ran, add the change to *In progress* in the task list
-   named by `.harness/config.json` `task_list`, in the main checkout's
-   parent directory, under `Group | # | What | Branch or PR | State`: the
-   issue's group from *Remaining* or `—`; `#n`, or `owed (not filed)` with no
-   issue; what; branch, then worktree, in one cell, each in backticks;
-   `started`. By that path, never through a `TODO.md` link; a linked worktree
-   writes it too. Under `--dispatched`, skip this write: `/dispatch` is the
-   task list's one writer (why: docs/commands/branch.md, *Step 5*).
+   Whichever row ran, add the change to *In progress*, once per issue, a
+   linked worktree too:
+
+   ```bash
+   py -3.12 .claude/scripts/dispatch_board.py tasks start <n> --branch <name> --worktree .claude/worktrees/<slug>
+   ```
+
+   It moves the issue's row out of *Remaining* keeping its group; with no
+   row, `--what '<what>'` gives the text; in place, `--worktree .`. Exit 2
+   names the defect: report it, and the list is never edited by hand round
+   it. Work with no issue is written by hand, under `Group | # | What |
+   Branch or PR | State`: `—`; `owed (not filed)`; what; branch, then
+   worktree, in one cell, each in backticks; `started`. Under
+   `--dispatched`, skip this write: `/dispatch` is the task list's one
+   writer (why: docs/commands/branch.md, *Step 5*).
 
    Then **`EnterWorktree`** with the new directory as `path`. Git writes go
    through the helpers only (why: `docs/harness-boundaries.md`, *Prefix

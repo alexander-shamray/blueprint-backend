@@ -38,7 +38,7 @@ dirty=$(git status --porcelain)
 row=$(gh_read pr view "$pr" --json state,headRefName,baseRefName,isCrossRepository \
   --jq '[.state, .headRefName, .baseRefName, (.isCrossRepository|tostring)] | @tsv') ||
   { echo "cannot read pull request #$pr" >&2; exit 3; }
-IFS=$'\t' read -r state head_branch base cross <<<"${row%$'\r'}"
+IFS=$'\t' read -r state head_branch base cross < <(printf '%s\n' "${row%$'\r'}")
 [ "$state" = OPEN ] || { echo "pull request #$pr is $state, not OPEN" >&2; exit 3; }
 [ "$head_branch" = "$branch" ] || { echo "pull request #$pr is for $head_branch, not $branch" >&2; exit 3; }
 [ "$base" = main ] && [ "$cross" = false ] || { echo "pull request #$pr is not a same-repository one into main" >&2; exit 3; }

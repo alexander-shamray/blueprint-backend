@@ -143,6 +143,15 @@ is recorded because a reader who learns only that the reviewer is read-only has
 been told the safe half. Restoring an outside reader starts from
 `archive/external-reviewers`.
 
+**`check-auditor` rests on it too.** `/ship` step 2 dispatches the audit
+passes a target's *Ship checks* names under it rather than as
+`general-purpose` agents told to edit nothing, since the command whose
+frontmatter denies the audited trees never loads when it is dispatched
+(blueprint-backend#1786). The passes read the branch under review, and the
+residual is `branch-reviewer`'s: the parent holds the edit, and step 5's
+verification is what catches a finding written to steer it
+([`docs/commands/ship.md`](commands/ship.md), *Step 2: checks*).
+
 **`team-peer` rests on it too, over a wider input.** `/team`'s peers hold
 the same three tools and read a board other peers wrote, so a line planted
 in the code can reach a second peer as a claim. The residual is that
@@ -206,10 +215,19 @@ git guard backs them for a redirect and a writing verb, in every turn:**
 `guard-git-argv.py` refuses both under either directory, all but the removal of
 a named memory file (*The edit-target guard*). `curl -o`, `tar -x` and an
 interpreter are not on its list of verbs, so they stay open, the residual *Git
-argv guard hook* states. Whether a frontmatter deny reaches such a command has
-not been measured in blueprint-harness; a path deny reaches a `Bash` command
-naming the path where it was (*A boundary an agent must keep across turns*), and
-a command that computes its path would not name it.
+argv guard hook* states. **A frontmatter deny reaches a shell redirect naming
+the path, measured for blueprint-harness's #307** outside it: on 2026-11-10,
+on Windows, in `default` mode with no classifier, in an empty directory outside
+every checkout, so no project hook ran and no user-level deny covered the path,
+a command whose frontmatter held only `disallowed-tools:
+Edit(~/.claude/projects/**)` had `echo x > ~/.claude/projects/probe307.md`
+refused with no prompt and nothing written, where the same command without that
+frontmatter, in the same session, met an ordinary prompt. So the deny in
+these five commands refuses, in their turn, a redirect naming the path, as a
+path deny did where *A boundary an agent must keep across turns* measured it.
+A redirect is what the git guard already refuses; whether the deny reaches
+`curl -o`, `tar -x` or an interpreter writing to a named path, the writes that
+guard misses, is unmeasured, and so is a command that computes its path.
 
 **The index skill's prefix grants are the same speed bump as `git *--output*`.**
 `Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)` matches the
@@ -786,7 +804,7 @@ about it:
 | `Bash(git worktree add:*)` | `-B`, which resets an existing branch rather than creating one |
 | `Bash(git checkout -b:*)` | the trailing flag — `git checkout -b <name> -f origin/main` discards tracked modifications |
 | `Bash(git branch:*)` | `git branch -fd <name>` — force and delete behind a spelling the `-d`/`-D`/`--delete` denies do not match |
-| `Bash(git branch --list:*)` | `--no-list`, abbreviated down to `--no-l`, which turns list mode off, so `git branch --list --no-list -D <name>` deletes and `-f`, `-m`, `-C` and `-u` work too. With list mode on each is git's usage error or a listing, and `--no-merged`, `--no-color` and `--no-column` are reads, so the deny is `Bash(git branch --list *--no-l*)` and the grant stays, `/branch` and `/ship` needing `git branch --list <name>` |
+| `Bash(git branch --list:*)` | `--no-list`, abbreviated down to `--no-l`, which turns list mode off, so `git branch --list --no-list -D <name>` deletes and `-f`, `-m`, `-C` and `-u` work too. With list mode on each is git's usage error or a listing, and `--no-merged`, `--no-color` and `--no-column` are reads, so the deny is `Bash(git branch --list *--no-l*)` and the grant stays, `/branch` and `/ship` needing `git branch --list <name>`. Both halves measured in a live session (#307, 2026-11-10, `default` mode, no classifier): `git branch --list --no-list -D x` refused with no prompt and no hook output, so by the settings deny, and `git branch --list x` ran |
 | `Bash(git reset HEAD:*)` | `git reset HEAD --hard` — the `--hard` deny matches the other word order |
 | `Bash(git log:*)`, `Bash(git diff:*)`, `Bash(git show:*)` | `--output=<path>`, which is an arbitrary file write with `--format=` choosing the bytes. Reproduced: `git log -1 --format=%s --output=<scratch>` wrote the commit subject, silently |
 | `Bash(git fetch:*)`, `Bash(git pull --ff-only:*)` | a URL in the repository position, and `ext::<cmd>` is a git transport that **runs its argument as a command** |
@@ -1245,8 +1263,12 @@ can read is admitted: `> "$var…"` was typed 523 times, `cd x && … > y` 736 a
 model* files. An expansion's readings, which exist to find a hidden program,
 place no file. The list of verbs trails the programs that write: `curl -o`,
 `rsync`, `tar -x`, `patch` and an interpreter's own writes are not on it, and
-that is a residual. A worktree removed from disk is still judged as one by its
-place under `.claude/worktrees/`, and a checkout under the temp root that the
+that is a residual. A write under `.claude/worktrees/<name>/` is judged as that
+worktree's by its place, with a `.git` left there or not, since it lands in that
+directory; git run in one with no `.git` file acts on the main checkout, so a
+`-C` into it is held as one into the main checkout, a directory not yet on
+disk included, since an earlier `mkdir` on the line can make it bare. A checkout
+under the temp root that the
 session is not standing in is not this target's: mutation proofs write there,
 which the replay of backend's transcripts found.
 
@@ -2026,9 +2048,10 @@ alternative fails open on a wrapper nobody listed.
 command to one subagent type is a **deny list of every other type**, because
 the harness has no "only this type" allow — so `security-sweep.md`,
 `bug-sweep.md`, `team.md` and `ship.md` each deny every registered type but the
-one they grant (`ship.md` also leaves `general-purpose`, which step 2
-dispatches its audits as), and **a newly added agent under `.claude/agents/` is
-admitted by default** until someone adds it to every list;
+ones they grant (`ship.md` grants two, `branch-reviewer` and the
+`check-auditor` its step 2 dispatches its audits as), and **a newly added
+agent under `.claude/agents/` is admitted by default** until someone adds it
+to every list;
 `test_command_grants.py` fails a granting command that does not. That is the
 shape this repository already knows rots; it is taken here because the
 alternative on offer is prose. **It rotted once already on the day a third
@@ -2097,8 +2120,8 @@ propagate to the subagents it spawns, and a path deny reaches a `Bash` command
 naming the path; the harness offers no deny that reaches the parent and not the
 child. The local review holds no writing agent, so none of this binds a
 boundary today, and it binds the first one added: `branch-reviewer`,
-`bug-auditor`, `security-auditor` and `team-peer` hold `Read`, `Grep` and
-`Glob` on their profiles for that reason.
+`check-auditor`, `bug-auditor`, `security-auditor` and `team-peer` hold
+`Read`, `Grep` and `Glob` on their profiles for that reason.
 
 ## The edit-target guard
 
@@ -2570,7 +2593,11 @@ hands every executor back.
 
 **The dispatcher writes the task list alone.** It writes only through
 `dispatch_board.py tasks`, with no `Edit` grant on the file. Every `tasks`
-action refuses a run with no `state.json`, `tasks rewrite` refuses any
+action given `--run` refuses a run with no `state.json`; a day session's
+run-less `start`, `state`, `done` and `back`, granted in the settings base,
+touch one issue's row of the list the config names and refuse one a run moved;
+the `done` and `back` grants are prefixes, so they reach the `--run` forms too,
+which still refuse without that run's `state.json`. `tasks rewrite` refuses any
 change to the *In progress* section, and `done` and `back` touch only the
 rows the run's own move recorded, `done` only once `verify` has passed.
 After `verify`, the dispatcher pulls with `--ff-only`, checks
@@ -2682,8 +2709,9 @@ renders nothing.
 is changed there.** A sync from that
 repository wrote the file, and the manifest records the harness commit and
 the file's hash. A change is made in that repository's `payload/` and reaches
-each target as the sync pull request opened on the next merge to its `main`;
-an edit to a target's copy is red until the next sync reverts it.
+each target as the sync pull request its next sync run opens, every four hours
+or on dispatch; an edit to a target's copy is red until the next sync reverts
+it.
 `.claude/settings.json` is among them: it is rendered from
 `.harness/settings.base.json` plus the `settings` in `.harness/config.json`,
 so a rule only one repository needs goes in that config, which is the

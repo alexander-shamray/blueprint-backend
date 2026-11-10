@@ -62,13 +62,12 @@ def profiles():
     return found
 
 
-def undenied_agents(text, profiles, exempt=()):
-    """The agent types a command that grants some neither grants, denies nor is excused, or None if it grants none."""
+def undenied_agents(text, profiles):
+    """The agent types a command that grants some neither grants nor denies, or None if it grants none."""
     granted = {m for t in frontmatter_list(text, "allowed-tools")
                for m in re.findall(r"^Agent\((.+)\)$", t)}
     if not granted:
         return None
-    granted |= set(exempt)
     denied = set(frontmatter_list(text, "disallowed-tools"))
     return sorted(n for n in (profiles | BUILT_IN_AGENTS) - granted if f"Agent({n})" not in denied)
 
@@ -86,7 +85,7 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
     def test_the_reviewer_and_the_auditors_run_on_opus(self):
         # An error from any of them is a silent miss, so none takes the session's model
         # (`docs/harness/token-rules.md`, *Which model a subagent runs on*).
-        for name in ("branch-reviewer", "bug-auditor", "security-auditor", "team-peer"):
+        for name in ("branch-reviewer", "bug-auditor", "security-auditor", "team-peer", "check-auditor"):
             with self.subTest(profile=name):
                 profile = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
                 self.assertEqual(["opus"], frontmatter_list(profile, "model"))
@@ -98,28 +97,32 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         self.assertEqual({"Read", "Grep", "Glob"}, set(frontmatter_list(profile, "tools")))
         self.assertNotRegex(profile, r"(?m)^skills:")
 
+    def test_the_check_auditor_holds_no_shell_no_edit_and_no_agent(self):
+        # /ship step 2 hands it the branch under review, and this list, not its brief, is what keeps it read-only.
+        profile = (AGENTS / "check-auditor.md").read_text(encoding="utf-8")
+        self.assertRegex(profile, r"(?m)^name:\s*check-auditor\s*$")
+        self.assertEqual({"Read", "Grep", "Glob"}, set(frontmatter_list(profile, "tools")))
+        self.assertNotRegex(profile, r"(?m)^skills:")
+
     def test_team_grants_its_peer_by_exact_type_and_nothing_broader(self):
         allowed = frontmatter_list((COMMANDS / "team.md").read_text(encoding="utf-8"), "allowed-tools")
         self.assertEqual(["Agent(team-peer)"], [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
 
-    def test_ship_grants_the_reviewer_by_exact_type_and_nothing_broader(self):
+    def test_ship_grants_the_reviewer_and_the_check_auditor_by_exact_type_and_nothing_broader(self):
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
         allowed = frontmatter_list(ship, "allowed-tools")
         self.assertEqual(
-            ["Agent(branch-reviewer)"],
+            ["Agent(branch-reviewer)", "Agent(check-auditor)"],
             [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
-
-    # What a command leaves undenied on purpose: /ship's step 2 dispatches its audits as `general-purpose`.
-    EXCUSED = {"ship.md": ("general-purpose",)}
 
     def test_every_other_exact_agent_grant_denies_every_other_profile(self):
         # The profiles are read from `.claude/agents/` each run, so one added tomorrow fails every command that
-        # grants a type and does not deny it, /ship included, which an allow cannot narrow to its reviewer.
+        # grants a type and does not deny it, /ship included, which an allow cannot narrow to its two types.
         names = profiles()
-        self.assertIn("branch-reviewer", names)
+        self.assertLessEqual({"branch-reviewer", "check-auditor"}, names)
         granting = 0
         for path in sorted(COMMANDS.glob("*.md")):
-            missing = undenied_agents(path.read_text(encoding="utf-8"), names, self.EXCUSED.get(path.name, ()))
+            missing = undenied_agents(path.read_text(encoding="utf-8"), names)
             if missing is None:
                 continue
             granting += 1
@@ -129,12 +132,16 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         # nothing.
         self.assertGreaterEqual(granting, 4)
 
-    def test_ship_keeps_general_purpose_for_its_audits_and_denies_the_other_profiles(self):
+    def test_ship_spawns_its_audits_as_the_check_auditor_and_denies_general_purpose(self):
+        # Step 2's passes read the branch under review, so a type holding Edit or Bash is one planted line from
+        # acting; general-purpose is denied rather than left for them.
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
         denied = set(frontmatter_list(ship, "disallowed-tools"))
-        self.assertNotIn("Agent(general-purpose)", denied)
-        self.assertIn("`general-purpose`", flat(COMMANDS / "ship.md"))
-        for name in ("bug-auditor", "security-auditor", "team-peer", "Explore", "fork"):
+        text = flat(COMMANDS / "ship.md")
+        step = text[text.index("2. **Checks**"):text.index("3. **`/commit`**")]
+        self.assertRegex(step, r"Spawn each pass \*Ship checks\* names as a `check-auditor`")
+        self.assertNotIn("general-purpose", step)
+        for name in ("general-purpose", "bug-auditor", "security-auditor", "team-peer", "Explore", "fork"):
             with self.subTest(agent=name):
                 self.assertIn(f"Agent({name})", denied)
 
