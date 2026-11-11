@@ -376,6 +376,8 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
     if berserk and SENT_BACK in row.cells[DEPENDS]:
         return SENT_BACK
     depends = _without_owner(row.cells[DEPENDS]) if berserk else row.cells[DEPENDS]
+    if UNPLACED in depends:
+        return "unplaced: no session has chosen its wave and group"
     if depends.strip().casefold() != "none":
         dates = DATE.findall(depends)
         numbers = {int(a or b) for a, b in ISSUE_REF.findall(DATE.sub(" ", depends))}
@@ -486,16 +488,16 @@ def _append(lines, name, new):
         lines[at:at] = new
 
 
-def _place(lines, new_line):
-    """Insert a Remaining row after its group, else after its wave, else before the first later wave."""
+def _place(lines, new_line, name="Remaining"):
+    """Insert a Remaining or Tracking row after its group, else after its wave, else before the first later wave."""
     scan = _scan(lines)
-    _, sep, rows, none = _table(lines, scan, "Remaining")
+    _, sep, rows, none = _table(lines, scan, name)
     if none is not None:
-        _append(lines, "Remaining", [new_line])
+        _append(lines, name, [new_line])
         return
-    row = _row("Remaining", new_line)
-    parsed = [(i, _row("Remaining", lines[i])) for i in rows]
-    same_group = [i for i, r in parsed if r.group == row.group]
+    row = _row(name, new_line)
+    parsed = [(i, _row(name, lines[i])) for i in rows]
+    same_group = [i for i, r in parsed if r.group == row.group and re.fullmatch(ROW_GROUP.pattern, r.group or "")]
     same_wave = [i for i, r in parsed if r.wave == row.wave]
     later = [i for i, r in parsed if r.wave > row.wave]
     if same_group:
@@ -589,8 +591,19 @@ def _checked(text):
     return text
 
 
-def _in_progress_row(tasks, key):
+def _in_progress_row(tasks, key, branch=None):
+    """`key`'s In progress row; for work with no issue (key None), the owed row whose branch is `branch`."""
+    if key is None:
+        return next((r for r in tasks.in_progress if r.number is None and row_branch(r) == branch), None)
     return next((r for r in tasks.in_progress if r.key == key), None)
+
+
+def _key(number):
+    return None if number is None else f"#{number}"
+
+
+def _name(number, branch):
+    return f"#{number}" if number is not None else f"the owed work on {branch}"
 
 
 def _a_day_row(row):
@@ -609,17 +622,25 @@ def _one_line(value, what):
 def start_issue(text, number, branch, worktree, what=None):
     """(the list with `#number` in progress, the Remaining line it left), or (None, None) when this branch holds it.
 
-    The row keeps the group it had in Remaining; an issue with no row starts under `—` with `what` as its text."""
+    The row keeps the group it had in Remaining; an issue with no row starts under `—` with `what` as its text, and
+    work with no issue (number None) as `owed (not filed)`, found again by its branch."""
     if not BRANCH_NAME.fullmatch(branch):
         raise Refusal(f"branch {branch!r} is not a branch name")
     if "`" in _one_line(worktree, "worktree"):
         raise Refusal(f"worktree {worktree!r} holds a backtick")
-    tasks, key = parse_tasks(text), f"#{number}"
-    held = _in_progress_row(tasks, key)
+    tasks, key = parse_tasks(text), _key(number)
+    held = _in_progress_row(tasks, key, branch)
     if held is not None:
         if row_branch(held) == branch:
             return None, None
         raise Refusal(f"{key} is already in progress as {held.cells[3]}; a second branch starts nothing")
+    if key is None:
+        if what is None:
+            raise Refusal("work with no issue takes --what for its In progress row")
+        lines = _lines(text)
+        _append(lines, "In progress", [_line(("—", OWED, _one_line(what, "--what"),
+                                              f"`{branch}`, `{worktree.strip()}`", "started"), _cr(lines))])
+        return _checked("\n".join(lines)), None
     for name, bucket in (("Tracking", tasks.tracking), ("Paused", tasks.paused)):
         if any(r.key == key for r in bucket):
             raise Refusal(f"{key} is in {name}; a row moves to In progress only from Remaining")
@@ -637,9 +658,9 @@ def start_issue(text, number, branch, worktree, what=None):
     return _checked("\n".join(lines)), source.line if source else None
 
 
-def finish_issue(text, number):
+def finish_issue(text, number, branch=None):
     """The list without `#number`'s In progress row, or None when it has none: a merge leaves nothing to undo."""
-    held = _in_progress_row(parse_tasks(text), f"#{number}")
+    held = _in_progress_row(parse_tasks(text), _key(number), branch)
     if held is None:
         return None
     return _checked(delete_in_progress(text, {_a_day_row(held).key}))
@@ -665,19 +686,255 @@ def return_issue(text, number, saved):
     return _checked("\n".join(lines))
 
 
-def set_issue_state(text, number, state):
+def set_issue_state(text, number, state, branch=None):
     """The list with only `#number`'s State cell changed, or None when it already reads `state`."""
-    key, state = f"#{number}", _one_line(state, "state")
-    held = _in_progress_row(parse_tasks(text), key)
+    state = _one_line(state, "state")
+    held = _in_progress_row(parse_tasks(text), _key(number), branch)
     if held is None:
-        raise Refusal(f"{key} has no In progress row; tasks start writes one")
+        raise Refusal(f"{_name(number, branch)} has no In progress row; tasks start writes one")
     at = HEADERS["In progress"].index("State")
     if _a_day_row(held).cells[at] == state:
         return None
     lines = _lines(text)
-    index = next(i for i in _table(lines, _scan(lines), "In progress")[2] if _row("In progress", lines[i]).key == key)
+    index = next(i for i in _table(lines, _scan(lines), "In progress")[2] if lines[i].rstrip("\r") == held.line)
     lines[index] = _line(held.cells[:at] + (state,) + held.cells[at + 1:], _cr(lines))
     return _checked("\n".join(lines))
+
+
+# The events that place, move or delete a row by an issue's live state, and the whole-list rebuild
+
+@dataclass(frozen=True)
+class Issue:
+    number: int
+    title: str
+    open: bool
+    labels: tuple[str, ...]
+
+
+# The Depends on cell of a row no session has placed yet: free text, so `board` holds it until one does.
+UNPLACED = "unplaced: no session has chosen its wave and group"
+# The letter a row the helper adds with no group is given, the number the lowest no table holds.
+UNPLACED_LETTER = "U"
+PAUSED_WHY = "labelled paused; the issue's pause comment says why"
+PAUSED_RESUME = "the paused label is removed"
+# The cells a caller may give a row `tasks place` or `tasks sync` adds; everything else comes from the issue.
+CALLER_CELLS = ("wave", "group", "task", "depends", "model", "conflicts", "why", "resume")
+# Set in a /dispatch executor's environment: the dispatcher is the list's one writer while it runs.
+DISPATCHED = "HARNESS_DISPATCHED"
+
+
+def issues_from(data):
+    """{number: Issue} from gh-issue-list.sh's JSON, refusing anything that is not that list."""
+    if not isinstance(data, list):
+        raise Refusal("the issue list is not a list")
+    found = {}
+    for item in data:
+        if not isinstance(item, dict) or not _number(item.get("number")) or not isinstance(item.get("title"), str):
+            raise Refusal("the issue list holds an entry that is not an issue")
+        labels = item.get("labels") or []
+        if not isinstance(labels, list):
+            raise Refusal(f"#{item['number']}'s labels are not a list")
+        names = (label.get("name") if isinstance(label, dict) else label for label in labels)
+        found[item["number"]] = Issue(item["number"], item["title"], item.get("state") == "OPEN",
+                                      tuple(name for name in names if isinstance(name, str) and name))
+    return found
+
+
+def where(issue):
+    """The section an issue's row belongs in, or None for a closed one, which has no row."""
+    if not issue.open:
+        return None
+    if "paused" in issue.labels:
+        return "Paused"
+    return "Tracking" if "tracking" in issue.labels else "Remaining"
+
+
+def _title_cell(title):
+    # A title can hold a pipe, which would split the row; `_cells` reads an escaped one as text.
+    text = " ".join(title.split())
+    if not text:
+        raise Refusal("the issue's title is empty")
+    return text.replace("|", "\\|")
+
+
+def _caller_cells(cells):
+    cells = {k: v for k, v in (cells or {}).items() if v is not None}
+    unknown = set(cells) - set(CALLER_CELLS)
+    if unknown:
+        raise Refusal(f"no cell named {', '.join(sorted(unknown))}")
+    checked = {k: _one_line(str(v), f"--{k}") for k, v in cells.items()}
+    if "wave" in checked and not re.fullmatch(r"\d+", checked["wave"]):
+        raise Refusal(f"--wave {checked['wave']!r} is not a number")
+    if "group" in checked and not re.fullmatch(ROW_GROUP.pattern, checked["group"]):
+        raise Refusal(f"--group {checked['group']!r} is not a group id")
+    if "model" in checked and checked["model"] not in MODELS:
+        raise Refusal(model_problem(checked["model"]))
+    return checked
+
+
+def _rows(tasks):
+    return tasks.in_progress + tasks.remaining + tasks.tracking + tasks.paused
+
+
+def _fresh_group(tasks):
+    held = {r.group for r in _rows(tasks) if r.group}
+    k = 1
+    while f"{UNPLACED_LETTER}{k}" in held:
+        k += 1
+    return f"{UNPLACED_LETTER}{k}"
+
+
+def _cells_for(section, issue, tasks, cells, old=None, owned=frozenset()):
+    """The cells of `issue`'s row in `section`: the caller's first, then what the row had in Remaining or Tracking,
+    then what the issue says. A row nobody placed waits as unplaced, and a `question` as OWNER. A title the owner did
+    not write never reaches the list, which the dispatcher reads: the cell says whose it is instead."""
+    labels = ", ".join(issue.labels) or "none"
+    title = _title_cell(issue.title) if issue.number in owned else f"Issue #{issue.number}, {NOT_OWNERS}"
+    task = cells.get("task") or (old.cells[TASK_AT[old.section]] if old else title)
+    if section == "Paused":
+        return str(issue.number), task, labels, cells.get("why", PAUSED_WHY), cells.get("resume", PAUSED_RESUME)
+    kept = old if old is not None and old.section in ("Remaining", "Tracking") else None
+    waves = [r.wave for r in tasks.remaining + tasks.tracking if r.wave is not None]
+    wave = cells.get("wave") or (str(kept.wave) if kept else str(max(waves, default=1)))
+    group = cells.get("group") or (kept.group if kept else None)
+    fresh = section == "Remaining" and not (group and re.fullmatch(ROW_GROUP.pattern, group))
+    if fresh:
+        group = _fresh_group(tasks)
+    # A group the helper made up is no session's placement, so the row waits until one regroups it.
+    depends = cells.get("depends") or (UNPLACED if fresh else kept.cells[DEPENDS] if kept else "none")
+    if "question" in issue.labels and not OWNER.search(depends):
+        depends = "OWNER" if depends.casefold() == "none" else f"OWNER; {depends}"
+    existing = next((g for g in groups(tasks) if g.id == group), None) if section == "Remaining" else None
+    model = cells.get("model") or (existing.model if existing else None) or (kept.cells[MODEL] if kept else None)
+    if section == "Remaining" and model not in MODELS:
+        model = "Opus"
+    return (wave, group or "—", str(issue.number), task, labels, depends, model or "—",
+            cells.get("conflicts") or (kept.cells[CONFLICTS] if kept else "none"))
+
+
+def _insert(lines, section, cells):
+    line = _line(cells, _cr(lines))
+    if section == "Paused":
+        _append(lines, section, [line])
+    else:
+        _place(lines, line, section)
+
+
+def settle(text, issue, cells=None, new=False, owned=frozenset()):
+    """(the list with `issue`'s row where its live state puts it, what was done), or (None, why nothing was).
+
+    A closed issue's row is deleted; an open one's added, or moved by its labels. An In progress row is its session's
+    to end with `done` or `back`, so nothing here moves it (spec section 4). `new` is a filing: a row there is refused."""
+    cells = _caller_cells(cells)
+    tasks, key = parse_tasks(text), f"#{issue.number}"
+    row = next((r for r in _rows(tasks) if r.key == key), None)
+    target = where(issue)
+    if new and row is not None:
+        raise Refusal(f"{key} already has a row in {row.section}; tasks sync moves it")
+    if new and target is None:
+        raise Refusal(f"{key} is closed, so it has no row")
+    lines = _lines(text)
+    if row is not None and row.section == "In progress":
+        return None, f"{key} is in progress; its row stays until the work ends with tasks done or back"
+    if target is None:
+        if row is None:
+            return None, f"{key} is closed and has no row"
+        _remove(lines, row.section, {key})
+        return _checked("\n".join(lines)), f"deleted {key} from {row.section}: the issue is closed"
+    if row is not None and row.section == target:
+        return None, f"{key} is already in {target}"
+    if row is not None:
+        _remove(lines, row.section, {key})
+        tasks = parse_tasks("\n".join(lines))
+    _insert(lines, target, _cells_for(target, issue, tasks, cells, row, owned))
+    done = f"moved {key} from {row.section} to {target}" if row else f"added {key} to {target}"
+    return _checked("\n".join(lines)), done
+
+
+def reconcile(text, issues, merged=lambda _branch: False, owned=frozenset()):
+    """(the list with every deterministic rule applied, one line per change, one per row left for a person).
+
+    `issues` is every issue, open and closed; `merged(branch)` says whether a branch's pull request merged; `owned`
+    the issues the repository owner opened, whose titles alone a new row may carry."""
+    notes, kept = [], []
+    tasks = parse_tasks(text)
+    # In progress is never rebuilt: each row is its session's or its run's to end, so a stale one is only named.
+    for row in tasks.in_progress:
+        if row.cells[HEADERS["In progress"].index("State")].startswith("dispatched"):
+            continue
+        branch = row_branch(row)
+        if row.number is None:
+            if branch and merged(branch):
+                kept.append(f"kept the owed row on {branch} in In progress: its pull request merged; "
+                            f"tasks done owed --branch {branch} ends it")
+        elif row.number not in issues:
+            kept.append(f"kept {row.key} in In progress: no such issue here")
+        elif not issues[row.number].open:
+            kept.append(f"kept {row.key} in In progress: the issue is closed; tasks done {row.number} ends it")
+        elif branch and merged(branch):
+            kept.append(f"kept {row.key} in In progress: its pull request merged and the issue is open; "
+                        "tasks back or close the issue")
+    for section in ("Remaining", "Tracking", "Paused"):
+        for row in getattr(parse_tasks(text), section.lower().replace(" ", "_")):
+            if row.number is None:
+                continue
+            if row.number not in issues:
+                kept.append(f"kept {row.key} in {section}: no such issue here")
+                continue
+            result, done = settle(text, issues[row.number], owned=owned)
+            if result is not None:
+                text = result
+                notes.append(done)
+    present = {r.number for r in _rows(parse_tasks(text))}
+    for number in sorted(n for n, issue in issues.items() if issue.open and n not in present):
+        text, done = settle(text, issues[number], new=True, owned=owned)
+        notes.append(f"{done}{', unplaced' if where(issues[number]) == 'Remaining' else ''}")
+    return text, notes, kept
+
+
+def _same_issues(before, after):
+    """Refuse a rewrite that adds, drops or moves an issue's row: GitHub decides those, through `settle` and
+    `reconcile`. An owed row has no issue to read, so a rewrite may add, drop or reword one."""
+    for name in ("Remaining", "Tracking", "Paused"):
+        attr = name.lower()
+        was = {r.key for r in getattr(before, attr) if r.number is not None}
+        now = {r.key for r in getattr(after, attr) if r.number is not None}
+        if was != now:
+            raise Refusal(f"the rewrite adds, drops or moves {', '.join(sorted(was ^ now))} in {name}; "
+                          "tasks sync and reconcile do that from GitHub")
+
+
+def rewrite_day(live, rebuilt):
+    """A session's regrouping of the list, refused unless each issue's row stays in its section and In progress is
+    as it was: a rewrite re-cuts waves, groups and cells, and only `settle` and `reconcile` add, move or delete."""
+    cr = _cr(_lines(live))
+    rebuilt = rebuilt.replace("\r\n", "\n").replace("\n", cr + "\n")
+    before, after = parse_tasks(live), parse_tasks(rebuilt)
+    _checked(rebuilt)
+    if sorted(r.line for r in before.in_progress) != sorted(r.line for r in after.in_progress):
+        raise Refusal("the rewrite changes In progress; its rows change only through start, state, done and back")
+    _same_issues(before, after)
+    return None if rebuilt == live else rebuilt
+
+
+# What `tasks init` puts above the sections: where the rules are, never the rules themselves.
+PREAMBLE = ("# Task list", "",
+            "Written only through `dispatch_board.py tasks`; the shape and the rules are "
+            "`docs/harness/task-list.md`.", "")
+EMPTY = "\n".join((*PREAMBLE, *(part for name in SECTIONS for part in (f"## {name}", "", "none", "")))).rstrip("\n") \
+    + "\n"
+
+
+def init(text):
+    """An empty list, or `text` with whatever sits above its first section replaced by the preamble."""
+    if text is None:
+        return EMPTY
+    lines = _lines(text)
+    first = _scan(lines)[SECTIONS[0]][0]
+    cr = _cr(lines)
+    result = "\n".join([line + cr for line in PREAMBLE] + lines[first:])
+    parse_tasks(result)
+    return None if result == text else _checked(result)
 
 
 def _read_or_refuse(path):
@@ -727,14 +984,91 @@ def _issue(value):
     return int(found.group(1))
 
 
-def _day_command(args):
+def _work(value):
+    """An issue number, or None for `owed`: work with no issue, which its branch names instead."""
+    return None if value == "owed" else _issue(value)
+
+
+def _whole_list(args, path, issues_source, merged_source, owned_source):
+    """init, reconcile and rewrite: the commands that read or rebuild the whole list rather than one issue's row."""
+    if args.action == "init":
+        if not path.exists():
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                raise Refusal(f"could not make {path.parent}: {error}") from None
+            _write(path, EMPTY)
+            print(f"wrote an empty list at {path}")
+            return
+        wrote = _swap(path, init)
+        print("replaced the text above the sections" if wrote else "the list already opens on the preamble")
+        return
+    if args.action == "rewrite":
+        try:
+            source = _read(args.source)
+        except OSError as error:
+            raise Refusal(f"could not read {args.source}: {error}") from None
+        wrote = _swap(path, lambda text: rewrite_day(text, source))
+        print("rewrote the list" if wrote else "the rewrite matches the list; nothing written")
+        return
+    issues, owned, notes = issues_source(), owned_source(), []
+
+    def edit(text):
+        result, done, kept = reconcile(text, issues, merged_source, owned)
+        notes[:] = done + kept
+        return result if result != text else None
+    _swap(path, edit)
+    print("\n".join(notes) or "the list already matches GitHub; nothing written")
+
+
+def _day_command(args, issues_source, merged_source, owned_source):
     # The settings base grants every session these prefixes, so the run-less forms write only the list the config
-    # names. The same `done` and `back` prefixes reach the --run forms, which refuse without the run's state.json.
+    # names. The same `done`, `back`, `place` and `rewrite` prefixes reach the --run forms, which refuse without the
+    # run's state.json.
     if getattr(args, "tasks", None) or args.root != ".":
         raise Refusal(f"tasks {args.action} without --run writes only the list .harness/config.json names; "
                       "it takes no --tasks or --root")
+    # Present at all is set: an empty value is still the dispatcher's mark, never a way past it.
+    if DISPATCHED in os.environ:
+        raise Refusal("a /dispatch executor writes no task list: the dispatcher is its one writer, and places what "
+                      "the result's filed names")
     path = task_list(".")
-    number = _issue(args.issue)
+    if args.action in ("init", "reconcile", "rewrite"):
+        _whole_list(args, path, issues_source, merged_source, owned_source)
+        return
+    if args.action in ("place", "sync"):
+        number = _issue(args.issue)
+        issue = issues_source().get(number)
+        if issue is None:
+            raise Refusal(f"#{number} is not an issue in this repository")
+        cells = {name: getattr(args, name, None) for name in CALLER_CELLS}
+        owned, said = owned_source(), []
+
+        def settled(text):
+            result, done = settle(text, issue, cells, new=args.action == "place", owned=owned)
+            said[:] = [done]
+            return result
+        wrote = _swap(path, settled)
+        print(said[0] if wrote else f"{said[0]}; nothing written")
+        return
+    number = _work(args.issue)
+    branch = getattr(args, "branch", None)
+    if number is None:
+        if args.action == "back":
+            raise Refusal("work with no issue has no wave to go back to; tasks done owed --branch ends its row")
+        if not branch:
+            raise Refusal(f"tasks {args.action} owed takes --branch, the branch its row names")
+        where_ = f"the owed work on {branch}"
+        if args.action == "state":
+            wrote = _swap(path, lambda text: set_issue_state(text, None, args.text, branch))
+            print(f"{where_} reads {args.text.strip()!r}" if wrote else f"{where_} already reads that; nothing written")
+        elif args.action == "done":
+            wrote = _swap(path, lambda text: finish_issue(text, None, branch))
+            print(f"done {where_}" if wrote else f"{where_} has no In progress row; nothing written")
+        else:
+            wrote = _swap(path, lambda text: start_issue(text, None, branch, args.worktree, args.what)[0])
+            print(f"started {where_}" if wrote else f"{where_} is already in progress; nothing written")
+        return
     # What `start` took out of Remaining, kept beside the list so `back` puts the whole row back, cells and all.
     saved = path.with_name(f"{path.stem}.started") / f"{number}.md"
     if args.action == "start":
@@ -859,6 +1193,7 @@ def rewrite(live, read, rebuilt):
     # Another session's row is never the dispatcher's to drop or edit (spec section 4), whatever state.json holds.
     if sorted(r.line for r in before.in_progress) != sorted(r.line for r in after.in_progress):
         raise Refusal("the rebuild changes the In progress section; its rows change only through move, done and back")
+    _same_issues(before, after)
     return rebuilt
 
 
@@ -1170,6 +1505,24 @@ def open_issues(root):
             if isinstance(item, dict) and item.get("state") == "OPEN" and _number(item.get("number"))}
 
 
+def all_issues(root):
+    """Every issue, open and closed, with its labels: what each task-list event re-derives a row from."""
+    try:
+        return issues_from(json.loads(helper(root, "gh-issue-list.sh")))
+    except ValueError:
+        raise Refusal("gh-issue-list.sh did not print JSON") from None
+
+
+def pr_merged(root, branch):
+    """Whether the branch's pull request into main merged and none is open, read as /ship step 0 reads it."""
+    try:
+        rows = json.loads(helper(root, "pr-for-branch.sh", branch))
+    except ValueError:
+        raise Refusal(f"pr-for-branch.sh {branch} did not print JSON") from None
+    states = {row.get("state") for row in rows if isinstance(row, dict)} if isinstance(rows, list) else set()
+    return "MERGED" in states and "OPEN" not in states
+
+
 def owned_issues(root):
     """The issues the repository owner opened, which a failed read leaves refused rather than empty or assumed."""
     try:
@@ -1192,8 +1545,29 @@ def main_red(root):
 
 # Command line
 
+def _cell_options(command):
+    for name in CALLER_CELLS:
+        command.add_argument(f"--{name}")
+
+
+def _run_less_place(args):
+    """`tasks place <n>` with no run is a filing; with a run, `<wave> <group> <n>` as /dispatch step 2 gives it."""
+    if args.run is None:
+        if len(args.spec) != 1:
+            raise Refusal("tasks place without --run takes one issue number; --wave and --group place it")
+        args.issue, args.wave, args.group = args.spec[0], args.wave_cell, args.group_cell
+        return
+    if len(args.spec) != 3 or not re.fullmatch(r"\d+", args.spec[0]) or not re.fullmatch(r"\d+", args.spec[2]):
+        raise Refusal("tasks place --run takes <wave> <group> <issue>")
+    given = [name for name in CALLER_CELLS if getattr(args, name if name not in ("wave", "group") else
+                                                          f"{name}_cell", None) is not None]
+    if given:
+        raise Refusal(f"tasks place --run reads its cells from place-<n>.json, not --{', --'.join(given)}")
+    args.wave, args.group, args.issue = int(args.spec[0]), args.spec[1], int(args.spec[2])
+
+
 def main(argv=None, body_source=None, open_source=None, branch_source=None, weekly_source=None, owned_source=None,
-         red_source=None):
+         red_source=None, issues_source=None, merged_source=None):
     import dispatch_run
     parser = argparse.ArgumentParser(prog="dispatch_board.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1204,17 +1578,22 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
     b.add_argument("--berserk", action="store_true")
     t = sub.add_parser("tasks")
     actions = t.add_subparsers(dest="action", required=True)
-    # A day session's `done` and `back` name an issue and no run; its list is the one the config names.
-    day = {"done", "back"}
-    for action in ("start", "state"):
+    # A day session's `done`, `back`, `place` and `rewrite` name no run; its list is the one the config names.
+    day = {"done", "back", "place", "rewrite"}
+    for action in ("start", "state", "sync"):
         s = actions.add_parser(action)
         s.add_argument("issue")
         if action == "start":
             s.add_argument("--branch", required=True)
             s.add_argument("--worktree", required=True)
             s.add_argument("--what")
-        else:
+        elif action == "state":
             s.add_argument("text")
+            s.add_argument("--branch")
+        else:
+            _cell_options(s)
+    for action in ("init", "reconcile"):
+        actions.add_parser(action)
     for action in ("move", "done", "back", "place", "rewrite"):
         s = actions.add_parser(action)
         s.add_argument("--tasks", required=action not in day)
@@ -1223,20 +1602,21 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
         if action == "rewrite":
             s.add_argument("--from", dest="source", required=True)
         elif action == "place":
-            s.add_argument("wave", type=int)
-            s.add_argument("group")
-            s.add_argument("issue", type=int)
+            s.add_argument("spec", nargs="+")
+            for name in CALLER_CELLS:
+                s.add_argument(f"--{name}", dest=f"{name}_cell" if name in ("wave", "group") else name)
         else:
             s.add_argument("group")
-        if action == "move":
+        if action in ("move", "done"):
             s.add_argument("--branch")
+        if action == "move":
             s.add_argument("--worktree")
     dispatch_run.add_commands(sub)
     # The task actions resolve their run under the root too, so each takes it after its own name.
     for command in [c for name, c in sub.choices.items() if name != "tasks"] + list(actions.choices.values()):
         command.add_argument("--root", default=".")
     args = parser.parse_args(argv)
-    if args.command == "tasks" and args.action in day and args.run is None:
+    if args.command == "tasks" and args.action in ("done", "back") and args.run is None:
         args.issue, args.group = args.group, None
     root = args.root
     bodies_from = body_source or (lambda number: issue_body(root, number))
@@ -1244,7 +1624,11 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
     branch_from = branch_source or (lambda branch: branch_paths(root, branch))
     owned_from = owned_source or (lambda: owned_issues(root))
     red_from = red_source or (lambda: main_red(root))
+    issues_from_ = issues_source or (lambda: all_issues(root))
+    merged_from = merged_source or (lambda branch: pr_merged(root, branch))
     try:
+        if args.command == "tasks" and args.action == "place":
+            _run_less_place(args)
         # A group names files under the run, so only a group letter and number, or a sync's, may reach a path.
         known = ROW_GROUP if args.command == "tasks" else GROUP_ID
         if getattr(args, "group", None) is not None and not re.fullmatch(known.pattern, args.group):
@@ -1269,7 +1653,7 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
             bodies = _bodies(parse_tasks(text), directory, bodies_from)
             print("\n".join(board(text, today, bodies, set(open_from()), branch_from, *flag, owned=owned_from())))
         elif args.command == "tasks" and getattr(args, "run", None) is None:
-            _day_command(args)
+            _day_command(args, issues_from_, merged_from, owned_from)
         elif args.command == "tasks":
             if not args.tasks:
                 raise Refusal(f"tasks {args.action} --run takes --tasks")

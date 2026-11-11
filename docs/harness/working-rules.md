@@ -238,42 +238,30 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   the whole feed, `gh api --paginate`, to a file, and take the newest or
   the count from that file.
 - **The task list** is where `.harness/agent-rules.md`, *Working in a
-  target*, puts it. **Where a row sits is a function of state**, so a session
-  re-derives it at each event (work starts on an issue, a pull request opens,
-  merges or closes, an issue is filed, closed, reopened, paused or unpaused,
-  labelled or unlabelled `tracking`, work is abandoned) and writes the result
-  in the same act:
+  target*, puts it, and `docs/harness/task-list.md` owns its shape, where
+  each row sits and the call each event takes. **No session edits it by
+  hand**: every write is one `dispatch_board.py tasks` call, made in the
+  same act as the event — work starts, a pull request opens, merges or
+  closes, an issue is filed, closed, reopened, paused or unpaused, labelled
+  or unlabelled `tracking`, work is abandoned. A filing helper places the
+  row it files and `issue_decisions.py` moves the row it closes or
+  unblocks, so their callers add nothing; an *In progress* row is left to
+  the `tasks done` or `back` of the session holding it
+  (`docs/harness/task-list.md`, *Where a row sits*). A sync pull request
+  has no row.
+  When in doubt, `tasks reconcile` re-derives the list from GitHub.
+  `/dispatch` is the list's one writer from its step 0 to its report, and
+  sends a hand-back or a stop back to its wave marked `OWNER`
+  (`docs/commands/dispatch.md`, *One writer of the task list* and
+  *Waking*); its executors write nothing.
 
-  | State | Where |
-  |---|---|
-  | Open issue not labelled `tracking`, no work under way and no open pull request | *Remaining*, in its wave |
-  | Open issue labelled `tracking`, not `paused`: it records work done elsewhere or a measurement over time, and no pull request implements it | *Tracking*, in its wave |
-  | Open issue labelled `paused` | *Paused*, whatever else is true of it |
-  | Work a session has taken up (about to be branched, or with a branch or a worktree), with or without an issue, and no open pull request | *In progress*, with the branch once it is named |
-  | Open pull request | *In progress*: a row for each open, unpaused issue it closes, or one row when there are none; such an issue has no other row |
-  | Closed issue; merged or closed pull request | No row, and no note of what landed, which git and the closed issues already keep |
-
-  A row with no issue reads `owed (not filed)` in its `#` cell, the form
-  `dispatch_board.py` parses beside a number. Outside `/dispatch` an
-  issue's *In progress* row moves only through `dispatch_board.py tasks
-  start <n>`, `state`, `done` and `back`, which take no run: `/branch`,
-  `/pr` and `/ship` call them, and each writes nothing `board` would refuse
-  (`docs/commands/branch.md`, *Step 5*). Work that ends with its issue
-  still open (a claim abandoned, a pull request closed unmerged, or one merged
-  without closing its issue) leaves its row to the table: *In progress* while
-  a branch remains, which holds its paths and which `/dispatch` names to the
-  owner, otherwise back to its wave. What the work found and filed has its
-  own row by the same table, written when it is filed. `/dispatch` is the
-  list's one writer from its step 0 to its report, and sends a hand-back or a
-  stop back to its wave marked `OWNER` (`docs/commands/dispatch.md`, *One
-  writer of the task list* and *Waking*). When in doubt, rebuild the list from
-  `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
-  default of 30 truncates silently; another session's *In progress* row stays.
-
-  *Remaining* and *Paused* put undated rows first, then dated ones nearest
-  first, and a row never sits above one it depends on. A linked worktree on
-  an issue's branch means another session is working it, unless its pull
-  request merged or `/dispatch` sent it back: its row is *In progress*. A tag
+  Work that ends with its issue still open (a claim abandoned, a pull
+  request closed unmerged, or one merged without closing its issue) stays
+  *In progress* while a branch remains, which holds its paths and which
+  `/dispatch` names to the owner, and otherwise goes back to its wave
+  through `tasks back`. A linked worktree on an issue's branch means
+  another session is working it, unless its pull request merged or
+  `/dispatch` sent it back: its row is *In progress*. A tag
   such as `#G1-826` names group `G1` and issue 826,
   `#B1-929+930` two issues worked as one change; read the group's rows and
   each issue, never grep for the tag.

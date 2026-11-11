@@ -134,11 +134,10 @@ sweeps' `mktemp -d` ones.
    It moves the issue's row out of *Remaining* keeping its group; with no
    row, `--what '<what>'` gives the text; in place, `--worktree .`. Exit 2
    names the defect: report it, and the list is never edited by hand round
-   it. Work with no issue is written by hand, under `Group | # | What |
-   Branch or PR | State`: `—`; `owed (not filed)`; what; branch, then
-   worktree, in one cell, each in backticks; `started`. Under
-   `--dispatched`, skip this write: `/dispatch` is the task list's one
-   writer (why: docs/commands/branch.md, *Step 5*).
+   it. Work with no issue is `tasks start owed --branch <name> --worktree
+   <path> --what '<what>'`. Under `--dispatched`, skip this write:
+   `/dispatch` is the task list's one writer (why: docs/commands/branch.md,
+   *Step 5*).
 
    Then **`EnterWorktree`** with the new directory as `path`. Git writes go
    through the helpers only (why: `docs/harness-boundaries.md`, *Prefix

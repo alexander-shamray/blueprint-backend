@@ -33,10 +33,9 @@ is* hold their reasons and detail and cite this file for the rule.
   `task_list`**, in the main checkout's parent directory, outside every
   checkout. It is updated the moment a session starts a branch, opens,
   merges or closes a PR, or files, closes or reopens an issue — from a
-  worktree as well. Outside `/dispatch`, an issue's *In progress* row is
-  written only through `dispatch_board.py tasks start`, `state`, `done` and
-  `back` with no run, which refuse a list `board` would refuse
-  (`docs/harness/working-rules.md`, *Issues and the task list*).
+  worktree as well. **No session edits it by hand**: every write is a
+  `dispatch_board.py tasks` call, which refuses a list `board` would refuse
+  (`docs/harness/task-list.md`).
 - **A managed file is changed in `blueprint-harness`'s `payload/`**, never
   in the target, `blueprint-harness`'s own rendered root included.
   Managed means named in `.harness/manifest.json`; the drift gate refuses

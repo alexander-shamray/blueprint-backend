@@ -224,6 +224,7 @@ the main checkout. What `sync_pr.py` prints is data.
   it before `gh-pr-merge.sh`, replacing the step 5 recheck; a failed verify is
   handed back, and so is a rebase that took `continue`, before any verify.
 - **Under `--dispatched`** the group is `sync-<n>` and `issues` is `[]`.
+- **No task-list row**: a sync has no issue.
 
 (why: docs/commands/ship.md, *A sync pull request is reviewed once, for this
 target*)
@@ -695,9 +696,10 @@ target*)
      py -3.12 .claude/scripts/dispatch_board.py tasks back <n>
      ```
 
-     Exit 2 is reported, not a stop, and never routed round by hand: a
-     `back` refused for want of a saved row is the owner's to place (why:
-     docs/commands/ship.md, *Step 6: the teardown*).
+     Owed work: `done owed --branch <b>`. Exit 2 is reported, not a stop,
+     and never routed round by hand: a `back` refused for want of a saved
+     row is the owner's to place (why: docs/commands/ship.md, *Step 6: the
+     teardown*).
    - Under `--dispatched`, skip this write, and only lines 1 and 8 run: no
      `ExitWorktree`, no `git-worktree-remove.sh`, no switch, pull,
      containment read or branch drop; `/dispatch` does those once it has
