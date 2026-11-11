@@ -318,9 +318,9 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
   moved into `.claude/worktrees/` with `EnterWorktree` every path in the
   main checkout outside that worktree, and admits one that no checkout
   contains. The main checkout's root may hold `TODO.md`, gitignored, as a
-  link to it for the user's editor; nothing writes through the link, which
-  the edit-target guard refuses (`docs/harness-boundaries.md`, *The
-  edit-target guard*).
+  link to it for the user's editor; a session never writes through the
+  link, which the edit-target guard refuses (`docs/harness-boundaries.md`,
+  *The edit-target guard*).
 
 ## 7. Checklist
 
