@@ -2579,7 +2579,9 @@ on the owner or reach `.claude/`; it lifts no deny, guard or stop.
 It also changes the executor: it never tears down its workspace, step 6 runs
 only lines 1 and 8, step 0's finished teardown is skipped, and it never
 writes the task list, not even for an issue it files or closes, which goes
-only in its result's `filed`. The dispatcher grants no agent type and
+only in its result's `filed`: `dispatch_run.py` sets `HARNESS_DISPATCHED` in
+its environment, under which every run-less `tasks` write refuses and the
+filing helper places no row. The dispatcher grants no agent type and
 denies every one, because it spawns sessions.
 
 **No grant was added for this.** Both spikes, one on docs and one on code,
@@ -2594,11 +2596,17 @@ hands every executor back.
 **The dispatcher writes the task list alone.** It writes only through
 `dispatch_board.py tasks`, with no `Edit` grant on the file. Every `tasks`
 action given `--run` refuses a run with no `state.json`; a day session's
-run-less `start`, `state`, `done` and `back`, granted in the settings base,
-touch one issue's row of the list the config names and refuse one a run moved;
-the `done` and `back` grants are prefixes, so they reach the `--run` forms too,
-which still refuse without that run's `state.json`. `tasks rewrite` refuses any
-change to the *In progress* section, and `done` and `back` touch only the
+run-less `start`, `state`, `done`, `back`, `place`, `sync`, `reconcile`,
+`rewrite` and `init`, granted in the settings base, write only the list the
+config names and write nothing to a row a run moved, `start`, `state`,
+`done` and `back` refusing it and `sync` and `reconcile` leaving it, and
+`place`, `sync` and
+`reconcile` take a row's section from GitHub rather than the caller
+(`docs/harness/task-list.md`); the `done`, `back`,
+`place` and `rewrite` grants are prefixes, so they reach the `--run` forms
+too, which still refuse without that run's `state.json`. `tasks rewrite`, run
+or not, refuses any change to the *In progress* section and any issue's row
+added, dropped or moved, and `done` and `back` touch only the
 rows the run's own move recorded, `done` only once `verify` has passed.
 After `verify`, the dispatcher pulls with `--ff-only`, checks
 containment with `git merge-base --is-ancestor`, runs `tasks done` and

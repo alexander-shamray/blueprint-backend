@@ -17,7 +17,8 @@ argues, and `--berserk` beside it on a flagged run.
 
 The dispatcher itself is the session the owner started, because two of its
 jobs are judgement — the interview, and placing a filed issue in a wave and
-a group by the task list's prose rules — and a script holds neither. What is
+a group by `docs/harness/task-list.md`'s rules — and a script holds neither.
+What is
 mechanical is a helper with its suite: `dispatch_board.py` for the task
 list, `dispatch_run.py` behind the same command line for the run, and
 `issue_decisions.py` for the issue bodies. Each prints a few lines, so a
@@ -52,16 +53,26 @@ command holds that no helper checks. Each `tasks` action re-reads
 the file at the moment it writes, so another session's edit since the last
 read is kept, not overwritten.
 
-**The rebuild is judgement written as a file.** Step 0 re-cuts groups and
-moves rows by the note's rules 1 to 10, which no helper can apply. So the
-session writes the whole rebuilt list under the run, and `tasks rewrite`
-replaces the live list with it only when the run was opened by `start`, the
-live list is still byte for byte the copy `board --run` read, the owner's
-note above the sections is unchanged, the result parses into groups, and
-*In progress* is exactly as it was. A rebuild made from a stale read is
-refused rather than merged, and is made again from a fresh `board`. The
-interview's answers change the list by the same route, in the same step
-(spec §5).
+**What GitHub decides is a helper's; only the grouping is judgement.** Step
+0 once rebuilt the whole list by the rules in a note at its top, deleting,
+moving and adding rows by hand as well as re-cutting groups, and day
+sessions wrote rows the same way: on 2026-11-11 a hand-written sync row with
+a dash in its `#` cell stopped `board` on a target's list (#395). So `tasks
+reconcile` now applies every rule GitHub's state decides outside *In
+progress* — a closed issue's row deleted, a row moved by its labels, an open
+issue with no row added unplaced — and `docs/harness/task-list.md` holds the
+rules the note held. What is left, waves and groups, is written as a file:
+the session writes the
+whole regrouped list under the run, and `tasks rewrite` replaces the live list
+with it only when the run was opened by `start`, the live list is still byte
+for byte the copy `board --run` read, the text above the sections is
+unchanged, the result parses into groups, *In progress* is exactly as it was,
+and every issue's row is still in its section. A rebuild made from a stale
+read is refused rather than merged, and is made again from a fresh `board`;
+one that adds, drops or moves an issue's row is refused as `reconcile`'s
+work. The interview's answers change the list by the same route, in the same
+step, after `issue_decisions.py` has moved the row an `unblock` or a `close`
+changed (spec §5).
 
 **An exit 2 promises no more than that the helper refused.** The runbook says
 only that, because a refusal can follow a write and no one sentence about
@@ -80,13 +91,19 @@ or edit another session's, which the spec's §4 leaves alone. So the whole
 section has to come through unchanged, whatever the run's state says: this
 run's own rows change only through `move`, `done` and `back`, and a stale
 row of another session's is named to the owner rather than deleted. The
-rebuild's cleanup of closed and merged rows is therefore *Remaining*,
-*Tracking* and *Paused* only.
+cleanup of closed and merged rows, `tasks reconcile`'s, is therefore
+*Remaining*, *Tracking* and *Paused* only, and `tasks sync`, which
+`issue_decisions.py` runs after an interview's close, leaves an *In
+progress* row too: the issue it closed may be one a day session is working.
 
 **A list `board` refuses is still rebuilt from.** `board --run` keeps its
 copy as soon as it has read the list, before it cuts a group, so a group
 spanning two waves or two models, which it refuses, is re-cut by the same
-rebuild rather than by a hand edit. A list that does not parse at all, a
+rebuild rather than by a hand edit. That re-cut is written before `tasks
+reconcile` runs, not after: each change `reconcile` makes is checked against
+`board`'s parser, so on a list whose groups span it refuses at the first one,
+and a later rewrite cannot bring its changes back, since `rewrite` refuses to
+add, drop or move an issue's row (#399). A list that does not parse at all, a
 malformed header or an *In progress* row naming two issues, still needs a
 human: `tasks rewrite` parses the live list too, and *In progress* is never
 rebuilt.
@@ -103,10 +120,10 @@ once `verify` has passed.
 `tasks place` adds a filed issue's row, its missing cells set to the
 cautious value, `OWNER` among them, and records the issue in the run's
 state for the report's *Filed overnight*. What the interview files or
-closes reaches no `tasks place`, since its row comes from step 0.5's
-rebuild or leaves with the closed issue, so `filed` records it in the
-same list: a close comment is a comment on an issue, which the spec's
-*Filed overnight* counts.
+closes reaches no `tasks place --run`, since the filing helper places a
+filed issue's row and `issue_decisions.py` syncs a closed one's, so `filed`
+records it in the same list: a close comment is a comment on an issue,
+which the spec's *Filed overnight* counts.
 
 `--dry-run` is the builder's flag the spec's §3 allows: it runs step 0's
 checks and `board`, says what the rebuild would change and what would

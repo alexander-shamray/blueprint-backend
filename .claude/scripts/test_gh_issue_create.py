@@ -58,6 +58,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
                   *"issue create"*)
                     printf '%s\\n' "${{MSYS2_ARG_CONV_EXCL-unset}}" > {(d / 'conv').as_posix()!r}
                     cat > {(d / 'body').as_posix()!r}
+                    [ ! -f {(d / 'url').as_posix()!r} ] || cat {(d / 'url').as_posix()!r}
                     exit 0
                     ;;
                 esac
@@ -72,9 +73,13 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def run_helper(self, *args, body=""):
+    def run_helper(self, *args, body="", dispatched=False):
         env = dict(os.environ)
         env["PATH"] = self.dir + os.pathsep + env["PATH"]
+        # A dispatched executor runs this suite too; only the case about one sets the marker.
+        env.pop("HARNESS_DISPATCHED", None)
+        if dispatched is not False:
+            env["HARNESS_DISPATCHED"] = "1" if dispatched is True else dispatched
         return subprocess.run(
             [BASH, str(self.HELPER), *args],
             capture_output=True, text=True, encoding="utf-8", input=body, env=env,
@@ -168,6 +173,42 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         create = [c for c in self.calls() if c.startswith("issue create ")]
         self.assertIn("--title fix: C# parsing of #12", create[0])
+
+    def placer(self, code=0):
+        """Stand-ins for both interpreters the helper may pick, recording the task-list call it makes."""
+        d = Path(self.dir)
+        (d / "url").write_text("https://github.com/acme/widgets/issues/77\n", encoding="utf-8")
+        for name in ("py", "python3"):
+            with open(d / name, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> {(d / 'placed').as_posix()!r}\n"
+                             f"exit {code}\n")
+            (d / name).chmod(0o755)
+        return d / "placed"
+
+    def test_a_filing_places_its_own_row_through_the_task_list_helper(self):
+        placed = self.placer()
+        result = self.run_helper("bug", "low", "code", "sweep", body=self.STDIN)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("https://github.com/acme/widgets/issues/77\n", result.stdout)
+        line = placed.read_text(encoding="utf-8").strip()
+        self.assertTrue(line.endswith("dispatch_board.py tasks place 77"), line)
+
+    def test_a_row_not_written_is_said_with_its_repair_and_the_filing_still_succeeds(self):
+        # A non-zero exit would read as a failed filing, and a retry would file the issue twice.
+        self.placer(code=2)
+        result = self.run_helper("bug", "low", "code", "sweep", body=self.STDIN)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("filed #77, but its task-list row was not written", result.stderr)
+        self.assertIn("tasks place 77", result.stderr)
+
+    def test_a_dispatched_executor_files_but_places_nothing(self):
+        placed = self.placer()
+        # An empty value is still the dispatcher's mark.
+        for value in (True, ""):
+            with self.subTest(value=value):
+                result = self.run_helper("bug", "low", "code", "sweep", body=self.STDIN, dispatched=value)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertFalse(placed.exists())
 
     def test_a_body_without_the_blank_separator_is_refused(self):
         # A body piped without its title line would otherwise file under its

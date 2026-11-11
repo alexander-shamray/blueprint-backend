@@ -74,6 +74,11 @@ class StubGh(unittest.TestCase):
         root = mock.patch.object(ID, "ROOT", self.dir)
         root.start()
         self.addCleanup(root.stop)
+        # The task list's own helper is a child; here it only records which issue's row it was asked to move.
+        self.synced, self.sync_fails = [], None
+        sync = mock.patch.object(ID, "sync_row", lambda number: self.synced.append(number) or self.sync_fails)
+        sync.start()
+        self.addCleanup(sync.stop)
         self.run_path = self.dir / "artifacts" / "dispatch" / RUN
         self.run_path.mkdir(parents=True)
         (self.run_path / "state.json").write_text('{"run": "%s", "groups": {}}\n' % RUN, encoding="utf-8")
@@ -235,6 +240,27 @@ class Cli(StubGh):
         self.assertEqual(
             calls[2], ["issue", "close", "9", "--repo", "acme/widgets", "--reason", "not planned"]
         )
+
+    def test_unblock_and_close_move_the_row_and_record_and_comment_do_not(self):
+        self.assertEqual(0, self.run_main(["unblock", "1677", "paused"])[0])
+        comment = self.write("interview/9-close.txt", "No work.\n")
+        self.assertEqual(0, self.run_main(["close", "9", "--comment-file", comment, "--run", RUN])[0])
+        self.assertEqual(0, self.run_main(["comment", "9", "--comment-file", comment, "--run", RUN])[0])
+        (self.stub / "body.txt").write_bytes(b"Original.\n")
+        self.assertEqual(0, self.record("1677", self.write("q", "q"), self.write("a", "a"))[0])
+        self.assertEqual(["1677", "9"], self.synced)
+
+    def test_a_row_the_helper_did_not_move_is_exit_4_naming_the_repair(self):
+        self.sync_fails = "refused: #1677 already has a row"
+        code, err = self.run_main(["unblock", "1677", "question"])
+        self.assertEqual(4, code)
+        self.assertIn("dispatch_board.py tasks sync 1677", err)
+        self.assertIn("already has a row", err)
+
+    def test_a_failed_gh_call_moves_no_row(self):
+        (self.stub / "fail").write_text("1", encoding="utf-8")
+        self.assertEqual(3, self.run_main(["unblock", "1677", "paused"])[0])
+        self.assertEqual([], self.synced)
 
     def test_comment_posts_and_leaves_the_issue_open(self):
         comment = self.write("interview/9-failure.txt", "Tried the hook edit; a deny stopped it.\n")
@@ -401,6 +427,20 @@ class Cli(StubGh):
                 self.assertEqual(code, 2)
                 self.assertIn("refused: the command line does not match the usage above", err)
         self.assertEqual(self.calls(), [])
+
+
+class SyncRowChild(unittest.TestCase):
+    def test_the_row_is_moved_by_the_helper_beside_this_one_from_this_checkout(self):
+        done = mock.Mock(returncode=0, stderr=b"")
+        with mock.patch.object(ID.subprocess, "run", return_value=done) as run:
+            self.assertIsNone(ID.sync_row("1677"))
+        argv, kwargs = run.call_args.args[0], run.call_args.kwargs
+        self.assertEqual([Path(ID.__file__).with_name("dispatch_board.py"), "tasks", "sync", "1677"],
+                         [Path(argv[1]), *argv[2:]])
+        self.assertEqual(ID.ROOT, kwargs["cwd"])
+        refused = mock.Mock(returncode=2, stderr=b"refused: no list\n")
+        with mock.patch.object(ID.subprocess, "run", return_value=refused):
+            self.assertEqual("refused: no list", ID.sync_row("1677"))
 
 
 class PathWhichParity(unittest.TestCase):

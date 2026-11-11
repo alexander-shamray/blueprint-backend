@@ -66,7 +66,8 @@ LIMIT_KIND = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, 
 FAKE_CLAUDE = """import json, os, sys
 here = os.path.dirname(os.path.abspath(__file__))
 seen = {"argv": sys.argv[1:], "cwd": os.getcwd(), "stdin": sys.stdin.buffer.read().decode("utf-8"),
-        "temp": {name: os.environ.get(name) for name in ("TMP", "TEMP", "TMPDIR")}}
+        "temp": {name: os.environ.get(name) for name in ("TMP", "TEMP", "TMPDIR")},
+        "dispatched": os.environ.get("HARNESS_DISPATCHED")}
 with open(os.path.join(here, "seen.json"), "w", encoding="utf-8") as handle:
     json.dump(seen, handle)
 with open(os.path.join(here, "reply.bin"), "rb") as handle:
@@ -596,6 +597,12 @@ class LaunchTests(InRoot):
         self.addCleanup(shutil.rmtree, first, True)
         self.addCleanup(shutil.rmtree, second, True)
         self.assertNotEqual(first, second)
+
+    def test_run_marks_the_executor_so_the_task_list_helper_refuses_its_writes(self):
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"))
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertEqual("1", seen["dispatched"])
 
     def test_run_removes_the_executors_temp_directory_once_it_exits(self):
         # Each launch's mkdtemp directory outlived its executor and piled up under the system temp root.

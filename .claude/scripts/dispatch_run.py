@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dispatch_board import (BRANCH_NAME, MODEL, MODELS, NOT_OWNERS, Group, Refusal, _blocker, _bodies, _held, _number,
+from dispatch_board import (BRANCH_NAME, DISPATCHED, MODEL, MODELS, NOT_OWNERS, Group, Refusal, _blocker, _bodies,
+                            _held, _number,
                             _read, _row, _write, git, group_claim, groups, helper, model_problem, one_line,
                             parse_tasks, path_which, pick, released, row_branch, runnable, strangers)
 from sync_pr import SYNC_HEAD
@@ -575,8 +576,9 @@ def _launch(root, directory, run, gid, entry, flag=False):
         raise Refusal("no claude on PATH")
     _remove_stale(worktree / "artifacts" / "dispatch" / run / f"{gid}.json")
     scratch = executor_temp(root, run, gid)
-    # Parallel executors sharing the system temp directory ran each other's scratch scripts.
-    env = {**os.environ, "TMP": str(scratch), "TEMP": str(scratch), "TMPDIR": str(scratch)}
+    # Parallel executors sharing the system temp directory ran each other's scratch scripts. The marker makes the
+    # task-list helper refuse the executor's writes: the dispatcher is the list's one writer while it runs.
+    env = {**os.environ, "TMP": str(scratch), "TEMP": str(scratch), "TMPDIR": str(scratch), DISPATCHED: "1"}
     started = now()
     # The permission mode is the settings' own, never a flag here (spec section 6.2); the prompt goes on stdin.
     try:

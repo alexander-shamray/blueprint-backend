@@ -15,12 +15,12 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 # each at most about a tenth over its landed size: a runbook past it has regrown its argument.
 # The payload's split commands; a target declares its own in `CEILINGS` in its `local_commands.py`.
 CEILINGS = {
-    "ship.md": 49700,
+    "ship.md": 49800,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
     "branch.md": 9300,
     "team.md": 6300,
-    "dispatch.md": 19400,
+    "dispatch.md": 19450,
 }
 
 ROOT = COMMANDS.parent.parent
@@ -29,7 +29,7 @@ ROOT = COMMANDS.parent.parent
 # exit counts these beside ship.md and branch.md, and none was split. A target's
 # own `CLAUDE.md` is resident too, and its ceiling is that target's.
 RESIDENT = {
-    ".claude/commands/pr.md": 10850,
+    ".claude/commands/pr.md": 10900,
     ".claude/commands/commit.md": 5200,
 }
 

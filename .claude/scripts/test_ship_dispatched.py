@@ -268,10 +268,8 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
                       ".claude/worktrees/<slug>", step)
         self.assertIn("moves the issue's row out of *Remaining* keeping its group", step)
         self.assertIn("the list is never edited by hand round it", step)
-        self.assertIn("—; owed (not filed); what; branch, then worktree, in one cell, each in backticks; started",
-                      step)
-        self.assertEqual(dispatch_board.HEADERS["In progress"][:2], ("Group", "#"),
-                         "the row's description follows the table's column order")
+        # Work with no issue goes through the helper too: a hand-spelled row once held a dash where `#` goes.
+        self.assertIn("tasks start owed --branch <name> --worktree <path> --what '<what>'", step)
 
     def test_pr_and_ship_end_the_row_through_the_helper(self):
         pr = flat((ROOT / ".claude" / "commands" / "pr.md").read_text(encoding="utf-8"))
@@ -284,16 +282,17 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
                 self.assertIn(f"py -3.12 .claude/scripts/dispatch_board.py tasks {action} <n>", step)
 
     def test_the_in_progress_row_is_the_one_the_board_parses(self):
-        # A session writes what this step says and /dispatch never rebuilds the section, so a row the board refuses
-        # stops the next run on the list until a human repairs it.
+        # /dispatch never rebuilds the section, so a row the board refuses stops the next run on the list until a
+        # human repairs it: the owed row the step's call writes is the one the board parses, branch first.
         step = flat(branch_step_5())
-        self.assertIn(" | ".join(dispatch_board.HEADERS["In progress"]), step)
-        self.assertIn(dispatch_board.OWED, step)
-        row = dispatch_board._row("In progress",
-                                  f"| — | {dispatch_board.OWED} | x | `fix/x`, `.claude/worktrees/x` | started |")
-        self.assertEqual(dispatch_board.row_branch(row), "fix/x", "the one cell names the branch first")
+        self.assertIn("tasks start owed", step)
+        empty = "## In progress\n\nnone\n\n## Remaining\n\nnone\n\n## Tracking\n\nnone\n\n## Paused\n\nnone\n"
+        written, _ = dispatch_board.start_issue(empty, None, "fix/x", ".claude/worktrees/x", "x")
+        row = dispatch_board.parse_tasks(written).in_progress[0]
+        self.assertEqual((None, "fix/x"), (row.number, dispatch_board.row_branch(row)))
+        self.assertEqual(dispatch_board.OWED, row.cells[1])
         # These two parse and name no branch, so the claim loses the branch's paths with nothing refused: hence
-        # the step's "each in backticks".
+        # `start_issue` writing each name in its own backticks.
         for cell in ("fix/x, .claude/worktrees/x", "`fix/x, .claude/worktrees/x`"):
             with self.subTest(cell=cell):
                 self.assertIsNone(dispatch_board.row_branch(

@@ -1,8 +1,8 @@
 """The owner's answers to /dispatch's interview, written into an issue and acted on.
 
-`record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments
-and closes as not planned, `comment` only comments; exit 2 is a refusal with nothing written, 3 a failed `gh` call.
-The untrusted body is searched for the heading line only, so one in a fence counts; a retried `close` comments twice."""
+`record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments and
+closes as not planned, `comment` only comments. Exit 2: refused, nothing written; 3: `gh` failed; 4: `tasks sync` left a
+row. The untrusted body is matched by heading line alone, so one in a fence counts; a retried `close` comments twice."""
 
 import argparse
 import json
@@ -192,6 +192,30 @@ def repository():
     return name
 
 
+def sync_row(number):
+    """Move or delete the issue's task-list row by its new state, through the helper that owns the list; the reason
+    it did not, or None. A child, so this helper still imports nothing of the dispatcher's."""
+    script = Path(__file__).with_name("dispatch_board.py")
+    try:
+        done = subprocess.run([sys.executable, str(script), "tasks", "sync", number], cwd=ROOT, capture_output=True)
+    except OSError as error:
+        return f"could not start: {error}"
+    if done.returncode == 0:
+        return None
+    return done.stderr.decode("utf-8", errors="replace").strip() or f"exited {done.returncode}"
+
+
+class RowNotSynced(Exception):
+    pass
+
+
+def _synced(number):
+    why = sync_row(number)
+    if why is not None:
+        raise RowNotSynced(f"#{number} changed on GitHub but its task-list row did not ({why}); run "
+                           f"py -3.12 .claude/scripts/dispatch_board.py tasks sync {number}")
+
+
 def record(number, question, answer, day):
     line = entry(day, question, answer)
     repo = repository()
@@ -243,6 +267,7 @@ def main(argv=None):
         elif args.command == "unblock":
             label = unblock_label(args.label)
             gh("issue", "edit", number, "--repo", repository(), "--remove-label", label)
+            _synced(number)
         else:
             # The text checked here is the text posted: gh reopening the path could read a file swapped since.
             text = comment_text(args.comment_file, run_directory(args.run))
@@ -256,12 +281,16 @@ def main(argv=None):
                     gh("issue", "close", number, "--repo", repo, "--reason", "not planned")
                 except GhFailure as failure:
                     raise GhFailure(f"close step failed after the comment was posted; a retry posts a second: {failure}")
+                _synced(number)
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
     except GhFailure as failure:
         print(f"gh failed: {failure}", file=sys.stderr)
         return 3
+    except RowNotSynced as stale:
+        print(f"row not synced: {stale}", file=sys.stderr)
+        return 4
     return 0
 
 

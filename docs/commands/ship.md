@@ -322,6 +322,14 @@ frontmatter as well as in the settings, and the harness filer in its frontmatter
 alone: a dispatched run's reads must be named by its own grants, and one they do
 not name is the auto classifier's to refuse.
 
+**A sync pull request has no task-list row**, attended or dispatched. It has
+no issue to key a row by, `/dispatch` reads it from `sync_pr.py list` rather
+than the list, and it lives for minutes. A session that took one with `/ship
+sync` once wrote a row by hand anyway, with a dash in its `#` cell and a
+"done" note left after the merge, and `board` refused the whole list at the
+next night's step 0 (#395); the helper that owns the list has no call that
+writes such a row (`docs/harness/task-list.md`).
+
 ## Step 0: the finished predicate
 
 **Start from the main checkout, on an up-to-date `main`, with no leftover
@@ -1344,16 +1352,16 @@ rather than stopping a chain whose merge is already done. Nothing else removes
 it: a row left behind reads as work still in progress after the PR has landed,
 which is what *In progress* exists not to say. An issue the merge left open, one
 a later pull request of a set closes, is still open work, so its row goes where
-`docs/harness/working-rules.md`, *Issues and the task list*, puts it rather than
-off the list. It reads the branch as those lines left it, since read earlier
+`docs/harness/task-list.md`, *Where a row sits*, puts it rather than off the
+list. It reads the branch as those lines left it, since read earlier
 the branch still stands and the row stays *In progress* naming one about to go:
 `back` waits for line 9's drop, and a branch a refused removal kept keeps its
-row *In progress*, which that table allows while a branch remains. A row
-`tasks start` saved nothing for, one started with `--what` or written by hand,
-is the exception the helper cannot place: its wave is in no cell, so `back`
-refuses, the row stays *In progress* with no branch behind it, and the report
-hands it to the owner to put in its wave, rather than the session guessing one
-(`docs/commands/branch.md`, *Step 5*).
+row *In progress*, which that section allows while a branch remains. A row
+`tasks start` saved nothing for, one started with `--what` or by a hand edit
+from before the helper owned the list, is the exception it cannot place: its
+wave is in no cell, so `back` refuses, the row stays *In progress* with no
+branch behind it, and the report hands it to the owner to put in its wave,
+rather than the session guessing one (`docs/commands/branch.md`, *Step 5*).
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
@@ -1504,7 +1512,10 @@ merge that did not happen. Both writes are skipped, and so is every other:
 `.harness/agent-rules.md`, *Working in a target*, has a session that files
 or closes an issue update the list, so the runbook says the list is written
 nowhere under the token, and an issue the executor files reaches it only
-through the result's `filed`, which the dispatcher places.
+through the result's `filed`, which the dispatcher places. The prose is not
+the only guard: the dispatcher marks each executor's environment, every
+run-less `tasks` write refuses under the mark, and the filing helper, which
+otherwise places the row it files, places none (`docs/harness/task-list.md`).
 
 **The workspace is the worktree the session starts in**, and nothing new
 makes it so: the branch there is clean and holds nothing `origin/main` lacks,

@@ -360,16 +360,14 @@ wave, and no cell says which wave that is. A row a `/dispatch` run
 moved is that run's to end, so the day actions refuse it. `/pr` changes only
 the *State* cell with `tasks state`, and `/ship` step 6 ends the rows with
 `tasks done` or `tasks back` (`docs/commands/ship.md`, *Step 6: the
-teardown*). Work with no issue has no number to key by, so its `owed (not
-filed)` row is still written by hand, and the step spells the five cells of
-`HEADERS` for it, with the branch and worktree sharing `Branch or PR`.
-`row_branch` reads the first name in backticks as the branch, so the branch
-comes first and each name has its own pair: a cell with no backticks, or one
-pair round both names with a comma between them, parses but names no branch,
-and `/dispatch` then leaves what that branch changed out of the row's claim,
-with nothing refused to say so. A row with no issue takes the
-spelling in `docs/harness/working-rules.md`, *Issues and the task list*, and a
-suite case holds the step's wording to `HEADERS` and `OWED`.
+teardown*). Work with no issue has no number to key by, so `tasks start owed`
+keys its `owed (not filed)` row by its branch, and `state` and `done` find it
+by the same `--branch`. It was once written by hand from cells the step
+spelled, and a session that had no issue to start, a sync pull request's,
+wrote a dash in the `#` cell, a row the board refused (#395): the helper
+writes the branch and the worktree each in its own backticks, the shape
+`row_branch` reads, and `back` refuses it, since owed work has no wave to go
+back to. `docs/harness/task-list.md` owns the shape and the events.
 
 **If the session cannot enter a worktree that was created, stop and report
 the path** — this is the other half and it fails the other way. Do
