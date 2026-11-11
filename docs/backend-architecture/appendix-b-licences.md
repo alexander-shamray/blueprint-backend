@@ -69,6 +69,7 @@ identity in words, for the reason the Stryker.NET row gives.
 | `SSH.NET` | MIT | The SSH transport behind Testcontainers' port forwarding — a transitive dependency pinned explicitly: the floor the Testcontainers rows declare resolves to a version carrying GHSA-q939-rpr3-3284 and NU1903 fails the restore. Registered because a pinned transitive is still a pin, not because anything here opens an SSH connection |
 | `Respawn` | MIT | Test database reset |
 | `WireMock.Net` | Apache 2.0 | HTTP stubbing |
+| `Microsoft.AspNetCore.WebUtilities` | Apache 2.0 | A transitive of the row above, pinned explicitly: the floor WireMock.Net reaches it at resolves to a version carrying GHSA-6527-9fp8-r4x6 and NU1902 fails the restore. Test-only, and registered because a pinned transitive is still a pin |
 | `Microsoft.NET.Test.Sdk` | MIT | The test host every test project needs; pinned because a major bump changes discovery |
 | `Microsoft.Extensions.TimeProvider.Testing` | MIT | `FakeTimeProvider` — the clock seam §12.7 requires |
 | `Microsoft.Extensions.DependencyInjection` | MIT | `ServiceCollection` for the registration and behaviour-ordering tests of [§6.2](06-cqrs.md) and [§6.3](06-cqrs.md). A separate identity from the abstractions row above, and not a redundant one: that package is contracts, with no container in it to build |
