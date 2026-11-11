@@ -127,8 +127,10 @@ TODO.md                      optional and gitignored: a link to the user's
                              than the thing it describes. The contract's §6
                              says where it lives and why,
                              .harness/agent-rules.md carries the rule that
-                             keeps it current, and no command, helper or
-                             gate reads it
+                             keeps it current, and
+                             docs/harness/working-rules.md, Issues and the
+                             task list, names the helper that reads and
+                             writes it
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup

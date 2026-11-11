@@ -311,25 +311,16 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
   if it does not belong in the PR being worked on, say so and ask rather
   than decide by deleting.
 - **The task list is `.todo/blueprint-backend.md` in the main checkout's
-  parent directory**, local and never committed, listing open PRs, with
-  the issues each closes, and open issues with no PR; `/branch` adds the
-  *In progress* row and `/ship` step 6 deletes it, and a session under
-  `--dispatched` writes nothing, its dispatcher writing for it
-  (`.claude/commands/dispatch.md`). It lives outside every checkout
-  because Claude Code's isolation refuses a session moved into
-  `.claude/worktrees/` with `EnterWorktree` every path in the main
-  checkout outside that worktree, and admits one that no checkout
-  contains. The permission check still sees a path outside the project:
-  under `acceptEdits` the write prompts, as `docs/harness-boundaries.md`,
-  *Settings self-lock and permission root*, measured, unless the user's
-  own settings list the directory under `additionalDirectories`; auto mode
-  wrote it unprompted when this rule was measured. The main checkout's
-  root may hold `TODO.md`, gitignored, as a link to it for the user's
-  editor; a session writes the file by its own path, never through the
-  link, which the edit-target guard refuses (`docs/harness-boundaries.md`,
-  *The edit-target guard*). When in doubt, rebuild it from
-  `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
-  default of 30 truncates silently.
+  parent directory**, local and never committed. What it holds, where each
+  row sits, who writes it and how it is rebuilt when in doubt are
+  `docs/harness/working-rules.md`'s, *Issues and the task list*. It lives
+  outside every checkout because Claude Code's isolation refuses a session
+  moved into `.claude/worktrees/` with `EnterWorktree` every path in the
+  main checkout outside that worktree, and admits one that no checkout
+  contains. The main checkout's root may hold `TODO.md`, gitignored, as a
+  link to it for the user's editor; nothing writes through the link, which
+  the edit-target guard refuses (`docs/harness-boundaries.md`, *The
+  edit-target guard*).
 
 ## 7. Checklist
 
