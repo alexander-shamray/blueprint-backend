@@ -207,6 +207,10 @@
          the simulator image's tag, which the SimulatorImageTests hold equal,
          so it moves when the Compose mirror's wiremock.net pin does. -->
     <PackageVersion Include="WireMock.Net" Version="2.20.0" />
+    <!-- Transitive of the row above, in SSH.NET's shape: WireMock.Net.Shared reaches it through
+         Microsoft.AspNetCore.Http 2.3.9 at 2.3.0, and every version from 2.3.0 through 2.3.13 carries
+         GHSA-6527-9fp8-r4x6, which NU1902 fails the restore on. -->
+    <PackageVersion Include="Microsoft.AspNetCore.WebUtilities" Version="2.3.14" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
          test resolve from a real container, and the abstractions package the
