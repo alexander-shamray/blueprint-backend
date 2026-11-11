@@ -215,7 +215,8 @@ Then mark each issue's *In progress* row:
 py -3.12 .claude/scripts/dispatch_board.py tasks state <issue> 'PR #<n> open'
 ```
 
-Exit 2 is reported, not a stop, and never routed round by hand. Under
+Owed work: `state owed '…' --branch <b>`. Exit 2 is reported, not a
+stop, and never routed round by hand. Under
 `/ship --dispatched`, skip this write (why: docs/commands/branch.md,
 *Step 5*).
 
