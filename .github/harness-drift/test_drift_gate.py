@@ -396,7 +396,7 @@ class DriftGate(unittest.TestCase):
         # Without its gate or the workflow that runs it, a target stays green and is never checked again.
         for key in ("local", "exclude"):
             for glob in (".github/harness-drift/**", ".github/harness-drift/drift_gate.py",
-                         ".github/workflows/harness-drift.yml", ".github/workflows/*.yml", ".github/**"):
+                         ".github/workflows/gates.yml", ".github/workflows/*.yml", ".github/**"):
                 with self.subTest(key=key, glob=glob), tempfile.TemporaryDirectory() as tmp:
                     tree = Tree(tmp)
                     tree.write_json(".harness/config.json", {**CFG, key: [glob]})

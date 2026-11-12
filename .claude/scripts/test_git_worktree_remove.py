@@ -17,6 +17,8 @@ from pathlib import Path
 from review_helpers import (
     SCRIPTS,
     code_lines,
+    copy_template,
+    fixture_template,
     setUpModule,
     temp_root,
     run_bash,
@@ -27,16 +29,18 @@ REMOVE = SCRIPTS / "git-worktree-remove.sh"
 HOOK = SCRIPTS.parent / "hooks" / "refresh-index.py"
 SHIP = SCRIPTS.parent / "commands" / "ship.md"
 
-# A checkout with origin/main and one /branch worktree at .claude/worktrees/probe
-# holding a tracked file.
-FIXTURE = """
-set -e
+# A checkout with origin/main, built once a module and copied a test, then one /branch worktree at
+# .claude/worktrees/probe holding a tracked file, added in each copy since its links spell absolute paths.
+TEMPLATE = """
 git init -q -b main "$root/origin"
 printf '.claude/worktrees/\\n.claude/cache/\\n' > "$root/origin/.gitignore"
 printf 'kept\\n' > "$root/origin/tracked.txt"
 git -C "$root/origin" add .gitignore tracked.txt
 git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m base
 git clone -q "$root/origin" "$root/checkout"
+"""
+FIXTURE = """
+set -e
 git -C "$root/checkout" worktree add -q --no-track -b feat/probe .claude/worktrees/probe origin/main
 """
 
@@ -100,6 +104,7 @@ class RemoveShape(unittest.TestCase):
         if inside:
             root = f"{root}/{inside}"
             os.mkdir(root)
+        copy_template(self, fixture_template(TEMPLATE, "root"), root)
         made = run_bash(FIXTURE, root=root)
         self.assertEqual(0, made.returncode, made.stderr)
         return root, Path(root)

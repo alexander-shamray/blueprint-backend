@@ -176,11 +176,13 @@ class Reading(unittest.TestCase):
             os.chdir(previous)
 
 
-WORKFLOW = Path(__file__).resolve().parent.parent / "workflows" / "commit-gate.yml"
+WORKFLOW = Path(__file__).resolve().parent.parent / "workflows" / "gates.yml"
 DEPENDABOT_LOGIN = "dependabot[bot]"
 DEPENDABOT_MAKER = ("49699333+dependabot[bot]@users.noreply.github.com", "noreply@github.com")
 HUMAN = "someone@example.com"
-STANDS_DOWN = "if: steps.dependabot.outputs.own != 'true'"
+STANDS_DOWN = "steps.dependabot.outputs.own != 'true'"
+# The take, the judge and the suite: a step of this gate by its id or the directory it runs in.
+OWN_STEP = re.compile(r"(?m)^        (?:id: commit(?:_take)?|working-directory: \.github/commit-gate)$")
 
 
 def find_bash() -> str | None:
@@ -203,7 +205,8 @@ def setUpModule() -> None:
 
 
 def workflow_steps() -> list[str]:
-    text = WORKFLOW.read_text(encoding="utf-8")
+    # The comments between steps dropped, or the one ahead of the next step reads as the end of this one's script.
+    text = re.sub(r"(?m)^      #.*\n", "", WORKFLOW.read_text(encoding="utf-8"))
     return re.split(r"\n(?=      - )", text.split("\n    steps:\n", 1)[1])
 
 
@@ -218,7 +221,7 @@ def run_block(step: str) -> str:
 
 
 class Standing(unittest.TestCase):
-    """The deciding step of commit-gate.yml, run as written against real commits."""
+    """The deciding step of gates.yml, run as written against real commits."""
 
     def setUp(self) -> None:
         self._dir = tempfile.TemporaryDirectory()
@@ -290,7 +293,7 @@ class Standing(unittest.TestCase):
 class WorkflowShape(unittest.TestCase):
     def test_the_job_has_no_condition_so_a_human_push_is_judged(self) -> None:
         head = WORKFLOW.read_text(encoding="utf-8").split("\n    steps:\n", 1)[0]
-        job = head.split("\n  commit-gate:\n", 1)[1]
+        job = head.split("\n  gates:\n", 1)[1]
         self.assertNotRegex(job, r"(?m)^    if:")
 
     def test_the_checkout_runs_first_with_full_history_and_no_condition(self) -> None:
@@ -299,13 +302,24 @@ class WorkflowShape(unittest.TestCase):
         self.assertIn("fetch-depth: 0", first)
         self.assertNotIn("if:", first)
 
-    def test_every_step_after_the_decision_stands_down_with_it(self) -> None:
+    def test_every_step_of_the_gate_after_the_decision_stands_down_with_it(self) -> None:
         steps = workflow_steps()
         at = steps.index(deciding_step())
-        self.assertEqual(at, 1)
-        self.assertGreater(len(steps[at + 1:]), 0)
-        for step in steps[at + 1:]:
-            self.assertRegex(step, r"(?m)^        " + re.escape(STANDS_DOWN) + "$")
+        own = [step for step in steps if OWN_STEP.search(step)]
+        self.assertEqual(3, len(own))
+        for step in own:
+            self.assertGreater(steps.index(step), at)
+            # On the `if:` line, or on the lines a folded `>-` condition continues on.
+            condition = re.search(r"(?m)^        if: (?:>-\n((?:          .+\n?)+)|(.+)$)", step)
+            self.assertIsNotNone(condition)
+            self.assertIn(STANDS_DOWN, condition.group(1) or condition.group(2))
+
+    def test_the_stand_down_is_posted_as_a_pass(self) -> None:
+        # The steps skip, so the check a ruleset requires has to be posted as passing or it never reports.
+        report = next(step for step in workflow_steps() if "id: report" in step)
+        commit_gate = re.search(r"(?m)^          COMMIT_GATE: >-\n((?:            .+\n)+)", report)
+        self.assertIsNotNone(commit_gate)
+        self.assertEqual(2, commit_gate.group(1).count("steps.dependabot.outputs.own == 'true' && 'success' ||"))
 
 
 if __name__ == "__main__":

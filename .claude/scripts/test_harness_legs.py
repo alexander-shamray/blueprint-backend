@@ -220,8 +220,9 @@ class WhatTheDecisionLooksAtTests(unittest.TestCase):
                 self.assertTrue(LEGS.reaches(rel, *self.reach))
 
     def test_every_file_a_suite_reads_off_the_root_is_reached(self) -> None:
-        # The subject is what the suites spell, so a suite that starts reading a file the reach misses fails here
-        # rather than passing on a pull request whose legs skipped. `review_helpers` is read for its suites.
+        # The subject is what the suites spell, so a suite that starts reading a file the reach misses, in a spelling
+        # `SPELT` knows, fails here rather than passing on a pull request whose legs skipped. A parents walk from another
+        # path, a name held in a variable and a path run as a string are not seen. `review_helpers` is read for its suites.
         sources = [*SCRIPTS.glob("test_*.py"), SCRIPTS / "review_helpers.py"]
         spelt = {rel for source in sources for rel in _spelt(source.read_text(encoding="utf-8"))}
         self.assertLessEqual({".claude/settings.json", ".harness/config.json", "docs/harness-boundaries.md"}, spelt,
