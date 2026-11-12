@@ -301,7 +301,8 @@ public static class AssistantEndpoints
             : null;
     }
 
-    private static readonly string LocaleWhy = $"A locale is a tag of at most {MaxLocaleLength} characters on one line.";
+    private static readonly string LocaleWhy =
+        $"A locale is a tag of at most {MaxLocaleLength} characters on one line.";
 
     // The open route and a turn both carry a locale, and a turn's replaces the conversation's for the turns after it.
     private static bool BadLocale(string locale) => locale.Length > MaxLocaleLength || HasControl(locale);
@@ -321,7 +322,8 @@ public static class AssistantEndpoints
     // IsControl misses the Unicode line and paragraph separators, which a model reads as a line break all the same.
     private static bool HasControl(string text) =>
         text.Any(c => char.IsControl(c) ||
-            CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator);
+            CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator
+                or UnicodeCategory.ParagraphSeparator);
 
     // §10.5's validation row: a field-keyed errors member, the shape Common.Web writes for a ValidationException.
     private static ValidationProblem NotValid(string field, string why) =>
