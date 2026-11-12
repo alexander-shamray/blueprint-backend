@@ -43,7 +43,10 @@ def unmatrixed(fetch: Fetch, repo: str, root: str, matrix: list[str]) -> list[st
     The owner's package listing answers a job's token with HTTP 400 (ADR-200), so only a person's token reads it.
     """
     listed = {package["name"] for package in paged(fetch, f"{root}?package_type=container")
-              if (package.get("repository") or {}).get("full_name") == repo}
+              if (package.get("repository") or {}).get("full_name", "").casefold() == repo.casefold()}
+    if not listed & set(matrix):
+        raise LookupError(f"the listing holds none of the matrix's packages for {repo}: it was refused, "
+                          "emptied by a token without read:packages, or filtered by another spelling of the name")
     return sorted(listed - set(matrix))
 
 
@@ -126,14 +129,19 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
          now: datetime | None = None, delete: Fetch | None = None, packages: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", help="owner/name; the origin remote's by default")
-    parser.add_argument("--delete", action="store_true", help="delete what the report names")
-    parser.add_argument("--unmatrixed", action="store_true",
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--delete", action="store_true", help="delete what the report names")
+    mode.add_argument("--unmatrixed", action="store_true",
                         help="only list the packages the image matrix dropped; needs a person's token, not a job's")
     args = parser.parse_args(argv)
     repo = args.repo or origin_repo()
     root = package_root(fetch, repo)
     if args.unmatrixed:
-        dropped = unmatrixed(fetch, repo, root, packages or image_packages(repo))
+        try:
+            dropped = unmatrixed(fetch, repo, root, packages or image_packages(repo))
+        except LookupError as error:
+            print(f"nothing judged, a read was refused: {error}")
+            return 2
         for package in dropped:
             print(f"{package}: in no image leg of ci.yml, so no run prunes it")
         print(f"{len(dropped):,} packages the matrix dropped")
