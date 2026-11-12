@@ -131,7 +131,11 @@ def repo_latency(fetch: Fetch, repo: str, window: Window, size: int = SAMPLE, st
         runs = runs_between(fetch, repo, window.start, window.end, workflow=workflow["id"])
         if runs:
             weeks = weekly(runs)
-            workflows[workflow["name"]] = {
+            # Two workflows may share a `name:`; the path tells them apart rather than one replacing the other.
+            label = workflow["name"]
+            if label in workflows:
+                label = f"{label} ({workflow['path']})"
+            workflows[label] = {
                 "runs": len(runs), "weekly": {week: summary(v) for week, v in sorted(weeks.items())},
                 **sampled(fetch, repo, runs, size, steps, workers)}
     return {"repo": repo, "window": {"name": window.name, "first": window.first.isoformat(),

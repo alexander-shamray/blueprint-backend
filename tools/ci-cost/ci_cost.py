@@ -189,7 +189,7 @@ def stamp(moment: datetime) -> str:
 def runs_between(fetch: Fetch, repo: str, start: datetime, end: datetime, workflow: int | None = None) -> list[dict]:
     """The runs created in [start, end), halving the span until each query fits under SEARCH_CAP.
 
-    One workflow's listing has its own cap, which is how a month of a busy repository is read whole.
+    A workflow's listing groups its runs without the caller sorting them, and halves the same way.
     """
     scope = f"workflows/{workflow}/runs" if workflow else "runs"
     query = f"repos/{repo}/actions/{scope}?created={stamp(start)}..{stamp(end - timedelta(seconds=1))}"
@@ -542,7 +542,8 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = 
     parser.add_argument("--repo", action="append", default=[],
                         help="owner/name; the origin remote's by default, and repeatable with --latency")
     parser.add_argument("--window", action="append", default=[],
-                        help="NAME=FIRST:LAST, both days inclusive and in UTC; the last 14 full days by default")
+                        help="NAME=FIRST:LAST, both days inclusive and in UTC; the last 14 full days by default, "
+                             "30 with --latency")
     parser.add_argument("--plan", choices=ALLOWANCES, default="Free")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--latency", action="store_true",
@@ -553,6 +554,8 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = 
     args = parser.parse_args(argv)
     if not args.latency and (args.day or args.cap or len(args.repo) > 1):
         parser.error("--day, --cap and a second --repo belong to --latency")
+    if any(cap < 1 for cap in args.cap):
+        parser.error("--cap is a count of concurrent jobs, so 1 or more")
     today = today or datetime.now(timezone.utc).date()
     try:
         windows = [window_of(text, i) for i, text in enumerate(args.window)]

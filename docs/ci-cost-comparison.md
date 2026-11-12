@@ -20,7 +20,7 @@ record of its day, per the contract's §2, and none is kept current.
 | Left out of Window B | #1436, closed as not planned: a scheduled `realm.yml` run bills nothing while `REALM_CHECK_SCHEDULED` is unset, so the change saves no minute; #1438, whose adopt-or-not decision is priced from this comparison's scenarios, so Window B cannot wait for it |
 | Decision informed | #1439, repository visibility and the GitHub plan |
 | Command | `py -3.12 tools/ci-cost/ci_cost.py --window A=<first>:<last> --window B=<first>:<last>` |
-| Latency | not priced here: `--latency` reports how long a pull request waits, in the same tables' shape, and the README owns what it measures |
+| Latency | not priced here: `--latency` reports how long a pull request waits, and the README owns what it measures |
 
 **The repository is public, and a public repository pays nothing for
 standard runners.** Every price below is therefore the list price the same

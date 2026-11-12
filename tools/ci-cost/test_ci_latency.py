@@ -43,7 +43,8 @@ class WorkflowApi(FakeApi):
 
     def __init__(self, runs, jobs, workflows=((1, "CI"),), **kwargs):
         super().__init__(runs, jobs, **kwargs)
-        self.workflows = [{"id": number, "name": name} for number, name in workflows]
+        self.workflows = [{"id": number, "name": name, "path": f".github/workflows/{number}.yml"}
+                          for number, name in workflows]
 
     def __call__(self, path):
         if "actions/workflows?" in path:
@@ -131,6 +132,12 @@ class RepoLatency(unittest.TestCase):
         self.assertEqual(sorted(result["workflows"]), ["CI", "Helm"])
         self.assertEqual(result["workflows"]["CI"]["weekly"]["2026-11-09"], {"n": 1, "p50": 540.0, "p90": 540.0})
         self.assertTrue(any("workflows/1/runs?" in path for path in api.paths))
+
+    def test_two_workflows_sharing_a_name_are_both_reported(self):
+        runs = [run(1, moment(1), moment(1), moment(1, 9)), run(2, moment(2), moment(2), moment(2, 4), 2)]
+        api = WorkflowApi(runs, {}, workflows=((1, "CI"), (2, "CI")))
+        result = ci_latency.repo_latency(api, REPO, WINDOW, workers=1)
+        self.assertEqual(sorted(result["workflows"]), ["CI", "CI (.github/workflows/2.yml)"])
 
     def test_a_workflow_past_the_search_cap_is_halved_like_the_whole_listing(self):
         runs = [run(n, moment(n % 24, n % 60, day=3 + n % 7), moment(1), moment(2)) for n in range(1, 31)]
@@ -221,6 +228,11 @@ class Report(unittest.TestCase):
         body = json.loads(self.main("--window", "A=2026-11-02:2026-11-12", "--day", "2026-11-10", "--json"))
         self.assertEqual(body["day"]["jobs"], 1)
         self.assertIn("CI", body["windows"][0]["workflows"])
+
+    def test_a_cap_below_one_is_refused(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            ci_cost.main(["--latency", "--repo", REPO, "--day", "2026-11-10", "--cap", "0"], fetch=self.api(),
+                         today=date(2026, 11, 12))
 
     def test_the_latency_flags_are_refused_without_latency(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
