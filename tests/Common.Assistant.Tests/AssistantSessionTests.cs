@@ -56,6 +56,36 @@ public sealed class AssistantSessionTests
         summary.Caller.ShouldBe(Operator);
         summary.ConversationId.ShouldBe(session.Id);
         summary.Usage.ShouldBe(new Usage(100, 7, 40));
+        summary.Unreported.ShouldBe(Usage.None, "the provider reported this round");
+    }
+
+    [Fact]
+    public async Task A_round_cancelled_before_its_usage_report_is_estimated_for_the_host_and_not_the_client()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedProvider provider = new ScriptedProvider().Round((_, ct) => ScriptedProvider.Hang("Look", started, ct));
+        TaskCompletionSource<TurnSummary> learnt = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        AssistantLimits limits = new();
+        using AssistantCore core = new(
+            provider,
+            [],
+            ToolPolicy.ReadOnly,
+            new PlantedRedactor(),
+            "Host rules.",
+            limits,
+            TimeProvider.System,
+            learnt.SetResult);
+        AssistantSession session = Open(core);
+
+        session.TryStart(Given.Turn("hello")).ShouldBeTrue();
+        await started.Task.WaitAsync(TestContext.Current.CancellationToken);
+        session.Cancel();
+        TurnSummary summary = await learnt.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        summary.Reason.ShouldBe(TurnEndReason.Cancelled);
+        summary.Usage.ShouldBe(Usage.None, "nothing was reported, and the client's event carries what was");
+        summary.Unreported.Input.ShouldBeGreaterThan(core.System.Length / 4, "the request carried the system text");
+        summary.Unreported.Output.ShouldBe(limits.MaxOutputTokens);
     }
 
     [Fact]
