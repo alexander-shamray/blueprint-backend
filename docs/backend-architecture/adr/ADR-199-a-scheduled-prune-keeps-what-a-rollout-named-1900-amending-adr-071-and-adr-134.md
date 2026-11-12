@@ -62,6 +62,11 @@ keeps them, once the prune is opted in.
 [ADR-200](ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md)**,
 which takes the packages from the image matrix.
 
+**Amended by
+[ADR-201](ADR-201-the-rollout-tags-the-digest-it-verified-so-the-prune-keeps-what-a-release-pins-1915-amending-adr-109-and-adr-199.md)**,
+whose rollout tags the digest it verified, so a rebuilt commit tag no longer
+leaves the digest of a release `deploy.yml` makes from then on to the prune.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
