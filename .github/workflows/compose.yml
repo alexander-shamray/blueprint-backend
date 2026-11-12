@@ -46,11 +46,11 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # Every .NET image builds with its own restore and publish, from the layer
-    # cache the runner keeps when it has one and from nothing when it has
-    # not, and not from a pulled `main`: this job tests the change's own
-    # sources (ADR-134). 45 is headroom for a cold cache and registry, not a
-    # sum of the images, so a new service does not move it.
+    # Every .NET image builds with its own restore and publish, from the
+    # repository's Actions cache (type=gha) where a scope holds its layers and
+    # from nothing where it does not, and not from a pulled `main`: this job
+    # tests the change's own sources (ADR-134). 45 is headroom for a cold cache
+    # and registry, not a sum of the images, so a new service does not move it.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
