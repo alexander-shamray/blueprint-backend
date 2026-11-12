@@ -100,6 +100,16 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_round_broken_after_the_provider_started_it_is_estimated()
+    {
+        TurnSummary summary = await SummaryAsync(new ScriptedProvider()
+            .Round((_, _) => StartedThenBroken()));
+
+        summary.Reason.ShouldBe(TurnEndReason.Error);
+        summary.Unreported.Output.ShouldBe(new AssistantLimits().MaxOutputTokens);
+    }
+
+    [Fact]
     public async Task A_round_that_ended_whole_without_a_report_is_not_estimated()
     {
         TurnSummary summary = await SummaryAsync(new ScriptedProvider()
@@ -107,6 +117,14 @@ public sealed class AssistantSessionTests
 
         summary.Reason.ShouldBe(TurnEndReason.Done);
         summary.Unreported.ShouldBe(Usage.None);
+    }
+
+    private static async IAsyncEnumerable<ProviderEvent> StartedThenBroken()
+    {
+        yield return new RoundStarted();
+        await Task.Yield();
+
+        throw new IOException("The provider's stream ended before the reply was complete.");
     }
 
     private static async Task<TurnSummary> SummaryAsync(ScriptedProvider provider)

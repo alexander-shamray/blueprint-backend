@@ -108,6 +108,26 @@ public sealed class StreamTests
         await Should.ThrowAsync<IOException>(() => Provider(http).Played(Given.Request(new UserMessage("hello"))));
     }
 
+    // The round is billed from message_start, so the core must hear of it before any block a break can cut short.
+    [Fact]
+    public async Task A_round_broken_inside_its_first_tool_call_has_already_said_it_started()
+    {
+        FakeHttp http = new FakeHttp().Stream("broken-in-tool");
+        List<ProviderEvent> events = [];
+
+        await Should.ThrowAsync<IOException>(async () =>
+        {
+            await foreach (ProviderEvent value in Provider(http).TurnAsync(
+                Given.Request(new UserMessage("open the logs")),
+                CancellationToken.None))
+            {
+                events.Add(value);
+            }
+        });
+
+        events.ShouldBe([new RoundStarted()]);
+    }
+
     [Fact]
     public async Task A_reply_stopped_at_the_output_limit_fails_the_round_after_its_text_rather_than_ending_done()
     {

@@ -20,7 +20,10 @@ the host's other 429s. The `…/events` route takes a limiter policy of its own,
 default of this host's, where the core's `AssistantLimits.MaxCallers` stays for
 a host with one caller. `Common.Assistant` ships under a new `Version`, as
 [ADR-150](ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)
-requires, a minor one since `TurnSummary` gains parameters.
+requires, a minor one since `TurnSummary` gains parameters, and so does
+`Common.Assistant.Anthropic`, whose stream now yields `RoundStarted` once the
+provider has accepted a round, which is what tells a broken round from a refused
+one.
 **Why.**
 [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 made the limit on what a customer can spend the host's, and its one limit was
