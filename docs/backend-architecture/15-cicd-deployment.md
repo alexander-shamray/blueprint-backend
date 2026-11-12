@@ -50,8 +50,8 @@ malformed or that a step output is never produced, and the signing steps cannot
 run before the first push to `main`. What `actionlint` reads and claims is
 [`.github/workflow-lint/`](../../.github/workflow-lint/README.md)'s. The build
 and test stages do not wait for any of the four sub-minute gates, which would
-queue them twice; a red gate fails the run and holds back every job after the
-test stages
+queue them twice; a red gate fails the run and holds back `stage-gate` and
+every job that needs it
 ([ADR-202](adr/ADR-202-the-build-and-test-stages-start-beside-the-sub-minute-gates-1954-amending-15-1.md)).
 
 > **The diagram is the target pipeline, and this repository runs the left half
