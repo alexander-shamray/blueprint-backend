@@ -70,7 +70,7 @@ public sealed class AssistantSpend : IDisposable
         }
     }
 
-    /// <summary>Adds a turn's tokens, cached input included, so the count errs above the provider's bill.</summary>
+    /// <summary>Adds a turn's tokens, each kind counted whole, whatever the provider's rate for a cached one.</summary>
     public void Add(string customer, Usage usage)
     {
         long tokens = usage.Input + usage.Output + usage.Cached;

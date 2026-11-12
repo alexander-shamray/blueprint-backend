@@ -42,26 +42,28 @@ for up to `AssistantEndpoints.StreamLifetime`.
 is reached finish past it: the cap bounds what a customer starts, and the
 overshoot is at most the turns they have running, each bounded as above. The
 host counts a turn just after its conversation reads idle, so a turn started in
-that moment is not refused. Cached input counts as whole tokens, so the count
-reads above the provider's bill. A provider reports a round's usage only as it
-ends, so a round a customer cancels, or a stream that breaks after the provider
-began answering, is counted at the core's estimate, its input from the size of
-what was sent and its output at `AssistantLimits.MaxOutputTokens`: starting and
-cancelling turns spends the budget too, and a cancel costs a customer the
-round's bound. A round the provider refuses before answering, in an outage or
-for a revoked key, bills nothing and is not counted. The client's `turn_ended`
-event still carries only what the provider reported. A restart, which every
-rollout is under the release's `Recreate`, forgets the day's counts, as it
-forgets the conversations. Once the host's budget is spent the assistant refuses
-every customer until midnight UTC, so enough accounts can deny it to everyone
-for the rest of the day: availability is traded for a bounded bill on purpose.
-The counts are keyed by the customer's id, which `docs/personal-data.md`
-records. A larger caller limit lets the release's one replica hold more
-conversations than its chart's memory limit was sized for at their worst, each
-at the context budget. A turn parked on a client tool call the client never
-answers still holds its caller's place for `AssistantLimits.ClientToolTimeout` a
-round, and ending it early is not decided here. The stream's refusal shares the
-limiter's code, since a client backs off from both alike.
+that moment is not refused. Every token counts whole, though the provider bills
+a cache read below an input token and a cache write above one, so the count is
+near the bill rather than equal to it. A provider reports a round's usage only
+as it ends, so a round a customer cancels, or a stream that breaks after the
+provider began answering, is counted at the core's estimate, its input from the
+size of what was sent and its output at `AssistantLimits.MaxOutputTokens`:
+starting and cancelling turns spends the budget too, and a cancel costs a
+customer the round's bound. A round the provider refuses before answering, in an
+outage or for a revoked key, bills nothing and is not counted. The client's
+`turn_ended` event still carries only what the provider reported. A restart,
+which every rollout is under the release's `Recreate`, forgets the day's counts,
+as it forgets the conversations. Once the host's budget is spent the assistant
+refuses every customer until midnight UTC, so enough accounts can deny it to
+everyone for the rest of the day: availability is traded for a bounded bill on
+purpose. The counts are keyed by the customer's id, which
+`docs/personal-data.md` records. A larger caller limit lets the release's one
+replica hold more conversations than its chart's memory limit was sized for at
+their worst, each at the context budget. A turn parked on a client tool call the
+client never answers still holds its caller's place for
+`AssistantLimits.ClientToolTimeout` a round, and ending it early is not decided
+here. The stream's refusal shares the limiter's code, since a client backs off
+from both alike.
 [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 and
 [ADR-156](ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-1484-1485.md)
