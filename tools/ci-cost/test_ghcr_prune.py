@@ -271,6 +271,35 @@ class Main(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("0 packages the matrix dropped", out)
 
+    def listing_fetch(self, listing):
+        fetch = self.fetch
+        return lambda path: (listing if "package_type=container" in path and "page=1" in path else []
+                             if "package_type=container" in path else fetch(path))
+
+    def test_unmatrixed_matches_the_repository_whatever_its_case(self):
+        self.fetch = self.listing_fetch([{"name": "repo/pkg", "repository": {"full_name": REPO.upper()}},
+                                         {"name": "repo/old", "repository": {"full_name": REPO.upper()}}])
+        code, out = self.run_main("--unmatrixed")
+        self.assertEqual(code, 1)
+        self.assertIn("repo/old: in no image leg", out)
+
+    def test_unmatrixed_with_none_of_the_matrix_s_packages_listed_is_refused_not_clean(self):
+        self.fetch = self.listing_fetch([{"name": "other/img", "repository": {"full_name": "owner/other"}}])
+        code, out = self.run_main("--unmatrixed")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing judged", out)
+        self.assertNotIn("0 packages the matrix dropped", out)
+
+    def test_unmatrixed_with_a_refused_listing_says_nothing_was_judged(self):
+        code, out = self.run_main("--unmatrixed")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing judged", out)
+
+    def test_delete_and_unmatrixed_are_alternatives(self):
+        with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
+            self.run_main("--delete", "--unmatrixed")
+        self.assertIn("not allowed with", err.getvalue())
+
     def test_a_run_deletes_no_more_than_the_cap(self):
         self.versions = [version(f"v{n}") for n in range(ghcr_prune.MAX_DELETES + 3)]
         self.run_main("--delete")
