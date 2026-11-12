@@ -280,7 +280,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         fields = re.compile(r"--json\s+([\w,]+)")
         helper = fields.search((SCRIPTS / "pr-closure-input.sh").read_text(encoding="utf-8"))
         workflow = fields.search(
-            (SCRIPTS.parent.parent / ".github" / "workflows" / "closure-gate.yml").read_text(encoding="utf-8")
+            (SCRIPTS.parent.parent / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
         )
         self.assertIsNotNone(helper)
         self.assertIsNotNone(workflow)

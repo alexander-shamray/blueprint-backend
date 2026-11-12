@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-The README beside this file owns the argument; the invocation is in closure-gate.yml and `/pr`.
+The README beside this file owns the argument; the invocation is in gates.yml and `/pr`.
 """
 
 from __future__ import annotations
