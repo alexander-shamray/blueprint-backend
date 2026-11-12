@@ -740,6 +740,7 @@ def _check_rollout(workflow_text: str, deploy_text: str) -> list[str]:
             ("--certificate-identity", "given an identity"),
             ("--certificate-oidc-issuer", "given an issuer"),
             ("verified-digest", "reading the digest it verified"),
+            ("imagetools create", "recording that digest under a tag the prune keeps (ADR-201)"),
             ("--source-ref refs/heads/main", "pinning the provenance to main"),
         ):
             if needle not in text:

@@ -95,6 +95,12 @@ class Plan(unittest.TestCase):
         versions = image_family("release", tags=["v1.2.3"]) + newer_images()
         self.assertEqual(self.going(versions, Registry("release")), set())
 
+    def test_a_digest_the_rollout_recorded_stays_after_a_rebuild_moves_its_commit_tag(self):
+        """ADR-201: the rebuilt bytes took the commit tag, and the rollout's own tag keeps what a release pins."""
+        versions = (image_family("pinned", tags=["rollout-42-1"]) + image_family("rebuilt", tags=[commit("pinned")])
+                    + newer_images())
+        self.assertEqual(self.going(versions, Registry("pinned", "rebuilt"), {commit("pinned")}), set())
+
     def test_only_the_newest_images_outlast_the_window(self):
         count = ghcr_prune.KEEP_NEWEST + 2
         versions = [version(f"i{n}", [commit(f"i{n}")], f"2026-09-{n + 1:02d}T00:00:00Z") for n in range(count)]
@@ -158,6 +164,15 @@ class RolledTags(unittest.TestCase):
                             workflow.read_text(encoding="utf-8"))
         self.assertIsNotNone(written, "deploy.yml's run-name no longer names the workload and the tag")
         self.assertIsNotNone(ghcr_prune.ROLLOUT_TITLE.fullmatch(written[1].format("catalog-api", "abc")))
+
+    def test_deploy_yml_records_a_tag_this_keeps(self):
+        # ADR-201: a record shaped like a commit or a referrers tag would protect nothing.
+        workflow = Path(__file__).parents[2] / ".github" / "workflows" / "deploy.yml"
+        written = re.search(r"RECORD: (\S*)\$\{\{ github\.run_id \}\}(\S*)\$\{\{ github\.run_attempt \}\}\s*$",
+                            workflow.read_text(encoding="utf-8"), re.MULTILINE)
+        self.assertIsNotNone(written, "deploy.yml no longer records a tag of the run's own on what it verified")
+        recorded = version("pinned", [f"{written[1]}42737{written[2]}1"])
+        self.assertEqual(ghcr_prune.kept_for_themselves([recorded], set(), NOW), [recorded])
 
 
 class ImagePackages(unittest.TestCase):
