@@ -34,6 +34,31 @@ public sealed class AssistantSessionTests
         core.Open(Operator, Given.Open(locale, clientTools)).ShouldNotBeNull();
 
     [Fact]
+    public async Task The_host_learns_each_turn_s_usage_and_whose_turn_it_was()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta("Hi."), new UsageReport(new Usage(100, 7, 40)), new RoundEnd(ProviderStop.Done));
+        TaskCompletionSource<TurnSummary> learnt = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using AssistantCore core = new(
+            provider,
+            [],
+            ToolPolicy.ReadOnly,
+            new PlantedRedactor(),
+            "Host rules.",
+            new AssistantLimits(),
+            TimeProvider.System,
+            learnt.SetResult);
+        AssistantSession session = Open(core);
+
+        session.TryStart(Given.Turn("hello")).ShouldBeTrue();
+        TurnSummary summary = await learnt.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        summary.Caller.ShouldBe(Operator);
+        summary.ConversationId.ShouldBe(session.Id);
+        summary.Usage.ShouldBe(new Usage(100, 7, 40));
+    }
+
+    [Fact]
     public async Task Text_is_relayed_as_it_arrives_and_the_turn_ends_done()
     {
         ScriptedProvider provider = new ScriptedProvider()
