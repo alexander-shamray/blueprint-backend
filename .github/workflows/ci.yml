@@ -42,13 +42,11 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # Ahead of the build, not after it (§15.1). The gate reads
-  # Directory.Packages.props, Appendix B and every .csproj, .props and .targets
-  # as text, so it needs neither a restore nor an SDK — which is why it can run
-  # here. The project files are in the subject because central pinning is a
-  # convention, and a project file can still restore a package
-  # Directory.Packages.props never mentions. Scanning that sits downstream of a
-  # build is scanning that a build failure skips.
+  # Beside the build, never after it (§15.1): it reads Directory.Packages.props,
+  # Appendix B and every .csproj, .props and .targets as text, so it needs no
+  # restore and no SDK. The project files are in the subject because a project
+  # file can still restore a package Directory.Packages.props never mentions.
+  # Scanning downstream of a build is scanning that a build failure skips.
 
   # This is §15.1's "SCA + secret scan" node, both halves. They share a job
   # because they share every property it is arranged around: stdlib Python over
@@ -204,14 +202,11 @@ jobs:
         working-directory: .github/coverage
         run: python -m unittest
 
-      # The output gate's suite lands here for the coverage reporter's reason
-      # and splits from its gate for the one reason neither of those has: the
-      # gate reads what a build left behind, so it cannot run until the build
-      # job has built something, while its suite builds every tree it walks and
-      # needs no SDK at all. Splitting them costs a job boundary and buys the
-      # suite a failure ahead of the fork — which matters most for the tests
-      # that read this checkout rather than a fixture, because those are the
-      # ones that go red when the gate stops looking at a source tree.
+      # The output gate's suite runs here, apart from its gate: the gate reads
+      # what a build left behind, so it waits on one, while its suite builds
+      # every tree it walks and needs no SDK. The split buys the suite a failure
+      # that waits on no build, which matters most for its tests that read this
+      # checkout, the ones that go red when the gate stops looking at a tree.
       - name: Test the output gate
         working-directory: .github/output-gate
         run: python -m unittest
@@ -373,14 +368,13 @@ jobs:
   # renders into a service that does not build, with every one of those tests
   # green.
 
-  # A separate job rather than a step added to `scaffold`, and that is the
-  # design. The scaffold job's value is that it needs no restore and no SDK —
-  # the property §15.1 relies on to put the licence gate ahead of the build —
-  # and adding .NET to it would spend that on every run. This one runs in
-  # parallel with `build`. It gates nothing, for the reason the job above
+  # A separate job rather than a step added to `scaffold`: that job needs no
+  # restore and no SDK, the property §15.1 relies on to keep the licence gate
+  # off the build's path, and adding .NET to it would spend that on every run.
+  # This one runs beside `build` and gates nothing, for the reason the job above
   # gives: a broken scaffold does not make the solution wrong.
   scaffold-build:
-    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
+    needs: changes
     # Nothing requires it, so it skips whole, as edit-target-guard does.
     if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-latest
@@ -690,18 +684,17 @@ jobs:
       - name: The source matches .editorconfig
         run: dotnet format whitespace --folder --verify-no-changes
 
-  # The four checks that answer in under a minute gate the three jobs that bill
-  # minutes: `build`, `integration` and `scaffold-build`. A whitespace or
-  # workflow-syntax error is known in seconds. No run-wide cancel: it hides
-  # every failure but the first. `workflow-lint` downloads actionlint, so an
-  # outage of that download holds the three back.
+  # The four checks that answer in under a minute run beside `build`,
+  # `integration` and `scaffold-build` rather than ahead of them, and
+  # `stage-gate` needs all four, so a red one still holds back every job that
+  # needs it (ADR-202).
 
   # Each step of `build`, `integration` and `stage-gate` asks `changes` whether a
   # stage reads this change, but for those on `failure()` or `always()`, which run
   # only behind a step that ran. The jobs carry no `if:` (`pipeline-gate code`):
   # skipped steps pass, so the check keeps its name and `needs:` still run.
   build:
-    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
+    needs: changes
     runs-on: ubuntu-latest
     # Forty green runs before 2026-10-09 took at most 5.4 minutes here and 6.2
     # in the slowest integration shard, so 30 fails a hanging test in half an
@@ -890,7 +883,7 @@ jobs:
   integration:
     # Unnamed, a leg is labelled with every matrix value, `selects` included.
     name: integration (${{ matrix.shard }})
-    needs: [changes, licence-gate, pipeline-gate, format, workflow-lint]
+    needs: changes
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
@@ -1024,8 +1017,7 @@ jobs:
   # The grant to comment, in a job with no checkout: the shards run the branch's
   # tests and hold none (ADR-197). The artifacts are the record, so a fork's token,
   # which cannot comment, or a missed comment fails no run the shards passed. A red
-  # shard's sighting is still a sighting, and a shard the gates skipped wrote nothing,
-  # as a shard `changes` skipped did not.
+  # shard's sighting is still a sighting, and a shard `changes` skipped wrote nothing.
   integration-report:
     needs: [changes, integration]
     if: ${{ !cancelled() && needs.integration.result != 'skipped' && needs.changes.outputs.code != 'false' }}
@@ -1087,7 +1079,7 @@ jobs:
   # nothing to count, and a second red job would say the gate broke when the
   # suite did.
   stage-gate:
-    needs: [changes, build, integration]
+    needs: [changes, build, integration, licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

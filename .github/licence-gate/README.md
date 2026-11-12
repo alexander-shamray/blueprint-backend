@@ -37,8 +37,8 @@ uncleared", for the reason under *What it does not claim*.
   Appendix B names one, is a different claim and not this gate's.
 
 Everything it reads is text, so nothing needs restoring first, and that is
-what lets [§15.1](../../docs/backend-architecture/15-cicd-deployment.md) put
-it ahead of the build.
+what lets [§15.1](../../docs/backend-architecture/15-cicd-deployment.md) keep
+it off the build's path: it runs beside the build, never downstream of it.
 
 ## What it refuses
 
@@ -84,4 +84,4 @@ it ahead of the build.
 ## How it runs
 
 The `licence-gate` job in [`ci.yml`](../workflows/ci.yml) tests it and then
-runs it, after the secret scan and before the build.
+runs it, after the secret scan and beside the build.

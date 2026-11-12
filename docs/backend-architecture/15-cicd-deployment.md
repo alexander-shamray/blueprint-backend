@@ -5,7 +5,8 @@
 ```mermaid
 graph LR
     PR[Pull request] --> SEC[SCA + secret scan]
-    SEC --> K{What changed?}
+    PR --> K{What changed?}
+    SEC --> IMG
     K -->|source| B[Build + analyse]
     B --> UT[Unit tests]
     B --> IT[Integration tests<br/>Testcontainers]
@@ -20,13 +21,13 @@ graph LR
     APP --> PRD[Deploy: production<br/>canary]
 ```
 
-**Scanning runs before the fork, not after the build.** Downstream of the
+**Scanning runs beside the fork, never after the build.** Downstream of the
 image build, it would put `deploy/**` — the directory most likely to receive a
 pasted credential — on the only path that skipped it. Neither half needs a
 build to run: the secret scan reads the working tree, and the licence gate
 reads `Directory.Packages.props` and every `.csproj`, `.props` and `.targets`
 against [Appendix B](appendix-b-licences.md) as text. Cheapest and least
-dependent goes first.
+dependent waits on nothing.
 
 **That reach is also why this seat is not an argument for central pinning.**
 The project files are in the gate's subject precisely because central pinning
@@ -43,11 +44,15 @@ added on one branch and merged on another is invisible to every diff scan
 downstream of it and visible to this one on the next pull request that touches
 anything.
 
-**The workflows are linted beside those gates, and the long jobs wait on
-it.** The gates read them as text, which cannot say an expression is malformed
-or that a step output is never produced, and the signing steps cannot run
-before the first push to `main`. What `actionlint` reads and claims is
-[`.github/workflow-lint/`](../../.github/workflow-lint/README.md)'s.
+**The workflows are linted beside those gates, and the long jobs start beside
+them.** The gates read them as text, which cannot say an expression is
+malformed or that a step output is never produced, and the signing steps cannot
+run before the first push to `main`. What `actionlint` reads and claims is
+[`.github/workflow-lint/`](../../.github/workflow-lint/README.md)'s. The build
+and test stages do not wait for any of the four sub-minute gates, which would
+queue them twice; a red gate fails the run and holds back every job after the
+test stages
+([ADR-202](adr/ADR-202-the-build-and-test-stages-start-beside-the-sub-minute-gates-1954-amending-15-1.md)).
 
 > **The diagram is the target pipeline, and this repository runs the left half
 > of it.** Everything up to and including the image build is live: both

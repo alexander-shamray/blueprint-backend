@@ -153,7 +153,7 @@ Directory.Packages.props     central package management, exact pins
 Platform.slnx                the solution, and the only list of its projects
 coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .editorconfig                house style; a build input, not a hint
-.github/workflows/ci.yml     every gate tested and then run, then
+.github/workflows/ci.yml     every gate tested and then run, beside
                              restore/build/test in three stages and the
                              coverage report — plus `scaffold-build`, which
                              renders a service in each mode, COMPILES it and
@@ -301,8 +301,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .github/workflow-lint/       the actionlint check over .github/workflows/ — a
                              README that owns its claim, and the fixture the
                              job requires to fail. Laid out like a gate and
-                             not one: the fixture is its case, though the
-                             long jobs in ci.yml wait on the job
+                             not one: the fixture is its case, though
+                             `stage-gate` in ci.yml waits on the job
 .github/coverage/            the domain-coverage reporter, laid out like a
                              gate — script, suite, README — and not one: it
                              reports and never fails on a figure
