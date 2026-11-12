@@ -27,6 +27,13 @@ and step 6, with nothing comparing them: a check added only to the ruleset is
 still enforced by GitHub, and one removed only from it is still waited for by
 `/ship`.
 
+**Amended by
+[ADR-203](ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md)**:
+the checks the ruleset requires and step 6 waits on are the list
+`docs/harness-local.md` *Ship checks* names, no longer six; where this record
+and ADR-155's note on it count six, read that list. This record is otherwise
+unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
