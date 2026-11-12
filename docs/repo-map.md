@@ -153,7 +153,7 @@ Directory.Packages.props     central package management, exact pins
 Platform.slnx                the solution, and the only list of its projects
 coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .editorconfig                house style; a build input, not a hint
-.github/workflows/ci.yml     every gate tested and then run, beside
+.github/workflows/ci.yml     the text gates tested and then run beside
                              restore/build/test in three stages and the
                              coverage report — plus `scaffold-build`, which
                              renders a service in each mode, COMPILES it and
