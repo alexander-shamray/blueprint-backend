@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, setUpModule, run_bash, code_lines
+from review_helpers import SCRIPTS, code_lines, copy_template, fixture_template, setUpModule, run_bash
 
 SLICES = SCRIPTS / "sweep-slices.sh"
 MARK = SCRIPTS / "sweep-mark.sh"
@@ -103,28 +103,32 @@ SMALL_TREE = {"src/BuildingBlocks/a.cs": "x\n", "src/Services/b.cs": "x\n", "tes
               ".config/h.json": "x\n", "README.md": "x\n", "docs/i.md": "```sh\nx\n```\n"}
 
 
+def small_repository(top):
+    """`SMALL_TREE` committed in `top/repo`, as `fixture_template` builds it."""
+    repo = top / "repo"
+    repo.mkdir()
+    made = run_bash('cd "$R" && git init -q --initial-branch=main .', R=str(repo))
+    if made.returncode != 0:
+        raise RuntimeError(made.stderr)
+    for relative, text in SMALL_TREE.items():
+        target = repo / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    git(str(repo), "add -A")
+    git(str(repo), 'commit -q -m "the small tree"')
+
+
 class ASmallRepository(unittest.TestCase):
     """A small repository of its own, so a commit and a ref never touch this one;
     its sweeps under a temp root beside it, so a run stopped before its cleanups
     leaves one directory behind, not a worktree git can no longer reach."""
 
     def setUp(self):
-        # Not rmtree with ignore_errors: git's objects are read-only, which
-        # Windows refuses to delete, and the flag hides each one that stays.
-        holder = tempfile.TemporaryDirectory(prefix="sweepslices-")
-        self.addCleanup(holder.cleanup)
-        top = holder.name
+        # `temp_root`, not rmtree with ignore_errors: git's objects are read-only, which Windows refuses to delete,
+        # and the flag hides each one that stays. The repository is built once a module and copied a test.
+        top = copy_template(self, fixture_template(small_repository, key="the small tree"))
         self.repo, self.root = str(Path(top, "repo")), str(Path(top, "root"))
-        os.mkdir(self.repo)
         os.mkdir(self.root)
-        made = run_bash('cd "$R" && git init -q --initial-branch=main .', R=self.repo)
-        self.assertEqual(0, made.returncode, made.stderr)
-        for relative, text in SMALL_TREE.items():
-            target = Path(self.repo, relative)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(text)
-        git(self.repo, "add -A")
-        git(self.repo, 'commit -q -m "the small tree"')
         self.script = self.helper(SMALL_ROWS)
 
     def helper(self, rows):

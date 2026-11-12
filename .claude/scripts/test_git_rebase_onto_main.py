@@ -1,21 +1,20 @@
 """git-rebase-onto-main.sh: a leased force push, and what bounds it.
 
 A permission rule cannot pin a fact about the checkout, so the guards are the
-script's, and its header lists them. The first class reads the flags, the last
-reads this file, and the rest run it against real repositories."""
+script's, and its header lists them. The first class reads the flags, the
+argument guards' runs it bare, and the rest against real repositories."""
 
-import ast
 import re
-import tempfile
 import unittest
 from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
     code_lines,
+    copy_template,
+    fixture_template,
     git_commands,
     setUpModule,
-    temp_root,
     run_bash as _run_bash,
 )
 
@@ -57,27 +56,11 @@ git checkout -q feat/x
 '''
 
 # Each test's own copy of that state, built once until a module cleanup removes it, which under the shard runner is
-# per class: about twenty git processes a test become three, which is most of this suite's time on Windows.
-FIXTURE = '''
-set -eu
-: "${TEMPLATE:?}"
-cp -Rp "$TEMPLATE/." "$root/"
-git -C "$root/work" remote set-url origin "$root/remote.git"
-'''
-_template = []
-
-
+# per class: about twenty git processes a test become none, which is most of this suite's time on Windows. A build
+# that fails raises, so no test runs against a `self.work` that is not there.
 def template():
-    if not _template:
-        holder = tempfile.TemporaryDirectory()
-        unittest.addModuleCleanup(holder.cleanup)
-        unittest.addModuleCleanup(_template.clear)
-        root = Path(holder.name).as_posix()
-        built = run_bash(BUILD, root=root)
-        if built.returncode != 0:
-            raise RuntimeError(f"the rebase fixture did not build: {built.stderr}")
-        _template.append(root)
-    return _template[0]
+    return fixture_template(BUILD, "root", GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null",
+                            GIT_CONFIG_NOSYSTEM="1")
 
 
 # Both sides edit the same line, so the replay cannot proceed without a person.
@@ -217,9 +200,7 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
 class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
 
     def helper(self, branch, mode="start"):
@@ -479,9 +460,7 @@ class TheHostsHooksNeverRunInAReplay(unittest.TestCase):
     HOOKS = ("pre-rebase", "post-rewrite", "pre-push", "reference-transaction")
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
 
     def at(self, script, **env):
@@ -568,9 +547,7 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
         self.at(CONFLICT)
 
@@ -763,9 +740,7 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
     loses it before the push, which no lease can see."""
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
 
     def at(self, script):
@@ -902,9 +877,7 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
 class TheHelperPublishesWhatItRebased(unittest.TestCase):
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
 
     def at(self, script):
@@ -1372,9 +1345,7 @@ class TheApplyBackendIsNeverTheOneThatRuns(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
         self.at("git config rebase.backend apply")
         self.at(CONFLICT)
@@ -1465,9 +1436,7 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
     itself and left in progress, because nothing here may drop a commit."""
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(FIXTURE, TEMPLATE=template(), root=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, template())
         self.work = self.root + "/work"
         self.at(CONFLICT)
 
@@ -1517,58 +1486,14 @@ class TheTemplateOutlivesAModuleCleanup(unittest.TestCase):
         self.assertFalse(Path(first).exists(), "the cleanup this case is about did not run")
         self.assertTrue(Path(template(), "work").is_dir())
 
+    def test_a_copy_reaches_its_own_remote_and_not_the_templates(self):
+        root = copy_template(self, template())
+        url = run_bash('git -C "$W" remote get-url origin', W=f"{root}/work").stdout.strip()
+        self.assertEqual(f"{root}/remote.git", url)
 
-class EveryFixtureSaysItWasBuilt(unittest.TestCase):
-    """With a failed fixture `self.work` is a directory that does not exist, so
-    every `cd` fails and the assertions are satisfied by the failed `cd`.
-
-    Read from the AST: a comment is not in it, and an assertion inside a lambda
-    or a branch is not a top-level statement of `setUp`."""
-
-    @staticmethod
-    def builds_the_fixture(function):
-        return any(isinstance(node, ast.Name) and node.id == "FIXTURE"
-                   for node in ast.walk(function))
-
-    @staticmethod
-    def asserts_its_build(function):
-        for statement in function.body:
-            if not isinstance(statement, ast.Expr):
-                continue
-            call = statement.value
-            if not (isinstance(call, ast.Call)
-                    and isinstance(call.func, ast.Attribute)
-                    and call.func.attr == "assertEqual"
-                    and isinstance(call.func.value, ast.Name)
-                    and call.func.value.id == "self"):
-                continue
-            if any(isinstance(subject, ast.Attribute) and subject.attr == "returncode"
-                   for subject in call.args):
-                return True
-        return False
-
-    def test_every_class_that_builds_the_fixture_says_it_was_built(self):
-        watched = []
-        for node in ast.parse(Path(__file__).read_text(encoding="utf-8")).body:
-            if not isinstance(node, ast.ClassDef):
-                continue
-            for member in node.body:
-                if not isinstance(member, ast.FunctionDef) or member.name != "setUp":
-                    continue
-                if not self.builds_the_fixture(member):
-                    continue
-                watched.append(node.name)
-                self.assertTrue(
-                    self.asserts_its_build(member),
-                    f"{node.name} builds the fixture and never says whether it "
-                    "worked: a failed one leaves no self.work and every "
-                    "assertion under it vacuous")
-        # Exact, so a class the recogniser sees cannot arrive without this
-        # number moving in the same edit, which is the moment to check it.
-        self.assertEqual(7, len(watched),
-                         f"this gate is watching {watched}: a fixture class was "
-                         "added or renamed. Check that each one asserts its build, "
-                         "then move this number deliberately")
+    def test_a_template_that_does_not_build_raises_rather_than_handing_over_nothing(self):
+        with self.assertRaises(RuntimeError):
+            fixture_template("false", "root")
 
 
 if __name__ == "__main__":

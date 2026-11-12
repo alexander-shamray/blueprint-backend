@@ -273,6 +273,9 @@ class TheSyncRow(unittest.TestCase):
         self.assertEqual([], [g for g in grants if g.startswith("Bash(py -3.12 -")])
         self.assertIn("Bash(py -3.12 .claude/scripts/shard-harness-suite.py)", grants,
                       "with `:*` this grant would admit --ids <file> and --queue <file>")
+        self.assertIn("Bash(py -3.12 .claude/scripts/shard-harness-suite.py --selective)", grants)
+        self.assertEqual([], [g for g in grants if g.startswith("Bash(py -3.12 .claude/scripts/shard-harness-suite.py")
+                              and g.endswith(":*)")])
         # The same two reach a session that is not /ship through the settings the sync renders.
         allow = json.loads(BASE.read_text(encoding="utf-8"))["permissions"]["allow"]
         self.assertIn(f"Bash({HELPER}:*)", allow)

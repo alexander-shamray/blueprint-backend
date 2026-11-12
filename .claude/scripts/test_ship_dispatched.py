@@ -50,6 +50,7 @@ INDEX_GRANTS = ("Bash(git merge-base origin/main HEAD)",
 SYNC_GRANTS = ("Bash(py -3.12 .claude/scripts/sync_pr.py:*)", "Bash(bash .claude/scripts/git-worktree-sync.sh:*)",
                "Bash(bash .claude/scripts/gh-issue-harness.sh:*)",
                "Bash(py -3.12 .claude/scripts/shard-harness-suite.py)",
+               "Bash(py -3.12 .claude/scripts/shard-harness-suite.py --selective)",
                "Bash(bash .claude/scripts/gh-issue-list.sh)", "Bash(bash .claude/scripts/gh-issue-suppresses.sh:*)")
 BRANCH_GRANTS_BEFORE = (
     "Read", "Grep", "EnterWorktree", "Bash(git status:*)", "Bash(git diff:*)", "Bash(git branch --list:*)",

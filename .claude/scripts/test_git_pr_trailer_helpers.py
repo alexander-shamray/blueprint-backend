@@ -9,13 +9,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, code_lines, git_commands, run_bash, setUpModule, temp_root  # noqa: F401
+from review_helpers import (SCRIPTS, code_lines, copy_template, fixture_template, git_commands, run_bash,  # noqa: F401
+                            setUpModule)
 
 TRAILER = SCRIPTS / "git-trailer-pr.sh"
 REVERT = SCRIPTS / "git-revert-pr.sh"
 
+# Built once a module and copied a test, since every test rewrites what it is handed.
+QUIET = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
 BUILD = """
-set -eu
 git init -q --bare --initial-branch=main "$ROOT/remote.git"
 git init -q --initial-branch=main "$ROOT/work"
 cd "$ROOT/work"
@@ -75,18 +77,12 @@ git() {
 
 
 def sh(script, **env):
-    result = run_bash(
-        "set -eu\n" + script,
-        GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null", GIT_CONFIG_NOSYSTEM="1", **env)
-    return result
+    return run_bash("set -eu\n" + script, **QUIET, **env)
 
 
 class Fixture(unittest.TestCase):
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(
-            BUILD, ROOT=self.root, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null", GIT_CONFIG_NOSYSTEM="1")
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, fixture_template(BUILD, "ROOT", **QUIET))
         self.work = f"{self.root}/work"
         stub = tempfile.TemporaryDirectory()
         self.addCleanup(stub.cleanup)
