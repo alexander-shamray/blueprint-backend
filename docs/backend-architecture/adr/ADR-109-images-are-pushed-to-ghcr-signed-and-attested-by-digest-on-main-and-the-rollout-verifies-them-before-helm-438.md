@@ -74,6 +74,11 @@ the push, the signature and the attestations move to a `publish-images` job that
 no pull request reaches, so the grants this record calls harmless on one are no
 longer held on one. This record is otherwise unchanged.
 
+**Amended by
+[ADR-201](ADR-201-the-rollout-tags-the-digest-it-verified-so-the-prune-keeps-what-a-release-pins-1915-amending-adr-109-and-adr-199.md)**:
+the rollout tags each digest it verified, before Helm, and holds
+`packages: write` for it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
