@@ -1,0 +1,150 @@
+name: CodeQL
+
+on:
+  # No `labeled`, `unlabeled` or `edited`, on ci.yml's reasoning: none of them
+  # changes a file the analysis reads.
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # A pull request analyses only the languages whose files it changed; a push to
+  # main, the weekly run and a dispatch analyse all four, so main's results stay
+  # whole. Not named `changes`: that is ci.yml's required check, and a second
+  # check of the name would answer for it.
+  languages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      languages: >-
+        ${{ github.event_name == 'pull_request' && steps.filter.outputs.changes
+        || '["actions", "csharp", "javascript-typescript", "python"]' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Detect changed languages
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Each filter's name is the language it starts, and this file is in
+          # every one, so a change to how the analysis runs reruns all of it.
+          filters: |
+            actions:
+              - &self '.github/workflows/codeql.yml'
+              - '.github/workflows/**'
+              - '**/action.yml'
+              - '**/action.yaml'
+            csharp:
+              - *self
+              - '**/*.cs'
+              - '**/*.csproj'
+              - '**/*.props'
+              - '**/*.targets'
+              - '**/*.slnx'
+              - 'global.json'
+            javascript-typescript:
+              - *self
+              - '**/*.js'
+              - '**/*.mjs'
+              - '**/*.cjs'
+              - '**/*.jsx'
+              - '**/*.ts'
+              - '**/*.mts'
+              - '**/*.cts'
+              - '**/*.tsx'
+              - '**/*.html'
+            python:
+              - *self
+              - '**/*.py'
+
+  # Read grants only: this job checks the branch out, so the upload's write
+  # grant is a job of its own with no checkout (ADR-197). Build mode `none`
+  # compiles nothing, so the branch's code is read here and never run.
+  analyze:
+    needs: languages
+    if: needs.languages.outputs.languages != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.languages.outputs.languages) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}
+          upload: never
+          upload-database: false
+          output: sarif
+
+      # Read once, by `upload` in this run.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sarif-${{ matrix.language }}
+          path: sarif
+          retention-days: 1
+          if-no-files-found: error
+
+  # One job for every language, each step uploading the one result it finds, so
+  # a leg that failed costs only its own upload and a skipped language none.
+  upload:
+    needs: analyze
+    if: ${{ !cancelled() && needs.analyze.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: sarif-*
+          path: sarif
+
+      - if: hashFiles('sarif/sarif-actions/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: sarif/sarif-actions
+          category: /language:actions
+
+      - if: hashFiles('sarif/sarif-csharp/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: sarif/sarif-csharp
+          category: /language:csharp
+
+      - if: hashFiles('sarif/sarif-javascript-typescript/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: sarif/sarif-javascript-typescript
+          category: /language:javascript-typescript
+
+      - if: hashFiles('sarif/sarif-python/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: sarif/sarif-python
+          category: /language:python

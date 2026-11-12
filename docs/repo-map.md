@@ -263,6 +263,14 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              GHCR_PRUNE_SCHEDULED opts it in, and on
                              dispatch, which only reports unless asked to
                              delete
+.github/workflows/codeql.yml  code scanning in advanced setup, the default
+                             setup switched off: a pull request analyses
+                             only the languages whose files it changed, read
+                             by its `languages` job, and a push to main, the
+                             weekly run and a dispatch analyse all four. The
+                             analysis holds read grants only and uploads in
+                             a job with no checkout (ADR-197). No check of it
+                             is required, so a skipped language blocks nothing
 .github/workflows/commit-gate.yml  the commit gate's run: every commit of a
                              pull request names it in a `PR: #<n>` trailer.
                              No `edited` trigger, because a body edit changes

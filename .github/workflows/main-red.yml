@@ -10,6 +10,7 @@ on:
     workflows:
       - Broker permissions
       - CI
+      - CodeQL
       - Compose
       - Compose images
       - Deploy
