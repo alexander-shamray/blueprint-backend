@@ -448,7 +448,7 @@ public sealed class AssistantSession : IDisposable
             turn?.Dispose();
             turn = null;
             LastActive = core.Time.GetUtcNow();
-            summary = new TurnSummary(core.Provider.Id, Id, reason, used, total);
+            summary = new TurnSummary(core.Provider.Id, Id, reason, used, total, Caller);
         }
 
         core.TurnEnded?.Invoke(summary);
@@ -520,5 +520,14 @@ public sealed class AssistantSession : IDisposable
     }
 }
 
-/// <summary>What a host logs of a turn (design §10): provider, conversation, end reason, usage; never text.</summary>
-public sealed record TurnSummary(string Provider, string ConversationId, string Reason, Usage Usage, Usage Total);
+/// <summary>
+/// What a host learns of a turn (design §10): provider, conversation, end reason, usage, and whose turn it was, so a
+/// host can count a caller's spend; never text.
+/// </summary>
+public sealed record TurnSummary(
+    string Provider,
+    string ConversationId,
+    string Reason,
+    Usage Usage,
+    Usage Total,
+    Caller Caller);
