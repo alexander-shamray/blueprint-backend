@@ -311,9 +311,10 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
   if it does not belong in the PR being worked on, say so and ask rather
   than decide by deleting.
 - **The task list is `.todo/blueprint-backend.md` in the main checkout's
-  parent directory**, local and never committed. What it holds, where each
-  row sits, who writes it and how it is rebuilt when in doubt are
-  `docs/harness/working-rules.md`'s, *Issues and the task list*. It lives
+  parent directory**, local and never committed. What it holds and where
+  each row sits are `docs/harness/task-list.md`'s; who writes it, when, and
+  how it is rebuilt when in doubt are `docs/harness/working-rules.md`'s,
+  *Issues and the task list*. It lives
   outside every checkout because Claude Code's isolation refuses a session
   moved into `.claude/worktrees/` with `EnterWorktree` every path in the
   main checkout outside that worktree, and admits one that no checkout
