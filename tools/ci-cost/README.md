@@ -99,6 +99,15 @@ py -3.12 tools/ci-cost/ghcr_prune.py
 A run takes minutes, since it lists every version and reads the manifests of
 the tagged ones it keeps.
 
+An image dropped from the matrix is never pruned again, and the scheduled run
+cannot say so, since the package listing refuses a job's token. From a
+person's token, `--unmatrixed` lists the packages of this repository the
+matrix no longer names, reads nothing else, and exits 1 when it finds one:
+
+```bash
+py -3.12 tools/ci-cost/ghcr_prune.py --unmatrixed
+```
+
 Stdlib only, and the suite answers from a fake API:
 
 ```bash

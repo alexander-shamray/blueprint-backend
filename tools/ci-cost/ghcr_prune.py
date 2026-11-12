@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Delete the GHCR versions ADR-199 does not keep. Without --delete it only reports them.
 
-    python tools/ci-cost/ghcr_prune.py [--repo owner/name] [--delete]
+    python tools/ci-cost/ghcr_prune.py [--repo owner/name] [--delete | --unmatrixed]
 """
 
 from __future__ import annotations
@@ -35,6 +35,16 @@ def image_packages(repo: str, workflow: Path = CI_WORKFLOW) -> list[str]:
     if not images:
         raise LookupError(f"{workflow} names no image, so the matrix's shape moved and this read is what is broken")
     return sorted({f"{repo.split('/')[1]}/{image}" for image in images})
+
+
+def unmatrixed(fetch: Fetch, repo: str, root: str, matrix: list[str]) -> list[str]:
+    """The repository's container packages the matrix no longer names, which the prune never judges again.
+
+    The owner's package listing answers a job's token with HTTP 400 (ADR-200), so only a person's token reads it.
+    """
+    listed = {package["name"] for package in paged(fetch, f"{root}?package_type=container")
+              if (package.get("repository") or {}).get("full_name") == repo}
+    return sorted(listed - set(matrix))
 
 
 def rolled_tags(fetch: Fetch, repo: str) -> set[str]:
@@ -117,12 +127,20 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", help="owner/name; the origin remote's by default")
     parser.add_argument("--delete", action="store_true", help="delete what the report names")
+    parser.add_argument("--unmatrixed", action="store_true",
+                        help="only list the packages the image matrix dropped; needs a person's token, not a job's")
     args = parser.parse_args(argv)
     repo = args.repo or origin_repo()
+    root = package_root(fetch, repo)
+    if args.unmatrixed:
+        dropped = unmatrixed(fetch, repo, root, packages or image_packages(repo))
+        for package in dropped:
+            print(f"{package}: in no image leg of ci.yml, so no run prunes it")
+        print(f"{len(dropped):,} packages the matrix dropped")
+        return 1 if dropped else 0
     now = now or datetime.now(timezone.utc)
     manifest = manifest or registry(repo)
     rolled = rolled_tags(fetch, repo)
-    root = package_root(fetch, repo)
 
     failed = 0
     doomed: list[tuple[str, dict]] = []

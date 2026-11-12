@@ -248,6 +248,29 @@ class Main(unittest.TestCase):
         self.assertEqual((code, len(self.deleted)), (1, 5))
         self.assertIn("repo/missing: nothing judged", out)
 
+    def test_unmatrixed_lists_the_repository_s_packages_the_matrix_dropped_and_changes_nothing(self):
+        listing = [{"name": "repo/pkg", "repository": {"full_name": REPO}},
+                   {"name": "repo/old", "repository": {"full_name": REPO}},
+                   {"name": "other/img", "repository": {"full_name": "owner/other"}},
+                   {"name": "loose"}]
+        fetch = self.fetch
+        self.fetch = lambda path: (listing if "package_type=container" in path and "page=1" in path else []
+                                   if "package_type=container" in path else fetch(path))
+        code, out = self.run_main("--unmatrixed")
+        self.assertEqual((code, self.deleted), (1, []))
+        self.assertIn("repo/old: in no image leg", out)
+        self.assertNotIn("other/img", out)
+        self.assertNotIn("loose", out)
+
+    def test_unmatrixed_is_clean_when_the_matrix_names_every_package(self):
+        listing = [{"name": "repo/pkg", "repository": {"full_name": REPO}}]
+        fetch = self.fetch
+        self.fetch = lambda path: (listing if "package_type=container" in path and "page=1" in path else []
+                                   if "package_type=container" in path else fetch(path))
+        code, out = self.run_main("--unmatrixed")
+        self.assertEqual(code, 0)
+        self.assertIn("0 packages the matrix dropped", out)
+
     def test_a_run_deletes_no_more_than_the_cap(self):
         self.versions = [version(f"v{n}") for n in range(ghcr_prune.MAX_DELETES + 3)]
         self.run_main("--delete")
