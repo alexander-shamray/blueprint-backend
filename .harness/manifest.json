@@ -1,5 +1,5 @@
 {
-  "harness_commit": "23ebc98401ed45628fa284c34c3db184f3600741",
+  "harness_commit": "d9a2864682c53f970a4ba9bb89065bae42392b7f",
   "files": {
     ".claude/agents/branch-reviewer.md": "c6bdaa06cfa86d674b80afc2180d58d27e0c277bbc6e2280bf46102339385740",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -57,6 +57,7 @@
     ".claude/scripts/git-worktree-fork.sh": "7d4a4db12a6e5f47dd2ea723efe19c02183d435faf288d12214aad7eecd3d162",
     ".claude/scripts/git-worktree-remove.sh": "759434b0ea78815eefbf9fc2f4d32774c8293f7e2469735cc978a432a962dc4e",
     ".claude/scripts/git-worktree-sync.sh": "a4f6d55e42a4c53d2b7ed25af4436bc7bbcbc7ec4d3d90fb8f1888c679193d1f",
+    ".claude/scripts/harness-legs.py": "8ce6144562fce62cfb11db7bae472ae39695843c948e828174414303c60c1c50",
     ".claude/scripts/issue_decisions.py": "d140cf42875233e85ee7958dab0a15d209c172792f88bb980864a09493fb7dc5",
     ".claude/scripts/main-red-open.sh": "235203755ead864141938a747123e161d44eed86dffe277ebb49fa84db427d0c",
     ".claude/scripts/pr-closure-input.sh": "b64d817b6373743584a911e14cc42637f79c107fb33f443443062f8c7b16eb8d",
@@ -97,6 +98,7 @@
     ".claude/scripts/test_git_worktree_sync.py": "c2fcb751c29bab0729c4928be8c8a3ae5b366497378ed45aaea5afc41d14994d",
     ".claude/scripts/test_grants_name_existing_helpers.py": "29e7905bbf76aef41a7f1aee286587f6c2a95c121cabed7c5950c55ad0dfab2c",
     ".claude/scripts/test_harness_denies.py": "155192ba0ba991c4f60acd013e9116cf9df284f9a1668ffeaa6e0eac76d883c7",
+    ".claude/scripts/test_harness_legs.py": "de971f4162cfa89f54cf45412906da4909e7781e2cf430d92076d5f2b7e4815a",
     ".claude/scripts/test_harness_shards.py": "993f8369f60134f6e841ac4d23e08cf65eb5ad24ceb74ce3ff918f55d9341041",
     ".claude/scripts/test_helper_argv_guard.py": "8abca7e5e0fe0d382cd16581bf36163965c106c8402b6900302e2387122c20a1",
     ".claude/scripts/test_here_string_band.py": "96173d71d9f077bec4727467f81c28b81bd91687fd87f9be985e6caa17051506",
@@ -175,7 +177,7 @@
     "docs/commands/security-sweep.md": "c3bac9d4a22e524b21ff50ba90212d61006e11d194de6c262ddb0c4a0bb2ddcf",
     "docs/commands/ship.md": "da3a46916c477ff6029d9535fe657f10d5cd714b30fc63580ac8b502f94e6788",
     "docs/commands/team.md": "1cdc4bcab8a82727ec98ab1a56d0420d115fc37e6f4b8075dad8c7cfdd8311b2",
-    "docs/harness-boundaries.md": "9547e43c6b67a25ab38896dcd7fe65a46bb2cd6c8bfb33ab3bb81f79e94c45ab",
+    "docs/harness-boundaries.md": "13f2d2fb2daaeacc8130bfd9efdef73de31ff880c0b19aeff3664e2ec13c41d8",
     "docs/harness/pitfalls.md": "df9c233f29d6f4e872126c11327413627b5a56e7771bcd539cffc634e5865124",
     "docs/harness/task-list.md": "d9c8c4a615a07c263f1e16d5ecc4539ec100fc94376992181a8164699cab35de",
     "docs/harness/token-rules.md": "cd83a078de693e468130242357b1eb6994df7e5beb0fad5c5dff510c6e4c7300",
