@@ -8,7 +8,7 @@ namespace Web.Bff.Assistant;
 
 public static class DependencyInjection
 {
-    /// <summary>ADR-151's assistant: options, tools, runtime, and the per-customer limit on starting work.</summary>
+    /// <summary>ADR-151's assistant: options, tools, runtime, and the per-customer limits (ADR-204).</summary>
     /// <remarks>
     /// The provider is a factory registration, so nothing of it is built until the runtime asks, which it does only
     /// when <c>Assistant:Provider</c> names one (ADR-151); a test registers its own provider after this.
@@ -46,12 +46,28 @@ public static class DependencyInjection
                         QueueLimit = 0
                     }));
 
+            // Held for the stream's life, which no start limit bounds: each reconnect is a new request (ADR-204).
+            limiter.AddPolicy(
+                AssistantEndpoints.StreamPolicy,
+                context => RateLimitPartition.GetConcurrencyLimiter(
+                    context.RequestServices.GetRequiredService<ICurrentUser>().Id,
+                    _ => new ConcurrencyLimiterOptions
+                    {
+                        PermitLimit = context.RequestServices
+                            .GetRequiredService<IOptions<AssistantOptions>>()
+                            .Value
+                            .StreamsPerCustomer,
+                        QueueLimit = 0
+                    }));
+
             // §10.3's write, with the code that tells a client this host refused rather than the gateway (§10.5).
             // No Retry-After: its one form is the gateway's RetryAfterHeader, which this host cannot reference.
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             limiter.OnRejected = async (context, _) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                bool stream = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()
+                    ?.PolicyName == AssistantEndpoints.StreamPolicy;
 
                 await context.HttpContext.RequestServices
                     .GetRequiredService<IProblemDetailsService>()
@@ -62,7 +78,9 @@ public static class DependencyInjection
                         {
                             Status = StatusCodes.Status429TooManyRequests,
                             Title = "Too many requests",
-                            Detail = "This customer has started as much assistant work as a minute allows.",
+                            Detail = stream
+                                ? "This customer holds as many assistant event streams open as this host allows."
+                                : "This customer has started as much assistant work as a minute allows.",
                             Extensions = { ["code"] = AssistantEndpoints.RateLimitedCode }
                         }
                     });

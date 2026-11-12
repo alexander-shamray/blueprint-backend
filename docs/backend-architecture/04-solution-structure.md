@@ -588,7 +588,9 @@ The **gateway** has its own pipeline and is the only place the platform's
 capacity limit is applied (§10.1); no service behind it calls `UseRateLimiter`,
 and the BFF calls it only for
 [ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)'s per-customer limit on the assistant's routes
-that start work: opening a conversation and starting a turn.
+that start work, opening a conversation and starting a turn, and
+[ADR-204](adr/ADR-204-the-bffs-assistant-caps-daily-tokens-bounds-event-streams-and-sizes-its-caller-limit-1970-1972.md)'s
+bound on the event streams one customer holds open.
 `src/Gateway/Gateway.Api/Program.cs` follows in three excerpts. Its
 registrations, up to the reverse proxy:
 
