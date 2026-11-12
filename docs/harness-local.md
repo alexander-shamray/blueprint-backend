@@ -48,7 +48,9 @@ beside the two checks above.
 
 The required checks, which `/ship` step 6's wait holds the list to, as the
 `main` ruleset requires them: `changes`, `build`, `closure-gate`,
-`locality-gate`, `commits`, `commit-gate` and `harness-drift`.
+`locality-gate`, `commits`, `commit-gate`, `harness-drift`, `licence-gate`,
+`pipeline-gate`, `format` and `workflow-lint`
+([ADR-203](backend-architecture/adr/ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md)).
 
 ## Residuals
 
