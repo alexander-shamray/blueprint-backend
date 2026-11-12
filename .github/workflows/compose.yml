@@ -73,9 +73,11 @@ jobs:
           {
             echo 'set<<EOF'
             docker compose -f deploy/compose/docker-compose.yml config --format json |
-              jq -r '.services | to_entries[] | select(.value.build) | .key |
-                "\(.).cache-from=type=gha,scope=compose-\(.)",
-                "\(.).cache-to=type=gha,scope=compose-\(.),mode=max"'
+              jq -r '.name as $project | .services | to_entries[] | select(.value.build) |
+                .key as $svc |
+                "\($svc).tags=\(.value.image // "\($project)-\($svc)")",
+                "\($svc).cache-from=type=gha,scope=compose-\($svc)",
+                "\($svc).cache-to=type=gha,scope=compose-\($svc),mode=max"'
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
