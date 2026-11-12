@@ -30,6 +30,11 @@ moves: the gates are not required checks, and a red one left the required
 runs and must pass on its own; a red gate still fails the run, which `/ship`
 reads before it merges.
 
+**Amended by
+[ADR-203](ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md)**:
+the four gates are required checks on `main`, so a red one holds the merge.
+This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

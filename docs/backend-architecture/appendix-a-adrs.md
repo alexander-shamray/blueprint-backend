@@ -209,6 +209,7 @@ decision looks wrong.
 | **ADR-200** | [The prune takes its packages from the image matrix (#1915), amending ADR-199](adr/ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md) |
 | **ADR-201** | [The rollout tags the digest it verified, so the prune keeps what a release pins (#1915), amending ADR-109 and ADR-199](adr/ADR-201-the-rollout-tags-the-digest-it-verified-so-the-prune-keeps-what-a-release-pins-1915-amending-adr-109-and-adr-199.md) |
 | **ADR-202** | [The build and test stages start beside the sub-minute gates (#1954), amending §15.1](adr/ADR-202-the-build-and-test-stages-start-beside-the-sub-minute-gates-1954-amending-15-1.md) |
+| **ADR-203** | [The four sub-minute gates are required checks on main (#1959), amending ADR-202](adr/ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md) |
 
 ---
 
