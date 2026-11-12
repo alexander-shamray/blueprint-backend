@@ -131,6 +131,9 @@ public static class AssistantEndpoints
                         return NotValid("text", $"A turn needs text, at most {MaxTextLength} characters.");
                     }
 
+                    if (request.Locale is { } locale && BadLocale(locale))
+                        return NotValid("locale", LocaleWhy);
+
                     return session.TryStart(request)
                         ? TypedResults.Accepted((string?)null)
                         : TypedResults.Problem(
@@ -275,8 +278,8 @@ public static class AssistantEndpoints
     // and holds no line break or control character, and the client tools are few.
     private static (string Field, string Why)? Bounded(OpenConversation request)
     {
-        if (request.Locale.Length > MaxLocaleLength || HasControl(request.Locale))
-            return ("locale", $"A locale is a tag of at most {MaxLocaleLength} characters on one line.");
+        if (BadLocale(request.Locale))
+            return ("locale", LocaleWhy);
 
         if (request.ClientTools.Count > MaxClientTools)
             return ("clientTools", $"A conversation takes at most {MaxClientTools} client tools.");
@@ -296,6 +299,11 @@ public static class AssistantEndpoints
             ? ("clientTools", "A client tool's title, description and input schema are short, on one line.")
             : null;
     }
+
+    private static readonly string LocaleWhy = $"A locale is a tag of at most {MaxLocaleLength} characters on one line.";
+
+    // The open route and a turn both carry a locale, and a turn's replaces the conversation's for the turns after it.
+    private static bool BadLocale(string locale) => locale.Length > MaxLocaleLength || HasControl(locale);
 
     private static bool Over(string text, int limit) => text.Length > limit || HasControl(text);
 
