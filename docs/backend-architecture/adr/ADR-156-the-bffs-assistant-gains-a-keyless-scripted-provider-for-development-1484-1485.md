@@ -50,6 +50,12 @@ of the panel, stays on blueprint-frontend#350.
 [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-1347.md)
 is otherwise unchanged and is read beside this record.
 
+**Amended by
+[ADR-204](ADR-204-the-bffs-assistant-caps-daily-tokens-bounds-event-streams-and-sizes-its-caller-limit-1970-1972.md)**:
+a third 429 code, `AssistantEndpoints.DailyLimitCode`, refuses new work once
+a daily token budget is spent, and the limiter's code also refuses an event
+stream past the customer's bound. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

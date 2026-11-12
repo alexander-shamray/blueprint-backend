@@ -51,8 +51,14 @@ public static class AssistantEndpoints
     /// <summary>The 429's <c>code</c> when the store cannot make room for a conversation (§10.5).</summary>
     public const string ConversationsFullCode = "assistant.conversations_full";
 
+    /// <summary>The 429's <c>code</c> once the customer's or the host's daily token budget is spent.</summary>
+    public const string DailyLimitCode = "assistant.daily_limit";
+
     /// <summary>The rate limiter policy on the two routes that start work: opening a conversation and a turn.</summary>
     public const string StartPolicy = "assistant-start";
+
+    /// <summary>The limiter policy bounding the event streams one customer holds open (ADR-204).</summary>
+    public const string StreamPolicy = "assistant-stream";
 
     /// <summary>Inside <c>ServiceOptions.OperationTimeout</c>, so the stream ends before a 504 does.</summary>
     public static readonly TimeSpan StreamLifetime = ServiceOptions.OperationTimeout - TimeSpan.FromSeconds(5);
@@ -91,6 +97,9 @@ public static class AssistantEndpoints
                 {
                     if (Invalid(request) is { } problem)
                         return problem;
+
+                    if (Spent(runtime.Spend, user) is { } spent)
+                        return spent;
 
                     try
                     {
@@ -135,6 +144,9 @@ public static class AssistantEndpoints
                     if (request.Locale is { } locale && BadLocale(locale))
                         return NotValid("locale", LocaleWhy);
 
+                    if (Spent(runtime.Spend, user) is { } spent)
+                        return spent;
+
                     return session.TryStart(request)
                         ? TypedResults.Accepted((string?)null)
                         : TypedResults.Problem(
@@ -157,7 +169,8 @@ public static class AssistantEndpoints
                 }
 
                 await StreamAsync(context, session, ParseLastEventId(context) ?? after ?? 0, ct);
-            });
+            })
+            .RequireRateLimiting(StreamPolicy);
 
         group.MapPost(
             "/conversations/{id}/tool-results",
@@ -209,6 +222,22 @@ public static class AssistantEndpoints
 
         return new Caller(subject, subject);
     }
+
+    // Read before work starts, so a turn already running finishes and is counted when it ends (ADR-204).
+    private static ProblemHttpResult? Spent(AssistantSpend spend, ICurrentUser user) =>
+        spend.Check(CallerOf(user).Id) switch
+        {
+            BudgetSpent.Customer => BudgetProblem("This customer has spent the assistant's daily allowance."),
+            BudgetSpent.Host => BudgetProblem("The assistant has spent its daily allowance for every customer."),
+            _ => null
+        };
+
+    private static ProblemHttpResult BudgetProblem(string detail) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status429TooManyRequests,
+            title: "Daily budget spent",
+            detail: detail + " It resets at midnight UTC.",
+            extensions: new Dictionary<string, object?> { ["code"] = DailyLimitCode });
 
     // ADR-108's shape: the stream ends inside the deadline and the client reconnects from Last-Event-ID.
     private static async Task StreamAsync(

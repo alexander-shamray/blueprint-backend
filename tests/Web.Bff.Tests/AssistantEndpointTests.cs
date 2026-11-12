@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.Assistant;
 using Common.Assistant.Protocol;
 using Common.Assistant.Providers;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -411,6 +412,82 @@ public sealed class AssistantEndpointTests
     }
 
     [Fact]
+    public async Task A_customer_past_their_daily_tokens_is_refused_new_work_and_another_customer_is_not()
+    {
+        await using AssistantFactory factory = new(
+            Setting(nameof(AssistantOptions.DailyTokensPerCustomer), "100"));
+        using HttpClient client = As(factory, _customer);
+        using HttpClient other = As(factory, Guid.CreateVersion7());
+        string id = await OpenAsync(client);
+
+        await SpendAsync(factory, client, id, new Usage(60, 30, 10), BudgetSpent.Customer);
+        HttpResponseMessage turn = await client.PostAsJsonAsync(
+            $"/v1/assistant/conversations/{id}/turns",
+            new { text = "Again" },
+            Ct);
+        HttpResponseMessage open = await client.PostAsJsonAsync("/v1/assistant/conversations", Opening, Ct);
+
+        turn.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await turn.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.DailyLimitCode);
+        turn.Headers.RetryAfter.ShouldBeNull();
+        open.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests, "opening is starting work too");
+        await OpenAsync(other);
+    }
+
+    [Fact]
+    public async Task The_host_past_its_daily_tokens_refuses_every_customer()
+    {
+        await using AssistantFactory factory = new(
+            Setting(nameof(AssistantOptions.DailyTokensForHost), "100"));
+        using HttpClient client = As(factory, _customer);
+        using HttpClient other = As(factory, Guid.CreateVersion7());
+        string id = await OpenAsync(client);
+
+        await SpendAsync(factory, client, id, new Usage(100, 0, 0), BudgetSpent.Host);
+        HttpResponseMessage open = await other.PostAsJsonAsync("/v1/assistant/conversations", Opening, Ct);
+
+        open.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await open.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.DailyLimitCode);
+    }
+
+    [Fact]
+    public async Task A_customer_s_streams_past_the_bound_are_refused_with_the_limiter_s_code()
+    {
+        await using AssistantFactory factory = new(Setting(nameof(AssistantOptions.StreamsPerCustomer), "1"));
+        using HttpClient client = As(factory, _customer);
+        using HttpClient other = As(factory, Guid.CreateVersion7());
+        string id = await OpenAsync(client);
+        string others = await OpenAsync(other);
+
+        using HttpResponseMessage held = await client.GetAsync(
+            $"/v1/assistant/conversations/{id}/events",
+            HttpCompletionOption.ResponseHeadersRead,
+            Ct);
+        using HttpResponseMessage second = await client.GetAsync(
+            $"/v1/assistant/conversations/{id}/events",
+            HttpCompletionOption.ResponseHeadersRead,
+            Ct);
+        using HttpResponseMessage another = await other.GetAsync(
+            $"/v1/assistant/conversations/{others}/events",
+            HttpCompletionOption.ResponseHeadersRead,
+            Ct);
+
+        held.StatusCode.ShouldBe(HttpStatusCode.OK);
+        second.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await second.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.RateLimitedCode);
+        another.StatusCode.ShouldBe(HttpStatusCode.OK, "the partition is the subject");
+    }
+
+    [Fact]
+    public void The_bff_holds_more_callers_than_the_core_s_one_caller_default()
+    {
+        new AssistantOptions().Limits().MaxCallers.ShouldBeGreaterThan(new AssistantLimits().MaxCallers);
+    }
+
+    [Fact]
     public async Task The_scripted_provider_streams_its_fixed_reply_with_no_key()
     {
         await using ScriptedFactory factory = new();
@@ -488,6 +565,27 @@ public sealed class AssistantEndpointTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         return (await response.Content.ReadFromJsonAsync<ConversationOpened>(Ct)).ShouldNotBeNull().Id;
+    }
+
+    // One turn that reports this usage. The host counts it just after the conversation reads idle, so the meter is
+    // read until it refuses as expected.
+    private async Task SpendAsync(AssistantFactory factory, HttpClient client, string id, Usage usage, BudgetSpent then)
+    {
+        factory.Provider.Then(new TextDelta("Spent."), new UsageReport(usage), new RoundEnd(ProviderStop.Done));
+        (await client.PostAsJsonAsync($"/v1/assistant/conversations/{id}/turns", new { text = "Hello" }, Ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await SettledAsync(client, id);
+
+        AssistantSpend spend = factory.Services.GetRequiredService<AssistantRuntime>().Spend;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+
+        while (spend.Check(_customer.ToString()) != then)
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new TimeoutException($"The turn on {id} was not counted within ten seconds.");
+
+            await Task.Delay(20, Ct);
+        }
     }
 
     // The turn runs off the request, so the view is read until it says the turn is over.

@@ -107,6 +107,13 @@ runs in Development alone and Compose's BFF sets, and each of the host's 429s
 carries a `code` of its own, still with no `Retry-After`. This record is
 otherwise unchanged.
 
+**Amended by
+[ADR-204](ADR-204-the-bffs-assistant-caps-daily-tokens-bounds-event-streams-and-sizes-its-caller-limit-1970-1972.md)**:
+the host's limit on what a customer can spend is also a daily token budget
+per customer and one for the host, the event stream has a limit per customer,
+and `MaxCallers` takes a default of this host's. This record is otherwise
+unchanged.
+
 > **Discharged in part** by
 > [ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)'s
 > release: its chart gives the provider a value and a Secret reference behind

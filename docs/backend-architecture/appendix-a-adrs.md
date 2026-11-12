@@ -210,6 +210,7 @@ decision looks wrong.
 | **ADR-201** | [The rollout tags the digest it verified, so the prune keeps what a release pins (#1915), amending ADR-109 and ADR-199](adr/ADR-201-the-rollout-tags-the-digest-it-verified-so-the-prune-keeps-what-a-release-pins-1915-amending-adr-109-and-adr-199.md) |
 | **ADR-202** | [The build and test stages start beside the sub-minute gates (#1954), amending §15.1](adr/ADR-202-the-build-and-test-stages-start-beside-the-sub-minute-gates-1954-amending-15-1.md) |
 | **ADR-203** | [The four sub-minute gates are required checks on main (#1959), amending ADR-202](adr/ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md) |
+| **ADR-204** | [The BFF's assistant caps each customer's and the host's daily tokens, bounds a customer's event streams, and sizes its own caller limit (#1970, #1972), amending ADR-151 and ADR-156](adr/ADR-204-the-bffs-assistant-caps-daily-tokens-bounds-event-streams-and-sizes-its-caller-limit-1970-1972.md) |
 
 ---
 

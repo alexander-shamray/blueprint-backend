@@ -3,10 +3,10 @@ using Common.Assistant.Anthropic;
 
 namespace Web.Bff.Assistant;
 
-/// <summary>The <c>Assistant</c> section: the provider, the core's limits and each customer's turn rate.</summary>
+/// <summary>The <c>Assistant</c> section: the provider, the core's limits and this host's per customer.</summary>
 /// <remarks>
 /// No key here holds a credential, and <see cref="AssistantRuntime"/> refuses one named like it (AI assistant design
-/// §9). The core owns each limit's default; a key only moves it.
+/// §9). The core owns each limit's default but <see cref="MaxCallers"/>, whose default is this host's (ADR-204).
 /// </remarks>
 public sealed class AssistantOptions
 {
@@ -34,6 +34,15 @@ public sealed class AssistantOptions
     /// <summary>The conversations and turns one customer may start a minute: this host's limit.</summary>
     public int TurnsPerMinute { get; set; } = 10;
 
+    /// <summary>The tokens one customer's turns may spend in a UTC day before new work is refused (ADR-204).</summary>
+    public long DailyTokensPerCustomer { get; set; } = 1_000_000;
+
+    /// <summary>The tokens every customer's turns together may spend in a UTC day (ADR-204).</summary>
+    public long DailyTokensForHost { get; set; } = 50_000_000;
+
+    /// <summary>The event streams one customer may hold open at once (ADR-204).</summary>
+    public int StreamsPerCustomer { get; set; } = 8;
+
     public int MaxSteps { get; set; } = Defaults.MaxSteps;
 
     public int MaxOutputTokens { get; set; } = Defaults.MaxOutputTokens;
@@ -42,7 +51,11 @@ public sealed class AssistantOptions
 
     public int MaxConversations { get; set; } = Defaults.MaxConversations;
 
-    public int MaxCallers { get; set; } = Defaults.MaxCallers;
+    /// <summary>
+    /// The customers one replica holds conversations for: this host's, as the core's suits a console with one caller
+    /// (ADR-204).
+    /// </summary>
+    public int MaxCallers { get; set; } = 256;
 
     /// <summary>How long an untouched conversation stays in this replica's memory (docs/personal-data.md).</summary>
     public TimeSpan IdleTimeout { get; set; } = Defaults.IdleTimeout;
@@ -72,6 +85,9 @@ public sealed class AssistantOptions
     public AssistantLimits Limits()
     {
         Positive(TurnsPerMinute, nameof(TurnsPerMinute));
+        Positive(DailyTokensPerCustomer, nameof(DailyTokensPerCustomer));
+        Positive(DailyTokensForHost, nameof(DailyTokensForHost));
+        Positive(StreamsPerCustomer, nameof(StreamsPerCustomer));
         Positive(MaxSteps, nameof(MaxSteps));
         Positive(MaxOutputTokens, nameof(MaxOutputTokens));
         Positive(ConversationTokenBudget, nameof(ConversationTokenBudget));

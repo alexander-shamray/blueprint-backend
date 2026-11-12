@@ -28,7 +28,12 @@ public sealed partial class AssistantRuntime : IDisposable
         ["password", "secret", "token", "apikey", "api_key", "credential", "authorization"];
 
     private static readonly string[] Declared =
-        [nameof(AssistantOptions.MaxOutputTokens), nameof(AssistantOptions.ConversationTokenBudget)];
+    [
+        nameof(AssistantOptions.MaxOutputTokens),
+        nameof(AssistantOptions.ConversationTokenBudget),
+        nameof(AssistantOptions.DailyTokensPerCustomer),
+        nameof(AssistantOptions.DailyTokensForHost)
+    ];
 
     private readonly ILogger<AssistantRuntime> _logger;
 
@@ -49,6 +54,7 @@ public sealed partial class AssistantRuntime : IDisposable
         AssistantOptions configured = options.Value;
         ProviderId = configured.ProviderInEffect(environment);
         AssistantLimits limits = configured.Limits();
+        Spend = new AssistantSpend(configured.DailyTokensPerCustomer, configured.DailyTokensForHost, time);
 
         if (ProviderId == AssistantOptions.Off)
             return;
@@ -71,8 +77,15 @@ public sealed partial class AssistantRuntime : IDisposable
     /// <summary>Null while the assistant is off.</summary>
     public AssistantCore? Core { get; }
 
-    /// <summary>Stops the core's sweep of idle conversations when the host's container is disposed.</summary>
-    public void Dispose() => Core?.Dispose();
+    /// <summary>Today's tokens, which the routes that start work read before they start it.</summary>
+    public AssistantSpend Spend { get; }
+
+    /// <summary>Stops the core's sweep and the spend's when the host's container is disposed.</summary>
+    public void Dispose()
+    {
+        Core?.Dispose();
+        Spend.Dispose();
+    }
 
     private static void RefuseSecretNamedKeys(IConfigurationSection section)
     {
@@ -90,8 +103,11 @@ public sealed partial class AssistantRuntime : IDisposable
         }
     }
 
-    // Each turn's provider, model, usage and end reason, never its text (AI assistant design §10).
-    private void Logged(TurnSummary turn) =>
+    // Each turn's provider, model, usage and end reason, never its text (AI assistant design §10), and its tokens to
+    // the customer's and the host's day.
+    private void Logged(TurnSummary turn)
+    {
+        Spend.Add(turn.Caller.Id, turn.Usage);
         TurnEnded(
             _logger,
             turn.Provider,
@@ -101,6 +117,7 @@ public sealed partial class AssistantRuntime : IDisposable
             turn.Usage.Input,
             turn.Usage.Output,
             turn.Usage.Cached);
+    }
 
     [LoggerMessage(
         Level = LogLevel.Information,
