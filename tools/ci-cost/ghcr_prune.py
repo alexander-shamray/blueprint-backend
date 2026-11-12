@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, manifest: Manifest | 
         try:
             dropped = unmatrixed(fetch, repo, root, packages or image_packages(repo))
         except LookupError as error:
-            print(f"nothing judged, a read was refused: {error}")
+            print(f"nothing judged: {error}")
             return 2
         for package in dropped:
             print(f"{package}: in no image leg of ci.yml, so no run prunes it")
