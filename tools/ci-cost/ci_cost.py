@@ -543,7 +543,7 @@ def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = 
                         help="owner/name; the origin remote's by default, and repeatable with --latency")
     parser.add_argument("--window", action="append", default=[],
                         help="NAME=FIRST:LAST, both days inclusive and in UTC; the last 14 full days by default, "
-                             "30 with --latency")
+                             "30 with --latency, and none if only --day is given")
     parser.add_argument("--plan", choices=ALLOWANCES, default="Free")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--latency", action="store_true",
