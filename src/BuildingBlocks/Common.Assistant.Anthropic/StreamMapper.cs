@@ -8,9 +8,9 @@ using Anthropic.Models.Beta.Messages;
 namespace Common.Assistant.Anthropic;
 
 /// <summary>
-/// One provider round's stream, as the core reads it (AI assistant design §8.2): text as it arrives, each tool call
-/// once its input is whole, the reasoning blocks as opaque payloads, one usage report and the end. A stream is mapped
-/// by one instance; it keeps what a block needs from its start to its stop.
+/// One provider round's stream, as the core reads it (AI assistant design §8.2): its start, text as it arrives, each
+/// tool call once its input is whole, the reasoning blocks as opaque payloads, one usage report and the end. A stream
+/// is mapped by one instance; it keeps what a block needs from its start to its stop.
 /// </summary>
 internal sealed class StreamMapper
 {
@@ -35,6 +35,8 @@ internal sealed class StreamMapper
                 start.Message.Usage.CacheCreationInputTokens,
                 start.Message.Usage.CacheReadInputTokens,
                 start.Message.Usage.OutputTokens);
+
+            yield return new RoundStarted();
         }
         else if (streamEvent.TryPickContentBlockStart(out BetaRawContentBlockStartEvent? begun))
         {

@@ -35,6 +35,12 @@ public sealed record TurnRequest(
 
 public abstract record ProviderEvent;
 
+/// <summary>
+/// The provider accepted the round's request and is answering, so the round is billed from here: one cut short after
+/// it is counted at the core's estimate, and one refused before it is not (ADR-204).
+/// </summary>
+public sealed record RoundStarted : ProviderEvent;
+
 /// <summary>A delta of the reply's text.</summary>
 public sealed record TextDelta(string Text) : ProviderEvent;
 
