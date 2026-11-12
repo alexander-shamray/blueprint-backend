@@ -125,7 +125,7 @@ def sampled(fetch: Fetch, repo: str, runs: list[dict], size: int, steps: int, wo
 
 def repo_latency(fetch: Fetch, repo: str, window: Window, size: int = SAMPLE, steps: int = STEPS,
                  workers: int = WORKERS) -> dict:
-    """Every workflow's runs in the window, listed per workflow: the repository-wide listing stops at 1,000."""
+    """Every workflow's runs in the window, listed per workflow, which groups them and skips a workflow without."""
     workflows = {}
     for workflow in paged(fetch, f"repos/{repo}/actions/workflows", "workflows"):
         runs = runs_between(fetch, repo, window.start, window.end, workflow=workflow["id"])
