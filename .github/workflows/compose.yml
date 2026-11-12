@@ -61,15 +61,14 @@ jobs:
         run: docker compose -f deploy/compose/docker-compose.yml config -q
 
       # The build comes before `up` so a layer cache can serve it: `up` alone
-      # builds each service with nothing restored, which was eight of the
-      # job's nine minutes. One cache scope per service, because a scope that
-      # several targets export to keeps only the last one's layers. A source
-      # change still misses the layers from its COPY on, so the images are
-      # still built from this change's own sources (ADR-134); only the restore
-      # and the SDK layers above them are reused.
-      - name: Name each built service's cache scope
+      # builds with nothing restored, eight of the job's nine minutes. Bake
+      # cannot follow the model's `include:`, so it reads the resolved file.
+      # One scope per service, since a shared scope keeps the last export. A
+      # source change misses every layer from its COPY on (ADR-134).
+      - name: Resolve the model and name each built service's cache scope
         id: scopes
         run: |
+          docker compose -f deploy/compose/docker-compose.yml config > "$RUNNER_TEMP/compose-resolved.yml"
           {
             echo 'set<<EOF'
             docker compose -f deploy/compose/docker-compose.yml config --format json |
@@ -87,7 +86,7 @@ jobs:
         uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         with:
           source: .
-          files: deploy/compose/docker-compose.yml
+          files: ${{ runner.temp }}/compose-resolved.yml
           load: true
           set: ${{ steps.scopes.outputs.set }}
 
