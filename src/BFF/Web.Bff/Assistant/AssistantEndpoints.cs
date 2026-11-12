@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Common.Application;
 using Common.Assistant;
 using Common.Assistant.Protocol;
@@ -295,7 +296,7 @@ public static class AssistantEndpoints
         (int title, int description, int schema) = ToolLimits;
 
         return request.ClientTools.Any(t => Over(t.Title, title) || Over(t.Description, description) ||
-            t.InputSchema.ToJsonString().Length > schema)
+            t.InputSchema.ToJsonString().Length > schema || SchemaHasControl(t.InputSchema))
             ? ("clientTools", "A client tool's title, description and input schema are short, on one line.")
             : null;
     }
@@ -304,6 +305,16 @@ public static class AssistantEndpoints
 
     // The open route and a turn both carry a locale, and a turn's replaces the conversation's for the turns after it.
     private static bool BadLocale(string locale) => locale.Length > MaxLocaleLength || HasControl(locale);
+
+    // The serialised schema escapes a line break, but the provider's model reads the string it stands for: a property's
+    // description is free text, so every name and string value in the schema meets the same rule as the other fields.
+    private static bool SchemaHasControl(JsonNode? node) => node switch
+    {
+        JsonObject o => o.Any(p => HasControl(p.Key) || SchemaHasControl(p.Value)),
+        JsonArray a => a.Any(SchemaHasControl),
+        JsonValue v => v.TryGetValue(out string? s) && HasControl(s),
+        _ => false
+    };
 
     private static bool Over(string text, int limit) => text.Length > limit || HasControl(text);
 
