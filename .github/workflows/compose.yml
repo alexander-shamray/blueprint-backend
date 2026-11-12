@@ -6,8 +6,8 @@ name: Compose
 # healthcheck reads, or this one changes, so a bumped §14.1 image pin is
 # smoke-tested here rather than in the solution build.
 
-# The model's application blocks carry build: stanzas, so `up` compiles the
-# solution inside Docker — what the timeout below is sized for. ci.yml's image
+# The model's application blocks carry build: stanzas, so the smoke compiles
+# the solution inside Docker — what the timeout below is sized for. ci.yml's image
 # matrix proves a Dockerfile against a source change; this smoke filters in only
 # what a host's healthcheck reads: the probe, the endpoints it asks and the
 # files that bind each host's port.
@@ -46,11 +46,11 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # Every .NET image builds with its own restore and publish and no layer
-    # cache on a fresh runner, after the infrastructure pulls, and not from a
-    # pulled `main`: this job tests the change's own sources (ADR-134). 45 is
-    # headroom for a cold registry, not a sum of the images, so a new
-    # service does not move it.
+    # Every .NET image builds with its own restore and publish, from the layer
+    # cache the runner keeps when it has one and from nothing when it has
+    # not, and not from a pulled `main`: this job tests the change's own
+    # sources (ADR-134). 45 is headroom for a cold cache and registry, not a
+    # sum of the images, so a new service does not move it.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -59,6 +59,35 @@ jobs:
       # should not cost an image download to find.
       - name: Validate the file
         run: docker compose -f deploy/compose/docker-compose.yml config -q
+
+      # The build comes before `up` so a layer cache can serve it: `up` alone
+      # builds each service with nothing restored, which was eight of the
+      # job's nine minutes. One cache scope per service, because a scope that
+      # several targets export to keeps only the last one's layers. A source
+      # change still misses the layers from its COPY on, so the images are
+      # still built from this change's own sources (ADR-134); only the restore
+      # and the SDK layers above them are reused.
+      - name: Name each built service's cache scope
+        id: scopes
+        run: |
+          {
+            echo 'set<<EOF'
+            docker compose -f deploy/compose/docker-compose.yml config --format json |
+              jq -r '.services | to_entries[] | select(.value.build) | .key |
+                "\(.).cache-from=type=gha,scope=compose-\(.)",
+                "\(.).cache-to=type=gha,scope=compose-\(.),mode=max"'
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the images with the layer cache
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: .
+          files: deploy/compose/docker-compose.yml
+          load: true
+          set: ${{ steps.scopes.outputs.set }}
 
       # --wait exits non-zero if a healthcheck never passes, or if a container
       # exits before the wait completes, so every healthcheck the model
@@ -70,7 +99,7 @@ jobs:
       # exiting 0 and fails it by exiting non-zero, so the migrator's exit code
       # is part of what this smoke asserts.
       - name: Start and wait for healthy
-        run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
+        run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull --no-build
 
       # --wait proved the grafana service's components are up, not what they
       # loaded. A rule file its Prometheus stopped reading would start green,
