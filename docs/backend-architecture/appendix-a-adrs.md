@@ -208,6 +208,7 @@ decision looks wrong.
 | **ADR-199** | [A scheduled prune keeps what a rollout named (#1900), amending ADR-071 and ADR-134](adr/ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md) |
 | **ADR-200** | [The prune takes its packages from the image matrix (#1915), amending ADR-199](adr/ADR-200-the-prune-takes-its-packages-from-the-image-matrix-1915-amending-adr-199.md) |
 | **ADR-201** | [The rollout tags the digest it verified, so the prune keeps what a release pins (#1915), amending ADR-109 and ADR-199](adr/ADR-201-the-rollout-tags-the-digest-it-verified-so-the-prune-keeps-what-a-release-pins-1915-amending-adr-109-and-adr-199.md) |
+| **ADR-202** | [The build and test stages start beside the sub-minute gates (#1954), amending §15.1](adr/ADR-202-the-build-and-test-stages-start-beside-the-sub-minute-gates-1954-amending-15-1.md) |
 
 ---
 
