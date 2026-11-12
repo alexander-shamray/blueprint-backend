@@ -70,8 +70,7 @@ jobs:
               - '**/*.py'
 
   # Read grants only: this job checks the branch out, so the upload's write
-  # grant is a job of its own with no checkout (ADR-197). Build mode `none`
-  # compiles nothing, so the branch's code is read here and never run.
+  # grant is a job of its own with no checkout (ADR-197).
   analyze:
     needs: languages
     if: needs.languages.outputs.languages != '[]'
