@@ -78,8 +78,8 @@ A window's runs are listed **per workflow**
 (`actions/workflows/<id>/runs`), which groups them by workflow without a
 second pass and lets a workflow with no run be skipped; each listing is
 halved by `runs_between` under the 1,000-result cap like the cost report's,
-and shares its paging and retries. A sampled run costs one request, so `--latency` takes about
-`SAMPLE` requests a workflow plus a day's jobs.
+and shares its paging and retries. A sampled run costs one request, so
+`--latency` takes about `SAMPLE` requests a workflow plus a day's jobs.
 
 ## The prune
 
