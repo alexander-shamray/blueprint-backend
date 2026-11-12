@@ -40,7 +40,7 @@ the first dispatch, which still fails for want of a cluster, is that check.
 
 **Amends**
 [ADR-109](ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
-whose rollout now writes one tag, and
+whose rollout now tags each image it verified, and
 [ADR-199](ADR-199-a-scheduled-prune-keeps-what-a-rollout-named-1900-amending-adr-071-and-adr-134.md),
 whose rebuilt-tag consequence holds now only for the releases named above.
 
