@@ -206,7 +206,7 @@ public sealed class AssistantSession : IDisposable
                 finally
                 {
                     used += round.Usage;
-                    unreported += round.Reported || round.Request is null ? Usage.None : Unreported(round.Request);
+                    unreported += Billed(round, cancellationToken) ? Unreported(round.Request!) : Usage.None;
 
                     // A round cut short keeps the text it had; its calls and blocks are dropped with it, since a
                     // provider would refuse a call with no result and a block it never finished.
@@ -255,8 +255,14 @@ public sealed class AssistantSession : IDisposable
         End(reason, category, used, unreported);
     }
 
-    // A round cut short before its usage report (a cancel, a broken stream) was still sent, and a host counting spend
-    // must count it: input at four characters a token of what was sent, output at the round's bound.
+    // A round cut short before its usage report, by the caller's cancel or a stream broken after the provider began,
+    // was billed with nothing reported. One the provider refused before answering, or that ended whole, was not.
+    private static bool Billed(Round round, CancellationToken cancellationToken) =>
+        round is { Reported: false, Stop: null, Request: not null } &&
+        (round.Heard || cancellationToken.IsCancellationRequested);
+
+    // What a host counting spend charges such a round: input at four characters a token of what was sent, output at
+    // the round's bound.
     private static Usage Unreported(TurnRequest request)
     {
         long characters = request.System.Length
@@ -280,6 +286,8 @@ public sealed class AssistantSession : IDisposable
 
         await foreach (ProviderEvent value in core.Provider.TurnAsync(request, cancellationToken))
         {
+            round.Heard = true;
+
             switch (value)
             {
                 case TextDelta delta when delta.Text.Length > 0:
@@ -531,6 +539,8 @@ public sealed class AssistantSession : IDisposable
         public Usage Usage { get; set; } = Usage.None;
 
         public bool Reported { get; set; }
+
+        public bool Heard { get; set; }
 
         public TurnRequest? Request { get; set; }
 

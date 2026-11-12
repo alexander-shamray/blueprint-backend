@@ -89,6 +89,45 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_round_the_provider_refused_before_answering_is_not_estimated()
+    {
+        // An outage or a refused key: the provider throws before its first event, and bills nothing.
+        TurnSummary summary = await SummaryAsync(new ScriptedProvider()
+            .Round((_, _) => throw new HttpRequestException("503 from the provider")));
+
+        summary.Reason.ShouldBe(TurnEndReason.Error);
+        summary.Unreported.ShouldBe(Usage.None);
+    }
+
+    [Fact]
+    public async Task A_round_that_ended_whole_without_a_report_is_not_estimated()
+    {
+        TurnSummary summary = await SummaryAsync(new ScriptedProvider()
+            .Round(new TextDelta("Whole."), new RoundEnd(ProviderStop.Done)));
+
+        summary.Reason.ShouldBe(TurnEndReason.Done);
+        summary.Unreported.ShouldBe(Usage.None);
+    }
+
+    private static async Task<TurnSummary> SummaryAsync(ScriptedProvider provider)
+    {
+        TaskCompletionSource<TurnSummary> learnt = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using AssistantCore core = new(
+            provider,
+            [],
+            ToolPolicy.ReadOnly,
+            new PlantedRedactor(),
+            "Host rules.",
+            new AssistantLimits(),
+            TimeProvider.System,
+            learnt.SetResult);
+
+        Open(core).TryStart(Given.Turn("hello")).ShouldBeTrue();
+
+        return await learnt.Task.WaitAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Text_is_relayed_as_it_arrives_and_the_turn_ends_done()
     {
         ScriptedProvider provider = new ScriptedProvider()
