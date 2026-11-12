@@ -104,10 +104,10 @@ jobs:
     # timeout hit, leaving a canary serving with no step left to remove it.
     timeout-minutes: 150
     environment: production
-    # `packages: write` for the pull and the one tag the rollout records on what
-    # it verified (ADR-201), `attestations: read` for the provenance lookup
-    # (ADR-109). The job runs only on a dispatch from main, so no pull request
-    # reaches the grant (ADR-197).
+    # `packages: write` for the pull and the tag the rollout records on each
+    # image it verified (ADR-201), `attestations: read` for the provenance
+    # lookup (ADR-109). The job runs only on a dispatch from main, so no pull
+    # request reaches the grant (ADR-197).
     permissions:
       contents: read
       packages: write
