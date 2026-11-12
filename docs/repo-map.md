@@ -323,7 +323,9 @@ deploy/workflow_paths/       the one reader of a workflow's `paths:` filter and
                              by the `pipeline-gate` job
 tools/ci-cost/               the Actions bill per dated window, from the
                              REST API through `gh api`; stdlib Python with
-                             a suite, for docs/ci-cost-comparison.md. Beside
+                             a suite, for docs/ci-cost-comparison.md; its
+                             `--latency` (`ci_latency.py`) reports queue wait,
+                             critical path and step times. Beside
                              it `ghcr_prune.py`, which shares its readers and
                              deletes what ADR-199 does not keep
 tools/new-service/           §4.5's scaffold — see the notes below

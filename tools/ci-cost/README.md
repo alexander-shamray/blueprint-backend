@@ -45,6 +45,41 @@ listing without `read:packages`, typically — is printed under the table rather
 than failing the run; a refused runs or jobs read ends it, because no figure
 stands without them.
 
+## The latency report
+
+The cost report says what the account pays; `--latency` says how long a pull
+request waits, which is what a speed change is measured by. It runs before
+and after each one, over the same window:
+
+```bash
+py -3.12 tools/ci-cost/ci_cost.py --latency                         # origin's last 30 full days
+py -3.12 tools/ci-cost/ci_cost.py --latency --repo owner/a --repo owner/b --window A=2026-10-13:2026-11-12
+py -3.12 tools/ci-cost/ci_cost.py --latency --day 2026-11-10 --cap 20 --cap 40 --cap 60 --json
+```
+
+A `--window`, or the default, prints four tables per repository and window;
+`--day` adds the day's two, and alone prints only them. Each duration is a
+nearest-rank p50 / p90, so every figure is one that was measured.
+
+| | |
+|---|---|
+| Weekly run time | `updated_at - run_started_at` of each successful run, by the Monday, in UTC, of its creation; what showed the 2026-11-08 regression |
+| Critical path | of the newest `SAMPLE` successful runs of each workflow: run start to its first job, first job to last end, the longest job, and the span beyond the longest job (the serial chain), from the latest attempt's jobs |
+| Queue wait | per job, `created_at` to `started_at`, matrix legs summed under the job's name, over the same runs |
+| Slowest steps | per job, the `STEPS` steps with the highest p90, skipped steps left out |
+| A day (`--day`) | every job of the runs created that UTC day in every `--repo`: jobs per hour, the peak running in one minute (a job counts in each minute it touches), how many were running when a job that waited over `QUEUED_AFTER` seconds was queued, and the day replayed under each `--cap` (`CAPS` by default) |
+
+The replay runs the day's jobs first come first served under the cap, each as
+long as it ran, so its waits are the cap's alone: the as-run row also holds
+the time a runner takes to start, and the two are compared by their gap, never
+as equals. A job of an older run re-run that day is not in the day.
+
+Runs are listed **per workflow** (`actions/workflows/<id>/runs`), since the
+repository-wide listing stops at 1,000 runs, 3-4 days here; each listing is
+halved by `runs_between` like the cost report's, and shares its paging and
+retries. A sampled run costs one request, so `--latency` takes about
+`SAMPLE` requests a workflow plus a day's jobs.
+
 ## The prune
 
 `ghcr_prune.py` deletes what

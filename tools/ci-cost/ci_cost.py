@@ -186,14 +186,18 @@ def stamp(moment: datetime) -> str:
     return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def runs_between(fetch: Fetch, repo: str, start: datetime, end: datetime) -> list[dict]:
-    """The runs created in [start, end), halving the span until each query fits under SEARCH_CAP."""
-    query = f"repos/{repo}/actions/runs?created={stamp(start)}..{stamp(end - timedelta(seconds=1))}"
+def runs_between(fetch: Fetch, repo: str, start: datetime, end: datetime, workflow: int | None = None) -> list[dict]:
+    """The runs created in [start, end), halving the span until each query fits under SEARCH_CAP.
+
+    One workflow's listing has its own cap, which is how a month of a busy repository is read whole.
+    """
+    scope = f"workflows/{workflow}/runs" if workflow else "runs"
+    query = f"repos/{repo}/actions/{scope}?created={stamp(start)}..{stamp(end - timedelta(seconds=1))}"
     total = fetch(f"{query}&per_page=1")["total_count"]
     if total > SEARCH_CAP and end - start > timedelta(minutes=1):
         middle = start + (end - start) / 2
         middle = middle.replace(microsecond=0)
-        return runs_between(fetch, repo, start, middle) + runs_between(fetch, repo, middle, end)
+        return runs_between(fetch, repo, start, middle, workflow) + runs_between(fetch, repo, middle, end, workflow)
     if total > SEARCH_CAP:
         raise LookupError(f"{total} runs in {stamp(start)}, more than a query answers: the count would be short")
     return list(paged(fetch, query, "workflow_runs"))
@@ -517,22 +521,47 @@ def origin_repo() -> str:
     return match[1]
 
 
+def latency(args: argparse.Namespace, windows: list[Window], fetch: Fetch, today: date) -> int:
+    """The latency report: the last 30 full days unless a window or only a day was asked for."""
+    import ci_latency
+
+    try:
+        day = date.fromisoformat(args.day) if args.day else None
+    except ValueError:
+        raise SystemExit(f"--day {args.day!r} is not YYYY-MM-DD") from None
+    if not windows and not day:
+        windows = [Window("A", today - timedelta(days=30), today - timedelta(days=1))]
+    print(ci_latency.report(fetch, args.repo or [origin_repo()], windows, day, tuple(args.cap) or ci_latency.CAPS,
+                            as_json=args.json))
+    return 0
+
+
 def main(argv: list[str] | None = None, fetch: Fetch = gh, today: date | None = None,
          manifest: Manifest | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--repo", help="owner/name; the origin remote's by default")
+    parser.add_argument("--repo", action="append", default=[],
+                        help="owner/name; the origin remote's by default, and repeatable with --latency")
     parser.add_argument("--window", action="append", default=[],
                         help="NAME=FIRST:LAST, both days inclusive and in UTC; the last 14 full days by default")
     parser.add_argument("--plan", choices=ALLOWANCES, default="Free")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--latency", action="store_true",
+                        help="report how long runs and jobs wait and take, per workflow, instead of what they cost")
+    parser.add_argument("--day", help="with --latency, YYYY-MM-DD: every job of that UTC day, replayed under --cap")
+    parser.add_argument("--cap", type=int, action="append", default=[],
+                        help="with --day, a concurrency cap to replay the day under; 20, 40 and 60 by default")
     args = parser.parse_args(argv)
+    if not args.latency and (args.day or args.cap or len(args.repo) > 1):
+        parser.error("--day, --cap and a second --repo belong to --latency")
     today = today or datetime.now(timezone.utc).date()
     try:
         windows = [window_of(text, i) for i, text in enumerate(args.window)]
     except argparse.ArgumentTypeError as error:
         parser.error(str(error))
+    if args.latency:
+        return latency(args, windows, fetch, today)
     windows = windows or [Window("A", today - timedelta(days=14), today - timedelta(days=1))]
-    repo = args.repo or origin_repo()
+    repo = (args.repo or [origin_repo()])[0]
     usages = [measure(fetch, repo, w, current=w.last >= today - timedelta(days=1), manifest=manifest)
               for w in windows]
     print(as_json(usages, args.plan) if args.json else table(usages, args.plan))
