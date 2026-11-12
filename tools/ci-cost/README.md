@@ -65,7 +65,7 @@ nearest-rank p50 / p90, so every figure is one that was measured.
 |---|---|
 | Weekly run time | `updated_at - run_started_at` of each successful run, by the Monday, in UTC, of its creation; what showed the 2026-11-08 regression |
 | Critical path | of the newest `SAMPLE` successful runs of each workflow: run start to its first job, first job to last end, the longest job, and the span beyond the longest job (the serial chain), from the latest attempt's jobs |
-| Queue wait | per job, `created_at` to `started_at`, matrix legs summed under the job's name, over the same runs |
+| Queue wait | per job, `created_at` to `started_at`, matrix legs' waits pooled under the job's name, over the same runs |
 | Slowest steps | per job, the `STEPS` steps with the highest p90, skipped steps left out |
 | A day (`--day`) | every job of the runs created that UTC day in every `--repo`: jobs per hour, the peak running in one minute (a job counts in each minute it touches), how many were running when a job that waited over `QUEUED_AFTER` seconds was queued, and the day replayed under each `--cap` (`CAPS` by default) |
 
@@ -74,10 +74,11 @@ long as it ran, so its waits are the cap's alone: the as-run row also holds
 the time a runner takes to start, and the two are compared by their gap, never
 as equals. A job of an older run re-run that day is not in the day.
 
-Runs are listed **per workflow** (`actions/workflows/<id>/runs`), since the
-repository-wide listing stops at 1,000 runs, 3-4 days here; each listing is
-halved by `runs_between` like the cost report's, and shares its paging and
-retries. A sampled run costs one request, so `--latency` takes about
+A window's runs are listed **per workflow**
+(`actions/workflows/<id>/runs`), which groups them by workflow without a
+second pass and lets a workflow with no run be skipped; each listing is
+halved by `runs_between` under the 1,000-result cap like the cost report's,
+and shares its paging and retries. A sampled run costs one request, so `--latency` takes about
 `SAMPLE` requests a workflow plus a day's jobs.
 
 ## The prune
