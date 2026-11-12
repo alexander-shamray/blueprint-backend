@@ -67,7 +67,11 @@ def touched(version: dict) -> datetime:
 
 
 def kept_for_themselves(versions: list[dict], rolled: set[str], now: datetime) -> list[dict]:
-    """The versions kept whatever else names them: recent, among the newest images, rolled, or tagged by hand."""
+    """The versions kept whatever else names them: recent, among the newest images, rolled, or with another tag.
+
+    Another tag is neither a commit nor a referrers tag: `main`, one put on by hand, and the rollout's own on the
+    digest it verified (ADR-201), so a rebuilt commit tag moves alone.
+    """
     cut = now - timedelta(days=KEEP_DAYS)
     images = [v for v in versions if any(COMMIT_TAG.fullmatch(tag) for tag in tags_of(v))]
     newest = sorted(images, key=touched, reverse=True)[:KEEP_NEWEST]

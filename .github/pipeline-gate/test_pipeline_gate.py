@@ -191,6 +191,7 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/v.json"
           gh attestation verify "oci://x" --source-ref refs/heads/main
+          docker buildx imagetools create --tag "$REGISTRY/$1:$RECORD" "$REGISTRY/$1@$VERIFIED"
         env:
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
 
@@ -1303,6 +1304,13 @@ class SupplyChainTests(Fixture):
         problems = self.broken("verified-digest", "images", deploy=True)
 
         self.assertIn("reading the digest it verified", problems[0])
+
+    def test_a_verify_that_records_no_tag_on_what_it_verified_is_caught(self) -> None:
+        """ADR-201: without the tag, a rebuilt commit tag leaves the pinned digest to the prune."""
+        problems = self.broken("imagetools create", "imagetools inspect", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("a tag the prune keeps", problems[0])
 
     def test_a_provenance_check_that_does_not_pin_the_ref_is_caught(self) -> None:
         """The signer workflow alone admits ci.yml on any branch."""

@@ -5,10 +5,10 @@ name: Deploy
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Roll {0} to {1}', inputs.workload, inputs.tag) || '' }}
 
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
-# cluster: no environment, no kubeconfig. It does reach a registry, to verify
-# what CI pushed and pin the digest it verified (ADR-109). The rest is
-# asserted by `deploy/canary/canary.py` and the modules beside it, whose suites
-# run on every change to this tree, and by the `check` job below.
+# cluster: no environment, no kubeconfig. It reaches a registry, to verify what
+# CI pushed, pin the digest it verified (ADR-109) and tag it (ADR-201). The
+# rest is asserted by `deploy/canary/canary.py` and the modules beside it, whose
+# suites run on every change to this tree, and by the `check` job below.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
@@ -104,11 +104,13 @@ jobs:
     # timeout hit, leaving a canary serving with no step left to remove it.
     timeout-minutes: 150
     environment: production
-    # `packages: read` for the pull and `attestations: read` for the
-    # provenance lookup; the job writes to neither (ADR-109).
+    # `packages: write` for the pull and the one tag the rollout records on what
+    # it verified (ADR-201), `attestations: read` for the provenance lookup
+    # (ADR-109). The job runs only on a dispatch from main, so no pull request
+    # reaches the grant (ADR-197).
     permissions:
       contents: read
-      packages: read
+      packages: write
       attestations: read
     env:
       NAMESPACE: commerce
@@ -227,9 +229,10 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # The identity is ci.yml on main and nothing else, so a branch, a fork or
-      # another workflow verifies as unsigned. The digest is the one cosign
-      # verified, not a second lookup of the tag (ADR-081), and the provenance
-      # is checked by that digest, so both checks cover the same bytes.
+      # another workflow verifies as unsigned. Both checks cover the digest
+      # cosign verified, not a second lookup of the tag (ADR-081). A tag of this
+      # run's own then holds that digest for the prune before Helm pins it, and
+      # is verified again, so other bytes under it stop the rollout (ADR-201).
       - name: The images are the ones CI built and signed
         run: |
           set -euo pipefail
@@ -246,6 +249,16 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
               --source-ref refs/heads/main > /dev/null
+            docker buildx imagetools create --tag "$reference:$RECORD" "$reference@$VERIFIED"
+            cosign verify "$reference:$RECORD" \
+              --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --output json > "$RUNNER_TEMP/$1.recorded.json"
+            RECORDED=$(python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/$1.recorded.json")
+            if [ "$RECORDED" != "$VERIFIED" ]; then
+              echo "::error::$1:$RECORD does not name the digest this run verified, so the prune would not keep it."
+              exit 1
+            fi
           }
           API_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role api)
           MIGRATOR_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role migrator)
@@ -263,6 +276,9 @@ jobs:
           WORKLOAD: ${{ inputs.workload }}
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
           GH_TOKEN: ${{ github.token }}
+          # Neither a commit nor a referrers tag, so ghcr_prune.py keeps it for
+          # itself; per attempt, since a re-run verifies the tag again.
+          RECORD: rollout-${{ github.run_id }}-${{ github.run_attempt }}
 
       # The tag is held to the revision it names and that revision's src/ is
       # extracted for the steps below to read: ADR-050 argues why, and this is
