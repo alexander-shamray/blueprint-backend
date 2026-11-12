@@ -26,6 +26,18 @@ public static class AssistantEndpoints
     /// <summary>The most catalogue entries a client may send.</summary>
     public const int MaxCatalogue = 200;
 
+    /// <summary>The most client tools a conversation may carry.</summary>
+    public const int MaxClientTools = 32;
+
+    /// <summary>The longest locale tag, in characters.</summary>
+    public const int MaxLocaleLength = 35;
+
+    /// <summary>The longest catalogue id, label, place and help, in characters.</summary>
+    public static readonly (int Id, int Label, int Where, int Help) CatalogueLimits = (64, 128, 256, 1_000);
+
+    /// <summary>The longest client tool title, description and serialised input schema, in characters.</summary>
+    public static readonly (int Title, int Description, int Schema) ToolLimits = (128, 1_000, 4_096);
+
     /// <summary>The largest body a route takes, so no field a client sends reaches a prompt unbounded.</summary>
     public const long MaxBodyBytes = 128 * 1024;
 
@@ -252,11 +264,45 @@ public static class AssistantEndpoints
             _ when request.ClientTools.Any(t => t is null || t.Name is null || t.Title is null ||
                 t.Description is null || t.InputSchema is null || t.Annotations is null) =>
                 ("clientTools", "Every client tool needs name, title, description, inputSchema and annotations."),
-            _ => null
+            _ => Bounded(request)
         };
 
         return error is { } e ? NotValid(e.Field, e.Why) : null;
     }
+
+    // The catalogue and the client tools reach the provider with the host's own weight (the system block and the tool
+    // definitions), so a caller who posts the route directly must not write instructions there: every text is short
+    // and holds no line break or control character, and the client tools are few.
+    private static (string Field, string Why)? Bounded(OpenConversation request)
+    {
+        if (request.Locale.Length > MaxLocaleLength || HasControl(request.Locale))
+            return ("locale", $"A locale is a tag of at most {MaxLocaleLength} characters on one line.");
+
+        if (request.ClientTools.Count > MaxClientTools)
+            return ("clientTools", $"A conversation takes at most {MaxClientTools} client tools.");
+
+        (int id, int label, int where, int help) = CatalogueLimits;
+
+        if (request.Catalogue.Any(e => Over(e.Id, id) || Over(e.Label, label) || Over(e.Where, where) ||
+            Over(e.Help, help)))
+        {
+            return ("catalogue", "A catalogue entry's id, label, where and help are short single lines.");
+        }
+
+        (int title, int description, int schema) = ToolLimits;
+
+        return request.ClientTools.Any(t => Over(t.Title, title) || Over(t.Description, description) ||
+            t.InputSchema.ToJsonString().Length > schema)
+            ? ("clientTools", "A client tool's title, description and input schema are short, on one line.")
+            : null;
+    }
+
+    private static bool Over(string text, int limit) => text.Length > limit || HasControl(text);
+
+    // IsControl misses the Unicode line and paragraph separators, which a model reads as a line break all the same.
+    private static bool HasControl(string text) =>
+        text.Any(c => char.IsControl(c) ||
+            CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator);
 
     // §10.5's validation row: a field-keyed errors member, the shape Common.Web writes for a ValidationException.
     private static ValidationProblem NotValid(string field, string why) =>
