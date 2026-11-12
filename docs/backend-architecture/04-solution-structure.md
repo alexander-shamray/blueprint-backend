@@ -981,7 +981,8 @@ somebody stops reading its output:
 
 Which versions those are is `Directory.Packages.props`'s answer and never this
 chapter's. A version with a known vulnerability fails the restore: NuGet's
-audit raises NU1903 and NU1904, and
+audit raises NU1901 to NU1904, one code per advisory severity from low to
+critical, since nothing here raises the audit level above its default, and
 [ADR-019](adr/ADR-019-warnings-are-errors-and-the-editorconfig-is-a-build-input.md)
 makes a warning a failed build, which is how several of that file's pins were
 chosen. Currency, whether a newer version exists, is a separate obligation, and
