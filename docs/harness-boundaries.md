@@ -30,6 +30,7 @@ the whole is about 46k. `Grep -n "^## <title>"` gives its first line.
 | The sed line-ending guard | guard-sed-crlf.py refusing `sed -i` on a tracked CRLF file: what it reads, what a crafted path makes it run, where it fails open, and its residuals. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop. |
 | The suite's shard runner | shard-harness-suite.py dealing the `.claude/scripts` classes to parallel workers, what it may never stop placing, its tables, and its one-run-per-user lock. |
+| The harness legs decision | harness-legs.py deciding whether a target's Windows and macOS legs test a pull request, what reaches them, and why only a cleanly read merge commit may skip. |
 | Managed files | Which paths blueprint-harness owns and where they are changed, the `local` paths a repository keeps, and the drift gate that holds them. |
 
 ## Purpose and provenance of this file
@@ -2705,6 +2706,56 @@ what one user runs, which on a developer's machine is every session that could
 collide; another user's runs, or one under a different `TMPDIR`, are not held by
 it. The operating system drops the lock with the process that held it, so there
 is nothing stale to clear.
+
+## The harness legs decision
+
+**`python .claude/scripts/harness-legs.py` prints `test=true` or
+`test=false`**, for a target's workflow to append to `$GITHUB_OUTPUT` and gate
+the test steps of its Windows and macOS legs on. It takes no arguments: it
+reads `GITHUB_EVENT_NAME` from the run, and the merge commit's two parents
+from the checkout, so the checkout takes `fetch-depth: 2`.
+The Linux leg runs every pull request whatever it prints. A product pull
+request still reaches the cases that read the whole tracked tree (the
+tracked-link and root-name cases, and the sweep slices' run over every tracked
+path), and a skip loses their Git Bash and bash 3.2 runs: that is the cost the
+decision accepts, and Linux still judges them on every pull request.
+
+```yaml
+- name: Decide whether this leg tests
+  id: reach
+  if: runner.os != 'Linux'
+  run: python .claude/scripts/harness-legs.py >> "$GITHUB_OUTPUT"
+- name: Test the harness
+  if: runner.os == 'Linux' || steps.reach.outputs.test != 'false'
+  run: python -m unittest discover -s .claude/scripts
+```
+
+**Only a pull request whose merge commit reads cleanly and reaches nothing the
+reach names may skip.** A push, any other event, a `HEAD` that is not a merge,
+an empty diff, a git read that fails, and a manifest or config that does not
+read as its shape all print `test=true`: a wrong skip loses a run, and a
+wrong test costs minutes. Moves are read as both sides, so a file moved out of
+a reached tree still reaches.
+
+**The reach is read from the target, never listed for it.** It is `.claude/`
+and `.harness/` whole, `docs/harness-local.md`, a `.gitignore` or
+`.gitattributes` at any depth, every path `.harness/manifest.json` lists, every
+`local` glob in `.harness/config.json`, and every workflow. Every workflow, not
+the caller alone: the legs' steps may sit in a reusable workflow, and the run's
+own `GITHUB_WORKFLOW_REF` names only the workflow GitHub started. A target that
+moves them into a local action lists its file under `local`. Paths compare
+case folded, as `apply` folds a `local` path. A sync that adds a managed file
+adds it to the reach in the same commit, and a local suite reading a file
+outside these trees is reached once the config lists that file under `local`.
+
+**`test_harness_legs.py` holds the reach to what the suites spell**, not to a
+list written beside it: every `test_*.py` beside it, and every file the suites
+and `review_helpers.py` spell off the root or `.claude/`, through a name or
+their own `__file__`, must be reached in the checkout the suite runs in, and a
+product path must not be. A suite that starts reading a
+file the reach misses fails there, rather than passing on a pull request whose
+legs skipped. `blueprint-harness` decides its own legs with
+`harness_sync/legs.py`, whose reach is the payload rather than a rendered tree.
 
 ## Managed files
 
