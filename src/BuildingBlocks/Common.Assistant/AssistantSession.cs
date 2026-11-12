@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Common.Assistant.Protocol;
 using Common.Assistant.Providers;
@@ -181,6 +182,7 @@ public sealed class AssistantSession : IDisposable
         // cancels, or the provider refuses. Server calls run concurrently, each with a timeout; client calls are
         // emitted and waited for. A turn is running work, not polling: it goes on with no stream open, until it ends.
         Usage used = Usage.None;
+        Usage unreported = Usage.None;
         string reason = TurnEndReason.Done;
         string? category = null;
 
@@ -204,6 +206,7 @@ public sealed class AssistantSession : IDisposable
                 finally
                 {
                     used += round.Usage;
+                    unreported += round.Reported || round.Request is null ? Usage.None : Unreported(round.Request);
 
                     // A round cut short keeps the text it had; its calls and blocks are dropped with it, since a
                     // provider would refuse a call with no result and a block it never finished.
@@ -249,7 +252,19 @@ public sealed class AssistantSession : IDisposable
             Emit(new ErrorEvent("provider-error", "The assistant's provider failed", 502, Detail(e)));
         }
 
-        End(reason, category, used);
+        End(reason, category, used, unreported);
+    }
+
+    // A round cut short before its usage report (a cancel, a broken stream) was still sent, and a host counting spend
+    // must count it: input at four characters a token of what was sent, output at the round's bound.
+    private static Usage Unreported(TurnRequest request)
+    {
+        long characters = request.System.Length
+            + JsonSerializer.Serialize<object>(request.Tools).Length
+            + JsonSerializer.Serialize<object>(request.Catalogue).Length
+            + request.History.Sum(message => (long)JsonSerializer.Serialize<object>(message).Length);
+
+        return new Usage(characters / 4, request.MaxOutputTokens, 0);
     }
 
     private async Task StreamAsync(Round round, CancellationToken cancellationToken)
@@ -260,6 +275,8 @@ public sealed class AssistantSession : IDisposable
         {
             request = new TurnRequest(registry.All, core.System, catalogue, [.. history], core.Limits.MaxOutputTokens);
         }
+
+        round.Request = request;
 
         await foreach (ProviderEvent value in core.Provider.TurnAsync(request, cancellationToken))
         {
@@ -293,6 +310,7 @@ public sealed class AssistantSession : IDisposable
 
                     break;
                 case UsageReport report:
+                    round.Reported = true;
                     round.Usage += report.Usage;
                     Interlocked.Exchange(ref contextTokens, report.Usage.Input + report.Usage.Cached);
 
@@ -417,7 +435,7 @@ public sealed class AssistantSession : IDisposable
         }
     }
 
-    private void End(string reason, string? category, Usage used)
+    private void End(string reason, string? category, Usage used, Usage unreported)
     {
         TurnSummary summary;
 
@@ -448,7 +466,7 @@ public sealed class AssistantSession : IDisposable
             turn?.Dispose();
             turn = null;
             LastActive = core.Time.GetUtcNow();
-            summary = new TurnSummary(core.Provider.Id, Id, reason, used, total, Caller);
+            summary = new TurnSummary(core.Provider.Id, Id, reason, used, total, Caller, unreported);
         }
 
         core.TurnEnded?.Invoke(summary);
@@ -512,6 +530,10 @@ public sealed class AssistantSession : IDisposable
 
         public Usage Usage { get; set; } = Usage.None;
 
+        public bool Reported { get; set; }
+
+        public TurnRequest? Request { get; set; }
+
         public ProviderStop? Stop { get; set; }
 
         public string? Category { get; set; }
@@ -521,8 +543,9 @@ public sealed class AssistantSession : IDisposable
 }
 
 /// <summary>
-/// What a host learns of a turn (design §10): provider, conversation, end reason, usage, and whose turn it was, so a
-/// host can count a caller's spend; never text.
+/// What a host learns of a turn (design §10): provider, conversation, end reason, usage, whose turn it was, and an
+/// estimate for rounds cut short before the provider reported their usage, so a host can count a caller's spend; never
+/// text. The estimate is the host's alone: the client's <see cref="TurnEndedEvent"/> carries reported usage.
 /// </summary>
 public sealed record TurnSummary(
     string Provider,
@@ -530,4 +553,5 @@ public sealed record TurnSummary(
     string Reason,
     Usage Usage,
     Usage Total,
-    Caller Caller);
+    Caller Caller,
+    Usage Unreported);

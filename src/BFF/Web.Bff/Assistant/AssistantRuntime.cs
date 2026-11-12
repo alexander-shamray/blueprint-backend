@@ -107,7 +107,7 @@ public sealed partial class AssistantRuntime : IDisposable
     // the customer's and the host's day.
     private void Logged(TurnSummary turn)
     {
-        Spend.Add(turn.Caller.Id, turn.Usage);
+        Spend.Add(turn.Caller.Id, turn.Usage + turn.Unreported);
         TurnEnded(
             _logger,
             turn.Provider,

@@ -11,16 +11,13 @@ public enum BudgetSpent
 }
 
 /// <summary>
-/// The tokens the assistant's turns spent in the current UTC day, per customer and for the host (ADR-204): each
-/// turn's usage is added as it ends, and a budget reached refuses new work until the day turns.
+/// The tokens the assistant's turns spent in the current UTC day, per customer and for the host, in memory as
+/// ADR-153's single replica allows: each turn is added as it ends, so turns running when a budget is reached finish
+/// past it (ADR-204).
 /// </summary>
-/// <remarks>
-/// In memory, as ADR-153's single replica allows. A turn is counted when it ends, so turns already running when a
-/// budget is reached finish and land past it; the cap bounds what a customer can start, not one turn's spend.
-/// </remarks>
 public sealed class AssistantSpend : IDisposable
 {
-    /// <summary>How often a timer forgets a past day's counts, so an idle replica holds no customer id past it.</summary>
+    /// <summary>How often a timer forgets a past day's counts, so an idle replica holds no id past it.</summary>
     public static readonly TimeSpan SweepPeriod = TimeSpan.FromHours(1);
 
     private readonly Lock _gate = new();
