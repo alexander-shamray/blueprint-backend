@@ -1,5 +1,5 @@
 {
-  "harness_commit": "712789f79c7452baf9cdab728d09df0e3156d0bc",
+  "harness_commit": "2f7fec53b62e84ac077ec1c837c45c7d32faf0fa",
   "files": {
     ".claude/agents/branch-reviewer.md": "c6bdaa06cfa86d674b80afc2180d58d27e0c277bbc6e2280bf46102339385740",
     ".claude/agents/bug-auditor.md": "6219201313c10252798ff249570298f4de6ad6a66690f3dc40510fd76859b4d7",
@@ -66,7 +66,7 @@
     ".claude/scripts/pr-for-branch.sh": "9dbc2b753f01300c9bfc49cda475e91138348eea03499b93fd25234c5d338651",
     ".claude/scripts/pr-locality.sh": "591495e2ac602f0257485c88f4cf3502ea2586ad7f0b95d2a2db2f217317b9d0",
     ".claude/scripts/pr-state.sh": "a352692e3bc2919b4c77b21aa354f7264a85134f734ae3eb9ee1e441ebd3827a",
-    ".claude/scripts/review_helpers.py": "09f19bd769f1abd1acbb14f57de0db6a12a18df4b2cdccd0efc35c410e7ffd2c",
+    ".claude/scripts/review_helpers.py": "8ae7a4575c9c00050e5db98208481661f045f595bb1e1031c77400da88525c0c",
     ".claude/scripts/shard-harness-suite.py": "7a8c4a587c8d7df227beb61224d59cb881fe1077576a58a5d3d46ccd77cee165",
     ".claude/scripts/suite_select.py": "7e2d0195f509f8aad54a63786149a23612ed4ae7cabf2c5d5917798cbbaeac65",
     ".claude/scripts/sweep-mark.sh": "6efecf9121fb7b8aa2446c1b86a27e1ecbb6125826e31d0bf9fc835c3d488cfb",
@@ -122,6 +122,7 @@
     ".claude/scripts/test_pr_helpers.py": "41004320169116cd499489485ee578d2b294ed2e5ec9bc6df384c5083710743d",
     ".claude/scripts/test_python_hygiene.py": "9a8d6f9e6bdbf5deaf0fed2304b67f92c592f692671c36e58fb8ce10dabfe8f0",
     ".claude/scripts/test_refresh_index.py": "5775158131d2b431676c54ee077d4f91803814c421aaa7b19f81332e92a9486a",
+    ".claude/scripts/test_review_helpers.py": "7870e024ad69fd40778b38d7a4b74f38d50206768742969bb5a6fb218b67b73a",
     ".claude/scripts/test_root_ignore_covers_nested.py": "12392c59bad53c21825154dd18e3cd9607818950da3359778d832bd858bd6e12",
     ".claude/scripts/test_run_guard.py": "229170339ea50415d7b4ffb9afa84f3adb4283ba4aa38d7b3ee723fcdf53c18b",
     ".claude/scripts/test_sed_crlf_guard.py": "682f3490a23513cf295a0d517814e4ff0625e1cd6476ec4bfb3f470c04adbd6c",
