@@ -299,7 +299,16 @@ class VerifyTests(SyncCase):
         self.deleted = []
         self.head_files["docs/c.md"] = "edited instead of deleted\n"
         self.start()
-        self.refused("docs/c.md left the manifest but was changed, not deleted")
+        out = self.refused("docs/c.md left the manifest but was changed, not deleted")
+        self.assertEqual(1, out.count("docs/c.md"), out)  # the head-tree read below does not name it again
+
+    def test_a_path_dropped_from_the_manifest_and_kept_unchanged_is_refused(self):
+        # An incomplete sync: the payload and the manifest both drop the file, and the head keeps it as it was, so
+        # the diff never names it; apply deletes it, and the drift gate refuses one only under a managed directory.
+        self.deleted = []
+        self.start()
+        out = self.refused("docs/c.md left the manifest but is still on the head")
+        self.assertEqual(1, out.count("docs/c.md"), out)
 
     def test_a_sync_older_than_the_base_is_refused(self):
         self.start()
@@ -615,6 +624,13 @@ class ConfigGlobTests(SyncCase):
         self.start(payload={**PAYLOAD, "docs/c.md": "C\n"})
         self.refused("docs/c.md is excluded or local to this target but the manifest lists it")
 
+    def test_an_excluded_path_dropped_from_the_manifest_and_kept_is_refused(self):
+        # Exclude means not delivered: apply deletes a formerly managed file that is excluded now, so keeping it
+        # is a fork, whether or not the payload still ships it.
+        self.deleted = []
+        self.start(payload={**PAYLOAD, "docs/c.md": "C\n"})
+        self.refused("docs/c.md left the manifest but is still on the head")
+
     def test_a_local_payload_path_need_not_be_listed(self):
         self.start(payload={**PAYLOAD, "docs/d.md": "D\n"})
         self.assertEqual(0, self.cli("verify", "7")[0])
@@ -622,6 +638,16 @@ class ConfigGlobTests(SyncCase):
     def test_the_globs_match_case_sensitively(self):
         self.start(payload={**PAYLOAD, "docs/D.md": "D\n"})
         self.refused("docs/D.md is a payload file but the manifest does not list it")
+
+
+class DroppedLocalPathTests(SyncCase):
+    config = {**CONFIG, "local": ["docs/local.md", "Docs/C.md"]}
+
+    def test_a_dropped_path_that_is_local_now_may_stay_whatever_its_case(self):
+        # apply keeps a dropped path a local glob matches, folding case, so the head keeping it is the sync's own.
+        self.deleted = []
+        self.start()
+        self.assertEqual(0, self.cli("verify", "7")[0])
 
 
 class UnreadableConfigTests(SyncCase):

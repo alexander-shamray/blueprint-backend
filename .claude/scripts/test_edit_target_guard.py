@@ -140,11 +140,11 @@ class GuardCase(unittest.TestCase):
         return linkpath
 
     def judge(self, file_path, tool="Edit", cwd=None, key="file_path",
-              project=None, process_cwd=None, hook=HOOK):
+              project=None, process_cwd=None, hook=HOOK, env=None):
         """The hook's verdict on one call: the reason, or `None` for allowed.
 
-        `cwd` is the event's, which a relative path resolves against;
-        `process_cwd` is where the hook process starts, the runner's if `None`.
+        `cwd` is the event's, for a relative path; `process_cwd` the hook
+        process's, the runner's if `None`; `env` lies over the runner's.
         """
         event = {
             "hook_event_name": "PreToolUse",
@@ -157,7 +157,8 @@ class GuardCase(unittest.TestCase):
             input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
             cwd=process_cwd,
             env={**os.environ,
-                 "CLAUDE_PROJECT_DIR": self.root if project is None else project},
+                 "CLAUDE_PROJECT_DIR": self.root if project is None else project,
+                 **(env or {})},
         )
         self.assertEqual(
             0, result.returncode,
@@ -282,6 +283,26 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
         # which is the one legitimate use of that grammar.
         self.assertAdmitted(plain)
         self.assertTrue(guard.alternate_alphabet("\\\\nas\\projects\\repo"))
+
+    def test_a_unc_checkout_licenses_only_what_it_contains(self):
+        # The exemption both ways: a checkout on a share is not refused
+        # wholesale, and its being `\\`-spelled admits no other spelling. A
+        # missing share on `localhost` answers the guard's reads in
+        # milliseconds, where an unknown host waits on name resolution.
+        share = "\\\\localhost\\guard-no-share\\repo"
+        guard = self.guard_module()
+        if os.name != "nt":
+            self.assertFalse(guard.alternate_alphabet(share))
+            return
+        on_share = {"project": share, "cwd": share}
+        self.assertAdmitted(share + "\\docs\\chapter.md", **on_share)
+        self.assertAdmitted("docs\\chapter.md", **on_share)
+        for spelling in ("\\\\?\\UNC\\localhost\\guard-no-share\\repo",
+                         "\\\\.\\UNC\\localhost\\guard-no-share\\repo",
+                         "\\\\localhost\\guard-no-share\\other"):
+            with self.subTest(spelling=spelling):
+                self.assertIn("other path grammar", self.assertRefused(
+                    spelling + "\\.claude\\settings.json", **on_share))
 
     def test_an_eight_dot_three_spelling_is_refused_where_one_exists(self):
         # Windows' other alphabet: `CLAUDE~1` is a different string from
@@ -649,7 +670,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             os.path.join(self.HOME, ".gitconfig"),
         ):
             with self.subTest(target=target):
-                self.assertIn("outside every checkout", self.assertRefused(target))
+                self.assertIn("no checkout below the home holds", self.assertRefused(target))
 
     def test_a_link_into_the_keys_is_held(self):
         for linker in linkers():
@@ -689,6 +710,39 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         ):
             with self.subTest(target=target):
                 self.assertIn("control surface", self.assertRefused(target))
+
+    def test_an_anchor_holding_the_home_excuses_nothing_at_login(self):
+        # A project directory set to the home or above contains every target
+        # under it, and containing a target is not owning it.
+        for project in (self.HOME, os.path.dirname(self.HOME)):
+            with self.subTest(project=project):
+                self.assertIn("no checkout below the home holds", self.assertRefused(
+                    os.path.join(self.HOME, ".ssh", "authorized_keys"),
+                    project=project))
+                self.assertIn("control surface", self.assertRefused(
+                    os.path.join(self.CLAUDE, "settings.json"), project=project))
+                self.assertAdmitted(os.path.join(self.HOME, "notes.md"),
+                                    project=project)
+
+    def test_a_dotfiles_checkout_at_the_home_excuses_nothing_at_login(self):
+        # The session stands in a home that is itself a checkout, so the
+        # event's cwd walks up to the home as an anchor.
+        home = os.path.join(self.outside, "home")
+        os.makedirs(os.path.join(home, ".git"))
+        os.makedirs(os.path.join(home, "notes"))
+        dotfiles = {"cwd": os.path.join(home, "notes"),
+                    "env": {"HOME": home, "USERPROFILE": home}}
+        for name in ((".ssh", "authorized_keys"), (".bashrc",)):
+            with self.subTest(name=name):
+                self.assertIn("no checkout below the home holds", self.assertRefused(
+                    os.path.join(home, *name), **dotfiles))
+        self.assertAdmitted(os.path.join(home, "notes", "todo.md"), **dotfiles)
+        # A checkout at `~/.claude` beside it owns nothing the home anchor
+        # leaves to `home_offence`: every anchor holding the target agrees.
+        control = os.path.join(home, ".claude")
+        os.makedirs(os.path.join(control, ".git"))
+        self.assertIn("control surface", self.assertRefused(
+            os.path.join(control, "settings.json"), project=control, **dotfiles))
 
     def test_names_that_cannot_be_read_refuse_the_home_and_nothing_else(self):
         # They live in `guard-git-argv.py`, so a guard copied without it fails
@@ -732,17 +786,34 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
 class AWorktreeTheSessionHasNotEntered(GuardCase):
     """No permission rule reaches it, so the target's own denies judge it."""
 
-    def linked(self, name="linked", beside=None):
-        """A linked worktree of the fixture, in the shape the guard reads."""
+    def linked(self, name="linked", beside=None, relative=False):
+        """A linked worktree of the fixture, in the shape the guard reads.
+
+        `relative` writes both pointers as git's `--relative-paths` option
+        does, each against the directory of the file holding it.
+        """
         worktree = os.path.join(beside or self.outside, name)
         os.makedirs(os.path.join(worktree, "docs"), exist_ok=True)
         admin = os.path.join(self.root, ".git", "worktrees", name)
         os.makedirs(admin, exist_ok=True)
-        self.write(os.path.join(worktree, ".git"), "gitdir: " + admin + "\n")
-        self.write(os.path.join(admin, "gitdir"),
-                   os.path.join(worktree, ".git") + "\n")
+        pointer, backlink = admin, os.path.join(worktree, ".git")
+        if relative:
+            pointer = os.path.relpath(pointer, worktree).replace(os.sep, "/")
+            backlink = os.path.relpath(backlink, admin).replace(os.sep, "/")
+        self.write(os.path.join(worktree, ".git"), "gitdir: " + pointer + "\n")
+        self.write(os.path.join(admin, "gitdir"), backlink + "\n")
         self.write(os.path.join(admin, "commondir"), "../..\n")
         return worktree
+
+    def test_a_worktree_with_relative_pointers_is_judged_the_same(self):
+        # Read against the hook's own cwd, the runner's here, both pointers
+        # name nothing and neither rule recognises the worktree.
+        worktree = self.linked("relative", relative=True)
+        self.assertIn("worktree of this repository", self.assertRefused(
+            os.path.join(worktree, ".claude", "settings.json")))
+        self.assertIn("main checkout", self.assertRefused(
+            os.path.join(self.root, ".claude", "settings.json"), cwd=worktree))
+        self.assertAdmitted(os.path.join(worktree, "docs", "note.md"))
 
     def hook_denying(self, *denies):
         """A copy of both guards whose checkout's settings carry `denies`."""
@@ -872,6 +943,12 @@ class AWorktreeTheSessionHasNotEntered(GuardCase):
         self.write(os.path.join(forged, ".git"), "gitdir: " + admin + "\n")
         self.write(os.path.join(admin, "gitdir"), "/elsewhere/.git\n")
         self.assertAdmitted(os.path.join(forged, ".claude", "scripts", "x.sh"))
+        # A relative backlink is read against the admin directory, so one
+        # naming the forged checkout from the hook's cwd agrees with nothing.
+        self.write(os.path.join(admin, "gitdir"), os.path.relpath(
+            os.path.join(forged, ".git"), self.outside) + "\n")
+        self.assertAdmitted(os.path.join(forged, ".claude", "scripts", "x.sh"),
+                            process_cwd=self.outside)
 
     def test_a_link_inside_it_is_judged(self):
         worktree = self.linked()

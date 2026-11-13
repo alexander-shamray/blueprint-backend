@@ -386,6 +386,29 @@ class PathTests(unittest.TestCase):
             # A checkout whose directories cannot be listed over-claims, the safe direction.
             self.assertEqual({"and/or"}, db.extract_paths("`and/or`"))
 
+    def test_a_code_fence_does_not_shift_the_backtick_pairing_of_later_lines(self):
+        self.in_checkout()
+        # A fence's three backticks pair across lines with an inline span's opening one, so a directory named after it
+        # would be read outside a span and dropped.
+        body = "Repro:\n\n```bash\nmake check\n```\n\nTouches `deploy/rabbitmq/` and `docs/x.md` too."
+        self.assertEqual({"deploy/rabbitmq", "docs/x.md"}, db.extract_paths(body))
+        self.assertEqual({"deploy/rabbitmq", "docs/x.md"}, db.extract_paths(body.replace("\n", "\r\n")))
+        # A path quoted inside the fence still claims: dropping it would narrow the claim, the unsafe direction.
+        self.assertEqual({"tools/quality-sets"}, db.extract_paths("```\nsee `tools/quality-sets/`\n```"))
+
+    def test_a_code_span_wrapped_across_a_line_break_still_pairs(self):
+        self.in_checkout()
+        # A hard-wrapped body breaks a span over two lines; paired line by line, its closing backtick would open the
+        # next span and drop the directory that follows it.
+        self.assertEqual({"deploy/rabbitmq"}, db.extract_paths("run `gh issue\nlist` and `deploy/rabbitmq/` too"))
+        self.assertEqual({"deploy/rabbitmq"}, db.extract_paths("- run `gh issue\n  list` and `deploy/rabbitmq/`"))
+        # A blank line, a list item, a heading or a block quote ends the block, so an unclosed backtick before it
+        # shifts nothing after it.
+        for start in ("\n", "- ", "* ", "2. ", "## ", "> "):
+            with self.subTest(start=start):
+                found = db.extract_paths(f"- a stray ` here\n{start}then `deploy/rabbitmq/`")
+                self.assertEqual({"deploy/rabbitmq"}, found)
+
     def test_a_dotless_token_under_a_nested_directory_still_claims(self):
         self.in_checkout()
         # src/Services/Ordering is in the checkout, so a body naming the subtree from below src still claims it.

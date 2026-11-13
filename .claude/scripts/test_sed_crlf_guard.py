@@ -234,6 +234,26 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
         reason = self.assertRefused("sed -i 's/one/uno/' *.txt", os.path.join(self.root, "crlf.txt"))
         self.assertIn("which *.txt matches", reason)
 
+    def test_a_brace_list_is_expanded_as_bash_would(self):
+        # The operand was looked up as one literal path, found missing and admitted, though bash expands it.
+        self.put("n02.txt", b"one\r\n")
+        self.git("-c", "core.autocrlf=false", "add", "n02.txt")
+        for command, names in (
+            ("sed -i 's/one/uno/' {lf,crlf}.txt", "crlf.txt, which {lf,crlf}.txt matches"),
+            ("sed -i 's/one/uno/' sub/{other,inner}.txt", "inner.txt, which sub/{other,inner}.txt matches"),
+            ("sed -i 's/one/uno/' *.{md,txt}", "which *.{md,txt} matches"),
+            ("sed -i 's/one/uno/' n{01..03}.txt", "n02.txt, which n{01..03}.txt matches"),
+            ("sed -i 's/one/uno/' {a..c}rlf.txt", "crlf.txt, which {a..c}rlf.txt matches"),
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, names)
+
+    def test_a_brace_list_s_literal_name_is_read_as_well(self):
+        # The hook cannot tell a quoted brace list from a bare one, so it reads both, which can only refuse more.
+        self.put("{x,y}.txt", b"one\r\n")
+        self.git("-c", "core.autocrlf=false", "add", "{x,y}.txt")
+        self.assertRefused("sed -i 's/one/uno/' '{x,y}.txt'", "{x,y}.txt")
+
     def test_a_pathspec_character_in_a_name_is_literal(self):
         # Review R7: as a pathspec, an untracked `crlf[x].txt` would match the tracked `crlfx.txt`.
         self.put("crlfx.txt", b"one\r\n")
@@ -250,6 +270,15 @@ class WhatSedLeavesAloneIsAdmitted(ACheckout):
 
     def test_an_untracked_crlf_file(self):
         self.assertAdmitted("sed -i 's/one/uno/' loose.txt")
+
+    def test_a_brace_list_naming_no_tracked_crlf_file(self):
+        for command in (
+            "sed -i 's/one/uno/' {lf,loose}.txt",
+            # No comma and no sequence: bash passes it literally, and no file has that name.
+            "sed -i 's/one/uno/' {crlf}.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
 
     def test_the_binary_forms_that_keep_the_cr(self):
         for command in (
@@ -328,6 +357,22 @@ class WhatTheHookCannotPlaceFailsOpen(ACheckout):
         self.addCleanup(setattr, GUARD.glob, "iglob", original)
         self.assertAdmitted("sed -i 's/one/uno/' *.cs")
         self.assertLessEqual(len(walked), GUARD.MAX_FILES + 1)
+        # One bound for the operand, not one for each word its braces make.
+        walked.clear()
+        self.assertAdmitted("sed -i 's/one/uno/' {a,b,c,d}*.cs")
+        self.assertLessEqual(len(walked), GUARD.MAX_FILES + 1)
+
+    def test_a_comma_quoted_inside_a_brace_list_is_the_stated_residual(self):
+        # Review R1: the quotes are gone before the list is read, so the `a,b.txt` bash passes is never looked up.
+        self.put("a,b.txt", b"one\r\n")
+        self.git("-c", "core.autocrlf=false", "add", "a,b.txt")
+        self.assertRefused("sed -i 's/one/uno/' a,b.txt", "a,b.txt")
+        self.assertAdmitted("sed -i 's/one/uno/' {\"a,b\",c}.txt")
+
+    def test_a_long_sequence_is_cut_at_the_bound(self):
+        # A sequence is made lazily, so `{1..N}` costs the words read and not N.
+        self.assertEqual(["1", "2"], list(GUARD.itertools.islice(GUARD.braces("{1..1000000000000}"), 2)))
+        self.assertAdmitted("sed -i 's/one/uno/' n{1..1000000000000}.txt")
 
     def test_a_file_list_another_program_computes_is_the_stated_residual(self):
         # Pinned as admitted, because a residual nobody can run is one the next reader assumes was closed: the files
@@ -350,6 +395,41 @@ class WhatTheHookCannotPlaceFailsOpen(ACheckout):
         GUARD.git_on_path = lambda cwd: None
         self.addCleanup(setattr, GUARD, "git_on_path", original)
         self.assertAdmitted("sed -i 's/one/uno/' crlf.txt")
+
+
+class BracesExpandAsBashExpandsThem(unittest.TestCase):
+    """The words `braces` makes, each against what bash 5's `echo` prints for the same word."""
+
+    def test_the_forms_bash_expands(self):
+        for word, words in (
+            ("plain.txt", ["plain.txt"]),
+            ("a{b,c}d{e,f}", ["abde", "abdf", "acde", "acdf"]),
+            ("x{,.bak}", ["x", "x.bak"]),
+            ("{a,{b,c}d}", ["a", "bd", "cd"]),
+            ("{1..3}", ["1", "2", "3"]),
+            ("{3..1}", ["3", "2", "1"]),
+            ("{-1..1}", ["-1", "0", "1"]),
+            ("{01..3}", ["01", "02", "03"]),
+            ("{1..7..3}", ["1", "4", "7"]),
+            ("{a..e..2}", ["a", "c", "e"]),
+        ):
+            with self.subTest(word=word):
+                self.assertEqual(words, list(GUARD.braces(word)))
+
+    def test_the_forms_bash_leaves_as_text(self):
+        for word, words in (
+            ("{a}", ["{a}"]),
+            ("{}", ["{}"]),
+            ("{a,b", ["{a,b"]),
+            ("{1..a}", ["{1..a}"]),
+            ("{ab..c}", ["{ab..c}"]),
+            # A brace that is not an expansion is text, and one after it still expands.
+            ("{a}{b,c}", ["{a}b", "{a}c"]),
+            ("{{a,b}}", ["{a}", "{b}"]),
+            ("{x{a,b}y}", ["{xay}", "{xby}"]),
+        ):
+            with self.subTest(word=word):
+                self.assertEqual(words, list(GUARD.braces(word)))
 
 
 class AGitPlantedWhereTheHookStands(ACheckout):

@@ -16,9 +16,10 @@ SCRIPTS = Path(__file__).resolve().parent
 COMMANDS = SCRIPTS.parent / "commands"
 BASE = SCRIPTS.parent.parent / ".harness" / "settings.base.json"
 
-# `Bash(bash .claude/scripts/x.sh:*)`, `Bash(bash .claude/scripts/x.sh)` and the `py -3.12` form of a Python helper.
+# `Bash(bash .claude/scripts/x.sh:*)`, `Bash(bash .claude/scripts/x.sh)` and the `py -3.12` form of a Python helper,
+# each also with arguments after the name, as `Bash(py -3.12 .claude/scripts/x.py tasks start:*)` carries them.
 # `-m unittest discover` and the other grants that name no file under `.claude/scripts/` do not match.
-HELPER = re.compile(r"Bash\((?:bash|py -3\.12) \.claude/scripts/([^:)\s/]+)(?::\*)?\)")
+HELPER = re.compile(r"Bash\((?:bash|py -3\.12) \.claude/scripts/([^:)\s/]+)(?:[ :].*)?\)")
 
 
 def granted_helpers(tools):
@@ -60,6 +61,20 @@ class TheScanSeesWhatItLooksFor(unittest.TestCase):
                  "Bash(py -3.12 .claude/scripts/c.py:*)", "Bash(py -3.12 -m unittest discover:*)",
                  "Bash(git status:*)", "Bash(bash .claude/scripts/sub/d.sh:*)", "Agent(branch-reviewer)"]
         self.assertEqual(["a.sh", "b.sh", "c.py"], granted_helpers(tools))
+
+    def test_a_grant_that_carries_arguments_is_read(self):
+        tools = ["Bash(py -3.12 .claude/scripts/dispatch_board.py tasks start:*)",
+                 "Bash(py -3.12 .claude/scripts/dispatch_board.py tasks init)",
+                 "Bash(py -3.12 .claude/scripts/shard.py --selective)",
+                 "Bash(bash .claude/scripts/e.sh <n> start:*)",
+                 "Bash(bash .claude/scripts/sub/f.sh tasks:*)", "Bash(bash .claude/scripts/g.shx)"]
+        self.assertEqual(["dispatch_board.py", "dispatch_board.py", "shard.py", "e.sh", "g.shx"],
+                         granted_helpers(tools))
+
+    def test_a_grant_with_arguments_for_a_file_that_is_gone_is_found(self):
+        with tempfile.TemporaryDirectory() as holder:
+            self.assertEqual(["renamed.py"],
+                             missing(["Bash(py -3.12 .claude/scripts/renamed.py tasks start:*)"], Path(holder)))
 
     def test_a_grant_for_a_file_that_is_gone_is_found(self):
         with tempfile.TemporaryDirectory() as holder:

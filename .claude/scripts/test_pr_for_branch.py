@@ -35,14 +35,16 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
     HELPER = SCRIPTS / "pr-for-branch.sh"
     OWNER = "acme/widgets"
 
+    # Rows 2-4 pass every other drop, a base of `main` and no `mergeCommit`, so the repository filter is what
+    # drops them; the base filter would otherwise drop them first and the tests below pass with no repository filter.
     ROWS = """[
       {"number": 1, "state": "OPEN", "url": "u1", "headRefOid": "aaa1", "baseRefName": "main",
        "headRepository": {"nameWithOwner": "acme/widgets"}},
-      {"number": 2, "state": "OPEN", "url": "u2",
+      {"number": 2, "state": "OPEN", "url": "u2", "headRefOid": "aaa2", "baseRefName": "main",
        "headRepository": {"nameWithOwner": "mallory/widgets"}},
-      {"number": 3, "state": "MERGED", "url": "u3",
+      {"number": 3, "state": "MERGED", "url": "u3", "headRefOid": "aaa3", "baseRefName": "main",
        "headRepository": null},
-      {"number": 4, "state": "CLOSED", "url": "u4",
+      {"number": 4, "state": "CLOSED", "url": "u4", "headRefOid": "aaa4", "baseRefName": "main",
        "headRepository": {"nameWithOwner": "acme/widgets-fork"}}
     ]"""
 
@@ -118,6 +120,14 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
         # equality rather than prefix.
         got = json.loads(self.run_helper().stdout)
         self.assertNotIn(4, [row["number"] for row in got])
+
+    def test_each_dropped_row_survives_with_this_checkouts_repository(self):
+        # The subject is the fixture: given row 1's repository, each dropped row is kept, so nothing but the
+        # repository filter is what drops it in the three tests above.
+        for row in json.loads(self.ROWS)[1:]:
+            with self.subTest(number=row["number"]):
+                row["headRepository"] = {"nameWithOwner": self.OWNER}
+                self.assertEqual([row["number"]], self.numbers(self.listing([row])))
 
     def test_the_shape_is_the_fixed_field_set(self):
         got = json.loads(self.run_helper().stdout)

@@ -112,8 +112,9 @@ merge; the rows say what is owed *between* them:
   resumed run starting inside its own unfinished worktree stays there (a sync
   run's attended resume aside), and the merged row ends the run at step 0 so
   the two never both remove one path.
-- Read the workspace as `/branch` step 0 does: `git rev-parse --git-dir
-  --git-common-dir` differing, with no `--show-superproject-working-tree`,
+- Read the workspace as `/branch` step 0 does: `git rev-parse
+  --path-format=absolute --git-dir --git-common-dir` differing, with no
+  `--show-superproject-working-tree`,
   means this session is already in this PR's worktree, every row is owed
   *there* (a sync run's attended resume aside), and nothing forks a second
   directory. Only a run starting in the main checkout on `main`, with a clean
@@ -233,8 +234,9 @@ target*)
 
 0. **Start from the main checkout, on an up-to-date `main`, with no leftover
    worktree.** Being in a worktree is not the problem; being in a *finished*
-   one is. `git rev-parse --git-dir --git-common-dir` differing, with no
-   `--show-superproject-working-tree`, says the session is in a linked
+   one is. `git rev-parse --path-format=absolute --git-dir --git-common-dir`
+   differing, with no `--show-superproject-working-tree`, says the session
+   is in a linked
    worktree; the branch it holds decides:
 
    | Where the session is | Do |

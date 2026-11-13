@@ -1635,7 +1635,9 @@ CRLF folded, since `run` starts an executor on that file before CI has judged
 it; the manifest lists each payload file the config neither excludes nor keeps
 local, and lists no path it does; and the head changes only manifest paths,
 old-manifest paths and the manifest, with `.harness/config.json` and every
-`local` path untouched. The settings proof executes code from the head: its
+`local` path untouched, and holds no path the old manifest listed and the new
+one drops, changed or not, but one a `local` glob keeps, since apply deletes
+it, excluded or not. The settings proof executes code from the head: its
 `.harness/render.py`, read by oid and never from a tree, runs only once that
 commit is on the harness's `main` and the renderer and
 `.harness/settings.base.json` are manifest paths whose blobs are the payload's
@@ -2168,13 +2170,13 @@ and its gate stays green.
 **That guard holds no copy of any deny list, and refusing to write one is
 the whole of why it is safe to run on every write this repository makes.**
 A path deny is *correct* when the spelling is true of the file, so inside a
-checkout the session stands in the hook judges only the disagreement and
-leaves every list — `.claude/settings.json`'s and both commands' frontmatter —
-to say what may be edited; where no rule reaches it reads that list rather
-than copying it, as the next paragraph says. Nothing here goes
-stale as those change, and the PR that lifts a deny to edit a helper is not
-refused by the guard on its way past. A test pins that control: a denied tree
-spelled as itself is **admitted** here.
+checkout the session stands in, one holding the home aside, the hook judges
+only the disagreement and leaves every list — `.claude/settings.json`'s and
+both commands' frontmatter — to say what may be edited; where no rule
+reaches it reads that list rather than copying it, as the next paragraph
+says. Nothing here goes stale as those change, and the PR that lifts a deny
+to edit a helper is not refused by the guard on its way past. A test pins
+that control: a denied tree spelled as itself is **admitted** here.
 
 **Two things a path deny may not reach are judged here all the same, and
 neither takes a copy of a list.** A rule of more than one component anchors at
@@ -2193,7 +2195,10 @@ one only if git's backlink agrees, so a `.git` file alone makes none, and a
 checkout of another repository is not one, because this target's denies say
 nothing about what it protects.
 
-**Outside every checkout the guard refuses by name and admits the rest.**
+**Outside every checkout, and inside one holding the home, the guard refuses
+by name and admits the rest.** A checkout holding the home, a dotfiles one at
+`~` or a project directory set there or above, still refuses a link that
+disagrees, as any checkout does, but excuses none of these names.
 `~/.ssh`, the shell profiles and `~/.gitconfig` run at login under every
 session, and `~/.claude`'s credentials, settings, hooks, commands, agents,
 plugins, scripts, skills and sandbox apply to every project, judged on the
@@ -2209,8 +2214,9 @@ one list, `HOME_TREES` and its neighbours in `guard-git-argv.py`, which the edit
 guard loads; if it cannot load them it refuses a target under the home
 directory. A redirect and a writing verb's operand are judged by spelling and by
 resolution, with `HOME` and the process's own home both read as the root, and a
-checkout the session stands in is left to its denies. The shell also may not
-write `~/.claude/projects/` or `~/.claude/output-styles/`, which the edit guard
+checkout the session stands in is left to its denies unless it holds the home.
+The shell also may not write `~/.claude/projects/` or
+`~/.claude/output-styles/`, which the edit guard
 admits: a `Write` there meets a command's deny in the turn that holds one, and a
 shell write meets none.
 
@@ -2521,9 +2527,10 @@ its input —
 as a command of its own, and reads sed's options as `getopt_long` does:
 clusters, `-i<suffix>`, `--in-place=`, unique prefixes of long names, and
 the first operand as the script when no `-e` or `-f` names one. It refuses
-when an operand, globbed as bash would, is a regular file whose first 4 MiB
-hold a CRLF and which `git ls-files --error-unmatch` finds in its
-checkout's index. The refusal names the forms that keep the endings: the
+when an operand, its brace lists and sequences expanded and its globs
+matched as bash would, is a regular file whose first 4 MiB hold a CRLF and
+which `git ls-files --error-unmatch` finds in its checkout's index. The
+refusal names the forms that keep the endings: the
 Edit tool, a Python script that opens the file with `newline=""`, or
 `sed --binary -i`, which is admitted. **It judges on Windows alone**: GNU
 sed on Linux and macOS keeps the CR as an ordinary character, so a refusal
@@ -2539,14 +2546,17 @@ as a separator, and an apostrophe in a comment as an unbalanced quote.
 
 **What it reads, and what a crafted path makes it run.** Only a regular
 file is opened, read-only, and nothing read leaves the hook but a path: the
-one the command spelled, or the file in its directory that a glob of it
-matched. So a device, a FIFO or a directory is never opened,
+one the command spelled, or a file its brace expansion names or a glob of
+it matched. So a device, a FIFO or a directory is never opened,
 and a path outside the checkout costs a read the session could `cat`
 anyway. The one thing a path can make it run is git in that path's
 directory, whose checkout may be foreign: the call switches
 `core.fsmonitor` off, since `ls-files` would otherwise run the command a
 hostile config names, and sets `GIT_OPTIONAL_LOCKS=0` so the read writes no
-index. Each git call is bounded at 5 seconds, and a command at 200 files.
+index. Each git call is bounded at 5 seconds, and a command at 200 files;
+an operand's braces are expanded to 201 words at most, made one at a time,
+and its globs share one walk of 201 entries, so a `{1..1000000}` costs
+what is read of it.
 
 **Which git it runs.** The first on `PATH` by the hook's own search, the
 rule *Index refresh and worktree seeding* gives its console script but for
@@ -2579,9 +2589,14 @@ an untracked CRLF file, whose endings are not yet the checkout's. A
 `printf` piped into a shell is read as its words rather than its format's
 expansion, so it is refused where the format holds the `sed` and its
 arguments carry the file, and admitted where an argument carries the whole
-line. A quoted
-glob is expanded although bash would pass it literally, which can only
-refuse more.
+line. A glob or brace list quoted whole is expanded although bash would
+pass it literally, and a brace list's own name is read beside the words it
+makes, since the hook cannot tell the quoted from the bare: either can only
+refuse more. A comma quoted or escaped inside a list is the exception: the
+quotes are gone before the list is read, so `{"a,b",c}.txt` is read as
+`a.txt`, `b.txt` and `c.txt`, never the `a,b.txt` bash passes. An operand
+whose braces make more than 201 words is judged on its first 201, and the
+command, as any command, is admitted once it names more than 200 files.
 
 ## Headless dispatched sessions
 

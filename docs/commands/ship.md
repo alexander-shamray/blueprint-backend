@@ -113,7 +113,8 @@ nothing after: there is no merge left to perform, and the teardown has
 already happened.
 
 **The workspace is part of that state**, and it is read the way `/branch`
-step 0 reads it: `git rev-parse --git-dir --git-common-dir` differing, with no
+step 0 reads it: `git rev-parse --path-format=absolute --git-dir
+--git-common-dir` differing, with no
 `--show-superproject-working-tree` to make it a submodule, means this session
 is already inside this PR's worktree. Then every row of the runbook's resume
 table is owed *there* and
@@ -338,8 +339,9 @@ failure this exists to prevent: step 1 reads "already on a branch", adopts
 it, and the whole chain commits this change onto the last one's branch.
 
 **Being in a worktree is not by itself the problem — being in a *finished*
-one is.** `git rev-parse --git-dir --git-common-dir` differing, with no
-`--show-superproject-working-tree`, says the session is in a linked
+one is.** `git rev-parse --path-format=absolute --git-dir --git-common-dir`
+differing, with no `--show-superproject-working-tree`, says the session is in
+a linked
 worktree; what decides whether to leave it is the branch it holds, as the
 runbook's table sets out.
 
