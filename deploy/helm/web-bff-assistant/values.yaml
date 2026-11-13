@@ -38,9 +38,10 @@ ports:
   - name: http
     containerPort: 8080
 
-# ADR-205: 256 callers x 8 conversations at the 150k-token budget, four
-# characters a token as UTF-16, is 2.3 GiB of history. The runtime caps its
-# heap at 75% of the limit, so 4Gi. Not measured, and not a bound.
+# ADR-208: 256 callers x CallerHistoryChars as UTF-16 bounds history at
+# about 0.95 GiB, beside the rounds in flight. The runtime caps its heap at 75%
+# of the limit (ADR-205), 3 GiB, and the rest is left for what the count leaves
+# out. Not measured.
 resources:
   requests: { cpu: 100m, memory: 512Mi }
   limits:   { memory: 4Gi }

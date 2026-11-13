@@ -38,6 +38,16 @@ spends, roughly four million characters, 8 MB held as UTF-16, in a day, and
 does not bound what its conversations hold. ADR-204 is otherwise unchanged and
 is read beside this record.
 
+**Amended by
+[ADR-208](ADR-208-the-assistant-core-bounds-each-callers-held-history-by-characters-giving-adr-205s-4gi-a-bound-to-hold-1980.md)**:
+`AssistantLimits.CallerHistoryChars` bounds what a caller's conversations
+hold, and a turn past either budget holds none of its text, so the history
+the release holds has a bound and the 4Gi has room over it; the figure is
+still not a measurement. The chart's comment states ADR-208's arithmetic in
+place of this record's, and a change to `AssistantOptions.MaxCallers` or
+`AssistantLimits.CallerHistoryChars`, not the three limits named above, is
+what revisits the figure. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
