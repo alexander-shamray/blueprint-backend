@@ -166,24 +166,29 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
 
     private bool ForgetIdleCaller()
     {
-        KeyValuePair<string, Dictionary<string, AssistantSession>>[] idle =
-            [.. byCaller.Where(c => c.Value.Values.All(s => !s.Running))];
-
-        if (idle.Length == 0)
+        // Each conversation is forgotten through TryForget, so a turn started after the read above survives, and so
+        // does its caller.
+        foreach (KeyValuePair<string, Dictionary<string, AssistantSession>> caller in byCaller
+                     .Where(c => c.Value.Values.All(s => !s.Running))
+                     .OrderBy(c => c.Value.Values.Max(s => (DateTimeOffset?)s.LastActive))
+                     .ToList())
         {
-            return false;
+            foreach (AssistantSession session in caller.Value.Values.ToList())
+            {
+                if (session.TryForget())
+                {
+                    caller.Value.Remove(session.Id);
+                }
+            }
+
+            if (caller.Value.Count == 0)
+            {
+                byCaller.Remove(caller.Key);
+
+                return true;
+            }
         }
 
-        KeyValuePair<string, Dictionary<string, AssistantSession>> oldest =
-            idle.MinBy(c => c.Value.Values.Select(s => s.LastActive).DefaultIfEmpty(DateTimeOffset.MinValue).Max());
-
-        byCaller.Remove(oldest.Key);
-
-        foreach (AssistantSession session in oldest.Value.Values)
-        {
-            session.Dispose();
-        }
-
-        return true;
+        return false;
     }
 }
