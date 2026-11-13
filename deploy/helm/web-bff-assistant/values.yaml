@@ -39,9 +39,9 @@ ports:
     containerPort: 8080
 
 # ADR-208: 256 callers x CallerHistoryChars as UTF-16 bounds history at
-# about 0.95 GiB, beside the rounds in flight. The runtime caps its heap at 75%
-# of the limit (ADR-205), 3 GiB, and the rest is left for what the count leaves
-# out. Not measured.
+# about 0.95 GiB, beside each conversation's last turn past its last check.
+# The runtime caps its heap at 75% of the limit (ADR-205), 3 GiB, and the rest
+# is left for what the count leaves out. Not measured.
 resources:
   requests: { cpu: 100m, memory: 512Mi }
   limits:   { memory: 4Gi }
