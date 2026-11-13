@@ -57,6 +57,15 @@
       is why it is made here.
     -->
     <NoWarn>$(NoWarn);CA1711</NoWarn>
+
+    <!--
+      NuGet's audit codes, one per advisory severity (§4.4), stay warnings unless NuGetAuditAsError is true:
+      an advisory published between two pushes would otherwise fail every restore of a tree that moved no
+      package. The scheduled audit and a change that could move one pass it, and hear them as errors (ADR-209).
+    -->
+    <WarningsNotAsErrors Condition="'$(NuGetAuditAsError)' != 'true'">
+      $(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904
+    </WarningsNotAsErrors>
   </PropertyGroup>
 
   <!--
