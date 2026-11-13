@@ -17,14 +17,20 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
 case "$mode" in
-  all)
-    exec dotnet test Platform.slnx
-    ;;
-  fast)
-    exec dotnet test Platform.slnx --filter "Category!=Integration"
-    ;;
+  all) args=(Platform.slnx) ;;
+  fast) args=(Platform.slnx --filter "Category!=Integration") ;;
   *)
     echo "usage: dotnet-test.sh [all|fast]" >&2
     exit 2
     ;;
 esac
+
+# The run's time goes to the harness timings record, whatever its exit; the
+# record's own failure never changes the exit (docs/harness-boundaries.md,
+# *The suite's shard runner*).
+started=$SECONDS
+code=0
+dotnet test "${args[@]}" || code=$?
+py -3.12 .claude/scripts/harness_timings.py record --script dotnet-test.sh --mode "$mode" \
+  --wall "$((SECONDS - started))" --exit "$code" || true
+exit "$code"
