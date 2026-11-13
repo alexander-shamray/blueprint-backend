@@ -59,18 +59,18 @@ shipped map, so the gate has been observed looking at the file CI hands it.
 ## How it runs
 
 The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs the
-pull-request gates as steps of one job, while its `open` and `report` jobs,
-which check nothing out and alone hold `checks: write`, open this one's check
-run before it judges and complete it as the `locality-gate` check. It has no
-path filter and runs on `edited`, on the closure gate's argument: half of what
-it judges is the body, which is edited without a push. A pull request that
-declares no class or touch set stands down only where Dependabot opened it and
-every commit's author and committer are Dependabot's; the opener alone is not
-enough, so a human commit on a Dependabot branch is judged. **The gate and the
+pull-request gates as steps of one job, while its `report` job, which checks
+nothing out and holds no grant, concludes the `locality-gate` check as the
+matrix leg named after the gate, from the verdict the `gates` job published.
+It has no path filter and runs on `edited`, on the closure gate's argument:
+half of what it judges is the body, which is edited without a push. A pull
+request that declares no class or touch set stands down only where Dependabot
+opened it and every commit's author and committer are Dependabot's; the opener
+alone is not enough, so a human commit on a Dependabot branch is judged. **The gate and the
 map that judge are read out of the base commit**, so a pull request cannot
 widen its own class. A base with no gate script has no gate to run, so the
-gate neither runs nor posts, and the pull request that lands the gate is not
-judged by it. The workflow file is still the branch's copy, as the closure
+gate does not run and its leg passes with nothing to judge, and the pull
+request that lands the gate is not judged by it. The workflow file is still the branch's copy, as the closure
 gate's is.
 **The suite runs after the verdicts are fixed.** Test code can write to
 `$GITHUB_ENV` or `$GITHUB_PATH` or replace a tool on the runner, and every
