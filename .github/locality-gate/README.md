@@ -58,20 +58,18 @@ shipped map, so the gate has been observed looking at the file CI hands it.
 
 ## How it runs
 
-The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs the
-pull-request gates as steps of one job, while its `report` job, which checks
-nothing out and holds no grant, concludes the `locality-gate` check as the
-matrix leg named after the gate, from the verdict the `gates` job published.
-It has no path filter and runs on `edited`, on the closure gate's argument:
-half of what it judges is the body, which is edited without a push. A pull
-request that declares no class or touch set stands down only where Dependabot
-opened it and every commit's author and committer are Dependabot's; the opener
-alone is not enough, so a human commit on a Dependabot branch is judged. **The gate and the
-map that judge are read out of the base commit**, so a pull request cannot
-widen its own class. A base with no gate script has no gate to run, so the
-gate does not run and its leg passes with nothing to judge, and the pull
-request that lands the gate is not judged by it. The workflow file is still the branch's copy, as the closure
-gate's is.
+The `gates` job in [`gates.yml`](../workflows/gates.yml) runs the
+pull-request gates as steps of one job, and that file owns how the
+`locality-gate` check is opened and concluded. It has no path filter and runs
+on `edited`, on the closure gate's argument: half of what it judges is the
+body, which is edited without a push. A pull request that declares no class or
+touch set stands down only where Dependabot opened it and every commit's
+author and committer are Dependabot's; the opener alone is not enough, so a
+human commit on a Dependabot branch is judged. **The gate and the map that
+judge are read out of the base commit**, so a pull request cannot widen its
+own class. A base with no gate script has no gate to run, so the gate is not
+run, and the pull request that lands the gate is not judged by it. The
+workflow file is still the branch's copy, as the closure gate's is.
 **The suite runs after the verdicts are fixed.** Test code can write to
 `$GITHUB_ENV` or `$GITHUB_PATH` or replace a tool on the runner, and every
 later step inherits that, so a suite ahead of the gate could choose its
