@@ -191,6 +191,9 @@ public sealed class AssistantSession : IDisposable
         Exception? failure = null;
         int silentRounds = 0;
 
+        // A turn that ended mid-round left its count behind, and the next turn must not inherit it.
+        Interlocked.Exchange(ref clientTimeouts, 0);
+
         try
         {
             for (int step = 0; ; step++)
