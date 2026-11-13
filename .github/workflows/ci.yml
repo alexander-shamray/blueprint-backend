@@ -659,8 +659,11 @@ jobs:
               - '**/*.csproj'
               - '**/*.props'
               - '**/*.targets'
+              - '**/*.slnx'
+              # Each spelling NuGet reads on a case-sensitive runner.
               - '**/nuget.config'
               - '**/NuGet.config'
+              - '**/NuGet.Config'
             # What the build and the test stages read, named by what they do
             # not, so a new path costs a build rather than skipping one. Only
             # `pipeline-gate code` and commit_builds.py read these beside the job.

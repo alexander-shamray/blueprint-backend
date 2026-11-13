@@ -8,8 +8,8 @@ does not fail on it. Two restores pass the property and fail as before:
 `.github/workflows/nuget-audit.yml`, daily and on dispatch over the whole
 solution, which files an issue or comments on the open one when it is red; and
 ci.yml's `build` job, for a change that touches what its `restore-audit` filter
-names — the pins, a project, props or targets file, `global.json` or a NuGet
-configuration. Every other restore, the integration shards', the per-commit
+names — the pins, a project, props, targets or solution file, `global.json` or
+a NuGet configuration in any spelling NuGet reads. Every other restore, the integration shards', the per-commit
 builds', each image's and a developer's, warns.
 **Why.** An advisory is published against a package, not against a commit. On
 266e955, a change to one document, three integration shards failed their
