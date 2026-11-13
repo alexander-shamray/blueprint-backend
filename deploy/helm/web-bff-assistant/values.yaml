@@ -38,12 +38,12 @@ ports:
   - name: http
     containerPort: 8080
 
-# Sized for the worst case of ADR-204's 256 callers: 256 x 8 conversations at
-# the 150k-token context budget, about four characters a token held as UTF-16,
-# is 2.5 GB, so the limit is 3Gi with the runtime beside it. Not measured.
+# ADR-205: 256 callers x 8 conversations at the 150k-token budget, four
+# characters a token as UTF-16, is 2.3 GiB of history. The runtime caps its
+# heap at 75% of the limit, so 4Gi. Not measured, and not a bound.
 resources:
   requests: { cpu: 100m, memory: 512Mi }
-  limits:   { memory: 3Gi }
+  limits:   { memory: 4Gi }
 
 # Off, and refused on beside Recreate: an autoscaler runs a second replica.
 autoscaling:
