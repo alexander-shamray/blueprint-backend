@@ -195,16 +195,16 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              the reads is what keeps that list complete, not
                              a more careful list
 .github/workflows/gates.yml  the closure, commit, harness-drift, comment and
-                             locality gates as steps of one job, with each
-                             gate's check a leg of one `report` job, named
-                             after the gate, which checks nothing out. It has
-                             no path filter, since what each judges is a property of
-                             every pull request and a filter could only make
-                             it skippable. The closure and locality gates run
-                             on `edited`, because a description edit with no
-                             push behind it changes their verdict; the commit
-                             gate does not, since a body edit changes no
-                             commit; the comment gate runs on `labeled` and
+                             locality gates as steps of one job, with a
+                             check per gate concluded by a job that checks
+                             nothing out. It has no path filter, since what
+                             each judges is a property of every pull request
+                             and a filter could only make it skippable. The
+                             closure and locality gates run on `edited`,
+                             because a description edit with no push behind
+                             it changes their verdict; the commit gate does
+                             not, since a body edit changes no commit; the
+                             comment gate runs on `labeled` and
                              `unlabeled`, being the one check that reads a
                              label. ci.yml on any of these would rebuild the
                              solution for a change that alters nothing it
