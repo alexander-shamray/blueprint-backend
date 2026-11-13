@@ -77,6 +77,8 @@ gate's is.
 later step inherits that, so a suite ahead of the gate could choose its
 verdict with no workflow edit. A later step cannot turn a failure
 green, and `python -I` would leave a replaced `python`, `gh` or `jq` in place,
-so the order is the control; the suite's `TheShippedWorkflow` reads it. A red
-suite fails the `gates` job rather than the `locality-gate` check.
+so the order is the control. `gates.yml` fixes each verdict as a job output
+before its suites run; the suite's `TheShippedWorkflow` reads the narrower
+order, every suite after the gate step, and not where the verdicts step sits.
+A red suite fails the `gates` job rather than the `locality-gate` check.
 `docs/testing.md` has the live invocation.
