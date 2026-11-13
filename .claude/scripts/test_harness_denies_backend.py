@@ -195,12 +195,15 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
 
     def test_the_test_runner_helper_takes_no_free_parameter(self):
         # The helper leaves nothing to steer: the solution, the filter and the
-        # flags are literals, and the one argument is matched against a fixed
-        # case rather than passed on.
+        # flags are literals set by a fixed case, and the one argument is matched
+        # against that case rather than passed on. After the case, `$mode`
+        # reaches only the timings recorder's `--mode`.
         source = (SCRIPTS / "dotnet-test.sh").read_text(encoding="utf-8")
-        self.assertIn("dotnet test Platform.slnx", source)
+        self.assertIn("all) args=(Platform.slnx) ;;", source)
+        self.assertIn('fast) args=(Platform.slnx --filter "Category!=Integration") ;;', source)
+        self.assertIn('dotnet test "${args[@]}"', source)
         self.assertNotIn('"$@"', source)
-        self.assertNotIn("$mode\"", source.replace('"$mode" in', ""))
+        self.assertNotIn("$mode\"", source.replace('"$mode" in', "").replace('--mode "$mode"', ""))
 
     # What `/validate-blueprint` actually audits, from its own opening lines.
     AUDITED_BY_VALIDATE_BLUEPRINT = {
