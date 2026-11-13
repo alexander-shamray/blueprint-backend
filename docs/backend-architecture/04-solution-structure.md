@@ -991,9 +991,9 @@ chosen. The audit fails a restore only where it is asked to: the scheduled
 audit, and ci.yml's build for a change that could move a package; everywhere
 else an advisory is a warning, so one published between two pushes is an issue
 rather than every open pull request red
-([ADR-209](adr/ADR-209-nugets-audit-warns-on-every-restore-and-fails-only-the-scheduled-audit-and-a-change-that-moves-a-package-2010-amending-adr-019.md)).
-Currency, whether a newer version exists, is a separate obligation, and the
-tooling for it is not in this repository.
+([ADR-209](adr/ADR-209-nugets-audit-warns-on-every-restore-and-fails-only-the-scheduled-audit-and-a-change-that-could-move-a-package-2010.md)).
+Currency, whether a newer version exists, is a separate obligation, which
+Dependabot's weekly NuGet updates carry (`.github/dependabot.yml`).
 
 > **Trap — pinning floors instead of versions.** Writing `Version="8.*"`, or
 > treating the file as a set of minimums to be "reviewed quarterly", means a
