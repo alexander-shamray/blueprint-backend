@@ -22,11 +22,12 @@ with it.
 **Consequences.** The figure is arithmetic and not a measurement: no load was
 sent to a running replica. It is also not a bound. A turn is appended to a
 conversation before the context budget is read, so a conversation at the
-budget takes another message of up to `AssistantEndpoints.MaxTextLength`
-characters on every turn, which sends nothing to the provider and spends no
-daily token; and the session keeps each message and reply a second time for
-the conversation read. The 0.7 GiB beside the history covers that second
-copy at about a third of the history and the runtime, and nothing more. A node
+budget takes another message, its text and context together up to
+`AssistantEndpoints.MaxBodyBytes`, on every turn, which sends nothing to the
+provider and spends no daily token; and the session keeps each message's text
+and reply a second time for the conversation read. The 0.7 GiB beside the
+history is not shown to cover that second copy and the runtime, and the
+figure rests on it. A node
 must have 512Mi free to place the pod and may take the pod past it up to 4Gi,
 so the node can be overcommitted by this one release, in every cluster the
 release runs in. Bounding a caller's held history by bytes, which would hold
