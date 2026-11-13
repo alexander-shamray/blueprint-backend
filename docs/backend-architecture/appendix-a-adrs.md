@@ -212,6 +212,7 @@ decision looks wrong.
 | **ADR-203** | [The four sub-minute gates are required checks on main (#1959), amending ADR-202](adr/ADR-203-the-four-sub-minute-gates-are-required-checks-on-main-1959-amending-adr-202.md) |
 | **ADR-204** | [The BFF's assistant caps each customer's and the host's daily tokens, bounds a customer's event streams, and sizes its own caller limit (#1970, #1972), amending ADR-151 and ADR-156](adr/ADR-204-the-bffs-assistant-caps-daily-tokens-bounds-event-streams-and-sizes-its-caller-limit-1970-1972.md) |
 | **ADR-205** | [The assistant release's memory limit holds ADR-204's 256 callers at their worst, amending ADR-204 (#1980)](adr/ADR-205-the-assistant-releases-memory-limit-holds-adr-204s-256-callers-at-their-worst-amending-adr-204-1980.md) |
+| **ADR-206** | [The core ends a turn whose client tool calls time out in two rounds running (end reason error, error type client-unresponsive), and a provider failure's message is withheld from the client unless AssistantLimits.ErrorDetail is on, the BFF logging the failure's type from TurnSummary.Failure (#1974, #1981), amending ADR-204 and ADR-151; Common.Assistant 0.2.0 to 0.3.0](adr/ADR-206-the-core-ends-a-turn-its-client-leaves-unanswered-and-withholds-a-provider-failures-message-1974-1981-amending-adr-204.md) |
 
 ---
 
