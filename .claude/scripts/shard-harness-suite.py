@@ -23,6 +23,11 @@ else:
 
 HERE = Path(__file__).resolve()
 ROOT = HERE.parents[2]
+if str(HERE.parent) not in sys.path:
+    sys.path.insert(0, str(HERE.parent))
+
+import harness_timings  # noqa: E402
+import suite_select  # noqa: E402
 
 # The one tree every target holds. A gate's suite or a stack's root is that
 # target's to run beside this, and `test_harness_shards.py` holds the list to it.
@@ -40,9 +45,6 @@ def local_pins(name=LOCAL_PINS):
     Absent the module, or either name in it, that pin is empty. A module whose own import fails is raised, since a
     pin that silently stopped applying reads exactly like one that is working.
     """
-    scripts = str(HERE.parent)
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
     try:
         module = importlib.import_module(name)
     except ModuleNotFoundError as error:
@@ -478,20 +480,24 @@ def unlock(handle):
 
 @contextlib.contextmanager
 def host_lock(path=LOCK, poll=5.0):
-    """Hold the user's harness lock, waiting for another run to finish first."""
+    """Hold the user's harness lock, waiting for another run to finish first; yields the seconds it waited."""
     try:
         handle = open(path, "a+b")
     except OSError as refused:
         raise LockUnavailable(f"cannot open the run lock {path}: {refused}")
     with handle:
+        began = time.monotonic()
         if not try_lock(handle):
             print(f"shard-harness-suite.py: another harness run of yours "
                   f"holds {path}; waiting for it rather than running beside "
                   f"it", flush=True)
             while not try_lock(handle):
                 time.sleep(poll)
+            print(f"shard-harness-suite.py: the lock came free after "
+                  f"{time.monotonic() - began:.0f}s, which no time below "
+                  f"includes", flush=True)
         try:
-            yield
+            yield round(time.monotonic() - began, 1)
         finally:
             unlock(handle)
 
@@ -501,31 +507,68 @@ def main(argv):
         return run_listed(Path(argv[2]).read_text(encoding="utf-8").split())
     if len(argv) == 3 and argv[1] == "--queue":
         return run_queue(Path(argv[2]))
-    if len(argv) != 1:
-        print("usage: shard-harness-suite.py        (it takes no arguments)",
+    if argv[1:] not in ([], ["--selective"]):
+        print("usage: shard-harness-suite.py [--selective]        (the whole suite, or what the change reaches)",
               file=sys.stderr)
         return 2
 
     # The lock before discovery, not after it: a run that waits out another
     # one may wait a whole suite, and a plan made before the wait would deal
     # the tree as it was, leaving a test added meanwhile in no unit at all.
+    facts = {"script": HERE.name, "mode": "selective" if argv[1:] else "whole"}
     try:
-        with host_lock():
-            return discover_and_run()
+        with host_lock() as waited:
+            began = time.monotonic()
+            code = discover_and_run(selective=bool(argv[1:]), facts=facts)
+            # Inside the lock, so two runs' lines never interleave.
+            harness_timings.record({**facts, **harness_timings.checkout(ROOT), "lock_wait": waited,
+                                    "wall": round(time.monotonic() - began, 1), "exit": code})
+            return code
     except LockUnavailable as refused:
         print(f"shard-harness-suite.py: {refused}. Refusing the run rather "
               f"than running beside one it cannot see.", file=sys.stderr)
         return 2
 
 
-def discover_and_run():
-    """Discover, plan, check the plan covers discovery, then run it."""
+def selection(found):
+    """The ids a `--selective` run keeps of `found`, saying which and why; `found` whole when the change is unplaced.
+
+    `suite_select.py` decides; the runner only filters, so every check below still holds over what it kept.
+    """
+    modules = {}
+    for module in dict.fromkeys(test_id.partition(".")[0] for test_id in found):
+        source = HERE.parent / f"{module}.py"
+        if module.startswith("test_") and source.is_file():
+            modules[module] = source.read_text(encoding="utf-8", errors="replace")
+    paths = suite_select.changed(ROOT)
+    selectors, why = suite_select.select(paths, modules, ROOT)
+    if selectors is None:
+        print(f"shard-harness-suite.py: --selective runs the whole suite: {why}", flush=True)
+        return found
+    kept = [test_id for test_id in found if suite_select.chosen(test_id, selectors)]
+    print(f"shard-harness-suite.py: --selective: {len(paths)} changed path(s) reach {len(selectors)} module(s) or "
+          f"class(es), {len(kept)} of {len(found)} tests; CI runs them all: {', '.join(sorted(selectors)) or 'none'}",
+          flush=True)
+    return kept
+
+
+def discover_and_run(selective=False, facts=None):
+    """Discover, select under `--selective`, plan, check the plan covers what was kept, then run it."""
+    facts = {} if facts is None else facts
     try:
         found = discovered()
     except NothingDiscovered as empty:
         print(f"shard-harness-suite.py: {empty}. Refusing the run rather than "
               f"reporting a pass over nothing.", file=sys.stderr)
         return 2
+    facts["discovered"] = len(found)
+    if selective:
+        found = selection(found)
+        if not found:
+            print("shard-harness-suite.py: no changed path reaches a test, so nothing ran", flush=True)
+            facts["tests"] = 0
+            return 0
+    facts["tests"] = len(found)
 
     units, tail = plan(found)
     phases = [("unit", ids) for ids in units]
@@ -540,10 +583,11 @@ def discover_and_run():
         return 2
 
     count = max(1, min(workers(), len(units)))
+    facts["workers"] = count
     print(f"shard-harness-suite.py: {len(found)} tests in {len(units)} units "
           f"over {count} parallel workers, then {len(tail)} serial",
           flush=True)
-    return run_all(units, tail, count)
+    return run_all(units, tail, count, facts)
 
 
 def queue_units(work, units):
@@ -556,8 +600,9 @@ def queue_units(work, units):
     return names
 
 
-def run_all(units, tail, count):
-    """Queue the units, drain the queue with `count` workers, then the tail."""
+def run_all(units, tail, count, facts=None):
+    """Queue the units, drain the queue with `count` workers, then the tail; each class's seconds go in `facts`."""
+    facts = {} if facts is None else facts
     work = Path(tempfile.mkdtemp(prefix="harness-shards-"))
     names = queue_units(work, units)
 
@@ -582,6 +627,7 @@ def run_all(units, tail, count):
                 codes.append(spawn(["--ids", str(listing)], log).wait())
         left = unfinished(work, names)
         times = slowest(work)
+        facts["classes"] = {cls: seconds for seconds, cls in times}
     finally:
         # A worker still running here is one this process is abandoning, and
         # several of them drive `git worktree` against this checkout.

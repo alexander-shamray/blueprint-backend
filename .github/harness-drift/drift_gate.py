@@ -40,7 +40,7 @@ GATE_FILES = (
     ".github/harness-drift/README.md",
     ".github/harness-drift/drift_gate.py",
     ".github/harness-drift/test_drift_gate.py",
-    ".github/workflows/harness-drift.yml",
+    ".github/workflows/gates.yml",
 )
 # The config's keys, as harness_sync.config takes them.
 _TOP_KEYS = ("repo", "task_list", "settings", "local", "exclude")

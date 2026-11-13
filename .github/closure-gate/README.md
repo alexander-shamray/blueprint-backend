@@ -60,17 +60,21 @@ closing references and head, each one of `REQUIRED_FIELDS`, and its `author`,
 which is optional and read only for the exemption above; the repository
 is read from the URL — fetched by the workflow, so the deciding is
 testable without a network. The live invocation is in
-[`closure-gate.yml`](../workflows/closure-gate.yml) and in `/pr`.
+[`gates.yml`](../workflows/gates.yml) and in `/pr`.
 
 ## How it runs
 
-[`closure-gate.yml`](../workflows/closure-gate.yml), on every pull request
-with no path filter, and on `edited` as well as pushes, because a
-description edit with no push behind it can break the claim. **The gate that
-judges is read out of the base commit**, while the suite runs the branch's
-copy, so a pull request cannot supply its own judge; a base carrying no gate
-fails rather than falling back. The suite runs only after the gate has judged,
-so head test code cannot alter the run ahead of it, and a red gate leaves the
-suite unrun. The workflow file itself is still the
+The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs every
+gate of the pull request in one job, while its `open` and `report` jobs,
+which check nothing out and alone hold `checks: write`, open this one's check
+run before it judges and complete it as the `closure-gate` check, on every
+pull request with no path filter, and on
+`edited` as well as pushes, because a description edit with no push behind
+it can break the claim. **The gate that judges is read out of the base
+commit**, while the suite runs the branch's copy, so a pull request cannot
+supply its own judge; a base carrying no gate fails rather than falling back.
+The suite runs only after every verdict is fixed, so head test code cannot
+alter the run ahead of it; a red suite fails the `gates` job rather than the
+`closure-gate` check. The workflow file itself is still the
 branch's copy, because `pull_request` runs the head definition, and closing
 that needs a required status check on `main`.

@@ -30,7 +30,7 @@ caught where it is made and not at the next sync.
   and does not execute it;
 - a `local` or `exclude` glob that matches a file the gate needs delivered:
   `.harness/settings.base.json`, `.harness/render.py`, this directory's
-  files, `.github/workflows/harness-drift.yml`, or a path a hook command in
+  files, `.github/workflows/gates.yml`, or a path a hook command in
   the settings base names (`.claude/hooks/guard-git-argv.py`, for one).
   Without them a target stays green and is never checked again, or runs a
   guard hook that fails unseen; apply refuses the same globs. The list is
@@ -77,10 +77,10 @@ delete the line. Three things guard against that, each a different part:
   repository's `main` (GitHub serves fork-network commits by SHA, so a SHA
   alone proves nothing) and is the base manifest's commit or a descendant of
   it, so a pull request cannot roll a target back to a weaker real release.
-  `--payload` makes the gate compare the manifest with it. A failed fetch or
-  a failed test fails the run. A pull request cannot change that repository.
+  `--payload` makes the gate compare the manifest with it. A failed fetch
+  fails the check. A pull request cannot change that repository.
 - **The repository ruleset and review** are the backstop for what is left.
-  `pull_request` runs the head's copy of `harness-drift.yml`, so a pull
+  `pull_request` runs the head's copy of `gates.yml`, so a pull
   request can edit the workflow itself, and only the ruleset requiring this
   check, with review of workflow changes, stops that.
 
@@ -106,12 +106,14 @@ harness repository tests that they agree.
 
 ## How it runs
 
-[`harness-drift.yml`](../workflows/harness-drift.yml), on every pull request
-with no path filter. It takes the gate from the base commit; when the base
-carries none, which is the first sync into a target, the head's copy judges
-and the run says so. It then fetches the payload, runs the gate, and only then
-runs this directory's suite, so head test code cannot tamper with the run
-before the gate has judged. A failed fetch fails the run.
+The `gates` job in [`gates.yml`](../workflows/gates.yml), whose verdict for
+this gate the `report` job posts as the `harness-drift` check, on every pull
+request with no path filter. It takes the gate from the base commit; when the
+base carries none, which is the first sync into a target, the head's copy
+judges and the run says so. It then fetches the payload, runs the gate, fixes
+the verdict, and only then runs this directory's suite, so head test code
+cannot tamper with the run before the gate has judged. A failed fetch fails
+the check; a failed suite fails the `gates` job.
 
 The suite includes `test_gate_reads_the_shipped_manifest`, which checks the
 tree it sits in. It needs a rendered tree and is never run from the harness

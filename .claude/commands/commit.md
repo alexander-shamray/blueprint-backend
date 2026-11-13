@@ -36,6 +36,10 @@ The splits this repo has actually wanted:
 Do not manufacture splits. Three commits that each say something beat six that
 divide one idea.
 
+**A file's hunks in two commits**: `bash .claude/scripts/git-stage-hunks.sh
+--list <path>` lists them, `bash .claude/scripts/git-stage-hunks.sh <path>
+<n>[,<n>...]` stages them; never `git add -p` (`docs/harness/pitfalls.md`).
+
 ## Message form
 
 ```

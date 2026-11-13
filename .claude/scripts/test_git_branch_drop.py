@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, setUpModule, temp_root, run_bash as _run_bash  # noqa: F401
+from review_helpers import SCRIPTS, copy_template, fixture_template, setUpModule, run_bash as _run_bash  # noqa: F401
 
 HELPER = SCRIPTS / "git-branch-drop.sh"
 OWNER = "acme/widgets"
@@ -21,14 +21,11 @@ SPELLINGS = ("main", "Main", "MAIN", "heads/main", "refs/heads/main",
 
 def run_bash(script, **env):
     """`review_helpers.run_bash` with the caller's git configuration shut out."""
-    return _run_bash("set -eu\n" + script,
-                     GIT_CONFIG_GLOBAL="/dev/null",
-                     GIT_CONFIG_SYSTEM="/dev/null",
-                     GIT_CONFIG_NOSYSTEM="1",
-                     **env)
+    return _run_bash("set -eu\n" + script, **QUIET, **env)
 
 
-# A remote, a checkout of it on `main`, and a branch with one commit, published.
+# A remote, a checkout of it on `main`, and a branch with one commit, published: built once a module, copied a test.
+QUIET = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
 BUILD = '''
 git init -q --bare --initial-branch=main "$R/remote.git"
 git init -q --initial-branch=main "$R/work"
@@ -48,9 +45,7 @@ git checkout -q main
 class Fixture(unittest.TestCase):
 
     def setUp(self):
-        self.root = temp_root(self)
-        built = run_bash(BUILD, R=self.root)
-        self.assertEqual(0, built.returncode, built.stderr)
+        self.root = copy_template(self, fixture_template(BUILD, "R", **QUIET))
         self.work = self.root + "/work"
         holder = tempfile.TemporaryDirectory(prefix="ghstub-")
         self.addCleanup(holder.cleanup)

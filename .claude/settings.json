@@ -20,6 +20,7 @@
       "Bash(git push origin:*)",
       "Bash(bash .claude/scripts/git-push-force.sh:*)",
       "Bash(bash .claude/scripts/git-branch-drop.sh:*)",
+      "Bash(bash .claude/scripts/git-stage-hunks.sh:*)",
       "Bash(py -3.12 .claude/scripts/sync_pr.py:*)",
       "Bash(py -3.12 .claude/scripts/dispatch_board.py tasks start:*)",
       "Bash(py -3.12 .claude/scripts/dispatch_board.py tasks state:*)",

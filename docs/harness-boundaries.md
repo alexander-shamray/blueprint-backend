@@ -29,7 +29,7 @@ the whole is about 46k. `Grep -n "^## <title>"` gives its first line.
 | Normalisation, residuals and the sweeps | Unicode and per-directory traits, the deny matcher's case folding, the .. admission, out-of-tree residual, how the sweeps share worktrees, and their slice lists and ref. |
 | The sed line-ending guard | guard-sed-crlf.py refusing `sed -i` on a tracked CRLF file: what it reads, what a crafted path makes it run, where it fails open, and its residuals. |
 | Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop. |
-| The suite's shard runner | shard-harness-suite.py dealing the `.claude/scripts` classes to parallel workers, what it may never stop placing, its tables, and its one-run-per-user lock. |
+| The suite's shard runner | shard-harness-suite.py dealing the `.claude/scripts` classes to parallel workers, what it may never stop placing, its tables, its one-run-per-user lock, its `--selective` run and the time each run records. |
 | The harness legs decision | harness-legs.py deciding whether a target's Windows and macOS legs test a pull request, what reaches them, and why only a cleanly read merge commit may skip. |
 | Managed files | Which paths blueprint-harness owns and where they are changed, the `local` paths a repository keeps, and the drift gate that holds them. |
 
@@ -1572,6 +1572,21 @@ that name, so nothing to drop; 7 it has not landed, with no `MERGED` row into
 or its worktrees could not be read, so whether it landed or is in use is
 unknown.
 
+**One helper is granted for a line a worktree session could not run, and
+writes only the index.** `git-stage-hunks.sh` is `git add -p` without its
+prompts: `--list <path>` numbers one tracked file's unstaged hunks, and
+`<path> <n>[,<n>...]` cuts those from `git diff` inside the script and stages
+them with `git apply --cached`. Before it, a session split a file's hunks by
+writing a patch to the scratchpad and applying it, a line Claude Code's
+worktree isolation check refused whenever a variable held the path or a loop
+walked the patches (`docs/harness/pitfalls.md`, its entry on git a worktree
+session cannot follow). The helper takes the path literally, refuses one
+starting `-`, a directory, an untracked, binary, added, deleted, retyped or
+unmerged file and a number past the last, and spells out each option a config
+could set to make the patch unreadable to `git apply` or refused by it. Its
+exit codes: 0 listed or staged; 2 usage; 3 a path it refuses; 4 a hunk number
+past the last; 5 `git apply` refused, with nothing staged.
+
 **A merged sync's branch goes from origin through a helper no setting grants.**
 `git push --delete` stays denied, and `dispatch_board.py sync-drop`, which
 `/dispatch` alone grants, is what runs `git-sync-head-drop.sh <branch>`. No
@@ -1668,7 +1683,8 @@ starts in it, and runs each path `local-suites` derives from
 `.harness/config.json` and `git ls-files` as `py -3.12 -m unittest discover -s
 <dir> -p <file>`. A target's *Ship checks* that runs the whole `.claude/scripts`
 suite runs `shard-harness-suite.py`, granted with no `:*` so that its `--ids
-<file>` and `--queue <file>`, its workers' own, stay out. Residual: those suites
+<file>` and `--queue <file>`, its workers' own, stay out; its `--selective`
+is granted as a second whole command for the same reason. Residual: those suites
 run with the session's credentials, and what they run is an open sync's head,
 which its pull request shows; a session can still run any test file by a command
 no grant names, which asks in the default mode and under `auto` is the
@@ -2661,7 +2677,8 @@ crash, never a success.
 ## The suite's shard runner
 
 **`py -3.12 .claude/scripts/shard-harness-suite.py` is the `.claude/scripts`
-suite, run in parallel.** It takes no arguments and exits 0 only when every
+suite, run in parallel.** It takes no arguments but `--selective`, below, and
+exits 0 only when every
 discovered test ran and passed or skipped itself, as a case does on a host
 without what it needs. `.claude/scripts` is its one root, the tree
 every target holds; a gate's suite or a stack's root is the target's to run
@@ -2684,9 +2701,12 @@ its claim file exclusively, and a rename is not exclusive on Windows.
 
 **Each class runs as its own suite.** Its time is measured whole, and module
 cleanups run between two classes of one worker, so a fixture a module caches
-has to be built again after one. Class sharding cannot split a class, so the
-run never takes less than its slowest one, which is why the worker count is
-capped rather than tuned.
+has to be built again after one. `review_helpers.fixture_template` is that
+cache: a class's repositories are built once and `copy_template` copies them
+for each test, re-pointing the remotes their configs name, which on Windows
+costs about a tenth of building them again. Class sharding cannot split a
+class, so the run never takes less than its slowest one, which is why the
+worker count is capped rather than tuned.
 
 **Two of its three tables are not about speed.** `SERIAL` holds the classes
 whose subject is elapsed time, `TOGETHER` the ones sharing the `secsweep-*`
@@ -2705,7 +2725,50 @@ workers the host holds and each took about three times as long. The lock spans
 what one user runs, which on a developer's machine is every session that could
 collide; another user's runs, or one under a different `TMPDIR`, are not held by
 it. The operating system drops the lock with the process that held it, so there
-is nothing stale to clear.
+is nothing stale to clear. A run that waited says how long once the lock comes
+free, since no time it prints after that includes the wait.
+
+**`--selective` runs what the change reaches, and CI runs the rest.** The
+change is what the checkout holds that `origin/main` does not: its commits, its
+edits and its untracked files. `suite_select.py` places each changed path: a
+suite that names its file, or names a code file that does, one step out; a
+suite `TREE_READERS` lists for a tree the path is in, since a suite that lists a
+directory names nothing in it; and the suite itself when the path is a suite.
+A suite only a target has is listed in `TREE_READERS` in that target's
+`local_commands.py`, which the selector reads after its own rows, for the
+reason the runner reads its pins there: a managed row naming it would not
+resolve in any other target. A path outside what `harness-legs.py`'s reach
+names is read by no suite for what
+it says, so it is placed as any path is, the suites listing every tracked path
+among what it selects, and is never unplaced. Everything else falls back to the
+whole suite: a
+path in the reach that nothing places, a change to `review_helpers.py`,
+`local_commands.py`, the runner or the selector, a change that cannot be read,
+and no change at all. The fallback is the never-stop-placing rule again, and
+`test_suite_select.py` holds the table to the suites by reading them: each
+suite that lists a tree, in a spelling its pattern knows, must be named in
+`TREE_READERS`, and every selector must name a class that exists. The check is
+per class: a listing in a test class the table does not name fails it, unless
+the table names its module whole. Module-level code, and a class holding no
+test, is placed by the module or by any class of it that is a reader. A
+listing in a spelling the pattern does not know, a root included, passes it;
+any change to a suite selects the check. What one step misses, a caller's
+caller, a red that only the whole suite shows, is the price of the local run,
+and CI, which runs every class on three hosts, is what pays it. A selection
+still goes through the plan's check against what it kept, and a module that
+fails to import runs in every selection.
+
+**Each run leaves one line of how long it took.** `harness_timings.py` appends
+it to `%LOCALAPPDATA%/blueprint-harness/timings.jsonl`, or
+`~/.cache/blueprint-harness/` elsewhere, outside every checkout so that no
+clean, sync or teardown loses it, and `HARNESS_TIMINGS` points it elsewhere,
+as CI does to upload it: the script and mode, the repository, branch and
+commit, the host, the workers, the lock wait, the wall time, the exit, and
+each class's seconds. A line that cannot be written is said and swallowed,
+since a run's exit is its tests', never its record's. `harness_timings.py
+report` prints p50, p90 and the maximum per script and mode and the slowest
+classes; a check script records itself with `harness_timings.py record
+--script <name> --wall <seconds> --exit <code>`.
 
 ## The harness legs decision
 
@@ -2753,8 +2816,14 @@ list written beside it: every `test_*.py` beside it, and every file the suites
 and `review_helpers.py` spell off the root or `.claude/`, through a name or
 their own `__file__`, must be reached in the checkout the suite runs in, and a
 product path must not be. A suite that starts reading a
-file the reach misses fails there, rather than passing on a pull request whose
-legs skipped. `blueprint-harness` decides its own legs with
+file the reach misses, in a spelling the scanner knows, fails there, rather
+than passing on a pull request whose legs skipped. It reads fixed base names
+joined by `/ "part"` and no more: a file reached through a `parents` walk
+from another path, a name held in a variable and joined to the root, or a
+path handed to a subprocess as a string is not seen, and a target lists each
+such file outside the trees above under `local` by hand
+(blueprint-harness#418).
+`blueprint-harness` decides its own legs with
 `harness_sync/legs.py`, whose reach is the payload rather than a rendered tree.
 
 ## Managed files
@@ -2797,7 +2866,7 @@ inside a managed directory: a sync neither writes nor deletes it.
 
 **The drift gate holds it**, delivered by the first sync with the manifest:
 `.github/harness-drift/`, run on every pull request by
-`.github/workflows/harness-drift.yml`. Its README owns what the
+`.github/workflows/gates.yml`. Its README owns what the
 gate refuses, how a config change re-renders the settings, and what to do
 when it is red.
 
