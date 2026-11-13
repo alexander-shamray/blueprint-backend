@@ -114,6 +114,12 @@ per customer and one for the host, the event stream has a limit per customer,
 and `MaxCallers` takes a default of this host's. This record is otherwise
 unchanged.
 
+**Amended by
+[ADR-205](ADR-205-the-core-ends-a-turn-its-client-leaves-unanswered-and-withholds-a-provider-failures-message-1974-1981-amending-adr-204.md)**:
+a provider failure's message goes to the client only where
+`AssistantLimits.ErrorDetail` is on, which this host leaves off, and the
+host logs the failure's type. This record is otherwise unchanged.
+
 > **Discharged in part** by
 > [ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)'s
 > release: its chart gives the provider a value and a Secret reference behind
