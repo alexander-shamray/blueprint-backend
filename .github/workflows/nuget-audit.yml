@@ -113,6 +113,10 @@ jobs:
           audits it as an error (ADR-209). Then dispatch this workflow, and
           close this issue on its green run.
 
+          ## Severity
+
+          medium
+
           Filed by nuget-audit.yml.
           EOF
           )"
