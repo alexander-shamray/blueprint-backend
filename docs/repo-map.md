@@ -195,8 +195,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              the reads is what keeps that list complete, not
                              a more careful list
 .github/workflows/gates.yml  the closure, commit, harness-drift, comment and
-                             locality gates, one step each in one job, with
-                             a check run per gate opened and completed by two
+                             locality gates as steps of one job, with a
+                             check run per gate opened and completed by two
                              jobs that check nothing out. It has no path
                              filter, since what each judges is a property of
                              every pull request and a filter could only make
