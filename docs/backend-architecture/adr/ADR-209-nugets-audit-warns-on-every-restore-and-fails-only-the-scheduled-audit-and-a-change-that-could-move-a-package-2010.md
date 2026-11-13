@@ -1,4 +1,4 @@
-# ADR-209 — NuGet's audit warns on every restore and fails only the scheduled audit and a change that moves a package (#2010), amending ADR-019
+# ADR-209 — NuGet's audit warns on every restore and fails only the scheduled audit and a change that could move a package (#2010), amending ADR-019
 
 **Decision.** `Directory.Build.props` lists NuGet's audit codes, NU1901 to
 NU1904, in `WarningsNotAsErrors` unless the property `NuGetAuditAsError` is
@@ -9,8 +9,9 @@ does not fail on it. Two restores pass the property and fail as before:
 solution, which files an issue or comments on the open one when it is red; and
 ci.yml's `build` job, for a change that touches what its `restore-audit` filter
 names — the pins, a project, props, targets or solution file, `global.json` or
-a NuGet configuration in any spelling NuGet reads. Every other restore, the integration shards', the per-commit
-builds', each image's and a developer's, warns.
+a NuGet configuration in any spelling NuGet reads. Every other restore, the
+integration shards', the per-commit builds', each image's and a developer's,
+warns.
 **Why.** An advisory is published against a package, not against a commit. On
 266e955, a change to one document, three integration shards failed their
 restore on NU1902 for a package no change had moved, and until a pin landed
