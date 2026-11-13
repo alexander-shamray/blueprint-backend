@@ -43,9 +43,10 @@ running replica, so 4Gi is still not a measurement. A round's reply is counted
 as it arrives and its history message when it ends, but either is weighed
 against the history budget only before the next round starts, so a caller
 running every conversation at once may pass it by that many rounds, and the
-excess stays until the store forgets those conversations: a later turn's room,
-`AssistantLimits.IdleTimeout` or a delete, and for a conversation at the
-history budget alone only the last two. A customer
+excess stays until the store forgets those conversations. A conversation's
+own turns make no room for it, so one at the history budget alone goes only by
+another conversation's turn, `AssistantLimits.IdleTimeout`, a delete, or the
+store's conversation or caller limit. A customer
 past the history budget loses their oldest idle conversation before
 `AssistantLimits.IdleTimeout` would have ended it, and one conversation that
 reaches the whole history budget alone ends every turn with `budget`, so the
