@@ -167,7 +167,7 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
     private bool ForgetIdleCaller()
     {
         // Each conversation is forgotten through TryForget, so a turn started after the read above survives, and so
-        // does its caller.
+        // does its caller, though its idle conversations already forgotten stay forgotten: a narrow race, accepted.
         foreach (KeyValuePair<string, Dictionary<string, AssistantSession>> caller in byCaller
                      .Where(c => c.Value.Values.All(s => !s.Running))
                      .OrderBy(c => c.Value.Values.Max(s => (DateTimeOffset?)s.LastActive))
