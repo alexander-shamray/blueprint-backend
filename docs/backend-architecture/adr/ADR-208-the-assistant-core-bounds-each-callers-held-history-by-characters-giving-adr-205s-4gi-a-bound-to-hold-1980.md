@@ -28,9 +28,9 @@ conversations. A replica that ran out of memory took every customer's
 conversations and the day's spend counts with it. Counted per caller, the
 store holds at most `AssistantOptions.MaxCallers` times the history budget,
 256 times 2,000,000 characters, about 0.95 GiB as UTF-16, beside, for each
-turn running at once, its opening message, which
-`AssistantEndpoints.MaxBodyBytes` bounds on arrival, and the round after its
-last check, which `AssistantLimits.MaxOutputTokens` and
+conversation, its last turn's opening message, which
+`AssistantEndpoints.MaxBodyBytes` bounds on arrival, and the round after that
+turn's last check, which `AssistantLimits.MaxOutputTokens` and
 `AssistantLimits.MaxToolResultChars` bound per call. That leaves about 2 GiB of
 the 3 GiB heap ADR-205's limit gives for what the count leaves out, and a
 change to `MaxCallers` or `CallerHistoryChars` is what revisits the 4Gi. The
@@ -43,7 +43,9 @@ running replica, so 4Gi is still not a measurement. A round's reply is counted
 as it arrives and its history message when it ends, but either is weighed
 against the history budget only before the next round starts, so a caller
 running every conversation at once may pass it by that many rounds, and the
-excess stays until the caller's next turn makes room. A customer
+excess stays until the store forgets those conversations: a later turn's room,
+`AssistantLimits.IdleTimeout` or a delete, and for a conversation at the
+history budget alone only the last two. A customer
 past the history budget loses their oldest idle conversation before
 `AssistantLimits.IdleTimeout` would have ended it, and one conversation that
 reaches the whole history budget alone ends every turn with `budget`, so the
