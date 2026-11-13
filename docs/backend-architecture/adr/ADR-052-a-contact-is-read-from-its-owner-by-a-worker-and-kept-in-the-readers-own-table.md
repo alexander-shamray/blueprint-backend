@@ -290,6 +290,11 @@ couplings.
 [ADR-140](ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md)**,
 under which the erasure consumer keeps the contact row and the waiting shipment
 of an order whose shipment lists the request being handled.
+**Amended by
+[ADR-207](ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md)**:
+from Keycloak 26.8.2 the contact reader's client holds Keycloak's
+`kc-admin-api` scope, so its token carries the admin API's audience, which no
+service validates. This record is otherwise unchanged.
 
 ---
 

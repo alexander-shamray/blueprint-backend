@@ -42,6 +42,12 @@ longer in either worker's.
 which judges the cap as Keycloak expands it, reads what a mapped role
 composes in a deployed realm, judges the `commerce-api` scope's own mappers,
 and judges token writers on `web-app` and `mobile-app` as well.
+**Amended by
+[ADR-207](ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md)**:
+the contact reader holds Keycloak's `kc-admin-api` scope, whose one mapper
+writes the admin API's audience: beside the `roles` scope's resolve mapper,
+the other writer of `aud` outside `commerce-api` a worker may hold. This
+record is otherwise unchanged.
 
 ---
 
