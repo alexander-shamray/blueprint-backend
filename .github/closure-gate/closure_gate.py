@@ -52,8 +52,9 @@ WRAPPERS = "`\"'([{*_<"
 ISSUE_SHAPED = re.compile(r"#\d|(?<![^\W_])gh-\d", re.IGNORECASE)
 
 # The house form's metadata row: `| Closes | <issue> (high), <issue> (high) |`.
+# The cell ends at its line's end when the closing pipe is missing.
 TABLE_ROW = re.compile(
-    rf"^[ \t]*\|[ \t]*{_KEYWORD}[ \t]*\|(?P<cell>[^|]*)\|",
+    rf"^[ \t]*\|[ \t]*{_KEYWORD}[ \t]*\|(?P<cell>[^|\n]*)(?:\||$)",
     re.IGNORECASE | re.MULTILINE,
 )
 

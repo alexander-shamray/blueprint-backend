@@ -168,8 +168,8 @@ def checkout_root(path):
 def verified_gitdir(root):
     """The admin directory `root`'s `.git` file names, once git's backlink agrees.
 
-    `None` for a main checkout, whose `.git` is a directory, and for a `.git`
-    file the admin directory does not point back at.
+    `None` for a main checkout and for a `.git` file not pointed back at. A
+    relative pointer is read against its own file's directory, as git does.
     """
     marker = os.path.join(root, ".git")
     if not os.path.isfile(marker):
@@ -179,9 +179,10 @@ def verified_gitdir(root):
             text = handle.read().strip()
         if not text.startswith("gitdir:"):
             return None
-        gitdir = os.path.realpath(text.split(":", 1)[1].strip())
+        gitdir = os.path.realpath(
+            os.path.join(root, text.split(":", 1)[1].strip()))
         with open(os.path.join(gitdir, "gitdir"), encoding="utf-8") as handle:
-            backlink = handle.read().strip()
+            backlink = os.path.join(gitdir, handle.read().strip())
     except (OSError, ValueError):
         return None
     if os.path.normcase(os.path.realpath(backlink)) != os.path.normcase(
@@ -276,7 +277,7 @@ def protected_in_worktree(path, root):
 
 
 def home_offence(spelled, lexical, resolved):
-    """The reason to refuse a target outside every checkout, or `None`.
+    """The reason to refuse a target no checkout below the home holds, or `None`.
 
     Spelling and resolution are both judged, so a link into `~/.ssh` is held.
     Only `~/.claude`'s first component is control. Unreadable names refuse.
@@ -303,7 +304,7 @@ def home_offence(spelled, lexical, resolved):
             if place == "login":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
-                    "which is outside every checkout and is a key, a shell "
+                    "which no checkout below the home holds and is a key, a shell "
                     "profile or git's own configuration: what runs at login, "
                     "under every session (docs/harness-boundaries.md)."
                 )
@@ -315,6 +316,13 @@ def home_offence(spelled, lexical, resolved):
                     "owner's to run (docs/harness-boundaries.md)."
                 )
     return None
+
+
+def holds_home(spelled_root, real_root, traits):
+    """Whether an anchor is the home directory or one of its ancestors."""
+    home = os.path.abspath(os.path.expanduser("~"))
+    return (under(home, spelled_root, traits)
+            or under(os.path.realpath(home), real_root, traits))
 
 
 def anchors(event):
@@ -447,8 +455,11 @@ def offence(event):
 
     # Every anchor containing the target must agree, so an extra anchor cannot
     # excuse what another refuses — the property `anchors` rests its trust in
-    # `CLAUDE_PROJECT_DIR` on.
+    # `CLAUDE_PROJECT_DIR` on. An anchor holding the home directory, a dotfiles
+    # checkout at `~` or a project directory set to it or above, judges its
+    # links but leaves `home_offence` to run.
     judged = False
+    held = False
     for spelled_root, real_root, traits in checkouts:
         if under(lexical, spelled_root, traits):
             base = spelled_root
@@ -457,6 +468,7 @@ def offence(event):
         else:
             continue
         judged = True
+        held = held or holds_home(spelled_root, real_root, traits)
 
         expected = os.path.normpath(
             os.path.join(real_root, os.path.relpath(lexical, base)))
@@ -511,9 +523,10 @@ def offence(event):
                     "given, so a name the rules cannot place is a write "
                     "nothing has judged (#181, docs/harness-boundaries.md)."
                 )
-        return home_offence(spelled, lexical, resolved)
 
     # Reached when every anchor containing the target agreed.
+    if held or not judged:
+        return home_offence(spelled, lexical, resolved)
     return None
 
 

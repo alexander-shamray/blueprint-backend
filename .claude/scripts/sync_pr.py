@@ -384,6 +384,12 @@ def prove(number, pin=None):
                 failures.append(f"{_name(path)} left the manifest but was changed, not deleted")
         else:
             failures.append(f"{_name(path)} is changed but is outside the manifest")
+    # The diff omits an unchanged file, so a dropped one the head kept is read from the head's tree: apply deletes
+    # every path that leaves the manifest unless a local glob keeps it, an excluded one included.
+    if local is not None:
+        failures += [f"{_name(path)} left the manifest but is still on the head; apply deletes it"
+                     for path in sorted(old - paths - {MANIFEST})
+                     if path in in_head and path not in changed and not folded(local, path)]
     return failures, head
 
 

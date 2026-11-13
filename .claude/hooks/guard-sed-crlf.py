@@ -52,6 +52,8 @@ ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 # What follows a `<<`: the `-` that strips tabs, then the delimiter word, which quotes or a backslash may spell.
 HEREDOC = re.compile(r"(-?)[ \t]*((?:[A-Za-z0-9_.\-]|\\.|'[^'\n]*'|\"[^\"\n]*\")+)")
 MSYS_DRIVE = re.compile(r"^/([A-Za-z])(?=/|$)")
+# What bash reads inside braces as a sequence: two integers or two letters, then an optional integer step.
+SEQUENCE = re.compile(r"([-+]?\d+|[A-Za-z])\.\.([-+]?\d+|[A-Za-z])(?:\.\.([-+]?\d+))?")
 
 # GNU sed's long options, matched as `getopt_long` matches them: an exact name, or a prefix only one name has.
 LONG_OPTIONS = (
@@ -333,21 +335,126 @@ def native(path):
     return os.path.expanduser(path)
 
 
+def closing_brace(word, opening):
+    """Where the brace at `opening` closes, and whether a comma sits directly inside it; `None` where none does."""
+    depth = 0
+    comma = False
+    for position in range(opening, len(word)):
+        character = word[position]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return position, comma
+        elif character == "," and depth == 1:
+            comma = True
+    return None, False
+
+
+def sequence(inner):
+    """The words bash's `{x..y[..step]}` makes of `inner`, made lazily; `None` where it is not a sequence."""
+    match = SEQUENCE.fullmatch(inner)
+    if match is None:
+        return None
+    first, last, step = match.groups()
+    if first.isalpha() != last.isalpha():
+        return None
+    # bash takes the step's size and walks towards the last end, and a step of 0 is 1.
+    step = abs(int(step or 1)) or 1
+    if first.isalpha():
+        start, end = ord(first), ord(last)
+        spell = chr
+    else:
+        start, end = int(first), int(last)
+        # A leading zero on either end pads every word to the wider end's length.
+        padded = any(re.match(r"-?0\d", bound) for bound in (first, last))
+        width = max(len(first), len(last)) if padded else 0
+        spell = lambda number: f"{number:0{width}d}"
+    if end < start:
+        step = -step
+    return (spell(number) for number in range(start, end + (1 if step > 0 else -1), step))
+
+
+def braces(word):
+    """The words bash's brace expansion makes of `word`, in bash's order, made lazily so a long sequence costs only
+    the words read. A brace with neither a comma directly inside it nor a sequence is text, as an unmatched one is,
+    and bash looks on for one after it."""
+    start = 0
+    while True:
+        opening = word.find("{", start)
+        if opening < 0:
+            yield word
+            return
+        closing, comma = closing_brace(word, opening)
+        if closing is None:
+            start = opening + 1
+            continue
+        inner = word[opening + 1:closing]
+        if comma:
+            alternatives = (expanded for part in split_commas(inner) for expanded in braces(part))
+        else:
+            alternatives = sequence(inner)
+            if alternatives is None:
+                start = opening + 1
+                continue
+        prefix, suffix = word[:opening], word[closing + 1:]
+        for alternative in alternatives:
+            for rest in braces(suffix):
+                yield prefix + alternative + rest
+        return
+
+
+def split_commas(inner):
+    """`inner` cut at each comma not inside a nested brace."""
+    parts = []
+    depth = 0
+    current = []
+    for character in inner:
+        if character == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+            continue
+        if character == "{":
+            depth += 1
+        elif character == "}" and depth:
+            depth -= 1
+        current.append(character)
+    parts.append("".join(current))
+    return parts
+
+
 def candidates(operand, cwd):
-    """The regular files `operand` names from `cwd`, globbed as bash would; empty for one this hook cannot place."""
+    """The regular files `operand` names from `cwd`, brace-expanded and globbed as bash would; empty for one this
+    hook cannot place.
+
+    A brace list's literal name is read as well, since the hook cannot tell a quoted list, which bash passes as it
+    is, from a bare one: `docs/harness-boundaries.md`, *The sed line-ending guard*."""
     if "$" in operand or "`" in operand:
         return []
-    path = native(operand)
-    if not os.path.isabs(path):
-        if cwd is None:
-            return []
-        path = os.path.join(cwd, path)
-    if any(character in operand for character in "*?["):
-        # `iglob` walks lazily, so the bound stops the walk itself and not only the reads after it.
-        matches = list(itertools.islice(glob.iglob(path), MAX_FILES + 1))
-        if matches:
-            return [match for match in matches if os.path.isfile(match)]
-    return [path] if os.path.isfile(path) else []
+    words = list(itertools.islice(braces(operand), MAX_FILES + 1))
+    if words != [operand]:
+        words.append(operand)
+    found = []
+    walked = 0
+    for word in words:
+        path = native(word)
+        if not os.path.isabs(path):
+            if cwd is None:
+                continue
+            path = os.path.join(cwd, path)
+        matches = []
+        if any(character in word for character in "*?["):
+            # `iglob` walks lazily, so the bound stops the walk itself and not only the reads after it; it is one
+            # bound for the operand, however many words its braces make.
+            matches = list(itertools.islice(glob.iglob(path), MAX_FILES + 1 - walked))
+            walked += len(matches)
+        for match in matches or [path]:
+            if match not in found and os.path.isfile(match):
+                found.append(match)
+        if walked > MAX_FILES or len(found) > MAX_FILES:
+            break
+    return found
 
 
 def holds_crlf(path):

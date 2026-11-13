@@ -32,10 +32,12 @@ sweeps' `mktemp -d` ones.
    anything:
 
    ```bash
-   git rev-parse --git-dir --git-common-dir --show-superproject-working-tree
+   git rev-parse --path-format=absolute --git-dir --git-common-dir --show-superproject-working-tree
    ```
 
-   The first two differing, with no superproject, means a linked worktree:
+   Never drop `--path-format=absolute`: from a subdirectory git prints one
+   path absolute and the other relative. The first two differing, with no
+   superproject, means a linked worktree:
    report its path and branch; step 5 forks nothing, but go on to step 1
    (why: docs/commands/branch.md, *Step 0*).
 1. **Read the current state.** `git branch --show-current` and

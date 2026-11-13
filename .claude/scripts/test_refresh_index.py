@@ -442,18 +442,30 @@ class SeedingAWorktree(Base):
 
     def test_a_copy_without_a_wal_header_is_never_renamed_in(self):
         """Such a copy is one the package's own readers refuse: it must not
-        reach the index path, nor leave the partial it was made in."""
-        main = self.main()
-        connection = sqlite3.connect(str(main / INDEX), isolation_level=None)
-        try:
-            connection.execute("pragma journal_mode=delete")
-        finally:
-            connection.close()
-        worktree = self.linked(main)
+        reach the index path, nor leave the partial it was made in. The source
+        passes `seed_source` and the copy leaves WAL as it closes, so only the
+        check after the copy stands between it and the index path."""
+        worktree = self.linked(self.main())
         (worktree / CACHE).mkdir(parents=True)
+        closed = []
 
-        self.mod.seed(worktree)
+        class LeavesWal(sqlite3.Connection):
+            def close(self):
+                self.execute("pragma journal_mode=delete")
+                closed.append(self)
+                super().close()
 
+        connect = sqlite3.connect
+
+        def copying(target, *arguments, **keywords):
+            if not keywords.get("uri"):
+                keywords["factory"] = LeavesWal
+            return connect(target, *arguments, **keywords)
+
+        with mock.patch.object(self.mod.sqlite3, "connect", copying):
+            self.mod.seed(worktree)
+
+        self.assertEqual(1, len(closed), "the copy was never made")
         self.assertFalse((worktree / INDEX).exists())
         self.assertEqual([], [path.name for path in (worktree / CACHE).iterdir()])
 
@@ -1707,6 +1719,28 @@ class TheIndexIsCompactedAfterARefresh(unittest.TestCase):
             self.assertFalse(self.mod.compact(self.root))
         self.assertEqual(before, self.snapshot())
         self.assertEqual([], self.owned_files())
+
+    def test_a_compacted_copy_without_a_wal_header_is_never_renamed_in(self):
+        """The index passes every check before the copy, and the copy leaves
+        WAL once it is locked down, so only the header check after it stands
+        between that copy and the index path."""
+        self.build(segments=True, free=True)
+        before = self.snapshot()
+        real = self.mod.locked_down
+        calls = []
+
+        def copy_leaves_wal(connection, limit):
+            calls.append(connection)
+            if len(calls) == 2:
+                connection.execute("PRAGMA journal_mode=DELETE")
+            return real(connection, limit)
+
+        with mock.patch.object(self.mod, "locked_down", copy_leaves_wal):
+            self.assertFalse(self.mod.compact(self.root))
+        self.assertEqual(2, len(calls), "the copy was never made")
+        self.assertEqual(before, self.snapshot())
+        self.assertEqual([], self.owned_files())
+        self.assertEqual(["index.sqlite"], self.cache_files())
 
     def test_the_compacted_index_is_in_wal_mode_and_is_still_openable(self):
         self.build(segments=True, free=True)

@@ -102,9 +102,12 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertEqual("deny", decision["permissionDecision"])
         return decision["permissionDecisionReason"]
 
-    def assertRefused(self, command):
-        reason = self.judge(command)
+    def assertRefused(self, command, tool="Bash"):
+        reason = self.judge(command, tool=tool)
         self.assertIsNotNone(reason, f"admitted: {command}")
+        # `main` answers any exception with a deny, so a refusal alone cannot
+        # tell a judged command from a parser that raised on it.
+        self.assertNotIn("crashed the guard", reason)
         return reason
 
     def assertAdmitted(self, command):
@@ -2187,7 +2190,8 @@ class TheGitArgvGuard(unittest.TestCase):
         # And the property behind those two, asserted over the corpus rather
         # than over the one input that exposed it: nothing in this suite may
         # take the hook down. `judge` already fails the test on a non-zero
-        # exit, so this is the subject stated where a reader will find it.
+        # exit, and `main` answers a caught exception with the crash deny, so
+        # each verdict, an admission or a judged refusal, must not be that one.
         for command in (
             "git log $'\\u0000' -5",
             "git log $'\\777' -5",
@@ -2196,7 +2200,7 @@ class TheGitArgvGuard(unittest.TestCase):
             "git log $'\\x' -5",
         ):
             with self.subTest(command=command):
-                self.judge(command)
+                self.assertNotIn("crashed the guard", self.judge(command) or "")
 
     def test_an_expansion_has_more_than_one_reading(self):
         # An empty expansion joining its neighbours is one reading of four, and
@@ -3170,7 +3174,7 @@ class TheGitArgvGuard(unittest.TestCase):
         # is refused whatever its arguments, a backtick-split name included.
         for command in ("git push origin +HEAD:main", "git status", "g`it log", "& 'git' push"):
             with self.subTest(command=command):
-                self.assertIsNotNone(self.judge(command, tool="PowerShell"))
+                self.assertRefused(command, tool="PowerShell")
         for command in ("Get-ChildItem", "Get-Content .gitignore"):
             with self.subTest(command=command):
                 self.assertIsNone(self.judge(command, tool="PowerShell"))
@@ -3183,7 +3187,7 @@ class TheGitArgvGuard(unittest.TestCase):
                         "iex $command", "Start-Process git", "Write-Output done; Get-ChildItem",
                         "pwsh -EncodedCommand ZwBpAHQAIABzAHQAYQB0AHUAcwA=", "cmd /c run.bat"):
             with self.subTest(command=command):
-                self.assertIsNotNone(self.judge(command, tool="PowerShell"))
+                self.assertRefused(command, tool="PowerShell")
         for command in ("Write-Output done", "Get-ChildItem -Path docs/backend-architecture"):
             with self.subTest(command=command):
                 self.assertIsNone(self.judge(command, tool="PowerShell"))
@@ -3223,7 +3227,9 @@ class TheGitArgvGuard(unittest.TestCase):
     def test_a_character_cp1252_cannot_decode_does_not_skip_the_judgement(self):
         # U+23F3 is E2 8F B3 in UTF-8, and 0x8F is undefined in cp1252.
         hourglass = "\u23f3"
-        self.assertIsNotNone(self.judge_raw(self.raw_event(f"git push origin +HEAD:main # {hourglass}")))
+        reason = self.judge_raw(self.raw_event(f"git push origin +HEAD:main # {hourglass}"))
+        self.assertIsNotNone(reason)
+        self.assertNotIn("crashed the guard", reason)
         self.assertIsNone(self.judge_raw(self.raw_event(f"git status # {hourglass}")))
 
     def test_an_event_that_is_not_utf8_is_refused(self):
@@ -4222,6 +4228,19 @@ class AWriteIntoWhatTheTargetDenies(unittest.TestCase):
         reached = os.path.join(self.root, "notes", "plugin")
         self.link(plugin, reached)
         self.assertAdmitted("ls > notes.md", cwd=reached, env=env)
+
+    def test_a_dotfiles_checkout_at_the_home_is_not_left_to_its_denies(self):
+        # Its denies name none of these, as the edit guard's home anchor does not.
+        home, env = self.real_home()
+        os.makedirs(os.path.join(home, ".git"))
+        os.makedirs(os.path.join(home, "notes"))
+        for cwd in (home, os.path.join(home, "notes")):
+            with self.subTest(cwd=cwd):
+                for command in ("ls > ~/.ssh/authorized_keys", "echo x >> ~/.bashrc",
+                                "ls > ~/.claude/.credentials.json"):
+                    self.assertIn("No rule judges a shell write",
+                                  self.assertRefused(command, cwd=cwd, env=env))
+                self.assertAdmitted("ls > ~/notes/todo.md", cwd=cwd, env=env)
 
     def test_a_redirection_through_a_link_into_a_protected_tree_is_refused(self):
         self.link(os.path.join(self.root, ".claude"),

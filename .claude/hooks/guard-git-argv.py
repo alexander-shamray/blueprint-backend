@@ -2927,6 +2927,9 @@ def home_target(path, cwd, command, whole=False, removing=False):
     homes = [written_path("~", cwd, command), os.path.expanduser("~")]
     roots = {root for home in homes if home
              for root in (os.path.abspath(home), os.path.realpath(home))}
+    # A checkout holding the home, a dotfiles one at `~`, has no deny naming these.
+    if any(beneath(root, checkout) for checkout in standing for root in roots):
+        standing = ()
     for place in (path, os.path.realpath(path)):
         if any(beneath(place, checkout) for checkout in standing):
             continue

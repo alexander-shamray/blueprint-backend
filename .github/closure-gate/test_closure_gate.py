@@ -248,6 +248,17 @@ class TableRow(unittest.TestCase):
     def test_a_bare_keyword_line_is_not_a_table_row(self):
         self.assertEqual(declared_in_table("Closes #88\n"), set())
 
+    def test_a_row_without_a_trailing_pipe_reads_its_own_line_only(self):
+        body = "| | |\n|---|---|\n| Closes | #88\n\nCloses #88\nCloses #99\n\n| a | b |\n"
+        self.assertEqual(declared_in_table(body), {88})
+
+    def test_a_row_without_a_trailing_pipe_at_the_end_of_the_body_is_read(self):
+        self.assertEqual(declared_in_table("| | |\n|---|---|\n| Closes | #88, #81"), {88, 81})
+
+    def test_a_crlf_row_without_a_trailing_pipe_reads_its_own_line_only(self):
+        body = "| Closes | #88\r\n\r\nCloses #99\r\n| a | b |\r\n"
+        self.assertEqual(declared_in_table(body), {88})
+
 
 class Repository(unittest.TestCase):
     def test_the_repository_comes_from_the_pull_request_url(self):
@@ -294,6 +305,16 @@ class Directions(unittest.TestCase):
         ))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("#77", problems[0])
+
+    def test_a_row_without_a_trailing_pipe_cannot_hide_an_omission(self):
+        """The cell stops at its line, so a later pipe cannot pad it."""
+        problems = check(payload(
+            body="| Closes | #88\n\nCloses #88\nCloses #99\n\n| a | b |\n",
+            commit_messages=("docs: a",),
+            linked=(88, 99),
+        ))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("#99", problems[0])
 
     def test_a_foreign_closing_reference_does_not_cover_a_local_number(self):
         """A foreign entry linked by hand must not hide a local issue with its number."""
