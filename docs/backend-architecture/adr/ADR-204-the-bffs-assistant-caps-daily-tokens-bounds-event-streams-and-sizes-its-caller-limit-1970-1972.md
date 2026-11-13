@@ -73,7 +73,7 @@ and
 are otherwise unchanged and are read beside this record.
 
 **Amended by
-[ADR-205](ADR-205-the-core-ends-a-turn-its-client-leaves-unanswered-and-withholds-a-provider-failures-message-1974-1981-amending-adr-204.md)**:
+[ADR-206](ADR-206-the-core-ends-a-turn-its-client-leaves-unanswered-and-withholds-a-provider-failures-message-1974-1981-amending-adr-204.md)**:
 a turn whose client tool calls time out in two rounds running ends with
 `error` and a `client-unresponsive` event, so the turn parked on a client
 that never answers no longer holds its caller's place for `MaxSteps`
