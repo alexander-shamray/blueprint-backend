@@ -334,6 +334,13 @@ obtains can already see every client secret in the realm it does reach, which is
 why `read_admin.py` refuses a base URL that is not `https`, and why widening the
 grant costs more than widening it looks like it costs.
 
+**Its client holds Keycloak's `kc-admin-api` as a default scope**, as
+`notifications-worker` does. From Keycloak 26.8.2 the admin API refuses with
+401 a token without the audience that scope writes, and the upgrade assigns it
+only to Keycloak's own admin clients, so this one is assigned by hand
+([ADR-207](backend-architecture/adr/ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md)).
+The scope adds an audience and no role, so the grant above is unchanged.
+
 **The scheduled consumer is a second grant, argued here rather than assumed
 to be covered by the first.** PR-36's row in
 [`docs/pr-decision-log.md`](pr-decision-log.md) said that a second unattended

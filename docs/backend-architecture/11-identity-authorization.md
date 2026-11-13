@@ -1288,7 +1288,8 @@ service-account client needs that scope assigned as default, and so does the
 client of a worker that calls a service (`shipping-worker` below), for the same
 reason and by the same mapper (ADR-052). The client of a worker that calls the
 realm's admin API (`notifications-worker`) takes neither the scope nor the
-audience, because the one thing it calls is the realm's own admin API:
+audience, because the one thing it calls is the realm's own admin API, whose
+audience Keycloak's `kc-admin-api` scope writes instead:
 
 | Realm object | Setting | Why |
 |---|---|---|
@@ -1297,7 +1298,7 @@ audience, because the one thing it calls is the realm's own admin API:
 | Client `commerce-api` | No flow enabled, holds the permission roles | The API as an object in the realm, so permissions are a closed set somebody can grant. Nothing can obtain a token *as* it |
 | Client `web-bff` | Service accounts enabled, `commerce-api` a **default** client scope | Client-credentials tokens request no scope explicitly; a client scope left optional is silently absent |
 | Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account, full scope off with that role its one scope mapping ([ADR-077](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)) | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
-| Client `notifications-worker` | Service accounts enabled, `commerce-api` in neither scope list, `roles` the scope its host requests, `view-users` on `realm-management` for its service account — with the two query roles that role composes — and full scope off with `view-users` its one scope mapping ([ADR-077](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)) | The contact reader ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). It reads the realm's admin API, so it holds no audience any service validates: a stolen secret reads every user's profile and calls no service. The worker refuses a token whose `realm-management` roles are not exactly that set |
+| Client `notifications-worker` | Service accounts enabled, `commerce-api` in neither scope list, `roles` the scope its host requests, `kc-admin-api` a **default** client scope, defined in the export ([ADR-207](adr/ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md)), `view-users` on `realm-management` for its service account — with the two query roles that role composes — and full scope off with `view-users` its one scope mapping ([ADR-077](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)) | The contact reader ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). It reads the realm's admin API, so it holds no audience any service validates — `realm-management`'s, which the `roles` scope writes, and the admin API's, which Keycloak 26.8.2 and later require: a stolen secret reads every user's profile and calls no service. The worker refuses a token whose `realm-management` roles are not exactly that set |
 | Clients for browser flows | Same scope, so a user's token validates at the same services | One audience for the whole platform (§11.3) — per-service audiences are a later split, not a v1 one |
 
 This is realm configuration, not code, which is exactly why it earns a test
@@ -1314,7 +1315,10 @@ satisfy.
 > realm imports, the login succeeds, and the access token loses `sub`,
 > `preferred_username`, `email` and `realm_access` at once. `sub` is the one
 > that matters, because `ICurrentUser.Id` reads it and would throw on every
-> authenticated request in every service.
+> authenticated request in every service. `kc-admin-api` is the one exception:
+> Keycloak adds it by a step of its own once the clients are in, too late for a
+> client naming it, so the export defines it
+> ([ADR-207](adr/ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md)).
 >
 > Keycloak itself reports nothing. `RealmImportTests`
 > (`tests/Common.Web.Tests/RealmImportTests.cs`) reads the shipped export and
