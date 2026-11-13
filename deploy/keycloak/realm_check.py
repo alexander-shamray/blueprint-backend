@@ -141,6 +141,11 @@ PERMISSION_CLAIM = "permission"
 AUDIENCE_KEY = "included.client.audience"
 ROLE_CLIENT_KEY = "usermodel.clientRoleMapping.clientId"
 
+# Keycloak's own scope, whose one mapper writes the audience its admin API
+# requires from 26.8.2 on; the contact reader's token is refused without it (ADR-207).
+ADMIN_API_SCOPE = "kc-admin-api"
+ADMIN_API_MAPPER = "oidc-admin-api-audience-mapper"
+
 # Grants a client turns on by attribute rather than by flag. No obligation
 # names one for any client, so each is refused wherever it is on; Keycloak
 # reads only "true" as on, and this refuses anything but "false".
@@ -653,6 +658,7 @@ def check_realm(realm: dict, kind: str, lifetime: int, audience: str, contact_gr
         problems += check_worker_client(worker[0])
     if contact:
         problems += check_contact_client(contact[0])
+        problems += check_admin_api_scope(realm)
     if bff:
         problems += check_bff_client(bff[0])
 
@@ -1110,7 +1116,32 @@ def check_contact_client(client: dict) -> list[str]:
             "client does not hold; its mapper is also what writes "
             "resource_access, the claim the worker's grant check reads")
 
+    if ADMIN_API_SCOPE not in defaults:
+        problems.append(
+            f"client {CONTACT_CLIENT!r} does not hold {ADMIN_API_SCOPE} as a default "
+            "client scope. Keycloak's admin API refuses a token without the "
+            "audience that scope writes, and the worker requests only roles by "
+            "name, so every contact read is refused with 401 (ADR-207)")
+
     return problems
+
+
+def check_admin_api_scope(realm: dict) -> list[str]:
+    """The kc-admin-api scope, where the realm defines it, carries the mapper that is its whole purpose.
+
+    Its absence is `check_token_writers`' finding for each client that holds it (ADR-207)."""
+    scopes = realm.get("clientScopes")
+    for scope in scopes if isinstance(scopes, list) else []:
+        if not isinstance(scope, dict) or scope.get("name") != ADMIN_API_SCOPE:
+            continue
+        mappers = scope.get("protocolMappers", [])
+        kinds = [m.get("protocolMapper") for m in mappers if isinstance(m, dict)] \
+            if isinstance(mappers, list) else []
+        if ADMIN_API_MAPPER not in kinds:
+            return [f"the client scope {ADMIN_API_SCOPE!r} carries no {ADMIN_API_MAPPER} mapper, so "
+                    f"a token holding it lacks the admin API's audience and {CONTACT_CLIENT!r}'s "
+                    "every read is refused with 401 (ADR-207)"]
+    return []
 
 
 def check_bff_client(client: dict) -> list[str]:
@@ -1192,9 +1223,9 @@ def defined_scopes(realm: dict) -> dict:
 def check_token_writers(realm: dict, client: dict, name: str) -> list[str]:
     """Only the commerce-api scope names the audience or writes the permission claim.
 
-    Read from the client's own mappers and every other scope it holds, on the
-    five named clients (ADR-077, ADR-088). The roles scope's resolve mapper names only
-    clients whose roles the token carries: the cap bounds it on the workers, and the rest hold the audience anyway."""
+    Read from the client's own mappers and every other scope it holds, on the five named clients (ADR-077, ADR-088).
+    The roles scope's resolve mapper names only clients whose roles the token carries, bounded by the cap on the
+    workers; kc-admin-api's mapper, another type, writes the admin API's audience, validated by no service (ADR-207)."""
     problems: list[str] = []
     scopes = defined_scopes(realm)
     sources = [("the client itself", client.get("protocolMappers"))]

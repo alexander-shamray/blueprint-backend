@@ -42,6 +42,28 @@ public sealed class ContactDeploymentTests
     }
 
     [Fact]
+    public void The_client_holds_the_admin_api_scope_the_realm_defines()
+    {
+        // Keycloak creates the built-in after the clients import, so a reference alone is dropped (ADR-207).
+        Client()
+            .GetProperty("defaultClientScopes")
+            .EnumerateArray()
+            .Select(s => s.GetString())
+            .ShouldContain("kc-admin-api");
+
+        JsonElement scope = Realm()
+            .GetProperty("clientScopes")
+            .EnumerateArray()
+            .Single(s => s.GetProperty("name").GetString() == "kc-admin-api");
+
+        scope
+            .GetProperty("protocolMappers")
+            .EnumerateArray()
+            .Select(m => m.GetProperty("protocolMapper").GetString())
+            .ShouldContain("oidc-admin-api-audience-mapper");
+    }
+
+    [Fact]
     public void The_scope_the_deployment_requests_is_one_the_client_holds()
     {
         // Keycloak refuses a scope the client does not hold with invalid_scope, at the first read.

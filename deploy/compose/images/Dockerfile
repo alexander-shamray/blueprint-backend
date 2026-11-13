@@ -3,7 +3,7 @@
 # that hold the image move with it.
 FROM mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04 AS sql
 FROM redis:8.10.3-alpine AS redis
-FROM quay.io/keycloak/keycloak:26.8.1-2 AS keycloak
+FROM quay.io/keycloak/keycloak:26.8.2-2 AS keycloak
 FROM chrislusf/seaweedfs:4.53 AS seaweedfs
 FROM nginx:1.31.8-alpine AS nginx
 FROM otel/opentelemetry-collector-contrib:0.165.0 AS collector

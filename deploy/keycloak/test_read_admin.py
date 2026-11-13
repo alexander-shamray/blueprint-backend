@@ -623,7 +623,7 @@ class WhatItWrites(Stubbed):
                  "directAccessGrantsEnabled": False,
                  "serviceAccountsEnabled": True,
                  "publicClient": False,
-                 "defaultClientScopes": ["basic", "roles"],
+                 "defaultClientScopes": ["basic", "roles", "kc-admin-api"],
                  "optionalClientScopes": ["address"],
                  "webOrigins": []},
                 {"clientId": realm_check.BFF_CLIENT,
@@ -654,6 +654,8 @@ class WhatItWrites(Stubbed):
              "config": {"included.client.audience": "commerce-api"}},
             {"name": "permission", "protocolMapper": "oidc-usermodel-client-role-mapper",
              "config": {"claim.name": "permission", "usermodel.clientRoleMapping.clientId": "commerce-api"}}]})
+        scopes.append({"id": "kc-admin-api-id", "name": "kc-admin-api", "protocolMappers": [
+            {"name": "admin-api-audience", "protocolMapper": "oidc-admin-api-audience-mapper"}]})
         granted = {"worker-id": {"clientMappings": {"commerce-api": {
                        "client": "commerce-api", "mappings": [{"name": "orders:delivery-address"}]}}},
                    "contact-id": {"clientMappings": {"realm-management": {

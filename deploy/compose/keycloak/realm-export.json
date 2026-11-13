@@ -1162,7 +1162,8 @@
         "profile",
         "roles",
         "basic",
-        "email"
+        "email",
+        "kc-admin-api"
       ],
       "optionalClientScopes": [
         "address",
@@ -1195,6 +1196,30 @@
     }
   ],
   "clientScopes": [
+    {
+      "id": "7e2009c5-c082-417e-bcd6-c791ae741a91",
+      "name": "kc-admin-api",
+      "description": "Grants access to the Keycloak Admin REST API by adding its required audience to the token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "id": "f11b037c-6765-4888-bc12-b8345be3d0aa",
+          "name": "admin-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-admin-api-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "lightweight.claim": "true",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
     {
       "id": "c75dee66-3c74-4f2f-bfc1-a8e0363d7f88",
       "name": "commerce-api",
