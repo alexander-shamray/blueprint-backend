@@ -16,9 +16,9 @@ public sealed record AssistantLimits
     public int MaxOutputTokens { get; init; } = 4096;
 
     /// <summary>
-    /// The context size a conversation may reach: the input tokens of its latest provider request, cached ones
-    /// included. Once a request has reached it the turn ends with <c>budget</c> before the next; the request that
-    /// crosses it is still sent, as its size is known only from its usage. Not a spend cap.
+    /// The context a conversation may reach: its latest request's input tokens, cached ones included. A turn ends with
+    /// <c>budget</c> before the round after the one that reached it, which is still sent, and a later turn at once,
+    /// holding none of its text. Not a spend cap.
     /// </summary>
     public long ConversationTokenBudget { get; init; } = 150_000;
 
@@ -33,6 +33,13 @@ public sealed record AssistantLimits
 
     /// <summary>Callers the store holds at once.</summary>
     public int MaxCallers { get; init; } = 64;
+
+    /// <summary>
+    /// The characters a caller's conversations hold together: each message as sent, and the caller's text and replies
+    /// again for the conversation read. A turn or round that would start past it forgets the caller's least recently
+    /// used idle conversation, or ends with <c>budget</c> (ADR-208).
+    /// </summary>
+    public long CallerHistoryChars { get; init; } = 2_000_000;
 
     /// <summary>How long an idle conversation is kept.</summary>
     public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromHours(4);

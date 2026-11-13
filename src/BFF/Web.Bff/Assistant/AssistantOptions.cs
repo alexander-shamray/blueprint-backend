@@ -57,6 +57,12 @@ public sealed class AssistantOptions
     /// </summary>
     public int MaxCallers { get; set; } = 256;
 
+    /// <summary>
+    /// The characters one customer's conversations may hold together, which with <see cref="MaxCallers"/> bounds what
+    /// the replica holds (ADR-208).
+    /// </summary>
+    public long CallerHistoryChars { get; set; } = Defaults.CallerHistoryChars;
+
     /// <summary>How long an untouched conversation stays in this replica's memory (docs/personal-data.md).</summary>
     public TimeSpan IdleTimeout { get; set; } = Defaults.IdleTimeout;
 
@@ -93,6 +99,7 @@ public sealed class AssistantOptions
         Positive(ConversationTokenBudget, nameof(ConversationTokenBudget));
         Positive(MaxConversations, nameof(MaxConversations));
         Positive(MaxCallers, nameof(MaxCallers));
+        Positive(CallerHistoryChars, nameof(CallerHistoryChars));
         Positive(IdleTimeout.Ticks, nameof(IdleTimeout));
 
         return new AssistantLimits
@@ -102,6 +109,7 @@ public sealed class AssistantOptions
             ConversationTokenBudget = ConversationTokenBudget,
             MaxConversations = MaxConversations,
             MaxCallers = MaxCallers,
+            CallerHistoryChars = CallerHistoryChars,
             IdleTimeout = IdleTimeout
         };
     }
