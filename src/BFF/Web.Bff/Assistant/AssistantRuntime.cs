@@ -117,7 +117,18 @@ public sealed partial class AssistantRuntime : IDisposable
             turn.Usage.Input,
             turn.Usage.Output,
             turn.Usage.Cached);
+
+        if (turn.Failure is not null)
+        {
+            TurnFailed(_logger, turn.ConversationId, turn.Failure);
+        }
     }
+
+    // The type alone: the message may hold what the provider or a tool returned, and the client is not sent it.
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Assistant turn failed: conversation {Conversation}, {Failure}")]
+    private static partial void TurnFailed(ILogger logger, string conversation, string failure);
 
     [LoggerMessage(
         Level = LogLevel.Information,

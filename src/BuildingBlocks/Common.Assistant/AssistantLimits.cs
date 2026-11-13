@@ -42,6 +42,13 @@ public sealed record AssistantLimits
     /// </summary>
     public int EventRing { get; init; } = 1024;
 
+    /// <summary>
+    /// Whether a provider failure's redacted message goes to the client in the error event's <c>detail</c>. Off, the
+    /// event carries its code and title alone and the host learns the failure's type from
+    /// <see cref="TurnSummary.Failure"/>; a loopback operator console turns it on.
+    /// </summary>
+    public bool ErrorDetail { get; init; }
+
     /// <summary>The size bound on one tool result, in characters, after redaction.</summary>
     public int MaxToolResultChars { get; init; } = 16_000;
 }

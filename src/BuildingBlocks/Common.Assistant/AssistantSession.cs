@@ -14,6 +14,8 @@ namespace Common.Assistant;
 /// </summary>
 public sealed class AssistantSession : IDisposable
 {
+    private const int MaxSilentRounds = 2;
+
     private readonly Lock gate = new();
     private readonly AssistantCore core;
     private readonly ToolRegistry registry;
@@ -32,6 +34,7 @@ public sealed class AssistantSession : IDisposable
     private JsonObject hostOptions;
     private Usage total = Usage.None;
     private long contextTokens;
+    private int clientTimeouts;
 
     internal AssistantSession(
         string id,
@@ -185,6 +188,8 @@ public sealed class AssistantSession : IDisposable
         Usage unreported = Usage.None;
         string reason = TurnEndReason.Done;
         string? category = null;
+        Exception? failure = null;
+        int silentRounds = 0;
 
         try
         {
@@ -240,6 +245,18 @@ public sealed class AssistantSession : IDisposable
                 {
                     history.Add(new ToolResultsMessage(results));
                 }
+
+                // A client that lets its calls time out in two rounds running is not there, and a turn left to go on
+                // would hold its caller's place against the store's eviction for MaxSteps timeouts.
+                silentRounds = Interlocked.Exchange(ref clientTimeouts, 0) > 0 ? silentRounds + 1 : 0;
+
+                if (silentRounds == MaxSilentRounds)
+                {
+                    reason = TurnEndReason.Error;
+                    Emit(new ErrorEvent("client-unresponsive", "The client did not answer its tool calls", 408, null));
+
+                    break;
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -249,10 +266,11 @@ public sealed class AssistantSession : IDisposable
         catch (Exception e)
         {
             reason = TurnEndReason.Error;
+            failure = e;
             Emit(new ErrorEvent("provider-error", "The assistant's provider failed", 502, Detail(e)));
         }
 
-        End(reason, category, used, unreported);
+        End(reason, category, used, unreported, failure);
     }
 
     // A round cut short before its usage report, by the caller's cancel or a stream broken after the provider began,
@@ -430,6 +448,8 @@ public sealed class AssistantSession : IDisposable
         }
         catch (TimeoutException)
         {
+            Interlocked.Increment(ref clientTimeouts);
+
             return new ToolOutcome(
                 false,
                 $"The client did not answer {call.Name} within {core.Limits.ClientToolTimeout.TotalSeconds:0} s.");
@@ -443,7 +463,7 @@ public sealed class AssistantSession : IDisposable
         }
     }
 
-    private void End(string reason, string? category, Usage used, Usage unreported)
+    private void End(string reason, string? category, Usage used, Usage unreported, Exception? failure)
     {
         TurnSummary summary;
 
@@ -474,16 +494,30 @@ public sealed class AssistantSession : IDisposable
             turn?.Dispose();
             turn = null;
             LastActive = core.Time.GetUtcNow();
-            summary = new TurnSummary(core.Provider.Id, Id, reason, used, total, Caller, unreported);
+            summary = new TurnSummary(
+                core.Provider.Id,
+                Id,
+                reason,
+                used,
+                total,
+                Caller,
+                unreported,
+                failure?.GetType().FullName);
         }
 
         core.TurnEnded?.Invoke(summary);
     }
 
     // The failure's message may hold what a tool or the provider returned, so it is redacted too; a redactor that is
-    // itself what failed gets no second call, or the turn would never reach its end.
+    // itself what failed gets no second call, or the turn would never reach its end. A host that has not asked for
+    // the detail sends the code and title alone (ADR-151's data policy is not a filter for what a failure says).
     private string? Detail(Exception failure)
     {
+        if (!core.Limits.ErrorDetail)
+        {
+            return null;
+        }
+
         try
         {
             return core.Redactor.Redact(failure.Message, Caller);
@@ -564,4 +598,5 @@ public sealed record TurnSummary(
     Usage Usage,
     Usage Total,
     Caller Caller,
-    Usage Unreported);
+    Usage Unreported,
+    string? Failure = null);

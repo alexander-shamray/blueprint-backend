@@ -110,6 +110,55 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_provider_failure_reaches_the_host_by_type_and_the_client_without_its_message_unless_asked()
+    {
+        ScriptedProvider Failing() => new ScriptedProvider()
+            .Round((_, _) => throw new HttpRequestException("balance of the owner's account is low"));
+
+        TurnSummary summary = await SummaryAsync(Failing());
+        AssistantSession quiet = Open(Core(Failing()));
+        AssistantSession verbose = Open(Core(Failing(), new AssistantLimits { ErrorDetail = true }));
+
+        quiet.TryStart(Given.Turn("hello"));
+        verbose.TryStart(Given.Turn("hello"));
+        ErrorEvent withheld = (await Given.UntilEnded(quiet)).OfType<ErrorEvent>().Single();
+        ErrorEvent shown = (await Given.UntilEnded(verbose)).OfType<ErrorEvent>().Single();
+
+        summary.Failure.ShouldBe(typeof(HttpRequestException).FullName);
+        withheld.Type.ShouldBe("provider-error");
+        withheld.Detail.ShouldBeNull();
+        shown.Detail.ShouldBe("balance of the owner's account is low");
+    }
+
+    [Fact]
+    public async Task A_client_that_lets_its_tool_calls_time_out_in_two_rounds_running_ends_the_turn()
+    {
+        FakeTimeProvider time = new();
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new ToolCall("c1", "open_screen", []), new RoundEnd(ProviderStop.Done))
+            .Round(new ToolCall("c2", "open_screen", []), new RoundEnd(ProviderStop.Done))
+            .Round(new ToolCall("c3", "open_screen", []), new RoundEnd(ProviderStop.Done));
+        AssistantSession session = Open(
+            Core(provider, new AssistantLimits { ClientToolTimeout = TimeSpan.FromSeconds(30) }, time),
+            clientTools: Given.ReadOnly("open_screen", ToolSide.Client));
+
+        session.TryStart(Given.Turn("open"));
+        Task<List<AssistantEvent>> ended = Given.UntilEnded(session);
+
+        while (!ended.IsCompleted)
+        {
+            time.Advance(TimeSpan.FromSeconds(31));
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+
+        List<AssistantEvent> events = await ended;
+        events.OfType<ErrorEvent>().Single().Type.ShouldBe("client-unresponsive");
+        events.OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Error);
+        provider.Requests.Count.ShouldBe(2, "the third round is never asked for");
+        session.Running.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task A_round_that_ended_whole_without_a_report_is_not_estimated()
     {
         TurnSummary summary = await SummaryAsync(new ScriptedProvider()
