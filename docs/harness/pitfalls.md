@@ -143,11 +143,16 @@ when a step behaves unexpectedly.
   it cannot work. Safe: check `echo "$CLAUDE_PROJECT_DIR"` before proposing
   one; put the anchoring in a hook.
 - **Hunks of one file are hard to split across commits**: `git add -p` is
-  interactive, and something may refuse `git apply --cached` (a target's
-  own deny, or the auto-mode classifier). Safe: group commits by file and
-  say in the body which change rides along, or write the file down to the
-  hunks the first commit wants, `git add` and commit it, then restore the
-  rest.
+  interactive, and a patch cut by hand into the scratchpad and applied with
+  `git apply --cached` is a line a worktree session's isolation check often
+  refuses (*A worktree session refuses git it cannot follow*), a variable
+  holding the path or a loop over patches among them, or a patch that no
+  longer applies. Safe: `bash .claude/scripts/git-stage-hunks.sh --list
+  <path>` numbers the file's unstaged hunks, and `bash
+  .claude/scripts/git-stage-hunks.sh <path> <n>[,<n>...]` stages those,
+  cutting and applying them inside the script with the index the only thing
+  written; it refuses an untracked, binary, added, deleted or unmerged file
+  and a number past the last, staging nothing.
 - **A subagent cannot ship from a worktree.** Its working directory is
   pinned to its parent's, so its `EnterWorktree` is refused and the
   edit-target guard refuses its edits in a worktree it is not standing

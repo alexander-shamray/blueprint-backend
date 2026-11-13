@@ -917,10 +917,15 @@ class TheGateOnARepository(unittest.TestCase):
 
 class TheShippedTree(unittest.TestCase):
     def test_every_tracked_file_it_reads_can_be_read(self):
-        listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"],
-                                capture_output=True, check=True).stdout
-        paths = [p for p in listed.decode("utf-8").split("\0")
-                 if p and gate.reader_for(p)]
+        def ls_files(*args):
+            listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", *args],
+                                    capture_output=True, check=True).stdout
+            return {p for p in listed.decode("utf-8").split("\0") if p}
+
+        # A tracked file the tree no longer holds is not shipped: a sync's apply
+        # removes a file the payload dropped before anything commits it.
+        paths = sorted(p for p in ls_files() - ls_files("--deleted")
+                       if gate.reader_for(p))
         self.assertGreater(len(paths), 100)
         for path in paths:
             with self.subTest(path=path):

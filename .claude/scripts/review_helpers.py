@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unittest
 from pathlib import Path
 from typing import NamedTuple
 
@@ -115,6 +116,62 @@ def temp_root(case):
     holder = tempfile.TemporaryDirectory()
     case.addCleanup(holder.cleanup)
     return Path(holder.name).as_posix()
+
+
+# Each module's fixture repositories, built once and copied per test: on Windows a `git init`, `add` and `commit`
+# cost about 210 ms where copying their result costs 19. Cleared by a module cleanup, which the shard runner runs
+# between two classes, so a template never outlives the class that last read it there.
+_templates = {}
+
+# Appended to every config a template holds, so that no copy starts a file-system monitor or an automatic collection.
+QUIET_GIT = "[core]\n\tfsmonitor = false\n[gc]\n\tauto = 0\n"
+
+
+def repository_configs(root):
+    """Every repository config under `root`: a checkout's `.git/config` and a bare repository's own."""
+    return [config for config in Path(root).rglob("config")
+            if config.is_file() and (config.parent.name == ".git" or (config.parent / "HEAD").is_file())]
+
+
+def fixture_template(build, root_var="R", key=None, **env):
+    """The directory `build` made once a module: a bash script run with `root_var` naming it and `env` beside, or a
+    function handed it as a `Path`, with a `key` saying what it builds. `copy_template` re-points the paths its configs
+    spell, so a build spells them with forward slashes; a build that fails raises, never handing over half a fixture.
+    """
+    if callable(build) and key is None:
+        raise TypeError("a function's template takes a key, since the function alone does not say what it builds")
+    key = ("function", key) if callable(build) else (build, root_var, tuple(sorted(env.items())))
+    if key not in _templates:
+        holder = tempfile.TemporaryDirectory(prefix="fixture-")
+        unittest.addModuleCleanup(holder.cleanup)
+        unittest.addModuleCleanup(_templates.clear)
+        root = Path(holder.name).as_posix()
+        if callable(build):
+            build(Path(root))
+        else:
+            built = run_bash("set -eu\n" + build, **{root_var: root}, **env)
+            if built.returncode != 0:
+                raise RuntimeError(f"the fixture template did not build: {built.stderr}")
+        for config in repository_configs(root):
+            with config.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(QUIET_GIT)
+        _templates[key] = root
+    return _templates[key]
+
+
+def copy_template(case, template, root=None):
+    """A fresh copy of `template` at `root`, a `temp_root` of `case`'s by default, every git config re-pointed at it.
+
+    A config is the one place git keeps an absolute path to another repository of the fixture, a remote's URL;
+    a template holding a linked worktree, whose `.git` file and `gitdir` spell absolute paths too, is not one.
+    """
+    root = temp_root(case) if root is None else Path(root).as_posix()
+    shutil.copytree(template, root, symlinks=True, dirs_exist_ok=True)
+    for config in repository_configs(root):
+        text = config.read_text(encoding="utf-8")
+        if template in text:
+            config.write_text(text.replace(template, root), encoding="utf-8", newline="\n")
+    return root
 
 
 def python_as_py(env, directory):

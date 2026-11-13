@@ -18,6 +18,7 @@ from unittest import mock
 
 import dispatch_board
 import sync_pr
+from review_helpers import copy_template, fixture_template
 
 NEW_H = "1234567890abcdef1234567890abcdef12345678"
 OLD_H = "a" * 40
@@ -106,23 +107,33 @@ class FakeGh:
         raise AssertionError(f"unexpected gh call {argv}")
 
 
+def seed(base, config):
+    """A bare origin and a checkout of it holding `MAIN_FILES` and `config`, pushed; the origin spelt with forward
+    slashes, which `copy_template` re-points."""
+    root, origin = base / "target", base / "origin.git"
+    git(base, "init", "-q", "--bare", "-b", "main", origin.as_posix())
+    git(base, "init", "-q", "-b", "main", str(root))
+    git(root, "config", "core.autocrlf", "false")
+    git(root, "remote", "add", "origin", origin.as_posix())
+    for rel, text in {**MAIN_FILES, ".harness/config.json": json.dumps(config),
+                      ".harness/manifest.json": manifest(OLD_H, ["docs/a.md", "docs/c.md", ".claude/settings.json"])
+                      }.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.encode("utf-8"))
+    git(root, "add", "-A")
+    git(root, *SEED, "commit", "-q", "-m", "seed")
+    git(root, "push", "-q", "origin", "main")
+
+
 class SyncCase(unittest.TestCase):
     config = CONFIG  # the base's .harness/config.json; a subclass sets its own globs
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        base = Path(tmp.name)
-        self.root, origin = base / "target", base / "origin.git"
-        git(base, "init", "-q", "--bare", "-b", "main", str(origin))
-        git(base, "init", "-q", "-b", "main", str(self.root))
-        git(self.root, "config", "core.autocrlf", "false")
-        git(self.root, "remote", "add", "origin", str(origin))
-        self.write({**MAIN_FILES, ".harness/config.json": json.dumps(self.config)})
-        self.write({".harness/manifest.json": manifest(OLD_H, ["docs/a.md", "docs/c.md", ".claude/settings.json"])})
-        git(self.root, "add", "-A")
-        git(self.root, *SEED, "commit", "-q", "-m", "seed")
-        git(self.root, "push", "-q", "origin", "main")
+        # The seeded checkout and its origin, built once a module for each config and copied a test.
+        config = self.config
+        base = Path(copy_template(self, fixture_template(lambda top: seed(top, config), key=json.dumps(config))))
+        self.root = base / "target"
         self.main = git(self.root, "rev-parse", "HEAD").strip()
         self.head_files = {
             **PAYLOAD, ".claude/settings.json": SETTINGS_NEW, ".harness/manifest.json": manifest(NEW_H, HEAD_PATHS),

@@ -7,6 +7,7 @@ discovery too. Each way of reporting a pass over tests that never ran has a case
 import contextlib
 import importlib.util
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -292,14 +293,16 @@ class TheRunnerRefusesRatherThanReportingAPass(unittest.TestCase):
         self.assertEqual(2, out.returncode, out.stdout + out.stderr)
         self.assertIn("no ids to run", out.stderr)
 
-    def test_it_takes_no_arguments_of_its_own(self):
+    def test_it_takes_no_arguments_of_its_own_but_the_selective_switch(self):
         # The shard count is the host's, capped; a caller who could set it
         # would be a second opinion about what the suite is.
-        out = subprocess.run([sys.executable, str(RUNNER), "--shards", "3"],
-                             cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
-                             timeout=120)
-        self.assertEqual(2, out.returncode, out.stdout)
-        self.assertIn("takes no arguments", out.stderr)
+        for args in (["--shards", "3"], ["--selective", "x"], ["--selective=yes"]):
+            with self.subTest(args=args):
+                out = subprocess.run([sys.executable, str(RUNNER), *args],
+                                     cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
+                                     timeout=120)
+                self.assertEqual(2, out.returncode, out.stdout)
+                self.assertIn("usage: shard-harness-suite.py [--selective]", out.stderr)
 
 
 class ATargetPinsItsOwnClasses(unittest.TestCase):
@@ -449,6 +452,89 @@ class TheRunItselfRefuses(unittest.TestCase):
             self.assertEqual((29.0, "m.C29"), SHARD.slowest(work)[0])
 
 
+class ASelectiveRunKeepsWhatTheChangeReaches(unittest.TestCase):
+    """`--selective` filters discovery and nothing else: every check after it holds over what it kept."""
+
+    def selection(self, paths):
+        out = io.StringIO()
+        with mock.patch.object(SHARD.suite_select, "changed", return_value=paths), contextlib.redirect_stdout(out):
+            kept = SHARD.selection(found())
+        return kept, out.getvalue()
+
+    def test_a_helper_keeps_its_own_suite_and_drops_the_unrelated(self):
+        kept, said = self.selection([".claude/scripts/git-branch-drop.sh"])
+        modules = {test_id.partition(".")[0] for test_id in kept}
+        self.assertIn("test_git_branch_drop", modules)
+        self.assertNotIn("test_refresh_index", modules)
+        self.assertLess(len(kept), len(found()))
+        self.assertTrue(set(kept) <= set(found()))
+        self.assertIn("CI runs them all", said)
+
+    def test_a_change_it_cannot_read_keeps_the_whole_suite(self):
+        kept, said = self.selection(None)
+        self.assertEqual(found(), kept)
+        self.assertIn("runs the whole suite", said)
+
+    def test_a_selection_of_nothing_runs_nothing_and_says_so(self):
+        out = io.StringIO()
+        with mock.patch.object(SHARD, "discovered", return_value=found()), \
+                mock.patch.object(SHARD, "selection", return_value=[]), \
+                mock.patch.object(SHARD, "run_all") as run_all, contextlib.redirect_stdout(out):
+            status = SHARD.discover_and_run(selective=True)
+        self.assertEqual(0, status)
+        self.assertIn("nothing ran", out.getvalue())
+        run_all.assert_not_called()
+
+    def test_a_kept_set_the_plan_drops_from_is_still_refused(self):
+        kept = [test_id for test_id in found() if test_id.startswith("test_harness_timings.")]
+        units, tail = SHARD.plan(kept)
+        with mock.patch.object(SHARD, "discovered", return_value=found()), \
+                mock.patch.object(SHARD, "selection", return_value=kept), \
+                mock.patch.object(SHARD, "plan", return_value=(units[:-1], tail)), \
+                mock.patch.object(SHARD, "run_all") as run_all, \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(2, SHARD.discover_and_run(selective=True))
+        run_all.assert_not_called()
+
+
+class EachRunIsRecorded(unittest.TestCase):
+
+    def test_run_all_hands_back_every_class_time(self):
+        facts = {}
+
+        def spawn(args, _log):
+            work = Path(args[1])
+            (work / "done" / "0000.ids").write_bytes(b"")
+            (work / "done" / "0000.ids.times").write_text("2.5\ta.A\n", encoding="utf-8")
+            return Worker(0)
+
+        with mock.patch.object(SHARD, "spawn", spawn), mock.patch.object(SHARD, "report"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, SHARD.run_all([["a.A.x"]], [], 1, facts))
+        self.assertEqual({"a.A": 2.5}, facts["classes"])
+
+    def test_main_records_one_line_with_the_mode_the_wait_and_the_exit(self):
+        @contextlib.contextmanager
+        def held(*_args, **_kwargs):
+            yield 7.5
+
+        def ran(selective, facts):
+            facts.update(tests=3, workers=2, classes={"a.A": 1.0})
+            return 1
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "t.jsonl"
+            with mock.patch.dict("os.environ", {SHARD.harness_timings.ENV: str(path)}), \
+                    mock.patch.object(SHARD, "host_lock", held), \
+                    mock.patch.object(SHARD, "discover_and_run", side_effect=ran):
+                self.assertEqual(1, SHARD.main(["shard-harness-suite.py", "--selective"]))
+            line = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(("shard-harness-suite.py", "selective", 7.5, 1, 3, {"a.A": 1.0}),
+                         (line["script"], line["mode"], line["lock_wait"], line["exit"], line["tests"],
+                          line["classes"]))
+        self.assertLessEqual({"repository", "branch", "commit", "wall", "at", "host"}, set(line))
+
+
 class OneRunAtATime(unittest.TestCase):
     """The lock two runs would otherwise interleave without.
 
@@ -493,11 +579,23 @@ class OneRunAtATime(unittest.TestCase):
                 released.start()
                 began = time.monotonic()
                 with mock.patch("builtins.print") as said:
-                    with SHARD.host_lock(path, poll=0.05):
+                    with SHARD.host_lock(path, poll=0.05) as reported:
                         waited = time.monotonic() - began
                 released.join()
             self.assertGreaterEqual(waited, 0.4)
-            self.assertIn("waiting for it", said.call_args.args[0])
+            # The wait is said as it starts and as it ends, and handed to the record, since no run time includes it.
+            lines = [call.args[0] for call in said.call_args_list]
+            self.assertIn("waiting for it", lines[0])
+            self.assertIn("came free", lines[-1])
+            self.assertGreaterEqual(reported, 0.4)
+
+    def test_a_lock_free_at_once_reports_no_wait_worth_naming(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch("builtins.print") as said:
+                with SHARD.host_lock(Path(tmp) / "lock") as reported:
+                    pass
+        said.assert_not_called()
+        self.assertLess(reported, 1.0)
 
     def test_a_holder_that_dies_leaves_no_lock_behind(self):
         # Why there is no stale-lock recovery: the operating system drops the
