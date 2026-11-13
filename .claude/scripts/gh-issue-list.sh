@@ -21,7 +21,7 @@ set -euo pipefail
 # refused rather than read as whole.
 limit=5000
 list=$(gh issue list --state all --limit "$limit" --json number,title,state,labels)
-count=$(jq length < <(printf '%s\n' "$list") | tr -d '\r')
+count=$(printf '%s\n' "$list" | jq length | tr -d '\r')
 [ "$count" -lt "$limit" ] ||
   { echo "gh-issue-list: $count issues is the limit, so the list may be cut; raise it here" >&2; exit 3; }
 printf '%s\n' "$list"

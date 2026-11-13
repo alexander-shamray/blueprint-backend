@@ -214,6 +214,45 @@ class LabelHelperBehaviour(unittest.TestCase):
                 self.assertRegex(create[0], r"--color [0-9a-f]{6}")
 
 
+class LabelHelperJudgesNoLineWithATool(unittest.TestCase):
+    """Git Bash reported a tool fed by a process substitution as `Child exited`."""
+
+    def shim(self, s, body):
+        grep = Path(s.dir) / "grep"
+        grep.write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8", newline="\n")
+        grep.chmod(0o755)
+
+    def test_the_whole_line_match_is_judged_in_bash(self):
+        # Only the row count may spawn a grep; a grep asked anything else dies as the killed one did, and the old
+        # `grep -qx` read that as "absent" and went on to create the label.
+        s = LabelStub(before=["security", "bug"])
+        self.addCleanup(s.cleanup)
+        self.shim(s, 'case "$1" in -c) exec /usr/bin/grep "$@" ;; esac\n'
+                     'echo "Child exited" >&2; exit 148\n')
+        r = s.run("security")
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("already exists", r.stdout)
+        self.assertFalse([c for c in s.calls() if "label create" in c])
+
+    def test_a_count_that_does_not_finish_stops_the_run(self):
+        # `grep -c` exits 1 for no row. The old count put an empty string in front of `[` when the grep died, which
+        # refused the listing as truncated: closed, but for the wrong reason. A dead count is now named as one.
+        s = LabelStub(before=["security"])
+        self.addCleanup(s.cleanup)
+        self.shim(s, 'echo "Child exited" >&2; exit 148\n')
+        r = s.run("security")
+        self.assertEqual(3, r.returncode, r.stderr)
+        self.assertIn("cannot count the listing", r.stderr)
+        self.assertFalse([c for c in s.calls() if "label create" in c])
+
+    def test_an_empty_listing_is_zero_rows_not_a_failure(self):
+        s = LabelStub(before=[])
+        self.addCleanup(s.cleanup)
+        r = s.run("medium")
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(1, len([c for c in s.calls() if "label create" in c]))
+
+
 class LabelHelperHasNoFreeParameter(unittest.TestCase):
     """The label helper pins the repository and never overwrites a label.
 

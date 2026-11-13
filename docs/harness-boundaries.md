@@ -1893,11 +1893,17 @@ read an empty alternative differently and one set would judge a path `inside`
 on one machine and `outside` on another. The verdicts come from one `grep`
 per pattern over every changed path, and a path is checked by `case`, so no
 process is spawned per path: on Windows a spawn per path and pattern made
-the helper look hung. A row that fails its grammar exits 3 naming the row
-and not its content, and so does a class map that is absent, names a class
-twice, leaves one without items, or holds a line or a token outside its
-grammar: a verdict half-read from a map the helper refuses would be one no
-gate gives. **The verdict narrows
+the helper look hung. The rows, their cells, the class, each token and each
+map item are judged by bash too, and each pattern's `grep` reads a pipe,
+since Git Bash on a loaded runner reported a `grep` fed by a process
+substitution as `Child exited`, and the helper refused a valid map item
+(#451); a pattern's `grep` ending past status 2, as a killed one does,
+exits 1 and prints nothing, since a verdict read past it would be
+`outside` for a path nothing judged. A row
+that fails its grammar exits 3 naming the row and not its content, and so
+does a class map that is absent, names a class twice, leaves one without
+items, or holds a line or a token outside its grammar: a verdict half-read
+from a map the helper refuses would be one no gate gives. **The verdict narrows
 and grants nothing**: the caller's deny list and the class's tree set hold
 authority, an `outside` or `outside-class` line is a finding, and an
 `inside` line is not a licence for anything the caller's grant refuses.
@@ -2728,7 +2734,8 @@ it. The operating system drops the lock with the process that held it, so there
 is nothing stale to clear. A run that waited says how long once the lock comes
 free, since no time it prints after that includes the wait.
 
-**`--selective` runs what the change reaches, and CI runs the rest.** The
+**`--selective` runs what the change reaches, and CI, where it runs the whole
+suite, runs the rest.** The
 change is what the checkout holds that `origin/main` does not: its commits, its
 edits and its untracked files. `suite_select.py` places each changed path: a
 suite that names its file, or names a code file that does, one step out; a
@@ -2750,11 +2757,15 @@ suite that lists a tree, in a spelling its pattern knows, must be named in
 `TREE_READERS`, and every selector must name a class that exists. The check is
 per class: a listing in a test class the table does not name fails it, unless
 the table names its module whole. Module-level code, and a class holding no
-test, is placed by the module or by any class of it that is a reader. A
-listing in a spelling the pattern does not know, a root included, passes it;
-any change to a suite selects the check. What one step misses, a caller's
-caller, a red that only the whole suite shows, is the price of the local run,
-and CI, which runs every class on three hosts, is what pays it. A selection
+test, is placed by the module or by any class of it that is a reader. The
+pattern reads a glob or directory listing off any ALL-CAPS module constant, off
+`root`, off `__file__` and a few attribute names, and `git ls-files`; a listing
+in a spelling it does not know, a lowercase or attribute name, passes it, and a
+script a suite runs over the checkout is named in the check's own table; any
+change to a suite selects the check. What one step misses, a caller's caller, a
+red that only the whole suite shows, is the price of the local run, and CI,
+where it runs the whole suite (`blueprint-harness`'s runs every class on three
+hosts), is what pays it; a target whose CI runs less pays less. A selection
 still goes through the plan's check against what it kept, and a module that
 fails to import runs in every selection.
 
@@ -2762,9 +2773,10 @@ fails to import runs in every selection.
 it to `%LOCALAPPDATA%/blueprint-harness/timings.jsonl`, or
 `~/.cache/blueprint-harness/` elsewhere, outside every checkout so that no
 clean, sync or teardown loses it, and `HARNESS_TIMINGS` points it elsewhere,
-as CI does to upload it: the script and mode, the repository, branch and
-commit, the host, the workers, the lock wait, the wall time, the exit, and
-each class's seconds. A line that cannot be written is said and swallowed,
+as `blueprint-harness`'s CI does to upload it, a target's setting it or not:
+the script and mode, the repository, branch and commit, the host, the workers,
+the lock wait, the wall time, the exit, and each class's seconds. A line that
+cannot be written is said and swallowed,
 since a run's exit is its tests', never its record's. `harness_timings.py
 report` prints p50, p90 and the maximum per script and mode and the slowest
 classes; a check script records itself with `harness_timings.py record
@@ -2869,6 +2881,21 @@ inside a managed directory: a sync neither writes nor deletes it.
 `.github/workflows/gates.yml`. Its README owns what the
 gate refuses, how a config change re-renders the settings, and what to do
 when it is red.
+
+**The gate checks hold against accident, not against a pull request that
+names its own job after one.** `pull_request` runs the head's copy of
+`gates.yml`, and a job's check run needs no token, so a branch that edits it
+(or adds a workflow) with a job named `closure-gate`, `commit-gate` or
+`harness-drift` posts a passing check of that name. It held before the
+`report` legs too, when the verdicts were posted through the API. It is
+accepted, and the fix is not filed again: the two ways to close it are a
+required workflow taken from `main`, a ruleset `workflows` rule that
+GitHub offers organisation repositories only, and verdicts posted from a
+`pull_request_target` or `workflow_run` workflow, a redesign that runs
+judges beside a token and a pull request's refs. What bounds a branch that
+sets out to spoof a gate is the owner's review of every merged pull request,
+which sees the edit to `gates.yml`, as *The guards' threat model* bounds the
+guards.
 
 **`docs/harness-local.md` is the one document every target writes for the
 payload**, and the payload cites it rather than any target document by path:

@@ -47,7 +47,7 @@ class NoHereString(unittest.TestCase):
     def test_no_shell_script_feeds_a_here_string(self):
         offenders = {path.name: lines for path in shell_scripts()
                      if (lines := here_strings(path.read_text(encoding="utf-8")))}
-        self.assertEqual({}, offenders, "feed it as `< <(printf '%s\\n' \"$x\")` (docs/harness/pitfalls.md)")
+        self.assertEqual({}, offenders, "feed it as docs/harness/pitfalls.md's two entries on Git Bash input say")
 
     def test_the_walk_reaches_every_rewritten_script(self):
         reached = {path.name for path in shell_scripts()}
@@ -56,6 +56,47 @@ class NoHereString(unittest.TestCase):
     def test_the_pattern_catches_a_here_string_and_passes_a_heredoc(self):
         self.assertEqual([2, 3], here_strings('x=1\njq length <<<"$list"\ndone <<< "$rows"\n'))
         self.assertEqual([], here_strings("# cmd <<<\"$x\" hangs\ncat <<'EOF'\nbody\nEOF\ncat <<-EOF\nEOF\n"))
+
+
+# Each `< <(` outside a comment is judged by the command segment in front of it, the text after the last `;`, `|`,
+# `&`, `(`, `do` or `then`: the shell reads it when that segment is the builtin `read` (after any assignments) or
+# the `done` of a loop.
+PROCESS_SUBSTITUTION = re.compile(r"<\s*<\(")
+SEGMENT_BREAK = re.compile(r"[;|&(]|\bdo\b|\bthen\b")
+SHELL_READS = re.compile(r"^\s*(\w+=\S*\s+)*(read(\s|$)|done\s*$)")
+
+
+def tools_fed_by_process_substitution(text):
+    found = []
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        for match in PROCESS_SUBSTITUTION.finditer(line):
+            if not SHELL_READS.match(SEGMENT_BREAK.split(line[:match.start()])[-1]):
+                found.append(n)
+                break
+    return found
+
+
+class NoToolFedByProcessSubstitution(unittest.TestCase):
+    """Git Bash reported such a tool as `Child exited` on a loaded Windows runner.
+
+    Only the shell's own `read` may take the form. The cases beside each script prove what a dead tool does there; this
+    walk is the one that proves a site was moved, and covers a script added later.
+    """
+
+    def test_no_shell_script_feeds_a_tool_by_process_substitution(self):
+        offenders = {path.name: lines for path in shell_scripts()
+                     if (lines := tools_fed_by_process_substitution(path.read_text(encoding="utf-8")))}
+        self.assertEqual({}, offenders, "judge it in bash or pipe it, as docs/harness/pitfalls.md's entry says")
+
+    def test_the_pattern_catches_a_tool_and_passes_the_shells_own_read(self):
+        self.assertEqual([1, 3, 4, 5, 6], tools_fed_by_process_substitution(
+            'count=$(jq length < <(printf x) | tr -d y)\ndone < <(printf x)\n  grep -q a < <(printf x)\n'
+            'read -r a < <(x); jq . < <(y)\nwhile read -r l; do grep -c . < <(printf "$l"); done\n'
+            'read-config < <(printf x)\n'))
+        self.assertEqual([], tools_fed_by_process_substitution(
+            'IFS=, read -r -a a < <(printf x)\n  done < <(printf "$m")\n# jq length < <(printf x)\n'))
 
 
 class TheBand(unittest.TestCase):

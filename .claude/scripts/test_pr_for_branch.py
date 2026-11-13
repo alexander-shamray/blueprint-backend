@@ -152,6 +152,24 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
         self.assertEqual("", result.stdout.strip())
         self.assertIn("truncated", result.stderr)
 
+    def test_a_jq_that_does_not_finish_is_no_answer(self):
+        # Git Bash reported a tool fed by a process substitution as `Child exited`. A `jq` dying on the
+        # count, the repository filter, the merged-row read or the final shape stands in: each ends the run with
+        # nothing printed, never an empty list `/ship` would read as "no pull request".
+        for dies_on in ("length", "--arg", "-r", "--argjson"):
+            with self.subTest(dies_on=dies_on):
+                shim = Path(self.bin, "jq")
+                shim.write_text(f'#!/usr/bin/env bash\ncase "$1" in {dies_on}) echo "Child exited" >&2; exit 148 ;; esac\n'
+                                'PATH=${PATH#*:}\nexec jq "$@"\n', encoding="utf-8", newline="\n")
+                shim.chmod(0o755)
+                path, git = self.make_repo()
+                git("branch", "some-branch")
+                result = self.listing([self.row(1, "MERGED", mergeCommit={"oid": "a" * 40}), self.row(2, "OPEN")],
+                                      cwd=path)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("Child exited", result.stderr, "the stand-in jq was not the one the helper ran")
+                self.assertEqual("", result.stdout)
+
     def test_an_answer_that_is_no_count_is_not_reported_as_truncation(self):
         result = self.run_helper(rows="")
         self.assertNotEqual(0, result.returncode)

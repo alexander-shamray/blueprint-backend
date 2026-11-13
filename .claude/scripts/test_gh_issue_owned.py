@@ -54,6 +54,33 @@ class OwnedIssues(unittest.TestCase):
         self.assertEqual(3, done.returncode)
         self.assertIn("limit", done.stderr)
 
+    def test_a_jq_that_does_not_finish_is_no_owned_list(self):
+        # Git Bash reported a tool fed by a process substitution as `Child exited`: a failed count and
+        # a failed filter each end the run with nothing printed, never an empty list `/dispatch` would read as
+        # "no owned issue". The stand-in dies on the count, then on the filter only.
+        for dies_on, expect in (("length", "count"), ("-c", "filter")):
+            with self.subTest(dies_on=dies_on):
+                stub = Path(tempfile.mkdtemp(prefix="owned-stub-"))
+                self.addCleanup(shutil.rmtree, stub, ignore_errors=True)
+                (stub / "gh").write_text(textwrap.dedent("""\
+                    #!/usr/bin/env bash
+                    if [ "$1" = repo ]; then echo ada; exit 0; fi
+                    echo '[{"number":1,"author":{"login":"ada"}}]'
+                    """), encoding="utf-8", newline="\n")
+                (stub / "jq").write_text(textwrap.dedent(f"""\
+                    #!/usr/bin/env bash
+                    case "$1" in {dies_on}) echo "Child exited" >&2; exit 148 ;; esac
+                    PATH=${{PATH#*:}}
+                    exec jq "$@"
+                    """), encoding="utf-8", newline="\n")
+                for name in ("gh", "jq"):
+                    (stub / name).chmod(0o755)
+                env = {**os.environ, "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}"}
+                done = subprocess.run([BASH, str(OWNED)], capture_output=True, text=True, encoding="utf-8", env=env)
+                self.assertNotEqual(0, done.returncode)
+                self.assertIn("Child exited", done.stderr, "the stand-in jq was not the one the helper ran")
+                self.assertEqual("", done.stdout)
+
     def test_it_takes_no_argument(self):
         self.assertEqual(2, self.run_it((), "--repo").returncode)
 

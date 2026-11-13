@@ -81,10 +81,10 @@ holder() {
   # `Feat/x` keeps `feat/x` on a filesystem where the two are one ref.
   local worktrees held common gitdir state text
   worktrees=$(git worktree list --porcelain) || return 12
-  # Held apart from the count, whose `|| true` for no match would swallow this.
+  # Read on its own line, so a failed fold returns 12 and is not taken for a list with no match.
   worktrees=$(printf '%s\n' "$worktrees" | tr -d '\r' | tr '[:upper:]' '[:lower:]') || return 12
-  held=$(grep -cxF -- "branch refs/heads/$lowered" < <(printf '%s\n' "$worktrees") || true)
-  [ "$held" = 0 ] || { echo "checked out in a worktree (git worktree list)"; return 0; }
+  # A whole-line match in bash, the name quoted so it is literal; no tool starts.
+  [[ $'\n'"$worktrees"$'\n' != *$'\n'"branch refs/heads/$lowered"$'\n'* ]] || { echo "checked out in a worktree (git worktree list)"; return 0; }
 
   # A worktree mid-rebase or mid-bisect has HEAD detached while the branch is
   # still the one it works on, as a conflicted `git-rebase-onto-main.sh start`
@@ -107,7 +107,7 @@ holder() {
     # match on the name is the test; an oid line never reads as a ref name.
     if [ -f "$gitdir/rebase-merge/update-refs" ]; then
       text=$(named "$gitdir/rebase-merge/update-refs") || return 12
-      if grep -qxF -- "refs/heads/$lowered" < <(printf '%s\n' "$text"); then
+      if [[ $'\n'"$text"$'\n' == *$'\n'"refs/heads/$lowered"$'\n'* ]]; then
         echo "to be updated by a rebase in a worktree ($gitdir/rebase-merge)"; return 0
       fi
     fi

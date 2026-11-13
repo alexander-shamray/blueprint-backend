@@ -23,11 +23,13 @@ SHIPPED_WITH = ("harness-legs.py", "sync_pr.py", "dispatch_board.py")
 IDENTITY = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 MANIFEST = '{"harness_commit": "0", "files": {"docs/harness/working-rules.md": "0", ".github/x-gate/gate.py": "0"}}\n'
 CONFIG = '{"local": ["docs/commands/review-branch.md", ".github/x-gate/test_*_target.py"]}\n'
-# A path spelt off the rendered root, or off `.claude/`, each `/ "part"` after it. A module's own `__file__` reaches
-# either, resolved or not: `parents[2]` is the root, and `parents[1]` or `parent.parent` is `.claude/`.
+# A path spelt off the rendered root, or off `.claude/`, each `/ "part"` after it; `CLAUDE = SCRIPTS.parent` is the
+# alias a target's suite names `.claude/` by. A module's own `__file__` reaches either, resolved or not: `parents[2]`
+# is the root, and `parents[1]` or `parent.parent` is `.claude/`.
 FILE = r'Path\((?:\w+\.)?__file__\)(?:\.resolve\(\))?'
-SPELT = re.compile(rf'\b(?:(?P<root>SCRIPTS\.parent\.parent|SCRIPTS\.parents\[1\]|ROOT|REPO|COMMANDS\.parent\.parent'
-                   rf'|{FILE}\.parents\[2\])|(?P<claude>SCRIPTS\.parent|{FILE}\.(?:parents\[1\]|parent\.parent)))'
+SPELT = re.compile(rf'\b(?:(?P<root>SCRIPTS\.parent\.parent|SCRIPTS\.parents\[1\]|ROOT|REPO|CLAUDE\.parent'
+                   rf'|COMMANDS\.parent\.parent|{FILE}\.parents\[2\])'
+                   rf'|(?P<claude>SCRIPTS\.parent|CLAUDE|{FILE}\.(?:parents\[1\]|parent\.parent)))'
                    r'((?:\s*/\s*"[^"]+")+)')
 
 
@@ -240,10 +242,11 @@ class WhatTheDecisionLooksAtTests(unittest.TestCase):
                      ("SCRIPTS.parent.parent", ".github", "w.yml"), ("SCRIPTS.parents[1]", "a"), ("REPO", "b"),
                      ("(Path(__file__).resolve().parents[2]", ".harness", "r.py"),
                      ("Path(__file__).resolve().parent.parent", "skills"), ("Path(dr.__file__).parent.parent", "c"),
-                     ("Path(__file__).parents[1]", "hooks")]
+                     ("Path(__file__).parents[1]", "hooks"), ("CLAUDE.parent", ".mcp.json"), ("CLAUDE", "skills")]
         text = "\n".join(" / ".join([base, *(f'"{part}"' for part in parts)]) for base, *parts in spellings)
         self.assertEqual([".claude/settings.json", "docs/x.md", ".harness/c.json", ".github/w.yml", "a", "b",
-                          ".harness/r.py", ".claude/skills", ".claude/c", ".claude/hooks"], _spelt(text))
+                          ".harness/r.py", ".claude/skills", ".claude/c", ".claude/hooks", ".mcp.json",
+                          ".claude/skills"], _spelt(text))
 
     def test_a_product_path_is_not_reached(self) -> None:
         # The negative control: a reach that took everything would pass both cases above and skip nothing.

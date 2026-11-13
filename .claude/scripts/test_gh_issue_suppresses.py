@@ -275,6 +275,21 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
                 else:
                     self.assertIn('"number":2', result.stdout)
 
+    def test_a_count_that_does_not_finish_is_no_list(self):
+        # Git Bash reported a tool fed by a process substitution as `Child exited`. A `jq` that dies as
+        # that one did stands in: the count is a failure, never an empty one that passes the limit and prints the list.
+        stub_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, stub_dir, ignore_errors=True)
+        for name, body in (("gh", "printf '[]\\n'\n"),
+                           ("jq", "echo 'Child exited' >&2\nexit 148\n")):
+            (stub_dir / name).write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8", newline="\n")
+            (stub_dir / name).chmod(0o755)
+        env = dict(os.environ, PATH=str(stub_dir) + os.pathsep + os.environ["PATH"])
+        result = subprocess.run([BASH, str(ISSUE_LIST)], capture_output=True, text=True, encoding="utf-8", env=env)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Child exited", result.stderr, "the stand-in jq was not the one the helper ran")
+        self.assertEqual("", result.stdout)
+
     def test_the_text_helper_withholds_the_one_field_that_decides(self):
         # The field set is fixed, and `author` is the field it exists to
         # withhold — a caller that could choose fields could choose that one.
