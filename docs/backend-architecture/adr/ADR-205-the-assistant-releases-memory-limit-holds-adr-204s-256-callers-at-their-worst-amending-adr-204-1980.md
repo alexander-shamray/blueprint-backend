@@ -22,8 +22,9 @@ with it.
 **Consequences.** The figure is arithmetic and not a measurement: no load was
 sent to a running replica. It is also not a bound. A turn is appended to a
 conversation before the context budget is read, so a conversation at the
-budget takes another message, its text and context together up to
-`AssistantEndpoints.MaxBodyBytes`, on every turn, which sends nothing to the
+budget takes another message on every turn, held as the prompt built from
+its text and context, which the body limit `AssistantEndpoints.MaxBodyBytes`
+bounds on arrival and not as held, and which sends nothing to the
 provider and spends no daily token; and the session keeps each message's text
 and reply a second time for the conversation read. The 0.7 GiB beside the
 history is not shown to cover that second copy and the runtime, and the
