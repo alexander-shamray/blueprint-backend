@@ -25,6 +25,13 @@ Roslyn cannot express stay at `suggestion` and remain a review matter: the four
 cases that keep `var` are the live example, and a rule whose carve-out lives in
 prose must not fail a build that cannot read the prose.
 
+**Amended by
+[ADR-209](ADR-209-nugets-audit-warns-on-every-restore-and-fails-only-the-scheduled-audit-and-a-change-that-moves-a-package-2010-amending-adr-019.md)**:
+NuGet's audit codes, NU1901 to NU1904, are not errors in a restore unless
+`NuGetAuditAsError` is `true`, as the scheduled audit and ci.yml's build for a
+change that could move a package set it; an advisory published between two
+pushes is an issue rather than a failed build.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

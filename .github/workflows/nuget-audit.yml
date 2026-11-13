@@ -1,0 +1,119 @@
+name: NuGet audit
+
+# NuGet's audit, run as an error over the whole solution, daily and on
+# dispatch (ADR-209). Every other restore hears an advisory as a warning, so an
+# advisory published between two pushes reaches this run and an issue rather
+# than turning every open pull request red; a change that moves a package is
+# still audited as an error by ci.yml's build.
+on:
+  # Off the top of the hour, which GitHub sheds first under load.
+  schedule:
+    - cron: '41 4 * * *'
+  # So the issue a red run filed can be closed on the evidence of a green one.
+  workflow_dispatch:
+
+permissions: {}
+
+# A schedule and a dispatch judge the same tree, and two red runs that both see
+# no open issue would both file one, so they queue rather than overlap.
+concurrency:
+  group: nuget-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # A restore of the solution takes about a minute; 15 fails a hung feed
+    # rather than holding a runner for GitHub's default of 360.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      advisories: ${{ steps.advisories.outputs.lines }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # No version named here: global.json is the pin (§4.4).
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore with the audit as an error
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore Platform.slnx -p:NuGetAuditAsError=true 2>&1 | tee "$RUNNER_TEMP/restore.log"
+
+      # Each advisory once, though every project that reaches it reports it. An
+      # empty answer means the restore failed for another reason, which the
+      # issue then says rather than staying silent.
+      - name: Name the advisories the restore failed on
+        id: advisories
+        if: failure() && steps.restore.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'lines<<END_OF_ADVISORIES'
+            { grep -o 'error NU190[1-4]: .*' "$RUNNER_TEMP/restore.log" || true; } \
+              | sed 's/ \[[^]]*\]$//' | sort -u | awk 'NR <= 50'
+            echo 'END_OF_ADVISORIES'
+          } >> "$GITHUB_OUTPUT"
+
+  # Its own job, with no checkout: the grant is spent where nothing from the
+  # tree runs (ADR-197). An issue rather than a notification, on main-red.yml's
+  # reasoning: it stays open until somebody closes it, and the next red run
+  # comments on it rather than filing again.
+  file:
+    needs: audit
+    if: always() && contains(fromJSON('["failure", "cancelled"]'), needs.audit.result)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: An advisory is an issue, not a red pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.audit.result }}
+          ADVISORIES: ${{ needs.audit.outputs.advisories }}
+          HEAD_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="NuGet audit is red"
+          FOUND=${ADVISORIES:-No NU1901 to NU1904 line was found: the restore failed for another reason, which the run shows.}
+          # A list as long as its limit may be cut, and a listing that cannot see
+          # the open issue files a second one, so it is refused.
+          LIST=$(gh issue list --state open --label security --limit 1000 --json number,title)
+          [ "$(jq length <<<"$LIST")" -lt 1000 ] || { echo "::error::the issue list reached its limit and may be cut"; exit 1; }
+          EXISTING=$(jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty' <<<"$LIST")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$(printf 'Still red (%s) at %s: %s\n\n```\n%s\n```' \
+              "$RESULT" "$HEAD_SHA" "$RUN_URL" "$FOUND")"
+          else
+            gh issue create --title "$TITLE" --label security --label medium --label code --body "$(cat <<EOF
+          ## What happened
+
+          The scheduled NuGet audit ended \`$RESULT\` at $HEAD_SHA: $RUN_URL
+
+          \`\`\`
+          $FOUND
+          \`\`\`
+
+          ## What to do
+
+          Pin each package named above at a version the advisory does not
+          cover, in \`Directory.Packages.props\` with the reason beside it, as
+          a pull request of its own: it moves a package, so ci.yml's build
+          audits it as an error (ADR-209). Then dispatch this workflow, and
+          close this issue on its green run.
+
+          Filed by nuget-audit.yml.
+          EOF
+          )"
+          fi

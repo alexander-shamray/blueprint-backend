@@ -263,6 +263,12 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              GHCR_PRUNE_SCHEDULED opts it in, and on
                              dispatch, which only reports unless asked to
                              delete
+.github/workflows/nuget-audit.yml  NuGet's audit as an error over the
+                             whole solution, daily and on dispatch, filing a
+                             tracker issue when red, or commenting on the
+                             open one (ADR-209). Every other restore warns,
+                             but ci.yml's build for a change that could move
+                             a package
 .github/workflows/codeql.yml  code scanning in advanced setup, the default
                              setup switched off: a pull request analyses
                              only the languages whose files it changed, read

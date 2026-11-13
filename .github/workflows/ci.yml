@@ -506,9 +506,9 @@ jobs:
   # CI never rebuilds. `pipeline-gate` asserts the list below is complete.
   changes:
     runs-on: ubuntu-latest
-    # A dispatch has no change to read, so every output but the package and
-    # guard ones is true: the run exists to build and sign every image once
-    # (ADR-109).
+    # A dispatch has no change to read, so every output but the package,
+    # guard and restore-audit ones is true: the run exists to build and sign
+    # every image once (ADR-109).
     outputs:
       catalog: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.catalog }}
       ordering: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.ordering }}
@@ -526,6 +526,9 @@ jobs:
       anthropic: ${{ steps.changes.outputs.anthropic }}
       # Empty on a dispatch, which builds images and has no guard to test.
       guard: ${{ steps.changes.outputs.guard }}
+      # Empty on a dispatch, which moves no package: the build's restore then
+      # leaves an advisory to the scheduled audit (ADR-209).
+      restore-audit: ${{ steps.changes.outputs.restore-audit }}
       # False only on a pull request: a push run is what tests two merged changes
       # together (§15.1). Only two real false answers skip, and readers test
       # `!= 'false'`, so an output lost at either end builds.
@@ -646,6 +649,18 @@ jobs:
             guard:
               - '.claude/**'
               - '.github/workflows/ci.yml'
+            # What can add or move a package, or change what NuGet's audit
+            # does with an advisory: a change here is audited as an error by
+            # the build's restore, and any other hears an advisory from
+            # nuget-audit.yml instead (ADR-209).
+            restore-audit:
+              - 'Directory.Packages.props'
+              - 'global.json'
+              - '**/*.csproj'
+              - '**/*.props'
+              - '**/*.targets'
+              - '**/nuget.config'
+              - '**/NuGet.config'
             # What the build and the test stages read, named by what they do
             # not, so a new path costs a build rather than skipping one. Only
             # `pipeline-gate code` and commit_builds.py read these beside the job.
@@ -720,7 +735,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - run: dotnet restore Platform.slnx
+      # An advisory is an error here only for a change that could move a package;
+      # one published since the last push is nuget-audit.yml's to hear, so it
+      # turns no unrelated pull request red (ADR-209). This job alone passes
+      # it: one audit per change is the gate, and the shards add none.
+      - run: >-
+          dotnet restore Platform.slnx
+          -p:NuGetAuditAsError=${{ needs.changes.outputs.restore-audit == 'true' }}
         if: needs.changes.outputs.code != 'false'
 
       - run: dotnet build Platform.slnx --no-restore -c Release
