@@ -194,22 +194,22 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              read it was never told about, so a test over
                              the reads is what keeps that list complete, not
                              a more careful list
-.github/workflows/closure-gate.yml  the closure gate's run, and one of the two
-                             workflows with no path filter and with `edited`
-                             in its triggers — what each judges is a property
-                             of every pull request, and a filter could only
-                             make it skippable. Its README owns why the judge
-                             is read from the base commit
-.github/workflows/locality-gate.yml  the other, and its own workflow rather
-                             than a job in ci.yml because `edited` there would
-                             rebuild the solution on every typo fix in a
-                             description
-.github/workflows/comment-gate.yml  the comment gate's run, its own workflow
-                             on the locality gate's reasoning: it is the one
-                             check that reads a label, so `labeled` and
-                             `unlabeled` are its triggers, and ci.yml on them
-                             would rebuild the solution for a change that
-                             alters nothing it builds
+.github/workflows/gates.yml  the closure, commit, harness-drift, comment and
+                             locality gates, one step each in one job, with
+                             a check run per gate opened and completed by two
+                             jobs that check nothing out. It has no path
+                             filter, since what each judges is a property of
+                             every pull request and a filter could only make
+                             it skippable. The closure and locality gates run
+                             on `edited`, because a description edit with no
+                             push behind it changes their verdict; the commit
+                             gate does not, since a body edit changes no
+                             commit; the comment gate runs on `labeled` and
+                             `unlabeled`, being the one check that reads a
+                             label. ci.yml on any of these would rebuild the
+                             solution for a change that alters nothing it
+                             builds. Each gate's README owns why its judge is
+                             read from the base commit
 .github/workflows/merge-notify.yml  a Telegram message when a pull
                              request merges into main; a notification, not
                              a gate, so an unset credential skips it.
@@ -271,10 +271,6 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              analysis holds read grants only and uploads in
                              a job with no checkout (ADR-197). No check of it
                              is required, so a skipped language blocks nothing
-.github/workflows/commit-gate.yml  the commit gate's run: every commit of a
-                             pull request names it in a `PR: #<n>` trailer.
-                             No `edited` trigger, because a body edit changes
-                             no commit
 .github/dependabot.yml       weekly version updates for NuGet, the Dockerfiles'
                              images and Actions; the two gates it
                              cannot satisfy skip its pull requests, and

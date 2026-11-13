@@ -58,23 +58,24 @@ shipped map, so the gate has been observed looking at the file CI hands it.
 
 ## How it runs
 
-[`locality-gate.yml`](../workflows/locality-gate.yml), with no path filter
-and on `edited`, on the closure gate's argument: half of what it judges is
-the body, which is edited without a push. It is a workflow of its own rather
-than a job in `ci.yml` because `edited` there would rebuild the solution on
-every typo in a description. Its job skips a pull request whose author is
-`dependabot[bot]`, which declares no class or touch set. **The gate and the
+The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs every
+gate of the pull request in one job, while its `open` and `report` jobs,
+which check nothing out and alone hold `checks: write`, open this one's check
+run before it judges and complete it as the `locality-gate` check. It has no
+path filter and runs on `edited`, on the closure gate's argument: half of what
+it judges is the body, which is edited without a push. A pull request whose
+every commit is Dependabot's, which declares no class or touch set, stands
+down; a human commit on a Dependabot branch is judged. **The gate and the
 map that judge are read out of the base commit**, so a pull request cannot
-widen its own class. A base
-with no gate directory at all is judged by the head copy under a warning,
-because the pull request that lands the gate has no base copy by definition.
-The workflow file is still the branch's copy, as the closure gate's is.
-**The suite runs after the gate.** Test code can write to `$GITHUB_ENV` or
-`$GITHUB_PATH` or replace a tool on the runner, and every later step inherits
-that, so a suite ahead of the gate could choose its verdict with no workflow
-edit. A later step cannot turn a failure
+widen its own class. A base with no gate script has no gate to run, so the
+gate neither runs nor posts, and the pull request that lands the gate is not
+judged by it. The workflow file is still the branch's copy, as the closure
+gate's is.
+**The suite runs after the verdicts are fixed.** Test code can write to
+`$GITHUB_ENV` or `$GITHUB_PATH` or replace a tool on the runner, and every
+later step inherits that, so a suite ahead of the gate could choose its
+verdict with no workflow edit. A later step cannot turn a failure
 green, and `python -I` would leave a replaced `python`, `gh` or `jq` in place,
-so the order is the control; the suite's `TheShippedWorkflow` reads it. The
-cost is that a run the gate refuses reports no suite result, and the suite
-speaks only on a run the gate passes. `docs/testing.md` has the live
-invocation.
+so the order is the control; the suite's `TheShippedWorkflow` reads it. A red
+suite fails the `gates` job rather than the `locality-gate` check.
+`docs/testing.md` has the live invocation.

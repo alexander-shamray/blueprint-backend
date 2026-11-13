@@ -3,9 +3,9 @@ name: CI
 on:
   pull_request:
     # No `labeled` or `unlabeled`: a label changes nothing that builds or
-    # tests, and the one gate that reads a label is comment-gate.yml's, so a
-    # label reruns that alone. No `edited`: locality-gate.yml's comment says
-    # why a body edit does not rebuild the solution.
+    # tests, and the one gate that reads a label is the comment gate's, a step
+    # of gates.yml, so a label reruns that alone. No `edited`: gates.yml's
+    # gates judge a body edit, so it does not rebuild the solution.
     types: [opened, synchronize, reopened]
   push:
     branches: [main]

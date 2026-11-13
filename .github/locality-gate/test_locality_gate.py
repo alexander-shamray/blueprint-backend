@@ -719,9 +719,9 @@ class TheShippedMap(unittest.TestCase):
 
     def test_this_gate_is_a_class_d_change(self) -> None:
         files = [".github/locality-gate/classes.yml", ".github/locality-gate/locality_gate.py",
-                 ".github/workflows/locality-gate.yml", "docs/change-locality.md", "CLAUDE.md",
+                 ".github/workflows/gates.yml", "docs/change-locality.md", "CLAUDE.md",
                  ".gitattributes", ".mcp.json", ".codeindexignore"]
-        touch = ("`.github/locality-gate/**`, `.github/workflows/locality-gate.yml`, `docs/**`, "
+        touch = ("`.github/locality-gate/**`, `.github/workflows/gates.yml`, `docs/**`, "
                  "`CLAUDE.md`, `.gitattributes`, `.mcp.json`, `.codeindexignore`")
         self.assertEqual(check(payload(files, class_cell="D", touch_cell=touch), self.map), [])
 
@@ -760,7 +760,7 @@ class TheShippedWorkflow(unittest.TestCase):
     GATE = '      - name: gate\n        run: python "$RUNNER_TEMP/locality-gate/locality_gate.py"\n'
 
     def test_the_head_suite_runs_after_the_enforcing_gate(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "locality-gate.yml").read_text(encoding="utf-8")
+        workflow = (ROOT / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
         self.assertTrue(suite_follows_gate(workflow))
 
     def test_a_suite_ahead_of_the_gate_is_caught(self) -> None:
