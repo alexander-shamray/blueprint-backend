@@ -492,6 +492,38 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_caller_past_their_history_budget_keeps_a_conversation_whose_turn_is_running()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(
+                new TextDelta(new string('a', 1500)),
+                new ToolCall("c1", "open_screen", new JsonObject { ["path"] = "logs" }),
+                new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('b', 1000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta("Opened."), new RoundEnd(ProviderStop.Done));
+        AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = 5000 });
+        AssistantSession parked = Open(core, clientTools: Given.ReadOnly("open_screen", ToolSide.Client));
+        AssistantSession other = Open(core);
+
+        parked.TryStart(Given.Turn("open logs"));
+        Task<List<AssistantEvent>> parkedEnded = Given.UntilEnded(parked);
+        ClientToolCallEvent call = await NextOf<ClientToolCallEvent>(parked);
+        other.TryStart(Given.Turn("two"));
+        await Given.UntilEnded(other);
+        (parked.Held + other.Held).ShouldBeGreaterThanOrEqualTo(5000, "the two together are at the budget");
+        other.Held.ShouldBeLessThan(5000, "the other alone is not");
+
+        long after = other.View().LastEventId;
+        other.TryStart(Given.Turn("three"));
+        (await Given.UntilEnded(other, after)).OfType<TurnEndedEvent>().Single().Reason
+            .ShouldBe(TurnEndReason.Budget);
+
+        core.Find(Operator, parked.Id).ShouldBeSameAs(parked);
+        parked.TryAnswer(new ClientToolResult(call.CallId, true, "opened")).ShouldBeTrue();
+        (await parkedEnded).OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Done);
+    }
+
+    [Fact]
     public async Task A_caller_past_their_history_budget_forgets_their_least_recently_used_idle_conversation()
     {
         ScriptedProvider provider = new ScriptedProvider()
