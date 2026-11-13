@@ -13,3 +13,8 @@ CEILINGS = {
     "validate-blueprint.md": 9900,
     "review-branch.md": 8400,
 }
+
+# Its own suites that list the tree rather than name its files, as `suite_select.py`'s `(pattern, (selector, ...))`.
+TREE_READERS = (
+    ("**", ("test_harness_denies_backend.CommandsEnforceTheEditingBoundariesTheyState",)),
+)
