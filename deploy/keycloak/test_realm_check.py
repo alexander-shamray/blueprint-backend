@@ -93,7 +93,7 @@ def worker(**overrides) -> dict:
 
 def contact(**overrides) -> dict:
     """A compliant `notifications-worker`: confidential, service accounts on,
-    no interactive flow, roles a default scope, and commerce-api in neither."""
+    no interactive flow, roles and kc-admin-api default scopes, and commerce-api in neither."""
     client = {
         "clientId": realm_check.CONTACT_CLIENT,
         "enabled": True,
@@ -102,7 +102,7 @@ def contact(**overrides) -> dict:
         "directAccessGrantsEnabled": False,
         "serviceAccountsEnabled": True,
         "publicClient": False,
-        "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "basic", "email"],
+        "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "basic", "email", "kc-admin-api"],
         "optionalClientScopes": ["address", "phone", "organization"],
         "webOrigins": [],
         "fullScopeAllowed": False,
@@ -157,7 +157,9 @@ def scope_documents() -> dict:
     return {
         "clientScopes": [{"name": name, "protocolMappers": []} for name in HELD_SCOPES]
         + [{"name": "commerce-api", "protocolMappers": [
-            {**found, "config": dict(found["config"])} for found in AUDIENCE_MAPPERS]}],
+            {**found, "config": dict(found["config"])} for found in AUDIENCE_MAPPERS]}]
+        + [{"name": "kc-admin-api", "protocolMappers": [
+            mapper("admin-api-audience", "oidc-admin-api-audience-mapper")]}],
         "scopeMappings": [],
         "clientScopeMappings": {
             "commerce-api": [{"client": realm_check.WORKER_CLIENT,
@@ -579,7 +581,7 @@ class TheContactClient(Fixture):
                 self.assertTrue(any(limb in problem for problem in found), found)
 
     def test_commerce_api_as_a_default_scope_is_caught(self):
-        found = self.one(realm(browser(), contact(defaultClientScopes=["roles", "commerce-api"])))
+        found = self.one(realm(browser(), contact(defaultClientScopes=["roles", "kc-admin-api", "commerce-api"])))
         self.assertIn("commerce-api", found)
 
     def test_commerce_api_as_an_optional_scope_is_caught(self):
@@ -587,13 +589,32 @@ class TheContactClient(Fixture):
         self.assertIn("commerce-api", found)
 
     def test_roles_in_neither_list_is_caught(self):
-        found = self.one(realm(browser(), contact(defaultClientScopes=["basic"], optionalClientScopes=[])))
+        found = self.one(realm(browser(), contact(defaultClientScopes=["basic", "kc-admin-api"],
+                                                  optionalClientScopes=[])))
         self.assertIn("roles", found)
 
     def test_roles_as_an_optional_scope_is_accepted(self):
         """The control for the case above: the worker names it, so either list serves."""
-        document = realm(browser(), contact(defaultClientScopes=["basic"], optionalClientScopes=["roles"]))
+        document = realm(browser(), contact(defaultClientScopes=["basic", "kc-admin-api"],
+                                            optionalClientScopes=["roles"]))
         self.assertEqual(self.problems(document), [])
+
+    def test_kc_admin_api_in_neither_list_is_caught(self):
+        found = self.one(realm(browser(), contact(defaultClientScopes=["roles", "basic"])))
+        self.assertIn("kc-admin-api", found)
+
+    def test_kc_admin_api_as_an_optional_scope_alone_is_caught(self):
+        """Unlike roles: the worker never names it, so an optional scope never reaches the token."""
+        found = self.one(realm(browser(), contact(defaultClientScopes=["roles", "basic"],
+                                                  optionalClientScopes=["kc-admin-api"])))
+        self.assertIn("kc-admin-api", found)
+
+    def test_kc_admin_api_without_its_audience_mapper_is_caught(self):
+        """A scope of that name mapping nothing is the realm every read is refused on."""
+        document = realm(browser(), contact())
+        scope = next(s for s in document["clientScopes"] if s["name"] == realm_check.ADMIN_API_SCOPE)
+        scope["protocolMappers"] = []
+        self.assertIn(realm_check.ADMIN_API_MAPPER, self.one(document))
 
     def test_a_string_service_account_flag_is_refused_rather_than_read_as_on(self):
         """Both the boolean check and this limb see a string, and each is asserted."""

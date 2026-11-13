@@ -128,10 +128,14 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   carries. On the two workers the cap bounds it: for `notifications-worker`
   that is `realm-management`, an audience no service validates. The other
   three have no cap and already carry the audience every service validates.
+  `kc-admin-api`'s mapper on `notifications-worker` is of another type and
+  writes the admin API's audience, which no service validates either (ADR-207).
 - **`notifications-worker`'s own shape**, as far as a client object reaches:
   one such client, confidential, service accounts on, no interactive flow,
-  `commerce-api` in neither scope list and `roles` in one — cited rather than
-  enumerated here, because
+  `commerce-api` in neither scope list, `roles` in one and `kc-admin-api` a
+  default, that scope carrying the admin API's audience mapper
+  ([ADR-207](../../docs/backend-architecture/adr/ADR-207-the-contact-readers-client-holds-keycloaks-kc-admin-api-scope-defined-in-the-realm-from-keycloak-2682-2003-amending-adr-052.md))
+  — cited rather than enumerated here, because
   [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
   and [§11.5](../../docs/backend-architecture/11-identity-authorization.md)'s
   table argue them and `check_contact_client` is the list. Its grant,
