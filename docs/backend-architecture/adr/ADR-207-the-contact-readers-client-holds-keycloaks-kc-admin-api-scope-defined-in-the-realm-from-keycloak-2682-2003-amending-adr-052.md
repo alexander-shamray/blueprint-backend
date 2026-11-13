@@ -8,7 +8,7 @@ gate refuses a realm whose contact client lacks the scope as a default, or
 whose `kc-admin-api` scope carries no such mapper. Keycloak 26.8.2 is the
 platform's floor: the Compose stack pins it, and a deployed realm runs on it
 or later. In a deployed realm the scope is Keycloak's built-in, and the
-operator assigns it to the contact client and to the service account
+operator assigns it to the contact client and to the client
 `read_admin.py` signs in with ([ADR-042](ADR-042-the-deployed-realm-is-checked-at-deploy-time.md)),
 since the upgrade assigns it only to Keycloak's own admin clients. This also
 amends [ADR-077](ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md):
