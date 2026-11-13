@@ -58,8 +58,8 @@ shipped map, so the gate has been observed looking at the file CI hands it.
 
 ## How it runs
 
-The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs every
-gate of the pull request in one job, while its `open` and `report` jobs,
+The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs the
+pull-request gates as steps of one job, while its `open` and `report` jobs,
 which check nothing out and alone hold `checks: write`, open this one's check
 run before it judges and complete it as the `locality-gate` check. It has no
 path filter and runs on `edited`, on the closure gate's argument: half of what
