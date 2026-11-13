@@ -93,8 +93,14 @@ jobs:
           [ "$(jq length <<<"$LIST")" -lt 1000 ] || { echo "::error::the issue list reached its limit and may be cut"; exit 1; }
           EXISTING=$(jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty' <<<"$LIST")
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$(printf 'Still red (%s) at %s: %s\n\n```\n%s\n```' \
-              "$RESULT" "$HEAD_SHA" "$RUN_URL" "$FOUND")"
+            gh issue comment "$EXISTING" --body "$(cat <<EOF
+          Still red ($RESULT) at $HEAD_SHA: $RUN_URL
+
+          \`\`\`
+          $FOUND
+          \`\`\`
+          EOF
+          )"
           else
             gh issue create --title "$TITLE" --label security --label medium --label code --body "$(cat <<EOF
           ## What happened
