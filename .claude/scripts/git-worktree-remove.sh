@@ -131,7 +131,8 @@ if [ -e "$path" ]; then
   listed=$(git worktree list --porcelain) ||
     { echo "cannot read the worktree list, so whether $path is still registered is unknown" >&2
       exit "$((status == 0 ? 1 : status))"; }
-  if ! grep -Fxq "branch refs/heads/$branch" < <(printf '%s\n' "$listed"); then
+  listed=${listed//$'\r'/}
+  if [[ $'\n'"$listed"$'\n' != *$'\n'"branch refs/heads/$branch"$'\n'* ]]; then
     # Git can fail after it has deleted the files and the registration, with
     # only the directory left. `rmdir` refuses one holding anything, so an
     # empty directory goes and the removal succeeded, and any other is named.

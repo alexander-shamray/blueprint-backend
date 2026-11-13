@@ -48,6 +48,20 @@ class MainRedOpen(unittest.TestCase):
                "STUB_LOG": str(self.log), "STUB_ROWS": listing, **env_extra}
         return subprocess.run([BASH, str(HELPER), *args], capture_output=True, text=True, encoding="utf-8", env=env)
 
+    def test_a_jq_that_does_not_finish_is_not_a_green_main(self):
+        # Git Bash reported a tool fed by a process substitution as `Child exited`. A `jq` dying on the
+        # count, then only on the title filter, stands in: either is the read failing (exit 2), never "main is green".
+        for dies_on in ("length", "-r"):
+            with self.subTest(dies_on=dies_on):
+                shim = Path(self.bin, "jq")
+                shim.write_text(f'#!/usr/bin/env bash\ncase "$1" in {dies_on}) echo "Child exited" >&2; exit 148 ;; esac\n'
+                                'PATH=${PATH#*:}\nexec jq "$@"\n', encoding="utf-8", newline="\n")
+                shim.chmod(0o755)
+                result = self.run_helper(rows("main is red"))
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertIn("Child exited", result.stderr, "the stand-in jq was not the one the helper ran")
+                self.assertEqual("", result.stdout)
+
     def test_no_open_issue_exits_0_printing_nothing(self):
         result = self.run_helper(rows())
         self.assertEqual(0, result.returncode, result.stderr)

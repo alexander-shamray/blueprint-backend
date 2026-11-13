@@ -51,7 +51,15 @@ not read for unresolvable keywords, and only when `author` is the Dependabot
 bot. Commits and every other author are read whole, because the exemption is
 for text this repository did not write. `closingIssuesReferences` is still
 compared in full, so a keyword GitHub links in this repository is still
-caught.
+caught, bar the foreign entries excused below.
+
+Upstream notes may also link their closures as full issue URLs
+(`closes [#3227](https://github.com/o/r/issues/3227)`): GitHub still parses
+the keyword and the URL and reports `o/r#3227` in `closingIssuesReferences`.
+For the Dependabot bot alone, a foreign entry whose issue URL appears inside
+the `<details>` blocks and nowhere outside them is excused. A foreign entry
+from any other author, or whose URL is also written outside the blocks, is
+still refused.
 
 ## What it reads
 
@@ -65,10 +73,9 @@ testable without a network. The live invocation is in
 ## How it runs
 
 The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs every
-gate of the pull request in one job, while its `open` and `report` jobs,
-which check nothing out and alone hold `checks: write`, open this one's check
-run before it judges and complete it as the `closure-gate` check, on every
-pull request with no path filter, and on
+gate of the pull request in one job, while the `closure-gate` leg of its
+`report` job, which checks nothing out, concludes as this gate did and is the
+`closure-gate` check, on every pull request with no path filter, and on
 `edited` as well as pushes, because a description edit with no push behind
 it can break the claim. **The gate that judges is read out of the base
 commit**, while the suite runs the branch's copy, so a pull request cannot
@@ -76,5 +83,6 @@ supply its own judge; a base carrying no gate fails rather than falling back.
 The suite runs only after every verdict is fixed, so head test code cannot
 alter the run ahead of it; a red suite fails the `gates` job rather than the
 `closure-gate` check. The workflow file itself is still the
-branch's copy, because `pull_request` runs the head definition, and closing
-that needs a required status check on `main`.
+branch's copy, because `pull_request` runs the head definition, so a required
+check holds against accident only and the owner's review bounds an edit made
+on purpose (`docs/harness-boundaries.md`, *Managed files*).

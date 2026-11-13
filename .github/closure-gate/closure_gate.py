@@ -84,11 +84,23 @@ def repository_of(pull_url: str) -> str | None:
 
 ISSUE_URL = re.compile(r"^https?://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/issues/\d+", re.IGNORECASE)
 
+ISSUE_URL_ANYWHERE = re.compile(
+    r"https?://github\.com/[\w.-]+/[\w.-]+/issues/\d+(?!\d)", re.IGNORECASE
+)
 
-def linked_issues(entries: list[dict], repository: str) -> tuple[set[int], list[str]]:
+
+def _issue_urls(text: str) -> set[str]:
+    """Each whole issue URL in `text`, so `issues/3` is not found inside `issues/3227`."""
+    return {m.group(0).lower() for m in ISSUE_URL_ANYWHERE.finditer(text)}
+
+
+def linked_issues(
+    entries: list[dict], repository: str, notes: str = "", outside: str = ""
+) -> tuple[set[int], list[str]]:
     """This repository's closing numbers, and a description of each foreign entry.
 
-    No `url` reads as local; a `url` that is another repository's, or unreadable, is foreign.
+    No `url` reads as local, an unreadable one as foreign; another repository's is foreign
+    unless the Dependabot `notes` hold it and `outside` (the notes cut of `<details>`) does not.
     """
     numbers: set[int] = set()
     foreign: list[str] = []
@@ -100,6 +112,12 @@ def linked_issues(entries: list[dict], repository: str) -> tuple[set[int], list[
         match = ISSUE_URL.match(str(url).strip())
         if match and match.group("repo").lower() == repository.lower():
             numbers.add(entry["number"])
+        elif (
+            match
+            and match.group(0).lower() in _issue_urls(notes)
+            and match.group(0).lower() not in _issue_urls(outside)
+        ):
+            continue
         else:
             foreign.append(f"{match.group('repo')}#{entry['number']}" if match else str(url))
     return numbers, foreign
@@ -214,7 +232,25 @@ def check(payload: dict) -> list[str]:
             f"pass the complete list"
         ]
 
-    linked, foreign = linked_issues(payload["closingIssuesReferences"], repository)
+    # The release notes are the text this repository did not write. For the
+    # Dependabot bot alone, a foreign entry whose URL sits only inside them is
+    # excused.
+    body = payload["body"] or ""
+    author = payload.get("author") or {}
+    notes = ""
+    if author.get("is_bot") and author.get("login") == DEPENDABOT:
+        whole = body
+        # DETAILS matches an innermost block, so a nested one takes passes.
+        stripped = DETAILS.sub("", body)
+        while stripped != body:
+            body, stripped = stripped, DETAILS.sub("", stripped)
+        notes = whole
+    # For the Dependabot bot, `body` is now what lies outside the blocks and
+    # `notes` the whole description; for any other author `body` is the whole
+    # description and `notes` is empty.
+    linked, foreign = linked_issues(
+        payload["closingIssuesReferences"], repository, notes, body
+    )
     for reference in foreign:
         problems.append(
             f"GitHub links `{reference}` as closed by merging, which is outside "
@@ -250,14 +286,8 @@ def check(payload: dict) -> list[str]:
     # The body is read only for the keyword-shaped tokens below. What the
     # description *closes* is `closingIssuesReferences`, which is GitHub's own
     # answer rather than this file's, and there is no reason to prefer a second
-    # opinion to the authority.
-    body = payload["body"] or ""
-    author = payload.get("author") or {}
-    if author.get("is_bot") and author.get("login") == DEPENDABOT:
-        # DETAILS matches an innermost block, so a nested one takes passes.
-        stripped = DETAILS.sub("", body)
-        while stripped != body:
-            body, stripped = stripped, DETAILS.sub("", stripped)
+    # opinion to the authority. For the Dependabot bot `body` is cut of
+    # its release notes above.
     _, body_unreadable = closing_references(body, repository)
     for phrase in body_unreadable:
         problems.append(

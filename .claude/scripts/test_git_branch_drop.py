@@ -434,6 +434,18 @@ class TheHelperDropsWhatLanded(Fixture):
         # fixture's `push -u` wrote one.
         self.assertEqual("", self.at("git config --get branch.feat/x.remote || true"))
 
+    def test_no_line_of_the_worktree_list_is_judged_by_a_tool(self):
+        # Git Bash reported a `grep` fed by a process substitution as `Child exited`; the holder check
+        # read that as "held" and kept a landed branch. A `grep` that dies on every call stands in for it: the
+        # branch is judged in bash, so it still drops.
+        stub = Path(self.bin, "grep")
+        stub.write_text('#!/usr/bin/env bash\necho "Child exited" >&2\nexit 148\n', encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+        result = self.helper()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("dropped feat/x", result.stdout)
+        self.assertFalse(self.exists())
+
     def test_one_landed_row_among_others_is_enough(self):
         # A branch reopened after a closed attempt has several rows.
         rows = [self.row(state="CLOSED", oid="0" * 40, number=5), self.row(oid=self.tip())]

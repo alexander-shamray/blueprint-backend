@@ -378,6 +378,26 @@ class RemoveShape(unittest.TestCase):
         self.assertIn("contains modified or untracked files", result.stderr)
         self.assertTrue(self.registered(root))
 
+    def test_the_registration_is_read_in_bash_not_by_a_tool(self):
+        # Git Bash reported a `grep` fed by a process substitution as `Child exited`, which read as
+        # "no longer registered" and sent a dirty worktree down the failed-delete path. A `grep` that dies on every
+        # call stands in for it: the dirty refusal still names git's own reason.
+        root, native = self.fixture()
+        run_bash('printf x > "$W/notes.txt"', W=f"{root}/checkout/.claude/worktrees/probe")
+        shim = native / "shim"
+        shim.mkdir()
+        (shim / "grep").write_bytes(b"#!/usr/bin/env bash\necho 'Child exited' >&2\nexit 148\n")
+        os.chmod(shim / "grep", 0o755)
+        shim_dir = shim.resolve()
+        if os.name == "nt":
+            shim_dir = "/" + shim_dir.drive[0].lower() + shim_dir.as_posix()[2:]
+        result = run_bash('cd "$WHERE" && PATH="$SHIM:$PATH" bash "$REMOVE" .claude/worktrees/probe feat/probe',
+                          WHERE=f"{root}/checkout", REMOVE=str(REMOVE), SHIM=str(shim_dir))
+        self.assertNotIn(result.returncode, (0, 4), result.stderr)
+        self.assertNotIn("not deleted", result.stderr)
+        self.assertIn("contains modified or untracked files", result.stderr)
+        self.assertTrue(self.registered(root))
+
     def test_a_missing_directory_is_refused(self):
         root, _ = self.fixture()
         result = self.remove(f"{root}/checkout", ".claude/worktrees/absent")

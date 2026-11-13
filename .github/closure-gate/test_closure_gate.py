@@ -477,6 +477,41 @@ class DependabotDescription(unittest.TestCase):
         )
         self.assertEqual(check(payload(body=nested, author=self.DEPENDABOT)), [])
 
+    LINKED_NOTES = (
+        "Updated a from 1 to 2.\n\n<details>\n<summary>Release notes</summary>\n\n"
+        "* closes [#3227](https://github.com/stryker-mutator/stryker-net/issues/3227)\n\n"
+        "</details>\n"
+    )
+    UPSTREAM = {"number": 3227, "url": "https://github.com/stryker-mutator/stryker-net/issues/3227"}
+
+    def _linked(self, body, author):
+        data = payload(body=body, author=author)
+        data["closingIssuesReferences"] = [self.UPSTREAM]
+        return check(data)
+
+    def test_a_foreign_link_from_the_release_notes_is_excused(self):
+        self.assertEqual(self._linked(self.LINKED_NOTES, self.DEPENDABOT), [])
+
+    def test_the_same_foreign_link_is_refused_for_any_other_author(self):
+        problems = self._linked(self.LINKED_NOTES, {"is_bot": False, "login": "someone"})
+        self.assertTrue(any("stryker-mutator/stryker-net#3227" in p for p in problems), problems)
+
+    def test_a_foreign_link_outside_the_details_block_is_still_refused(self):
+        body = self.LINKED_NOTES + "\nsee https://github.com/stryker-mutator/stryker-net/issues/3227\n"
+        problems = self._linked(body, self.DEPENDABOT)
+        self.assertTrue(any("stryker-mutator/stryker-net#3227" in p for p in problems), problems)
+
+    def test_a_foreign_link_the_notes_do_not_hold_is_still_refused(self):
+        problems = self._linked(self.NOTES, self.DEPENDABOT)
+        self.assertTrue(any("stryker-mutator/stryker-net#3227" in p for p in problems), problems)
+
+    def test_a_longer_issue_number_in_the_notes_does_not_excuse_a_shorter_one(self):
+        data = payload(body=self.LINKED_NOTES, author=self.DEPENDABOT)
+        data["closingIssuesReferences"] = [
+            {"number": 3, "url": "https://github.com/stryker-mutator/stryker-net/issues/3"}]
+        problems = check(data)
+        self.assertTrue(any("stryker-mutator/stryker-net#3" in p for p in problems), problems)
+
     def test_a_payload_without_author_is_read_whole(self):
         legacy = payload(body=self.NOTES)
         del legacy["author"]

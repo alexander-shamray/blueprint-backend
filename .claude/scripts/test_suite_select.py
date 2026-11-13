@@ -21,10 +21,11 @@ from review_helpers import copy_template, fixture_template, run_bash, setUpModul
 
 SCRIPTS = Path(__file__).resolve().parent
 
-# How a suite spells listing a tree of the checkout: a glob or directory read off one of the roots the suites name,
-# or `git ls-files` run as an argument vector. A fixture's own directory (`self.root`, `self.dir`) is not one.
+# How a suite spells listing a tree of the checkout: a glob or directory read off any module constant (an ALL-CAPS
+# name a suite binds to a path of the checkout) or `root`, or `git ls-files` run as an argument vector. A fixture's
+# own directory (`self.root`, `self.dir`, `cache`, `worktree / CACHE`) is not one.
 LISTING = re.compile(
-    r"(?<![.\w])(?:COMMANDS|AGENTS|ARGUMENTS|SCRIPTS|HOOKS|SKILL\w*|ROOT|root)\b[^\n]*?\.(?:r?glob|iterdir)\("
+    r"(?<![.\w])(?<!/ )(?:[A-Z][A-Z0-9_]*|root)\b[^\n]*?\.(?:r?glob|iterdir)\("
     r"|__file__\)[^\n]*?\.(?:r?glob|iterdir)\("
     r"|(?:self\.)?(?:source|LAUNCHER\.parent)\.glob\("
     r"|\[\s*(?:\"git\"|GIT)\s*,\s*\"ls-files\"")
@@ -257,9 +258,11 @@ class TheTablesNameWhatTheSuitesHold(unittest.TestCase):
     def test_the_pattern_finds_each_listing_spelling_and_no_fixture_read(self):
         found = ['sorted(COMMANDS.glob("*.md"))', "(root / tree).rglob(", 'SKILL_DIR.rglob("*.md")',
                  'Path(__file__).parent.glob("*.py")', 'self.source.glob("run-guard.*")',
-                 'self.LAUNCHER.parent.glob("x")', '["git", "ls-files"]', '[GIT, "ls-files", "-s"]']
+                 'self.LAUNCHER.parent.glob("x")', '["git", "ls-files"]', '[GIT, "ls-files", "-s"]',
+                 'sorted(PAYLOAD.rglob("*.md"))', "(CLAUDE / \"hooks\").iterdir()", 'REPO_TREE.glob("*")']
         missed = ['(self.root / "system-temp").iterdir()', "self.dir.iterdir()", '"git ls-files -s"',
-                  "os.listdir(directory)"]
+                  "os.listdir(directory)", "(worktree / CACHE).iterdir()", "self.cache.iterdir()",
+                  "box.cache.iterdir()", "run_path.iterdir()"]
         for text in found:
             with self.subTest(text=text):
                 self.assertRegex(text, LISTING)

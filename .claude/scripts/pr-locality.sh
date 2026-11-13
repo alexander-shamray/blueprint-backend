@@ -8,6 +8,12 @@ set -euo pipefail
 pr="${1:?usage: pr-locality.sh <pr-number>}"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number" >&2; exit 2; }
 refuse() { echo "$1" >&2; exit 3; }
+grep_died() { echo "a pattern's grep did not finish, so nothing is printed" >&2; exit 1; }
+# A path token's characters, spelled out so no locale reads a range, judged by bash itself: Git Bash on a loaded
+# Windows runner reported a `grep` fed by a process substitution as `Child exited`, refusing a valid token.
+is_token() {
+  case "$1" in ''|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./*?{},\(\)@+-]*) return 1 ;; esac
+}
 # The token as an anchored regular expression: `**` crosses directories,
 # `*` and `?` do not, braces are alternation, and a token also covers
 # everything beneath the directory it names — `tests/Ordering.*` is the
@@ -24,28 +30,42 @@ to_regex() {
 }
 # The body is captured before it is filtered, so a `gh` failure — no
 # authentication, no network, no such pull request — is fatal under `set -e`
-# rather than indistinguishable from a body with no rows. Only grep's own
-# no-match status, which is exactly 1, is masked.
+# rather than indistinguishable from a body with no rows. The rows are found
+# and cut by bash itself, as a token is.
 body=$(gh_read pr view "$pr" --json body --jq .body)
 # A body saved on Windows or through the web form ends each line in CR, which no row grammar below expects.
 body=${body//$'\r'/}
-class_row=$(grep -E '^\| *Class *\|' < <(printf '%s\n' "$body") || [ $? -eq 1 ])
-touch_row=$(grep -E '^\| *Touch set *\|' < <(printf '%s\n' "$body") || [ $? -eq 1 ])
+class_row="" touch_row="" class_rows=0 touch_rows=0
+class_at='^\| *Class *\|' touch_at='^\| *Touch set *\|'
+while IFS= read -r line; do
+  if [[ "$line" =~ $class_at ]]; then class_row=$line; class_rows=$((class_rows + 1)); fi
+  if [[ "$line" =~ $touch_at ]]; then touch_row=$line; touch_rows=$((touch_rows + 1)); fi
+done < <(printf '%s\n' "$body")
 # Exactly one of each, or none, checked before either grammar: with two rows a
 # valid first would carry an invalid second past a check of whether any row
 # matched.
-[ "$(grep -c . < <(printf '%s\n' "$class_row"))" -le 1 ] || refuse "more than one Class row"
-[ "$(grep -c . < <(printf '%s\n' "$touch_row"))" -le 1 ] || refuse "more than one Touch set row"
+[ "$class_rows" -le 1 ] || refuse "more than one Class row"
+[ "$touch_rows" -le 1 ] || refuse "more than one Touch set row"
 if [ -z "$class_row" ] && [ -z "$touch_row" ]; then exit 0; fi
 [ -n "$class_row" ] && [ -n "$touch_row" ] || refuse "one row without the other"
-# The class cell: the text between the second `|` and the closing one.
-class=$(sed -E 's/^\| *Class *\| *//; s/ *\| *$//' < <(printf '%s\n' "$class_row"))
+# Cut `cell`, a row labelled `$1`, to the text after its label's `|`, less a closing `|` and the spaces around both.
+cell_of() {
+  local head="^\\| *$1 *\\| *" tail=' *\| *$'
+  if [[ "$cell" =~ $head ]]; then cell=${cell:${#BASH_REMATCH[0]}}; fi
+  if [[ "$cell" =~ $tail ]]; then cell=${cell:0:${#cell}-${#BASH_REMATCH[0]}}; fi
+}
+cell=$class_row
+cell_of Class
+class=$cell
 # Spelled out, here and in the map's grammar below: a regex library that collates by locale reads a range as taking
 # lower case too, which the gate refuses.
-grep -Eq '^([ABCDE](\+[ABCDE])?|A\+D\+E)$' < <(printf '%s\n' "$class") || refuse "the Class row is not a class"
+class_re='^([ABCDE](\+[ABCDE])?|A\+D\+E)$'
+[[ "$class" =~ $class_re ]] || refuse "the Class row is not a class"
 [ "${class:0:1}" != "${class:2:1}" ] || refuse "the Class row repeats a class"
 # The touch-set cell, then each comma-separated token on its own.
-cells=$(sed -E 's/^\| *Touch set *\| *//; s/ *\| *$//' < <(printf '%s\n' "$touch_row"))
+cell=$touch_row
+cell_of "Touch set"
+cells=$cell
 case "$cells" in *'|'*) refuse "the Touch set row is not one cell" ;; esac
 [ -n "$cells" ] || refuse "the Touch set row is empty"
 # Split on commas outside braces, because a brace glob carries its own —
@@ -88,8 +108,7 @@ for item in "${items[@]}"; do
     '`'*'`') t="${t:1:${#t}-2}" ;;
     *'`'*) refuse "the Touch set row has an unbalanced backtick" ;;
   esac
-  grep -Eq '^[A-Za-z0-9_./*?{},()@+-]+$' < <(printf '%s\n' "$t") ||
-    refuse "the Touch set row is not a path list"
+  is_token "$t" || refuse "the Touch set row is not a path list"
   case "$t" in *[/.]*) ;; *) refuse "the Touch set row is not a path list" ;; esac
   t="${t%/}"
   # A brace alternative is a segment start too: `{../outside,docs/x.md}`
@@ -137,7 +156,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   # An item takes the touch-set token checks, since an unchecked one widens a
   # class: `docs/a,docs/b` would admit `docs/admin`. A target's own gate may
   # admit fewer characters than this grammar does.
-  grep -Eq '^[A-Za-z0-9_./*?{},()@+-]+$' < <(printf '%s\n' "$item") && [[ "$item" == *[/.]* ]] ||
+  is_token "$item" && [[ "$item" == *[/.]* ]] ||
     refuse "classes.yml has an item that is not a path token"
   depth=0
   for ((i = 0; i < ${#item}; i++)); do
@@ -197,25 +216,28 @@ while IFS= read -r line; do
 done < <(printf '%s\n' "$files")
 # The endpoint stops short of a very large pull request, and a short list would read as the whole diff.
 [ "$names" -eq "$changed" ] || refuse "the files endpoint returned $names names against changedFiles $changed"
-printf 'class %s\n' "$class"
-# One grep per pattern over every path, and line N's hit is path N's: a
-# validated path holds no newline. A pattern grep cannot compile matches
-# nothing and leaves the other patterns' verdicts alone.
+# One grep per pattern over every path, reading a pipe, and line N's hit is
+# path N's: a validated path holds no newline. Status 2, a pattern grep
+# cannot compile, matches nothing; a status past 2 stops the run, since a
+# verdict read past a grep that did not finish is `outside` for a path
+# nothing judged.
 hits=(); class_hits=()
 if [ -n "$list" ]; then
   for re in "${patterns[@]}"; do
-    matched=$(grep -nE -e "$re" < <(printf '%s\n' "${list%$'\n'}") || true)
+    matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
     while IFS=: read -r n _; do
       [ -z "$n" ] || hits[n - 1]=1
     done < <(printf '%s\n' "$matched")
   done
   for re in "${class_patterns[@]}"; do
-    matched=$(grep -nE -e "$re" < <(printf '%s\n' "${list%$'\n'}") || true)
+    matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
     while IFS=: read -r n _; do
       [ -z "$n" ] || class_hits[n - 1]=1
     done < <(printf '%s\n' "$matched")
   done
 fi
+# Printed once every grep has finished, so a run stopped above prints nothing that reads as a pull request with no paths.
+printf 'class %s\n' "$class"
 i=0
 # bash 3.2 calls an empty array unbound under `set -u`, and a pull request can have no changed file.
 for path in ${verdicts[@]+"${verdicts[@]}"}; do

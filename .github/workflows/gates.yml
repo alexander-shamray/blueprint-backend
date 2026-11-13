@@ -1,136 +1,37 @@
 name: Gates
 
-# The pull-request gates as steps of one job: each takes seconds, and a job
-# each held a runner slot and a queue wait apiece. A ruleset requires gates by
-# check name, so the `open` job opens a check run per gate under its name, as
-# GitHub Actions, the app the rulesets pin, and `report` completes each. Each
-# gate's README owns its rules and trust model; this file only runs them.
+# The pull-request gates as steps of one job: a job each held a runner slot
+# and a queue wait apiece. A ruleset requires gates by check name, so each
+# leg of the `report` job is named after a gate and concludes as it did.
+# Each gate's README owns its rules and trust model; this file only runs them.
+
+# A leg's check run is this run's own, and GitHub reads a required check only
+# from the newest run of a workflow on a head, so every run judges every
+# gate: one judging fewer would leave the rest Expected, the merge refused.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
-# None here: each job names its own, so the write grant sits only on the jobs
-# with no checkout of the branch, and a job added later inherits nothing.
+# None here: each job names its own, and a job added later inherits nothing.
 permissions: {}
 
 # No concurrency group: a rerun of an older head's run would cancel the newest
-# head's, which then leaves its gates unposted and the merge refused.
+# head's, which then leaves its gates cancelled and the merge refused. An
+# earlier run of this head that finishes later stands over nothing, since
+# only the newest run's legs are read.
 
 # Every judge is the base commit's copy and the head suites run after the
 # verdicts are fixed, so head test code cannot steer a judge or a verdict by
 # accident. Not against intent: a pull request can edit this file, and a
 # bootstrap judge (a base with no copy) is head code ahead of the verdicts.
 
-# The judging job holds read grants alone and the jobs posting check runs
-# check nothing out, so nothing the branch carries but this file runs beside
-# the checks token. A red suite fails the unrequired `gates` job.
+# No job holds a write grant: a job's own check run needs none. The judging
+# job holds read grants alone, and the legs check nothing out and run no
+# action. A red suite fails the unrequired `gates` job.
 jobs:
-  # Opens a check run in progress for each gate the event runs before any gate
-  # judges, so the newest run's check is the newest one GitHub reads: a run
-  # with no concurrency group can finish after a later one, and an `edited`
-  # run would otherwise leave the push's verdict standing while it judges.
-  open:
-    runs-on: ubuntu-latest
-    permissions:
-      # The base commit's tree, read through the API: this job checks nothing
-      # out.
-      contents: read
-      checks: write
-    # The one decision every job reads, then each gate's check run id.
-    outputs:
-      closure: ${{ steps.event.outputs.closure }}
-      commit: ${{ steps.event.outputs.commit }}
-      drift: ${{ steps.event.outputs.drift }}
-      comment: ${{ steps.event.outputs.comment }}
-      locality: ${{ steps.event.outputs.locality }}
-      closure_id: ${{ steps.open.outputs.closure }}
-      commit_id: ${{ steps.open.outputs.commit }}
-      drift_id: ${{ steps.open.outputs.drift }}
-      comment_id: ${{ steps.open.outputs.comment }}
-      locality_id: ${{ steps.open.outputs.locality }}
-    steps:
-      # The one decision every job below reads, so a gate the report posts is
-      # a gate the event runs. A gate the event does not run posts nothing, so
-      # `edited` or a label leaves the push's verdict standing.
-      - name: Choose the gates this event runs
-        id: event
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          ACTION: ${{ github.event.action }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          runs_on() { if [[ " $1 " == *" $ACTION "* ]]; then echo true; else echo false; fi; }
-          # The locality gate is a target's own, beside its change contract: a
-          # base with no gate script has no gate to run, though it may keep the
-          # class map a local check reads, so the gate neither runs nor posts.
-          # A 404 is no script, and a directory answers with an array; any
-          # other failed read runs the gate, which fails where there is none.
-          locality=$(runs_on 'opened synchronize reopened edited')
-          if [ "$locality" = true ]; then
-            if found=$(gh api "repos/$REPO/contents/.github/locality-gate/locality_gate.py?ref=$BASE_SHA" \
-                --jq 'if type == "array" then "dir" else .type end' 2>&1); then
-              [ "$found" = file ] || locality=false
-            elif [[ $found == *"HTTP 404"* ]]; then
-              locality=false
-            else
-              echo "::warning::could not read whether $BASE_SHA carries the locality gate, so it runs: $found"
-            fi
-          fi
-          {
-            # `edited`: a description can withdraw a closure with no push.
-            echo "closure=$(runs_on 'opened synchronize reopened edited')"
-            # `edited` as the closure gate's: the class and touch set are rows
-            # of the description.
-            echo "locality=$locality"
-            # The labels: the comment gate is the one check that reads one.
-            # No `edited`: a title change counts from the next push.
-            echo "comment=$(runs_on 'opened synchronize reopened labeled unlabeled')"
-            # No `edited`: a body edit changes no commit.
-            echo "commit=$(runs_on 'opened synchronize reopened')"
-            echo "drift=$(runs_on 'opened synchronize reopened')"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Open a check run for each gate this event runs
-        id: open
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          CLOSURE: ${{ steps.event.outputs.closure }}
-          COMMIT: ${{ steps.event.outputs.commit }}
-          DRIFT: ${{ steps.event.outputs.drift }}
-          COMMENT: ${{ steps.event.outputs.comment }}
-          LOCALITY: ${{ steps.event.outputs.locality }}
-        run: |
-          set -euo pipefail
-          open() {
-            [ "$3" = true ] || return 0
-            local id
-            id=$(gh api --method POST "repos/$REPO/check-runs" \
-              -f name="$2" -f head_sha="$HEAD_SHA" -f status=in_progress \
-              -f "output[title]=$2: judging" \
-              -f "output[summary]=Judged in the gates job: $RUN_URL" --jq .id)
-            [[ $id =~ ^[0-9]+$ ]] || { echo "::error::no check run id for $2: $id"; exit 1; }
-            echo "$1=$id" >> "$GITHUB_OUTPUT"
-          }
-          open closure closure-gate "$CLOSURE"
-          open commit commit-gate "$COMMIT"
-          open drift harness-drift "$DRIFT"
-          open comment comment-gate "$COMMENT"
-          open locality locality-gate "$LOCALITY"
-
   gates:
-    needs: open
-    # Keyed on the decision, not on the posts: a fork's read-only token or a
-    # failed post still judges and runs every suite.
-    if: ${{ !cancelled() && needs.open.outputs.closure != '' }}
-    # The report waits on the head suites too: a hung suite ends the job as
-    # cancelled at this limit and the `always()` report still posts, rather
+    # The legs wait on the head suites too: a hung suite ends the job as
+    # cancelled at this limit and the `always()` legs still conclude, rather
     # than every check waiting six hours.
     timeout-minutes: 15
     runs-on: ubuntu-latest
@@ -169,13 +70,38 @@ jobs:
         with:
           python-version: '3.12'
 
+      # The job's one decision, read from the base commit, never the event.
+      # The locality gate is a target's own, beside its change contract: a
+      # base with no gate script, though it may keep the class map a local
+      # check reads, has none to run. A base commit missing from the checkout
+      # runs the gate, which then fails.
+      - name: Decide whether the base commit carries the locality gate
+        id: decide
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GATE: .github/locality-gate/locality_gate.py
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::warning::the base commit $BASE_SHA is not in the checkout, so the locality gate runs"
+            locality=true
+          elif [ "$(git cat-file -t "$BASE_SHA:$GATE" 2>/dev/null || true)" = blob ]; then
+            locality=true
+          else
+            echo "the base commit carries no $GATE, so the locality gate has nothing to judge"
+            locality=false
+          fi
+          echo "locality=$locality" >> "$GITHUB_OUTPUT"
+
       # The closure gate: .github/closure-gate/README.md. A base that carries
       # no gate fails rather than falling back to the head copy, the silent
       # pass this gate exists to refuse; `main` carries it, so only a base
       # older than it, a rebase somebody performs knowingly, reaches that.
       - name: Take the enforcing closure gate from the base commit
         id: closure_take
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.closure == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -220,14 +146,12 @@ jobs:
 
       # The commit gate: .github/commit-gate/README.md. The opener alone is
       # not enough to stand down: every commit's author and committer must be
-      # Dependabot's too. No job condition names the author: the report posts
+      # Dependabot's too. No job condition names the author: the leg concludes
       # the stand-down as a pass, so a human push is never left unjudged. The
       # locality gate stands down on the same decision.
       - name: Decide whether this is Dependabot's own pull request
         id: dependabot
-        if: >-
-          ${{ !cancelled() && steps.setup.outcome == 'success'
-          && (needs.open.outputs.commit == 'true' || needs.open.outputs.locality == 'true') }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -253,9 +177,7 @@ jobs:
       # gate while the head also lacks it still fails.
       - name: Take the enforcing commit gate from the base commit
         id: commit_take
-        if: >-
-          ${{ !cancelled() && needs.open.outputs.commit == 'true'
-          && steps.dependabot.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
+        if: ${{ !cancelled() && steps.dependabot.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -295,7 +217,7 @@ jobs:
       # missing, or a head with no gate either, fails.
       - name: Take the enforcing drift gate from the base commit
         id: drift_take
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.drift == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -393,7 +315,7 @@ jobs:
       # under a warning (the bootstrap).
       - name: The comments this pull request adds keep the style guide's rule
         id: comment
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.comment == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -429,7 +351,7 @@ jobs:
       - name: Take the enforcing locality gate and map from the base commit
         id: locality_take
         if: >-
-          ${{ !cancelled() && needs.open.outputs.locality == 'true'
+          ${{ !cancelled() && steps.decide.outputs.locality == 'true'
           && steps.dependabot.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
         shell: bash
         env:
@@ -476,23 +398,24 @@ jobs:
             jq -s --argjson pr "$pr_json" '$pr + {files: .}' |
             python "$RUNNER_TEMP/locality-gate/locality_gate.py" --map "$RUNNER_TEMP/locality-gate/classes.yml"
 
-      # Each gate's step outcomes, fixed as this job's outputs before the head
-      # suites run: the commit and locality gates' stand-down reads as
-      # successes. The report job puts the open job's decision ahead of each.
+      # Each gate's line, fixed as this job's outputs before the head suites
+      # run: whether it judges, then the outcome of each of its steps, as
+      # words. Every gate but the locality gate judges on every run; the
+      # commit and locality gates' stand-down reads as successes.
       - name: Publish each gate's step outcomes
         id: verdicts
         if: ${{ !cancelled() }}
         shell: bash
         env:
-          CLOSURE_GATE: ${{ steps.closure_take.outcome }} ${{ steps.closure.outcome }}
+          CLOSURE_GATE: true ${{ steps.closure_take.outcome }} ${{ steps.closure.outcome }}
           COMMIT_GATE: >-
-            ${{ steps.dependabot.outcome }}
+            true ${{ steps.dependabot.outcome }}
             ${{ steps.dependabot.outputs.own == 'true' && 'success' || steps.commit_take.outcome }}
             ${{ steps.dependabot.outputs.own == 'true' && 'success' || steps.commit.outcome }}
-          HARNESS_DRIFT: ${{ steps.drift_take.outcome }} ${{ steps.drift_fetch.outcome }} ${{ steps.drift.outcome }}
-          COMMENT_GATE: ${{ steps.comment.outcome }}
+          HARNESS_DRIFT: true ${{ steps.drift_take.outcome }} ${{ steps.drift_fetch.outcome }} ${{ steps.drift.outcome }}
+          COMMENT_GATE: true ${{ steps.comment.outcome }}
           LOCALITY_GATE: >-
-            ${{ steps.dependabot.outcome }}
+            ${{ steps.decide.outputs.locality }} ${{ steps.dependabot.outcome }}
             ${{ steps.dependabot.outputs.own == 'true' && 'success' || steps.locality_take.outcome }}
             ${{ steps.dependabot.outputs.own == 'true' && 'success' || steps.locality.outcome }}
         run: |
@@ -508,114 +431,99 @@ jobs:
       # The head copies, deliberately: a proposal that fails its own suite
       # belongs red. Last, after the verdicts, for the reason at the top.
       - name: Test the proposed closure gate
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.closure == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: .github/closure-gate
         run: python -m unittest
 
       - name: Test the proposed commit gate
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.commit == 'true' && steps.dependabot.outputs.own != 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
         working-directory: .github/commit-gate
         run: python -m unittest
 
       - name: Test the proposed drift gate
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.drift == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: .github/harness-drift
         run: python -m unittest
 
       - name: Test the proposed comment gate
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.comment == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: .github/comment-gate
         run: python -m unittest
 
-      # Wherever the head carries the gate, on the closure gate's events: one
-      # that introduces it, to a base whose locality decision stood down, is
-      # tested too. One removing it leaves nothing; one deleting the suite is red.
+      # Wherever the head carries the gate: one that introduces it, to a base
+      # whose locality decision stood down, is tested too. One removing it
+      # leaves nothing; one deleting the suite is red.
       - name: Test the proposed locality gate
         if: >-
-          ${{ !cancelled() && steps.setup.outcome == 'success' && needs.open.outputs.closure == 'true'
+          ${{ !cancelled() && steps.setup.outcome == 'success'
           && steps.dependabot.outputs.own != 'true' && hashFiles('.github/locality-gate/locality_gate.py') != '' }}
         working-directory: .github/locality-gate
         run: python -m unittest
 
-  # Completes the runs the open job opened, from the lines the gates job
-  # published; it checks nothing out. `always()`, so a red gate is posted red
-  # and a run cancelled during the head suites still posts the verdicts fixed
-  # ahead of them, rather than leaving its checks in progress.
+  # One leg per gate, named after it, so its check run is the gate's check and
+  # sits in this run's own suite, where no other workflow's rerun reaches it.
+  # It reads the line the gates job published and checks nothing out.
+  # `always()`, so a red gate concludes red and a run cancelled during the
+  # head suites still concludes on the verdicts fixed ahead of them.
   report:
-    needs: [open, gates]
+    needs: gates
     if: ${{ always() }}
+    name: ${{ matrix.gate }}
+    strategy:
+      # A failing leg would otherwise cancel the rest, hiding which gate held.
+      fail-fast: false
+      matrix:
+        include:
+          - gate: closure-gate
+            key: closure
+          - gate: commit-gate
+            key: commit
+          - gate: harness-drift
+            key: drift
+          - gate: comment-gate
+            key: comment
+          - gate: locality-gate
+            key: locality
     runs-on: ubuntu-latest
-    permissions:
-      # A fork's pull request gets a read-only token whatever this asks, so its
-      # gates post nothing and it cannot land until its commits are pushed to a
-      # branch here.
-      checks: write
+    timeout-minutes: 5
+    permissions: {}
     steps:
-      # Each gate this event ran, posted under its own check name: success
-      # only when every step of that gate succeeded. A post that fails leaves
-      # the check in progress, which the ruleset refuses; this step then fails
-      # too, as it does when any gate failed.
-      - name: Post each gate's verdict under the gate's check name
-        id: report
+      # A pass only when every step of the gate succeeded. A gates job that
+      # died before its verdicts step leaves an empty line, which fails, as
+      # does a malformed line holding a decision and no outcome.
+      - name: Conclude as the gate concluded
+        id: verdict
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GATE: ${{ matrix.gate }}
+          LINE: ${{ needs.gates.outputs[matrix.key] }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # Each gate's check run and the event's decision, from the open job,
-          # then the outcome of each of its steps, from the gates job: a gates
-          # job that published nothing leaves a decision with no outcomes,
-          # which completes an opened run as a failure.
-          CLOSURE_GATE_ID: ${{ needs.open.outputs.closure_id }}
-          COMMIT_GATE_ID: ${{ needs.open.outputs.commit_id }}
-          HARNESS_DRIFT_ID: ${{ needs.open.outputs.drift_id }}
-          COMMENT_GATE_ID: ${{ needs.open.outputs.comment_id }}
-          LOCALITY_GATE_ID: ${{ needs.open.outputs.locality_id }}
-          CLOSURE_GATE: ${{ needs.open.outputs.closure }} ${{ needs.gates.outputs.closure }}
-          COMMIT_GATE: ${{ needs.open.outputs.commit }} ${{ needs.gates.outputs.commit }}
-          HARNESS_DRIFT: ${{ needs.open.outputs.drift }} ${{ needs.gates.outputs.drift }}
-          COMMENT_GATE: ${{ needs.open.outputs.comment }} ${{ needs.gates.outputs.comment }}
-          LOCALITY_GATE: ${{ needs.open.outputs.locality }} ${{ needs.gates.outputs.locality }}
         run: |
           set -uo pipefail
-          failed=0
-          verdict() {
-            local name=$1 id=$2 runs=${3-}
-            shift 2; [ "$#" -gt 0 ] && shift
-            case "$runs" in
-              true) ;;
-              false) return 0 ;;
-              *) echo "::error::no event decision for $name"; failed=1; return 0 ;;
-            esac
-            if [[ ! $id =~ ^[0-9]+$ ]]; then
-              echo "::error::no check run was opened for $name"
-              failed=1
-              return 0
+          # A fork's pull request lands only once its commits are pushed to a
+          # branch here, as when its read-only token posted nothing. Against
+          # accident only: a fork can edit this file.
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "::error::$GATE: the head is $HEAD_REPO, a fork; push its commits to a branch of $REPO to be judged"
+            exit 1
+          fi
+          # The line unquoted on purpose: the decision, then each outcome, as words.
+          # shellcheck disable=SC2086
+          set -- $LINE
+          case "${1-}" in
+            true) shift ;;
+            false) echo "$GATE: the base commit carries no gate, so there is nothing to judge"; exit 0 ;;
+            *) echo "::error::the gates job published no verdict for $GATE"; exit 1 ;;
+          esac
+          if [ "$#" -eq 0 ]; then
+            echo "::error::the gates job published no outcome for $GATE"
+            exit 1
+          fi
+          for outcome in "$@"; do
+            if [ "$outcome" != success ]; then
+              echo "::error::$GATE: a step of the gate concluded $outcome; the gates job holds its output"
+              exit 1
             fi
-            local conclusion=success outcome
-            [ "$#" -gt 0 ] || conclusion=failure
-            for outcome in "$@"; do [ "$outcome" = success ] || conclusion=failure; done
-            if ! gh api --method PATCH "repos/$REPO/check-runs/$id" \
-                -f status=completed -f conclusion="$conclusion" \
-                -f "output[title]=$name: $conclusion" \
-                -f "output[summary]=Judged in the gates job: $RUN_URL" > /dev/null; then
-              echo "::error::could not post the $name check run"
-              failed=1
-              return 0
-            fi
-            echo "$name: $conclusion"
-            [ "$conclusion" = success ] || failed=1
-          }
-          # The lines unquoted on purpose: the decision, then each outcome, as words.
-          # A shellcheck directive covers the one command after it, so each call has its own.
-          # shellcheck disable=SC2086
-          verdict closure-gate "$CLOSURE_GATE_ID" $CLOSURE_GATE
-          # shellcheck disable=SC2086
-          verdict commit-gate "$COMMIT_GATE_ID" $COMMIT_GATE
-          # shellcheck disable=SC2086
-          verdict harness-drift "$HARNESS_DRIFT_ID" $HARNESS_DRIFT
-          # shellcheck disable=SC2086
-          verdict comment-gate "$COMMENT_GATE_ID" $COMMENT_GATE
-          # shellcheck disable=SC2086
-          verdict locality-gate "$LOCALITY_GATE_ID" $LOCALITY_GATE
-          exit "$failed"
+          done
+          echo "$GATE: success"

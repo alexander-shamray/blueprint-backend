@@ -40,7 +40,7 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 3; }
 
 # --search is a match, not an equality, so the exact name is checked with
-# grep -x afterwards: searching for `low` also returns `slow` if one ever
+# a whole-line match afterwards: searching for `low` also returns `slow` if one ever
 # exists, and a helper that concluded "already there" from a near miss would
 # leave the sweep filing against a label that does not exist.
 
@@ -52,13 +52,18 @@ labels_matching() {
   local out
   out=$(gh label list --repo "$repo" --search "$label" --limit "$LABEL_LIMIT" \
           --json name --jq '.[].name') || return 1
-  [ "$(grep -c . < <(printf '%s\n' "$out") || true)" -lt "$LABEL_LIMIT" ] ||
+  # `grep -c` prints 0 and exits 1 for no row; any other status is a grep that did not finish.
+  rows=$(printf '%s\n' "$out" | grep -c .) || [ "$?" -eq 1 ] ||
+    { echo "cannot count the listing for $label in $repo" >&2; exit 3; }
+  [ "$rows" -lt "$LABEL_LIMIT" ] ||
     { echo "the listing for $label in $repo holds $LABEL_LIMIT rows, so it may be truncated" >&2; exit 3; }
-  printf '%s' "$out"
+  # A listing written with CRLF would otherwise never equal the bare label.
+  printf '%s' "${out//$'\r'/}"
 }
 existing=$(labels_matching) ||
   { echo "cannot list $repo's labels" >&2; exit 3; }
-if grep -qx -- "$label" < <(printf '%s\n' "$existing"); then
+# A whole-line match in bash: the label is quoted, so it is literal, and no tool starts.
+if [[ $'\n'"$existing"$'\n' == *$'\n'"$label"$'\n'* ]]; then
   echo "label $label already exists in $repo"
   exit 0
 fi
@@ -74,7 +79,7 @@ if ! gh label create "$label" \
   --description "$description"; then
   again=$(labels_matching) ||
     { echo "cannot confirm whether $label exists in $repo after a failed create" >&2; exit 3; }
-  grep -qx -- "$label" < <(printf '%s\n' "$again") ||
+  [[ $'\n'"$again"$'\n' == *$'\n'"$label"$'\n'* ]] ||
     { echo "could not create label $label in $repo" >&2; exit 3; }
   echo "label $label was created concurrently in $repo"
 fi

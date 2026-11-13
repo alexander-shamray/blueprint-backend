@@ -355,6 +355,19 @@ class FailedFork(unittest.TestCase):
         self.assertIn("could not create leading directories", result.stderr)
         self.assertEqual("", self.branch(root))
 
+    def test_the_worktree_list_is_read_in_bash_not_by_a_tool(self):
+        # Git Bash reported a `grep` fed by a process substitution as `Child exited`, which read as
+        # "no worktree holds it", and the branch a worktree holds was deleted from under it. A `grep` that dies on
+        # every call stands in for it: the held branch is still kept.
+        root = self.fixture()
+        shim = self.stub(root, '"$real" worktree add -q "$root/other" feat/probe')
+        (Path(root) / "shim" / "grep").write_bytes(b"#!/usr/bin/env bash\necho 'Child exited' >&2\nexit 148\n")
+        os.chmod(Path(root) / "shim" / "grep", 0o755)
+        result = self.fork(root, shim)
+        self.assertEqual(128, result.returncode, result.stderr)
+        self.assertIn("feat/probe", self.branch(root))
+        self.assertIn("is kept", result.stderr)
+
     def test_a_branch_moved_off_the_start_point_is_kept(self):
         # Its commit is on no other ref, so removing it would lose the commit.
         root = self.fixture()

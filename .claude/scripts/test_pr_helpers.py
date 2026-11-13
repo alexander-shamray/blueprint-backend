@@ -712,7 +712,10 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
                 self.assertEqual("", r.stdout)
                 self.assertIn("classes.yml has an item with an empty brace alternative", r.stderr)
 
-    def _spawns_for(self, body, files):
+    COUNTING = ('grep() { printf "grep\\n" >> "$LOCALITY_SPAWN_LOG"; command grep "$@"; }\n'
+                'sed() { printf "sed\\n" >> "$LOCALITY_SPAWN_LOG"; command sed "$@"; }\n')
+
+    def _spawns_for(self, body, files, shims=COUNTING, code=0):
         # `grep` and `sed` are the tools the helper ran per item; a function logs its name and runs the real one.
         # Functions are found before any PATH entry, and `BASH_ENV` is read by a non-interactive bash first.
         d = Path(tempfile.mkdtemp())
@@ -721,10 +724,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         log.write_text("", encoding="utf-8")
         (d / "gh").write_text("#!/usr/bin/env bash\n" + self._gh_printing(body, files), encoding="utf-8")
         (d / "gh").chmod(0o755)
-        (d / "counting.sh").write_text(
-            'grep() { printf "grep\\n" >> "$LOCALITY_SPAWN_LOG"; command grep "$@"; }\n'
-            'sed() { printf "sed\\n" >> "$LOCALITY_SPAWN_LOG"; command sed "$@"; }\n',
-            encoding="utf-8", newline="\n")
+        (d / "counting.sh").write_text(shims, encoding="utf-8", newline="\n")
         scripts = self._scripts_with_map(CLASSES)
         env = dict(os.environ)
         env["PATH"] = str(d) + os.pathsep + env["PATH"]
@@ -732,7 +732,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         env["LOCALITY_SPAWN_LOG"] = log.as_posix()
         r = subprocess.run([BASH, str(scripts / "pr-locality.sh"), "187"],
                            capture_output=True, text=True, encoding="utf-8", env=env)
-        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(code, r.returncode, r.stderr)
         return r, log.read_text(encoding="utf-8").splitlines()
 
     def test_the_spawn_count_does_not_grow_with_the_changed_paths(self):
@@ -750,6 +750,29 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         self.assertEqual(3, len(r_small.stdout.splitlines()))
         self.assertEqual(25, len(r_large.stdout.splitlines()))
         self.assertEqual(sorted(small_spawns), sorted(large_spawns))
+
+    def test_the_rows_class_and_tokens_are_judged_with_no_tool(self):
+        # Git Bash on a loaded Windows runner reported a `grep -Eq` fed by a process substitution as `Child exited`,
+        # and the helper refused a valid class map item. A `grep` that fails every call but the per-pattern match,
+        # and a `sed -E` that fails outright, stand in for it: the rows, their cells, the class, each token and each
+        # map item are judged by bash, so the verdicts come back.
+        failing = ('grep() { case "$1" in -nE) ;; *) printf "Child exited\\n" >&2; return 148 ;; esac; '
+                   'printf "grep\\n" >> "$LOCALITY_SPAWN_LOG"; command grep "$@"; }\n'
+                   'sed() { case "$1" in -E) printf "Child exited\\n" >&2; return 148 ;; esac; command sed "$@"; }\n')
+        body = "| Class | D |\n| Touch set | docs/**, `e2e/{a,b}/**` (why), src/app/x.ts |\n"
+        r, spawns = self._spawns_for(body, "docs/a.md\nsrc/b.ts\n", shims=failing)
+        self.assertEqual(["class D", "inside docs/a.md", "outside-class src/b.ts"], r.stdout.splitlines())
+        # The control: the stand-in was the `grep` the helper ran.
+        self.assertIn("grep", spawns)
+
+    def test_a_pattern_grep_that_does_not_finish_stops_the_run(self):
+        # Status 1 is no match and 2 a pattern grep cannot compile; a grep killed mid-run read as either would print
+        # `outside` for a path nothing judged, and a lone class line reads as a pull request with no changed path.
+        dying = 'grep() { case "$1" in -nE) printf "Child exited\\n" >&2; return 148 ;; esac; command grep "$@"; }\n'
+        body = "| Class | D |\n| Touch set | docs/** |\n"
+        r, _ = self._spawns_for(body, "docs/a.md\n", shims=dying, code=1)
+        self.assertEqual("", r.stdout)
+        self.assertIn("a pattern's grep did not finish, so nothing is printed", r.stderr)
 
     def test_a_path_the_row_admits_and_the_class_does_not_is_outside_class(self):
         # The CI gate judges each path against the class's tree set in

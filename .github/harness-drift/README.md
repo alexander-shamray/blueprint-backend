@@ -81,8 +81,9 @@ delete the line. Three things guard against that, each a different part:
   fails the check. A pull request cannot change that repository.
 - **The repository ruleset and review** are the backstop for what is left.
   `pull_request` runs the head's copy of `gates.yml`, so a pull
-  request can edit the workflow itself, and only the ruleset requiring this
-  check, with review of workflow changes, stops that.
+  request can edit the workflow itself, and the ruleset requiring this check
+  holds against accident only: the owner's review of workflow changes bounds
+  an edit made on purpose (`docs/harness-boundaries.md`, *Managed files*).
 
 Exclude means "not delivered", never "replaced". A payload path the config
 excludes that still exists in the tree is refused here and by apply, because
@@ -107,11 +108,12 @@ harness repository tests that they agree.
 ## How it runs
 
 The `gates` job in [`gates.yml`](../workflows/gates.yml), whose verdict for
-this gate the `report` job posts as the `harness-drift` check, on every pull
-request with no path filter. It takes the gate from the base commit; when the
-base carries none, which is the first sync into a target, the head's copy
-judges and the run says so. It then fetches the payload, runs the gate, fixes
-the verdict, and only then runs this directory's suite, so head test code
+this gate the `harness-drift` leg of the `report` job concludes as the
+`harness-drift` check, on every pull request event with no path filter. It
+takes the gate from the base commit; when the base carries none, which is the
+first sync into a target, the head's copy judges and the run says so. It
+then fetches the payload, runs the gate, fixes the verdict, and only then
+runs this directory's suite, so head test code
 cannot tamper with the run before the gate has judged. A failed fetch fails
 the check; a failed suite fails the `gates` job.
 

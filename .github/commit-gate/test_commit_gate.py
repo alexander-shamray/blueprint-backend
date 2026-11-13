@@ -204,15 +204,30 @@ def setUpModule() -> None:
         raise RuntimeError("bash is needed to run the workflow's deciding step")
 
 
+def job_of(text: str, job: str) -> str:
+    """One job's lines under `jobs:`, from its key to the next job's."""
+    found = re.search(rf"(?ms)^  {re.escape(job)}:\n(.*?)(?=^  [\w-]+:\n|^\S|\Z)", text.split("\njobs:\n", 1)[-1])
+    if found is None:
+        raise ValueError(f"no job {job}")
+    return found.group(1)
+
+
 def gates_job(text: str) -> str:
-    """The judging job's lines: the jobs opening and completing the check runs run no step of this gate."""
-    return re.split(r"(?m)^  [\w-]+:\n", text.split("\n  gates:\n", 1)[1], maxsplit=1)[0]
+    """The judging job's lines: the legs concluding each gate's check run no step of this gate."""
+    return job_of(text, "gates")
+
+
+def steps_of(text: str, job: str = "gates") -> list[str]:
+    """One job's steps, comments dropped, or the one ahead of the next step reads as the end of this one's script."""
+    code = "\n".join(line for line in job_of(text, job).splitlines() if not line.lstrip().startswith("#"))
+    parts = code.split("\n    steps:\n") if not code.startswith("    steps:\n") else ["", code[len("    steps:\n"):]]
+    if len(parts) != 2:
+        raise ValueError(f"expected one steps list in {job}, found {len(parts) - 1}")
+    return re.split(r"\n(?=      - )", parts[1])
 
 
 def workflow_steps() -> list[str]:
-    # The comments between steps dropped, or the one ahead of the next step reads as the end of this one's script.
-    text = re.sub(r"(?m)^      #.*\n", "", WORKFLOW.read_text(encoding="utf-8"))
-    return re.split(r"\n(?=      - )", gates_job(text).split("\n    steps:\n", 1)[1])
+    return steps_of(WORKFLOW.read_text(encoding="utf-8"))
 
 
 def deciding_step() -> str:
@@ -223,6 +238,54 @@ def run_block(step: str) -> str:
     lines = step.split("\n")
     at = next(i for i, line in enumerate(lines) if line.strip() == "run: |")
     return "\n".join(line[10:] for line in lines[at + 1:]) + "\n"
+
+
+# Each gate directory gates.yml runs a suite in, after the verdicts.
+SUITES = {"closure-gate", "comment-gate", "commit-gate", "harness-drift", "locality-gate"}
+# A judge sits outside the checkout; the comment gate holds its path in `$judge`.
+JUDGE = re.compile(r'(?<![-\w])python(?: -I)? "\$(?:RUNNER_TEMP/[\w./-]+\.py|judge)"')
+# Reads no module from the checkout: how the drift gate reads its manifest ahead of the judge.
+ISOLATED = re.compile(r"(?<![-\w])python -I -c\b")
+# A list of spellings, so an interpreter it does not name reads as nothing: a command whose first word is a path, a
+# shell handed a file, Python, a local action, or any step set to run inside the checkout.
+HEAD_CODE = re.compile(
+    r"(?<![-\w])python3?(?:\.\d+)?(?=\s)|\bpytest\b|\bunittest\b"
+    r"|(?<![-\w])(?:bash|sh|source)[ \t]+\S|^\s*(?:- )?(?:run: )?[\w./-]*/[\w./-]+"
+    r"|^\s*(?:- )?uses: \./|^\s*working-directory:", re.M)
+VERDICTS = re.compile(r"(?m)^ +(?:- )?id: verdicts$")
+
+
+def verdicts_at(steps: list[str]) -> int:
+    """Where the judging job fixes its verdicts; nothing the head wrote may run at or before it."""
+    at = [i for i, step in enumerate(steps) if VERDICTS.search(step)]
+    if len(at) != 1:
+        raise ValueError(f"expected one step fixing the verdicts, found {len(at)}")
+    if not any(JUDGE.search(step) for step in steps[:at[0]]):
+        raise ValueError("expected a judge ahead of the verdicts")
+    return at[0]
+
+
+def runs_head_code(step: str) -> bool:
+    return bool(HEAD_CODE.search(JUDGE.sub("", ISOLATED.sub("", step))))
+
+
+def name_of(step: str) -> str:
+    found = re.search(r"name: (.+)", step)
+    return found.group(1) if found else step.splitlines()[0].strip()
+
+
+def head_code_before_the_verdicts(text: str, job: str = "gates") -> list[str]:
+    steps = steps_of(text, job)
+    return [name_of(step) for step in steps[:verdicts_at(steps) + 1] if runs_head_code(step)]
+
+
+def workflow(*steps: str) -> str:
+    body = "\n".join(f"      - name: step {i}\n{step}" for i, step in enumerate(steps))
+    return f"name: Gate\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n{body}\n"
+
+
+JUDGES = '        run: python "$RUNNER_TEMP/gate/gate.py"'
+REPORTS = "        id: verdicts\n        run: true"
 
 
 class Standing(unittest.TestCase):
@@ -296,10 +359,9 @@ class Standing(unittest.TestCase):
 
 
 class WorkflowShape(unittest.TestCase):
-    def test_the_job_waits_on_the_decision_alone_so_a_human_push_is_judged(self) -> None:
+    def test_the_job_runs_on_every_event_so_a_human_push_is_judged(self) -> None:
         job = gates_job(WORKFLOW.read_text(encoding="utf-8")).split("\n    steps:\n", 1)[0]
-        self.assertEqual(["${{ !cancelled() && needs.open.outputs.closure != '' }}"],
-                         re.findall(r"(?m)^    if: (.*)$", job))
+        self.assertEqual([], re.findall(r"(?m)^    (?:if|needs): (.*)$", job))
 
     def test_the_checkout_runs_first_with_full_history_and_no_condition(self) -> None:
         first = workflow_steps()[0]
@@ -325,6 +387,86 @@ class WorkflowShape(unittest.TestCase):
         commit_gate = re.search(r"(?m)^          COMMIT_GATE: >-\n((?:            .+\n)+)", verdicts)
         self.assertIsNotNone(commit_gate)
         self.assertEqual(2, commit_gate.group(1).count("steps.dependabot.outputs.own == 'true' && 'success' ||"))
+
+
+class TheOrder(unittest.TestCase):
+    """Test code can rewrite `$GITHUB_ENV`, `$GITHUB_PATH` or a tool, so no suite may run before a verdict is fixed."""
+
+    def test_nothing_the_head_wrote_runs_before_the_verdicts(self) -> None:
+        self.assertEqual([], head_code_before_the_verdicts(WORKFLOW.read_text(encoding="utf-8")))
+
+    def test_each_gate_still_runs_its_suite_after_the_verdicts(self) -> None:
+        # Moving a suite past the verdicts is the fix; deleting it would pass the case above.
+        steps = workflow_steps()
+        suites = [step for step in steps[verdicts_at(steps) + 1:] if "python -m unittest" in step]
+        found = [re.search(r"working-directory: \.github/(\S+)", step) for step in suites]
+        self.assertNotIn(None, found)
+        self.assertEqual(sorted(SUITES), sorted(match.group(1) for match in found))
+
+
+class TheReader(unittest.TestCase):
+    """What the order cases lean on, against workflows that are wrong on purpose."""
+
+    def test_a_suite_moved_ahead_of_the_verdicts_is_named(self) -> None:
+        suite = "        working-directory: .github/commit-gate\n        run: python -m unittest"
+        self.assertEqual(["step 1"], head_code_before_the_verdicts(workflow(JUDGES, suite, REPORTS)))
+        self.assertEqual(["step 0"], head_code_before_the_verdicts(workflow(suite, JUDGES, REPORTS)))
+
+    def test_each_spelling_of_head_code_before_the_verdicts_is_named(self) -> None:
+        for spelling in ("        run: python -m unittest",
+                         "        run: python .github/gate/test_gate.py",
+                         "        run: python3 -m pytest",
+                         "        run: python3.12 .github/gate/test_gate.py",
+                         "        run: bash .github/gate/suite.sh",
+                         "        run: sh .github/gate/suite.sh",
+                         "        run: source .github/gate/suite.sh",
+                         "        run: ./.github/gate/suite.sh",
+                         "        run: .github/gate/suite.sh",
+                         "        run: |\n          set -e\n          .github/gate/suite.sh",
+                         "        uses: ./.github/actions/suite",
+                         "        working-directory: .github/gate\n        run: make"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(["step 1"], head_code_before_the_verdicts(workflow(JUDGES, spelling, REPORTS)))
+
+    def test_a_path_run_by_a_nameless_step_is_named(self) -> None:
+        text = ("jobs:\n  gates:\n    steps:\n"
+                '      - run: python "$RUNNER_TEMP/gate/gate.py"\n      - run: ./.github/gate/suite.sh\n'
+                "      - id: verdicts\n        run: true\n")
+        self.assertEqual(["- run: ./.github/gate/suite.sh"], head_code_before_the_verdicts(text))
+
+    def test_the_same_code_after_the_verdicts_are_not_named(self) -> None:
+        self.assertEqual([], head_code_before_the_verdicts(workflow(JUDGES, REPORTS, "        run: python -m unittest")))
+
+    def test_head_code_beside_a_judge_is_named_on_either_side(self) -> None:
+        above = '        run: |\n          python .github/gate/check.py\n          python "$RUNNER_TEMP/gate/gate.py"'
+        below = '        run: |\n          python "$RUNNER_TEMP/gate/gate.py"\n          python .github/gate/check.py'
+        for step in (above, below):
+            with self.subTest(step=step):
+                self.assertEqual(["step 0"], head_code_before_the_verdicts(workflow(step, REPORTS)))
+
+    def test_what_runs_nothing_from_the_checkout_is_not_named(self) -> None:
+        for spelling in ("        uses: actions/setup-python@v7\n        with:\n          python-version: '3.12'",
+                         "        run: python -I -c 'import json'",
+                         "        shell: bash\n        env:\n          GATE: .github/gate/gate.py\n        run: true",
+                         "        run: git show \"$BASE_SHA:$GATE\" > \"$RUNNER_TEMP/gate/gate.py\"",
+                         "        # python -m unittest\n        run: true"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual([], head_code_before_the_verdicts(workflow(spelling, JUDGES, REPORTS)))
+
+    def test_a_workflow_with_no_verdicts_two_or_no_judge_ahead_is_refused(self) -> None:
+        for steps in ((JUDGES,), (JUDGES, REPORTS, REPORTS), (REPORTS, JUDGES)):
+            with self.subTest(steps=steps), self.assertRaises(ValueError):
+                head_code_before_the_verdicts(workflow(*steps))
+
+    def test_a_second_jobs_steps_are_not_read_as_the_first_jobs(self) -> None:
+        second = "  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: python -m unittest\n"
+        self.assertEqual([], head_code_before_the_verdicts(workflow(JUDGES, REPORTS) + second))
+        self.assertEqual(["- run: python -m unittest"], [name_of(step) for step in steps_of(
+            workflow(JUDGES, REPORTS) + second, "other") if runs_head_code(step)])
+
+    def test_a_job_that_is_not_there_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            head_code_before_the_verdicts(workflow(JUDGES, REPORTS), "other")
 
 
 if __name__ == "__main__":

@@ -35,8 +35,9 @@ against a throwaway repository. The testing document `docs/harness-local.md`
 ## How it runs
 
 The `gates` job in [`gates.yml`](../workflows/gates.yml), whose verdict for
-this gate the `report` job posts as the `commit-gate` check, on every pull
-request with no path filter; a stand-down is posted as a pass. Dependabot's
+this gate the `commit-gate` leg of the `report` job concludes as the
+`commit-gate` check, on every pull request event with no path filter; a
+stand-down concludes as a pass. Dependabot's
 commits carry no trailer, so the gate stands down only where Dependabot
 opened the pull request and every commit's author and committer are
 Dependabot's. The
@@ -52,9 +53,9 @@ judged, as in [`closure-gate`](../closure-gate/README.md), so head test code
 cannot alter the run ahead of it. The pull request that introduces the gate
 has no base copy and is judged by its own, with a notice; a base without the
 gate and a head without it fails. The workflow file itself is the branch's copy,
-as in [`closure-gate`](../closure-gate/README.md), and closing that needs the
-required status check the pull request that added this gate lists as an
-owner-only setting.
+as in [`closure-gate`](../closure-gate/README.md): the required check holds
+against accident only, and the owner's review bounds an edit made on purpose
+(`docs/harness-boundaries.md`, *Managed files*).
 
 The other half, where a target's own CI workflow has it, is a job that
 builds every commit before the head, which the build of the head already

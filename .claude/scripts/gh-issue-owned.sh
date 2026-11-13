@@ -17,7 +17,8 @@ owner=$(gh repo view --json owner --jq .owner.login) ||
 # stranger's; a cut list is refused as `gh-issue-list.sh` refuses one.
 limit=5000
 list=$(gh issue list --state all --limit "$limit" --json number,author)
-count=$(jq length < <(printf '%s\n' "$list") | tr -d '\r')
+count=$(printf '%s\n' "$list" | jq length | tr -d '\r')
 [ "$count" -lt "$limit" ] ||
   { echo "gh-issue-owned: $count issues is the limit, so the list may be cut; raise it here" >&2; exit 3; }
-jq -c --arg owner "$owner" '[.[] | select(.author.login == $owner) | .number]' < <(printf '%s\n' "$list") | tr -d '\r'
+printf '%s\n' "$list" |
+  jq -c --arg owner "$owner" '[.[] | select(.author.login == $owner) | .number]' | tr -d '\r'

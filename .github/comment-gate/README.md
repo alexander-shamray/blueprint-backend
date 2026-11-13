@@ -142,9 +142,9 @@ event that started the run carried them. The gate's workflow takes
 `labeled` and `unlabeled` among its `pull_request` types, so a label added
 starts a run that reads it; re-running the failed job would not, as it
 replays the old event. A title
-changed counts from the next push. A run without either, as a local one is,
-takes no exception, and a `PR_LABELS` that is not a list of names refuses
-the run.
+changed counts at once, since an edit starts a run too. A run without
+either, as a local one is, takes no exception, and a `PR_LABELS` that is
+not a list of names refuses the run.
 
 **`--tree` judges every line of the tracked files under the paths it is
 given**, as the working tree holds them, instead of a diff, and prints the
@@ -155,9 +155,10 @@ tree is under the rule; CI does not run it.
 ## How it runs
 
 The `gates` job in [`gates.yml`](../workflows/gates.yml), which runs every
-gate of the pull request in one job, while its `report` job posts this one's
-verdict as the `comment-gate` check; a label starts a run of this gate
-alone, which in the CI workflow would start a build and every suite as well.
+gate of the pull request in one job, while the `comment-gate` leg of its
+`report` job concludes as this one did and is the `comment-gate` check; a
+label starts a run of the gates, which in the CI workflow would start a
+build and every suite as well.
 On a pull request, **the gate that judges is read out of the base commit**,
 on the closure gate's design, so a pull request cannot loosen the rule it is
 judged by. The suite
