@@ -117,13 +117,14 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task An_inbox_row_is_purged_on_age_alone()
     {
         // Unlike the outbox, an inbox row has no unfinished state; its window outlasts the longest redelivery (§9.5).
+        Guid recentId = Guid.CreateVersion7();
         await fixture.StageInboxAsync(
             new InboxMessage(Guid.CreateVersion7(), "inventory-inventory-events", LongAgo),
-            new InboxMessage(Guid.CreateVersion7(), "inventory-inventory-events", Recently));
+            new InboxMessage(recentId, "inventory-inventory-events", Recently));
 
         (await fixture.PurgeRetentionAsync()).Inbox.ShouldBe(1);
 
-        InboxMessage survivor = (await fixture.InboxAsync()).ShouldHaveSingleItem();
+        InboxMessage survivor = (await fixture.InboxAsync(recentId)).ShouldHaveSingleItem();
         survivor.HandledAt.ShouldBeGreaterThan(LongAgo);
     }
 
