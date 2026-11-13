@@ -488,6 +488,14 @@ public sealed class AssistantEndpointTests
     }
 
     [Fact]
+    public void The_bff_hands_the_core_its_callers_history_budget_and_refuses_one_that_is_not_positive()
+    {
+        new AssistantOptions { CallerHistoryChars = 1234 }.Limits().CallerHistoryChars.ShouldBe(1234);
+        Should.Throw<InvalidOperationException>(() => new AssistantOptions { CallerHistoryChars = 0 }.Limits())
+            .Message.ShouldContain(nameof(AssistantOptions.CallerHistoryChars));
+    }
+
+    [Fact]
     public async Task The_scripted_provider_streams_its_fixed_reply_with_no_key()
     {
         await using ScriptedFactory factory = new();

@@ -34,6 +34,7 @@ public sealed class AssistantSession : IDisposable
     private JsonObject hostOptions;
     private Usage total = Usage.None;
     private long contextTokens;
+    private long held;
     private int clientTimeouts;
 
     internal AssistantSession(
@@ -60,6 +61,9 @@ public sealed class AssistantSession : IDisposable
 
     public DateTimeOffset LastActive { get; private set; }
 
+    /// <summary>What this conversation holds, as <see cref="AssistantLimits.CallerHistoryChars"/> counts it.</summary>
+    internal long Held => Interlocked.Read(ref held);
+
     public bool Running
     {
         get
@@ -85,7 +89,10 @@ public sealed class AssistantSession : IDisposable
         }
     }
 
-    /// <summary>Starts a turn; false when one is already running, or the conversation is gone.</summary>
+    /// <summary>
+    /// Starts a turn; false when one is already running, or the conversation is gone. A turn past a budget holds none
+    /// of its text and ends with <c>budget</c> at once, so a conversation at its budget grows no further.
+    /// </summary>
     public bool TryStart(StartTurn request)
     {
         lock (gate)
@@ -94,22 +101,39 @@ public sealed class AssistantSession : IDisposable
             {
                 return false;
             }
+        }
 
-            // The host's redactor runs before anything changes, so one that throws leaves the conversation as it was
-            // rather than holding a turn with no loop behind it.
-            string turnLocale = request.Locale is { Length: > 0 } changedLocale ? changedLocale : locale;
-            UserMessage message = new(
-                core.Redactor.Redact(Prompt.Turn(request.Text, request.Context, turnLocale), Caller));
+        // Between two holds of the lock, since the store's is taken before a session's; a start refused above makes
+        // no room.
+        bool full = Full();
 
-            locale = turnLocale;
-            hostOptions = request.HostOptions ?? hostOptions;
+        lock (gate)
+        {
+            if (turn is not null || closed)
+            {
+                return false;
+            }
+
+            if (!full)
+            {
+                // The host's redactor runs before anything changes, so one that throws leaves the conversation as it
+                // was rather than holding a turn with no loop behind it.
+                string turnLocale = request.Locale is { Length: > 0 } changedLocale ? changedLocale : locale;
+                UserMessage message = new(
+                    core.Redactor.Redact(Prompt.Turn(request.Text, request.Context, turnLocale), Caller));
+
+                locale = turnLocale;
+                hostOptions = request.HostOptions ?? hostOptions;
+                items.Add(new OperatorItem(request.Text));
+                Interlocked.Add(ref held, request.Text.Length);
+                Append(message);
+            }
+
             turn = new CancellationTokenSource();
-            items.Add(new OperatorItem(request.Text));
-            history.Add(message);
             LastActive = core.Time.GetUtcNow();
 
             CancellationToken token = turn.Token;
-            _ = Task.Run(() => RunAsync(token), CancellationToken.None);
+            _ = Task.Run(() => RunAsync(full, token), CancellationToken.None);
 
             return true;
         }
@@ -179,9 +203,27 @@ public sealed class AssistantSession : IDisposable
         log.Close();
     }
 
-    private async Task RunAsync(CancellationToken cancellationToken)
+    /// <summary>Forgets the conversation as <see cref="Dispose"/> does, unless a turn is running.</summary>
+    internal bool TryForget()
     {
-        // The turn ends when the provider is done, it reaches MaxSteps tool rounds or the context budget, the caller
+        lock (gate)
+        {
+            if (turn is not null)
+            {
+                return false;
+            }
+
+            closed = true;
+        }
+
+        log.Close();
+
+        return true;
+    }
+
+    private async Task RunAsync(bool refused, CancellationToken cancellationToken)
+    {
+        // The turn ends when the provider is done, it reaches MaxSteps tool rounds or a budget, the caller
         // cancels, or the provider refuses. Server calls run concurrently, each with a timeout; client calls are
         // emitted and waited for. A turn is running work, not polling: it goes on with no stream open, until it ends.
         Usage used = Usage.None;
@@ -198,7 +240,7 @@ public sealed class AssistantSession : IDisposable
         {
             for (int step = 0; ; step++)
             {
-                if (Interlocked.Read(ref contextTokens) >= core.Limits.ConversationTokenBudget)
+                if (step == 0 ? refused : Full())
                 {
                     reason = TurnEndReason.Budget;
 
@@ -246,7 +288,7 @@ public sealed class AssistantSession : IDisposable
 
                 lock (gate)
                 {
-                    history.Add(new ToolResultsMessage(results));
+                    Append(new ToolResultsMessage(results));
                 }
 
                 // A client that lets its calls time out in two rounds running is not there, and a turn left to go on
@@ -273,7 +315,19 @@ public sealed class AssistantSession : IDisposable
             Emit(new ErrorEvent("provider-error", "The assistant's provider failed", 502, Detail(e)));
         }
 
-        End(reason, category, used, unreported, failure);
+        End(reason, category, used, unreported, failure, refused);
+    }
+
+    // Past either budget: the context the provider last read, or what the caller holds once the store has made room.
+    private bool Full() =>
+        Interlocked.Read(ref contextTokens) >= core.Limits.ConversationTokenBudget ||
+        core.Trim(this) >= core.Limits.CallerHistoryChars;
+
+    // Counted as a provider is sent it, which is how Unreported sizes a request.
+    private void Append(HistoryMessage message)
+    {
+        history.Add(message);
+        Interlocked.Add(ref held, JsonSerializer.Serialize<object>(message).Length);
     }
 
     // A round cut short before its usage report, by the caller's cancel or a stream broken after the provider began,
@@ -315,6 +369,7 @@ public sealed class AssistantSession : IDisposable
                     lock (gate)
                     {
                         round.Text.Append(delta.Text);
+                        Interlocked.Add(ref held, delta.Text.Length);
 
                         if (round.ReplyAt is int at)
                         {
@@ -361,12 +416,12 @@ public sealed class AssistantSession : IDisposable
         {
             if (complete && (round.Text.Length > 0 || round.Calls.Count > 0 || round.Opaque.Count > 0))
             {
-                history.Add(new AssistantMessage(round.Text.ToString(), [.. round.Calls], [.. round.Opaque]));
+                Append(new AssistantMessage(round.Text.ToString(), [.. round.Calls], [.. round.Opaque]));
             }
             else if (round.Text.Length > 0)
             {
                 round.Calls.Clear();
-                history.Add(new AssistantMessage(round.Text.ToString(), [], []));
+                Append(new AssistantMessage(round.Text.ToString(), [], []));
             }
         }
     }
@@ -466,7 +521,7 @@ public sealed class AssistantSession : IDisposable
         }
     }
 
-    private void End(string reason, string? category, Usage used, Usage unreported, Exception? failure)
+    private void End(string reason, string? category, Usage used, Usage unreported, Exception? failure, bool refused)
     {
         TurnSummary summary;
 
@@ -476,7 +531,7 @@ public sealed class AssistantSession : IDisposable
             // each, so the next turn's request is one a provider accepts.
             if (history.LastOrDefault() is AssistantMessage { Calls.Count: > 0 } asked)
             {
-                history.Add(new ToolResultsMessage(
+                Append(new ToolResultsMessage(
                     [.. asked.Calls.Select(c => new ToolResult(c.Id, false, $"Not run: the turn ended ({reason})."))]));
             }
 
@@ -492,7 +547,13 @@ public sealed class AssistantSession : IDisposable
             }
 
             total += used;
-            items.Add(new EndItem(reason, category));
+
+            // A refused turn after the first adds nothing to the read, or each would grow it.
+            if (!refused || items.LastOrDefault() is not EndItem { Reason: TurnEndReason.Budget })
+            {
+                items.Add(new EndItem(reason, category));
+            }
+
             log.Append(new TurnEndedEvent(reason, category, used, total));
             turn?.Dispose();
             turn = null;

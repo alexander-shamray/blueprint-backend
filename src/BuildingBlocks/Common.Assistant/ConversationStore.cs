@@ -77,6 +77,46 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
         return true;
     }
 
+    /// <summary>
+    /// What the caller of <paramref name="keep"/> holds, after forgetting their least recently used idle conversations
+    /// but that one while it is past <see cref="AssistantLimits.CallerHistoryChars"/>. A session calls it holding none
+    /// of its own lock, since the store's lock is taken before a session's.
+    /// </summary>
+    public long Trim(AssistantSession keep)
+    {
+        lock (gate)
+        {
+            if (!byCaller.TryGetValue(keep.Caller.Id, out Dictionary<string, AssistantSession>? own))
+            {
+                return keep.Held;
+            }
+
+            long held = own.Values.Sum(s => s.Held);
+
+            // A conversation at the budget alone is refused whatever else goes, so the others stay.
+            if (keep.Held >= limits.CallerHistoryChars)
+            {
+                return Math.Max(held, keep.Held);
+            }
+
+            foreach (AssistantSession oldest in own.Values.Where(s => s != keep).OrderBy(s => s.LastActive).ToList())
+            {
+                if (held < limits.CallerHistoryChars)
+                {
+                    break;
+                }
+
+                if (oldest.TryForget())
+                {
+                    own.Remove(oldest.Id);
+                    held -= oldest.Held;
+                }
+            }
+
+            return own.ContainsKey(keep.Id) ? held : held + keep.Held;
+        }
+    }
+
     /// <summary>Forgets what is idle past the timeout, for a caller that opens and finds nothing to do it.</summary>
     public void SweepIdle()
     {
@@ -92,10 +132,12 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
 
         foreach ((string callerId, Dictionary<string, AssistantSession> own) in byCaller.ToList())
         {
-            foreach (AssistantSession stale in own.Values.Where(s => !s.Running && s.LastActive < cutoff).ToList())
+            foreach (AssistantSession stale in own.Values.Where(s => s.LastActive < cutoff).ToList())
             {
-                own.Remove(stale.Id);
-                stale.Dispose();
+                if (stale.TryForget())
+                {
+                    own.Remove(stale.Id);
+                }
             }
 
             if (own.Count == 0)
@@ -105,17 +147,21 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
         }
     }
 
+    // TryForget checks a session is idle and closes it in one hold of its lock, so a turn that starts between the
+    // two is never cancelled by its own eviction.
     private static bool ForgetIdle(Dictionary<string, AssistantSession> own)
     {
-        if (own.Values.Where(s => !s.Running).MinBy(s => s.LastActive) is not { } oldest)
+        foreach (AssistantSession oldest in own.Values.OrderBy(s => s.LastActive).ToList())
         {
-            return false;
+            if (oldest.TryForget())
+            {
+                own.Remove(oldest.Id);
+
+                return true;
+            }
         }
 
-        own.Remove(oldest.Id);
-        oldest.Dispose();
-
-        return true;
+        return false;
     }
 
     private bool ForgetIdleCaller()

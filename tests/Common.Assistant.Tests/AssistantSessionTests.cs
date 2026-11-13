@@ -424,6 +424,101 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_conversation_at_its_context_budget_holds_no_further_message_and_ends_each_turn_with_budget()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta("Full."), new UsageReport(new Usage(1000, 10, 0)), new RoundEnd(ProviderStop.Done));
+        AssistantSession session = Open(Core(provider, new AssistantLimits { ConversationTokenBudget = 1000 }));
+
+        session.TryStart(Given.Turn("fill it"));
+        await Given.UntilEnded(session);
+        int history = session.History.Count;
+        long held = session.Held;
+
+        for (int i = 0; i < 3; i++)
+        {
+            long after = session.View().LastEventId;
+            session.TryStart(Given.Turn(new string('m', 4000))).ShouldBeTrue();
+            (await Given.UntilEnded(session, after)).OfType<TurnEndedEvent>().Single().Reason
+                .ShouldBe(TurnEndReason.Budget);
+        }
+
+        provider.Requests.Count.ShouldBe(1);
+        session.History.Count.ShouldBe(history);
+        session.Held.ShouldBe(held);
+        session.View().Items.Count(item => item is EndItem { Reason: TurnEndReason.Budget }).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_turn_that_takes_its_caller_past_their_history_budget_ends_with_budget_before_its_next_round()
+    {
+        ScriptedTools tools = new(("stack_status", (_, _, _) => Task.FromResult(new ToolOutcome(true, "up"))));
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta(new string('x', 4000)), new ToolCall("c1", "stack_status", []),
+                new RoundEnd(ProviderStop.Done));
+        AssistantSession session =
+            Open(Core(provider, new AssistantLimits { CallerHistoryChars = 3000 }, sources: tools));
+
+        session.TryStart(Given.Turn("status"));
+        List<AssistantEvent> events = await Given.UntilEnded(session);
+
+        events.OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Budget);
+        provider.Requests.Count.ShouldBe(1);
+        session.Held.ShouldBeGreaterThanOrEqualTo(3000);
+    }
+
+    [Fact]
+    public async Task A_conversation_at_the_history_budget_alone_is_refused_and_leaves_the_callers_others()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta("Hi."), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('x', 4000)), new RoundEnd(ProviderStop.Done));
+        AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = 3000 });
+        AssistantSession small = Open(core);
+        AssistantSession large = Open(core);
+
+        small.TryStart(Given.Turn("one"));
+        await Given.UntilEnded(small);
+        large.TryStart(Given.Turn("two"));
+        await Given.UntilEnded(large);
+
+        long after = large.View().LastEventId;
+        large.TryStart(Given.Turn("three")).ShouldBeTrue();
+        (await Given.UntilEnded(large, after)).OfType<TurnEndedEvent>().Single().Reason
+            .ShouldBe(TurnEndReason.Budget);
+
+        provider.Requests.Count.ShouldBe(2);
+        core.Find(Operator, small.Id).ShouldBeSameAs(small);
+    }
+
+    [Fact]
+    public async Task A_caller_past_their_history_budget_forgets_their_least_recently_used_idle_conversation()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta(new string('a', 2000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('b', 2000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta("Again."), new RoundEnd(ProviderStop.Done));
+        AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = 6000 });
+        AssistantSession first = Open(core);
+        AssistantSession second = Open(core);
+
+        first.TryStart(Given.Turn("one"));
+        await Given.UntilEnded(first);
+        second.TryStart(Given.Turn("two"));
+        await Given.UntilEnded(second);
+        (first.Held + second.Held).ShouldBeGreaterThan(6000, "the two together are past the budget");
+
+        long after = second.View().LastEventId;
+        second.TryStart(Given.Turn("three"));
+        (await Given.UntilEnded(second, after)).OfType<TurnEndedEvent>().Single().Reason
+            .ShouldBe(TurnEndReason.Done);
+
+        core.Find(Operator, first.Id).ShouldBeNull();
+        core.Find(Operator, second.Id).ShouldBeSameAs(second);
+        first.TryStart(Given.Turn("gone")).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Cancel_ends_a_turn_mid_stream_with_cancelled_and_keeps_the_text_it_had()
     {
         TaskCompletionSource started = new();

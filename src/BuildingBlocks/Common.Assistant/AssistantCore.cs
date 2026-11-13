@@ -92,4 +92,6 @@ public sealed class AssistantCore : IDisposable
     public AssistantSession? Find(Caller caller, string id) => store.Find(caller, id);
 
     public bool Delete(Caller caller, string id) => store.Delete(caller, id);
+
+    internal long Trim(AssistantSession session) => store.Trim(session);
 }
