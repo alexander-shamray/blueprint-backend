@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Threading.Channels;
 using Common.Assistant.Protocol;
 using Common.Assistant.Providers;
 using Common.Assistant.Tools;
@@ -156,6 +157,83 @@ public sealed class AssistantSessionTests
         events.OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Error);
         provider.Requests.Count.ShouldBe(2, "the third round is never asked for");
         session.Running.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_client_timeout_in_a_turn_cancelled_mid_round_is_not_counted_against_the_next_turn()
+    {
+        // The first turn leaves a client call timed out and a sibling server call running, then is cancelled, so its
+        // round never reaches the line that reads and resets the count. The second turn answers its first round with
+        // a server call alone and times out its second: inheriting the count, it would be two silent rounds running.
+        FakeTimeProvider time = new();
+        TaskCompletionSource slowStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedTools slow = new(("slow", async (_, _, ct) =>
+        {
+            slowStarted.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+
+            return new ToolOutcome(true, "unreachable");
+        }
+        ));
+        ScriptedTools quick = new(("quick", (_, _, _) => Task.FromResult(new ToolOutcome(true, "done"))));
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(
+                new ToolCall("c1", "open_screen", []),
+                new ToolCall("s1", "slow", []),
+                new RoundEnd(ProviderStop.Done))
+            .Round(new ToolCall("s2", "quick", []), new RoundEnd(ProviderStop.Done))
+            .Round(new ToolCall("c2", "open_screen", []), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta("Opened."), new RoundEnd(ProviderStop.Done));
+        Channel<TurnSummary> summaries = Channel.CreateUnbounded<TurnSummary>();
+        using AssistantCore core = new(
+            provider,
+            [slow, quick],
+            ToolPolicy.ReadOnly,
+            new PlantedRedactor(),
+            "Host rules.",
+            new AssistantLimits
+            {
+                ClientToolTimeout = TimeSpan.FromSeconds(30),
+                ServerToolTimeout = TimeSpan.FromMinutes(10),
+            },
+            time,
+            summary => _ = summaries.Writer.TryWrite(summary));
+        AssistantSession session = Open(core, clientTools: Given.ReadOnly("open_screen", ToolSide.Client));
+
+        session.TryStart(Given.Turn("open")).ShouldBeTrue();
+        await slowStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        time.Advance(TimeSpan.FromSeconds(31));
+
+        using (CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken))
+        {
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+            await foreach ((long _, AssistantEvent seen) in session.Events(0, timeout.Token))
+            {
+                if (seen is ToolFinishedEvent { CallId: "c1" })
+                {
+                    break;
+                }
+            }
+        }
+
+        session.Cancel();
+        TurnSummary first = await summaries.Reader.ReadAsync(TestContext.Current.CancellationToken);
+        first.Reason.ShouldBe(TurnEndReason.Cancelled);
+
+        session.TryStart(Given.Turn("again")).ShouldBeTrue();
+
+        TurnSummary second;
+
+        while (!summaries.Reader.TryRead(out second!))
+        {
+            time.Advance(TimeSpan.FromSeconds(31));
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+
+        second.Reason.ShouldBe(TurnEndReason.Done, "one timed-out round is not two in a row");
+        provider.Requests.Count.ShouldBe(4, "the turn went on to its third round");
     }
 
     [Fact]
