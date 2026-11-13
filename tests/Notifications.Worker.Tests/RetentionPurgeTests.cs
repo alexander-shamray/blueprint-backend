@@ -35,9 +35,12 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.StageInboxAsync(new InboxMessage(messageId, "notifications-orders", Recently));
         await fixture.StageInboxAsync(new InboxMessage(messageId, "notifications-Orders", Recently));
 
-        (await fixture.InboxAsync()).Count.ShouldBe(
+        IReadOnlyList<InboxMessage> rows = await fixture.InboxAsync(messageId);
+
+        rows.Count.ShouldBe(
             2,
-            "case-insensitive collation would have made the second insert a primary-key violation");
+            "case-insensitive collation would have made the second insert a primary-key violation; found " +
+            string.Join(", ", rows.Select(r => r.Endpoint)));
     }
 
     [Fact]
@@ -49,13 +52,14 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.StageInboxAsync(new InboxMessage(messageId, "notifications-ж", Recently));
         await fixture.StageInboxAsync(new InboxMessage(messageId, "notifications-д", Recently));
 
-        IReadOnlyList<InboxMessage> rows = await fixture.InboxAsync();
+        IReadOnlyList<InboxMessage> rows = await fixture.InboxAsync(messageId);
 
         rows.Count.ShouldBe(
             2,
             "varchar folds both endpoints to 'notifications-?', so the second insert is a " +
             "primary-key violation — and a message dropped by the mechanism that exists " +
-            "to drop only duplicates");
+            "to drop only duplicates; found " +
+            string.Join(", ", rows.Select(r => r.Endpoint)));
 
         // The endpoint unchanged, which catches a folding the count cannot see.
         rows.Select(r => r.Endpoint).ShouldBe(["notifications-ж", "notifications-д"], ignoreOrder: true);
