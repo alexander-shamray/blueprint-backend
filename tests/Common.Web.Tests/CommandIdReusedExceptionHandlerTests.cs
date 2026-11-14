@@ -43,7 +43,7 @@ public class CommandIdReusedExceptionHandlerTests
     {
         using JsonDocument body = await BodyOfAsync(new CommandIdReusedException(CommandId));
 
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/orders");
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
         body.RootElement.TryGetProperty("correlationId", out _).ShouldBeTrue();
     }

@@ -40,7 +40,7 @@ public class ValidationExceptionHandlerTests
         errors.GetProperty("Amount").GetArrayLength().ShouldBe(1);
 
         // §10.5's customisation reaches this body too.
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /products");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/products");
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
     }
 

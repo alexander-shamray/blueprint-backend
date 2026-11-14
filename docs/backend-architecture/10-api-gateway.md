@@ -828,8 +828,8 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
     return services.AddProblemDetails(options =>
         options.CustomizeProblemDetails = context =>
         {
-            context.ProblemDetails.Instance =
-                $"{context.HttpContext.Request.Method} {context.HttpContext.Request.Path}";
+            // RFC 9457 §3.1.5 makes instance a URI reference, so the path alone, escaped by PathString.
+            context.ProblemDetails.Instance = context.HttpContext.Request.Path.ToUriComponent();
 
             // From the request, which survives an unwinding exception where the log scope does not (§10.4).
             context.ProblemDetails.Extensions["correlationId"] =
@@ -959,7 +959,7 @@ identifier that was sitting one field away:
   "title": "Unprocessable Entity",
   "status": 422,
   "detail": "An order that has already shipped cannot be cancelled; raise a return instead.",
-  "instance": "POST /v1/orders/018f.../cancel",
+  "instance": "/v1/orders/018f.../cancel",
   "code": "order.already_shipped",
   "correlationId": "018f4c2e-...",
   "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"

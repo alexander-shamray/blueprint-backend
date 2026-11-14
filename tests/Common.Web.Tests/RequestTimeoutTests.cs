@@ -44,7 +44,7 @@ public partial class RequestTimeoutTests
 
         body.RootElement.GetProperty("status").GetInt32().ShouldBe(StatusCodes.Status504GatewayTimeout);
         body.RootElement.GetProperty("code").GetString().ShouldBe(RequestTimeoutExtensions.TimedOutCode);
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /stalled");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/stalled");
         body.RootElement.GetProperty("correlationId").GetString().ShouldNotBeNullOrEmpty();
     }
 
