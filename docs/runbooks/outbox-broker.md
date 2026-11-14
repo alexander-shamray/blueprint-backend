@@ -165,9 +165,14 @@ passes. So after a long outage the oldest rows sit out their backoff while
 newer ones drain, and the age gauge — the oldest unprocessed row, waiting or
 not — holds for up to the ladder's longest step with nothing wrong. A count
 that falls while the **age does not** is therefore not yet a poison message.
-It is one when the old row's `LockedUntil` has already passed and its
-`Attempts` keep climbing, or when it is at the cap, which is
-[`outbox-abandoned.md`](outbox-abandoned.md). Read it now rather than waiting:
+Read the old rows twice, a backoff step apart: a row in backoff keeps its
+`Attempts` until its `LockedUntil` passes, then is delivered and leaves. A row
+whose `Attempts` rise and whose `LastError` is rewritten after the broker came
+back is failing on its own — a poison message, and
+[`outbox-abandoned.md`](outbox-abandoned.md) once it hits the cap. Its
+`LockedUntil` will be in the future too, since every failure sets the next
+step, so that column alone tells the two apart only before a retry has run.
+Read it now rather than waiting:
 
 ```sql
 SELECT TOP 10
