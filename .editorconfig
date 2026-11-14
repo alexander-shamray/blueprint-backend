@@ -27,12 +27,25 @@ indent_size = 2
 [*.{json,yml,yaml}]
 indent_size = 2
 
-# The one override of end_of_line above. The Python gates run on a Linux
-# runner, and a CRLF shebang makes the kernel look for an interpreter named
-# `python3\r`.
+# The overrides of end_of_line above mirror every `eol=lf` line in
+# .gitattributes, or an editor saves CRLF where git shows no diff. The Python
+# gates run on a Linux runner, and a CRLF shebang makes the kernel look for an
+# interpreter named `python3\r`.
 [*.py]
 end_of_line = lf
 indent_size = 4
+
+[{*.sh,.claude/skills/codebase-index/scripts/cbx}]
+end_of_line = lf
+
+[{deploy/helm,deploy/canary,deploy/observability,deploy/keycloak}/**]
+end_of_line = lf
+
+[deploy/compose/{rabbitmq,carrier-simulator,redis,grafana,otel,keycloak,psp-simulator}/**]
+end_of_line = lf
+
+[.github/{secret-scan,locality-gate}/**]
+end_of_line = lf
 
 [*.{cs,csx}]
 indent_size = 4
