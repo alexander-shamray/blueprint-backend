@@ -296,6 +296,17 @@ class FilterTests(Fixture):
 
         self.assertTrue(any("predicate-quantifier" in problem for problem in problems))
 
+    def test_a_quantifier_only_a_comment_names_is_caught(self) -> None:
+        """ci.yml's comments name the word too, so a search of the text passed a key deleted or changed."""
+        for line in ("# predicate-quantifier: 'some-with-excludes'", "predicate-quantifier: 'every'"):
+            with self.subTest(line=line):
+                self.write(WORKFLOW.replace(
+                    "predicate-quantifier: 'some-with-excludes'", f"{line}\n          # some-with-excludes"))
+
+                problems = pipeline_gate.check_filters(self.root)
+
+                self.assertTrue(any("predicate-quantifier" in problem for problem in problems), problems)
+
     def test_an_unparsed_block_fails_rather_than_passing_empty(self) -> None:
         """The gate's own subject. Every check above asks whether a directory
         appears in the pattern list; against an empty list they all pass and
