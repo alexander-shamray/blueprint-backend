@@ -40,9 +40,10 @@ def selectors():
 
 
 # How a class runs a script that lists the checkout for it, which `LISTING` cannot see since the text spells no
-# listing: `test_sweep_slices` runs `sweep-slices.sh` over the checkout as `Sweep(self, REPO)`. A comment, a module
-# constant and a `Sweep` over a fixture repository are not a run over the checkout.
-SCRIPT_LISTERS = re.compile(r"\bSweep\(self, REPO\b")
+# listing: `test_sweep_slices` runs `sweep-slices.sh` over the checkout as `Sweep(self, REPO)`, or over a clone of
+# its HEAD as `Sweep(self, *own_clone(self))`. A comment, a module constant and a `Sweep` over a fixture repository
+# are not a run over the checkout.
+SCRIPT_LISTERS = re.compile(r"\bSweep\(self, (?:REPO\b|\*own_clone\(self\))")
 
 
 def listing_units(text):
@@ -236,6 +237,8 @@ class TheTablesNameWhatTheSuitesHold(unittest.TestCase):
     def test_a_class_running_a_script_that_lists_the_tree_is_a_listing(self):
         held = {"test_b": "class Runs:\n    def test_x(self):\n        Sweep(self, REPO).slices()\n"}
         self.assertEqual(["test_b.Runs"], unplaced_listings(held, set()))
+        cloned = {"test_b": "class Runs:\n    def test_x(self):\n        Sweep(self, *own_clone(self)).slices()\n"}
+        self.assertEqual(["test_b.Runs"], unplaced_listings(cloned, set()))
         named = {"test_c": 'SLICES = SCRIPTS / "sweep-slices.sh"\nclass Reads:\n    def test_x(self):\n'
                            "        Sweep(self, self.repo).slices()  # `sweep-slices.sh` narrows\n"}
         self.assertEqual([], unplaced_listings(named, set()))

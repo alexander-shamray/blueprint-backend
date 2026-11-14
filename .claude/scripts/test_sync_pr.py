@@ -433,10 +433,21 @@ class RenderedSettingsTests(SyncCase):
         self.start()
         self.refused(".claude/settings.json is not what .harness/render.py renders")
 
-    def test_the_render_takes_the_base_commits_config(self):
+    def test_the_render_takes_the_targets_config(self):
         self.head_files[".claude/settings.json"] = rendered(config={})
         self.start()
         self.refused(".claude/settings.json is not what .harness/render.py renders")
+
+    def test_the_render_takes_mains_config_once_main_moved_past_the_base(self):
+        # The drift gate renders with the config of the tree it checks, main's, not the one the head was cut from.
+        self.start()
+        moved = {**CONFIG, "settings": {"deny": ["Bash(target-only:*)", "Bash(moved-on-main:*)"]}}
+        self.write({".harness/config.json": json.dumps(moved)})
+        git(self.root, "add", "-A")
+        git(self.root, *SEED, "commit", "-q", "-m", "the target's config moves")
+        git(self.root, "push", "-q", "origin", "main")
+        self.refused(".claude/settings.json is not what .harness/render.py renders from "
+                     ".harness/settings.base.json and main's .harness/config.json")
 
     def test_a_head_deleting_settings_json_is_refused(self):
         del self.head_files[".claude/settings.json"]
@@ -635,9 +646,12 @@ class ConfigGlobTests(SyncCase):
         self.start(payload={**PAYLOAD, "docs/d.md": "D\n"})
         self.assertEqual(0, self.cli("verify", "7")[0])
 
-    def test_the_globs_match_case_sensitively(self):
+    def test_local_globs_fold_case_and_exclude_globs_do_not(self):
+        # As apply matches them: a local glob folded, since its write path folds, and an exclude glob exactly.
         self.start(payload={**PAYLOAD, "docs/D.md": "D\n"})
-        self.refused("docs/D.md is a payload file but the manifest does not list it")
+        self.assertEqual(0, self.cli("verify", "7")[0])
+        self.start(payload={**PAYLOAD, "docs/C.md": "C\n"})
+        self.refused("docs/C.md is a payload file but the manifest does not list it")
 
 
 class DroppedLocalPathTests(SyncCase):
@@ -927,6 +941,17 @@ class RunLocalSuitesTests(SyncCase):
         # A tracked suite edited after the proof is not the code the proof vouches for.
         head = self.take({"tools/test_bad.py": self.FAILS})
         self.write({"tools/test_bad.py": self.FAILS + "# edited\n"})
+        code, out, _ = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(1, code)
+        self.assertIn("not clean", out)
+        self.assertNotIn("boom", out)
+
+    def test_an_untracked_module_is_not_clean_whatever_status_shows(self):
+        # status.showUntrackedFiles=no would hide a module `unittest discover` imports beside the proved suite.
+        head = self.take({"tools/test_bad.py": self.FAILS})
+        git(self.root, "config", "status.showUntrackedFiles", "no")
+        self.write({"tools/helper.py": "pass\n"})
+        self.assertEqual("", git(self.root, "status", "--porcelain").strip())
         code, out, _ = self.cli("run-local-suites", "7", "--head", head)
         self.assertEqual(1, code)
         self.assertIn("not clean", out)

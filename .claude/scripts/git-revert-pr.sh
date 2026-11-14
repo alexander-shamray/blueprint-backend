@@ -9,9 +9,15 @@ pr="$1"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number: $pr" >&2; exit 2; }
 
 branch=$(git branch --show-current)
-[ -n "$branch" ] && [ "$branch" != main ] ||
+[ -n "$branch" ] ||
   { echo "not on a working branch: reverts land on a branch, never on main" >&2; exit 3; }
-dirty=$(git status --porcelain)
+# Folded and spelled out as git-trailer-pr.sh does: on a case-insensitive filesystem `Main` is `main`'s ref.
+case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
+  main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
+    echo "not on a working branch: reverts land on a branch, never on main, spelled $branch" >&2; exit 3 ;;
+esac
+# Every untracked file is named, whatever status.showUntrackedFiles says: `no` would read untracked work as clean.
+dirty=$(git status --porcelain --untracked-files=all)
 [ -z "$dirty" ] || { echo "the tree is not clean: commit or stash first" >&2; exit 3; }
 
 git fetch --quiet origin main

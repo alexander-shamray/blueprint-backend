@@ -250,6 +250,34 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         self.assertIn("the tree is dirty", result.stderr)
         self.assertIn("uncommitted", self.at("cat b.txt").stdout, "the edit survives the refusal")
 
+    def test_an_untracked_file_is_dirty_whatever_status_shows(self):
+        # status.showUntrackedFiles=no would read the planted file as a clean tree.
+        self.at("git config status.showUntrackedFiles no && echo x > planted.txt")
+        self.assertEqual("", self.at("git status --porcelain").stdout.strip())
+        result = self.helper("feat/x")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertIn("the tree is dirty", result.stderr)
+
+    def test_an_assume_unchanged_file_is_refused_and_named(self):
+        # Tag h in `git ls-files -v`: `git status` reads clean, and the replay's checkout would overwrite the edit.
+        self.at("git update-index --assume-unchanged b.txt && echo local >> b.txt")
+        self.assertEqual("", self.at("git status --porcelain").stdout.strip())
+        before = self.head()
+        result = self.helper("feat/x")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertIn("assume-unchanged", result.stderr)
+        self.assertIn("b.txt", result.stderr)
+        self.assertEqual(before, self.head())
+        self.assertIn("local", self.at("cat b.txt").stdout, "the edit survives the refusal")
+        # No sparse checkout sets the flag, so saying there is one lifts nothing.
+        self.at("git config core.sparseCheckout true")
+        result = self.helper("feat/x")
+        self.assertEqual(5, result.returncode, result.stderr)
+        self.assertIn("assume-unchanged", result.stderr)
+        self.assertIn("b.txt", result.stderr)
+        self.assertEqual(before, self.head())
+        self.assertIn("local", self.at("cat b.txt").stdout, "the edit survives the refusal")
+
     def test_a_skip_worktree_file_is_refused_and_named(self):
         # `git status` reads clean here, so the dirty-tree guard cannot be what
         # fires; the message is what tells this guard from that one.
@@ -287,6 +315,32 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         result = self.helper("feat/x")
         self.assertEqual(6, result.returncode, result.stderr)
         self.assertIn("no refs/remotes/origin/main", result.stderr)
+
+    def narrow_and_push(self, ref, change):
+        # Only the other ref is fetched by default: a bare `git fetch origin` succeeds and leaves `ref`'s stale.
+        other = "feat/x" if ref == "main" else "main"
+        self.at(f"git config remote.origin.fetch +refs/heads/{other}:refs/remotes/origin/{other}")
+        pushed = run_bash('cd "$R" && git clone -q remote.git third && cd third '
+                          '&& git config user.email t@e.invalid && git config user.name T '
+                          '&& git checkout -q "$F" && echo "$C" > "$C.txt" && git add -A '
+                          '&& git commit -qm "$C" && git push -q origin "$F"', R=self.root, F=ref, C=change)
+        self.assertEqual(0, pushed.returncode, pushed.stderr)
+        return run_bash('cd "$R/remote.git" && git rev-parse "refs/heads/$F"', R=self.root, F=ref).stdout.strip()
+
+    def test_a_narrowed_fetch_refspec_still_replays_onto_the_fresh_main(self):
+        main = self.narrow_and_push("main", "again")
+        result = self.helper("feat/x")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, self.at(f"git merge-base --is-ancestor {main} HEAD").returncode,
+                         "the replay's base is a main origin no longer holds")
+
+    def test_a_narrowed_fetch_refspec_still_sees_the_remote_branchs_new_commits(self):
+        before = self.head()
+        self.narrow_and_push("feat/x", "theirs")
+        result = self.helper("feat/x")
+        self.assertEqual(7, result.returncode, result.stderr)
+        self.assertIn("carries commits this checkout did not start from", result.stderr)
+        self.assertEqual(before, self.head(), "the branch was rewritten before the refusal")
 
     def test_commits_only_the_remote_has_stop_it(self):
         # A lease is satisfied by a commit this checkout has fetched, so it

@@ -143,6 +143,17 @@ GLOBAL_VALUE_FLAGS = {
     "--attr-source",
 }
 
+# Git's globals that take no value, so the word after one is the subcommand.
+# Only the push search reads it, and a flag missing here is read as taking a
+# value, which over-refuses rather than hiding a push.
+GLOBAL_VALUELESS_FLAGS = frozenset({
+    "-p", "--paginate", "-P", "--no-pager", "--bare", "--no-replace-objects",
+    "--no-lazy-fetch", "--no-optional-locks", "--no-advice",
+    "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs", "--exec-path", "--html-path", "--man-path",
+    "--info-path", "-v", "--version", "-h", "--help",
+})
+
 # Per subcommand, because arity is not a property of a flag name: `-m` is a
 # message for `commit` and "show merge diffs" for `log`. Absent an entry, nothing
 # is skipped — a false positive is cheap and a bypass is not.
@@ -1793,19 +1804,22 @@ def leading_command(run):
 def reads_stdin_as_script(words):
     """Whether a run made of `words` will execute what arrives on its stdin.
 
-    A wrapper in front of a shell — `echo 'git push origin +HEAD:main' |
-    command bash`, or `env bash` — still runs the push, so the shell is looked
-    for anywhere in the run, and the exemption is `DATA_ONLY_COMMANDS`'
-    allow-list rather than a set of wrappers, which fails open on the first
-    one nobody listed. Reading any shell name in the run costs an over-refusal
-    only in the shape `echo '…git push…' | grep bash`, because the printer
-    half of the pipeline pass has to match first.
-
     A run carrying `-c` reads its script from the argv rather than from stdin,
     and `evaluated_scripts` judges that channel at any position already.
     """
     body = [word for word in words if not ASSIGNMENT.match(word)]
+
+    # A wrapper in front of a shell, `command bash` or `env bash`, still runs
+    # the push, so the shell is looked for anywhere in the run, and the
+    # exemption is an allow-list rather than a set of wrappers, which fails
+    # open on the first one nobody listed.
     if not body or program_name(body[0]) in DATA_ONLY_COMMANDS:
+        return False
+
+    # A reader takes a shell's name as a pattern or a file; `git` is no reader
+    # here, since `bisect run` executes its operand. A printer that formats,
+    # piped into any other run that reads its stdin as a script, is refused.
+    if program_name(body[0]) in READING_COMMANDS - {"git"}:
         return False
     for position, word in enumerate(body):
         if program_name(word) not in EVALUATORS:
@@ -2307,32 +2321,38 @@ def subcommand_of(segment):
     return stripped[0] if stripped else ""
 
 
+def push_position(segment):
+    """The index of `push` in `segment` where it is the subcommand, or None.
+
+    A non-flag after a flag is its value, without a list of value-taking
+    globals, so `git --some-future-global X push` is still a push.
+    """
+
+    # Unless the flag is in `GLOBAL_VALUELESS_FLAGS` or carries its value after
+    # `=`: then the non-flag is the subcommand, and `git --no-pager grep push`
+    # is a `grep`.
+    for index, element in enumerate(segment):
+        if element.startswith("-"):
+            continue
+        if element == "push":
+            return index
+        previous = segment[index - 1] if index else ""
+        if (not previous.startswith("-") or "=" in previous
+                or previous in GLOBAL_VALUELESS_FLAGS):
+            return None  # this is the subcommand, and it is not `push`
+    return None
+
+
 def push_offence(segment):
     """The reason to refuse a `git push`, or None — by allow-list.
 
     `push` is located rather than assumed to be first, so no global option,
     known or not, can hide it.
     """
-    # `push` is the subcommand when everything before it is either an option or
-    # an option's value — and a value is recognised structurally, as a non-flag
-    # immediately preceded by a flag, rather than by consulting a list of
-    # value-taking globals. That is what makes an unknown global harmless:
-    # `git --attr-source HEAD push` and `git --some-future-global X push` both
-    # resolve, without this file knowing either flag.
-    #
-    # It also keeps `git log push` — a ref that happens to be called `push` —
-    # out of the push checks, because `log` is a non-flag that no flag precedes,
-    # so `log` is the subcommand and `push` is one of its arguments: a guard
-    # that fires on innocent traffic is one somebody turns off.
-    start = None
-    for index, element in enumerate(segment):
-        if element.startswith("-"):
-            continue
-        if element == "push":
-            start = index
-            break
-        if index == 0 or not segment[index - 1].startswith("-"):
-            break  # this is the subcommand, and it is not `push`
+
+    # `git log push` names a ref, not a push: `log` is the subcommand, and a
+    # guard that fires on innocent traffic is one somebody turns off.
+    start = push_position(segment)
     if start is None:
         return None
     rest = segment[start + 1:]
@@ -2464,14 +2484,7 @@ CONFIG_OTHER_ACTIONS = frozenset({"edit", "get", "list", "remove-section",
 
 def _is_push(segment):
     """Whether `segment` is a `git push`, located as `push_offence` locates it."""
-    for index, element in enumerate(segment):
-        if element.startswith("-"):
-            continue
-        if element == "push":
-            return True
-        if index == 0 or not segment[index - 1].startswith("-"):
-            return False
-    return False
+    return push_position(segment) is not None
 
 
 def _sets_pipefail(words):
@@ -2489,6 +2502,12 @@ def unchecked_push_pipeline(tokens):
             current = []
         else:
             current.append(token)
+    # `|&` is a pipe too, as `pipeline_groups` reads it. A grouping token ends no
+    # pipeline's status: `(git push | tail) && x` chains on `tail`'s exit. The
+    # lexer glues punctuation (`)&&`, `|(`), so both are read inside a token.
+    def piped(separator):
+        return "|" in separator and "||" not in separator and set(separator) <= set("|&(){}")
+
     pipefail = piped_push = False
     for run, separator in runs:
         if run and program_name(run[0]) == "set":
@@ -2496,11 +2515,11 @@ def unchecked_push_pipeline(tokens):
         elif run and program_name(run[0]) not in DATA_ONLY_COMMANDS and any(
                 program_name(token) == "git" and _is_push(run[index + 1:])
                 for index, token in enumerate(run)):
-            piped_push = not pipefail and separator == "|"
+            piped_push = not pipefail and piped(separator)
             continue
-        if piped_push and separator in ("&&", "||"):
+        if piped_push and ("&&" in separator or "||" in separator):
             return True
-        if separator != "|":
+        if not piped(separator) and not set(separator) <= set("(){}"):
             piped_push = False
     return False
 

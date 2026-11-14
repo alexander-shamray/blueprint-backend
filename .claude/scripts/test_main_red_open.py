@@ -83,8 +83,8 @@ class MainRedOpen(unittest.TestCase):
         self.assertEqual(3, result.returncode, result.stderr)
         self.assertEqual("main is red: #1 u1\nmain is red: #2 u2\n", result.stdout)
 
-    def test_an_issue_the_search_lists_but_is_closed_exits_0(self):
-        # The search index lags a closure: the listing still has the issue, its own state says CLOSED.
+    def test_an_issue_the_listing_holds_but_is_closed_exits_0(self):
+        # Closed since the listing was read: the listing still has the issue, its own state says CLOSED.
         result = self.run_helper(rows("main is red"), STUB_CLOSED="1")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("", result.stdout)
@@ -107,7 +107,7 @@ class MainRedOpen(unittest.TestCase):
         self.assertEqual("", result.stdout)
 
     def test_a_title_that_only_contains_the_phrase_exits_0(self):
-        # The search is full text, so it returns these. The last has the words and no separator.
+        # Every open bug is listed, so these come back. The last has the words and no separator.
         result = self.run_helper(rows("why main is red yesterday", "Fix: main is red", "main is reddish", "main is red:"))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("", result.stdout)
@@ -118,7 +118,7 @@ class MainRedOpen(unittest.TestCase):
         self.assertEqual("", result.stdout)
 
     def test_a_full_page_exits_2(self):
-        result = self.run_helper(rows(*["other"] * 100))
+        result = self.run_helper(rows(*["other"] * 1000))
         self.assertEqual(2, result.returncode)
         self.assertEqual("", result.stdout)
 
@@ -147,6 +147,8 @@ class MainRedOpen(unittest.TestCase):
         for part in ("issue list ", "--state open", "--label bug", "--json number,title,url"):
             with self.subTest(part=part):
                 self.assertIn(part, call)
+        # A search reads the search index, which lags a filing: a `main is red` issue filed moments ago is not in it.
+        self.assertNotIn("--search", call)
 
     def board_read(self, listing="[]", **env_extra):
         # `dispatch_board.main_red` over the real helper at its real path, as a `wake` runs it in a target.

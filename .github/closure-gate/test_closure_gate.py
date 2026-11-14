@@ -10,7 +10,12 @@ passes silently while the merge closes an issue nobody declared.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 
 from closure_gate import check, closing_references, declared_in_table, repository_of
 
@@ -258,6 +263,19 @@ class TableRow(unittest.TestCase):
     def test_a_crlf_row_without_a_trailing_pipe_reads_its_own_line_only(self):
         body = "| Closes | #88\r\n\r\nCloses #99\r\n| a | b |\r\n"
         self.assertEqual(declared_in_table(body), {88})
+
+    def test_another_repositorys_issue_in_the_row_is_not_a_local_one(self):
+        # A linked local issue beside a row naming another repository's issue of that number is no agreement.
+        for cell in ("other/repo#5", "https://github.com/other/repo/issues/5", "#7, other/repo#5"):
+            with self.subTest(cell=cell):
+                problems = check(payload(body=f"| Closes | {cell} |\n\nCloses #5\nCloses #7\n", linked=(5, 7)))
+                self.assertTrue(any("outside" in p and "other/repo" in p for p in problems), problems)
+                self.assertTrue(any("#5" in p and "does not say so" in p for p in problems), problems)
+
+    def test_this_repositorys_own_prefix_or_url_in_the_row_is_local(self):
+        for cell in (f"{REPO}#5", f"https://github.com/{REPO}/issues/5", f"{REPO.upper()}#5"):
+            with self.subTest(cell=cell):
+                self.assertEqual([], check(payload(body=f"| Closes | {cell} |\n\nCloses #5\n", linked=(5,))))
 
 
 class Repository(unittest.TestCase):
@@ -537,6 +555,30 @@ class DependabotDescription(unittest.TestCase):
         legacy = payload(body=self.NOTES)
         del legacy["author"]
         self.assertEqual(len(check(legacy)), 1)
+
+
+class TheInput(unittest.TestCase):
+    """stdin is `gh`'s UTF-8 whatever the locale says, the local pipe included."""
+
+    GATE = Path(__file__).with_name("closure_gate.py")
+
+    def run_gate(self, data: bytes) -> subprocess.CompletedProcess:
+        # cp1252 is what a Windows console hands Python, and it has no
+        # character for 0x9D, the last byte of a right double quote.
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+        return subprocess.run([sys.executable, str(self.GATE)], input=data,
+                              capture_output=True, env=env)
+
+    def test_utf8_on_stdin_is_read_as_utf8_whatever_the_locale(self):
+        text = json.dumps(payload(body="a “quoted” body"), ensure_ascii=False)
+        result = self.run_gate(text.encode("utf-8"))
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+
+    def test_stdin_that_is_not_utf8_is_refused_with_a_verdict(self):
+        result = self.run_gate(b'{"body": "\xff"}')
+        self.assertEqual(2, result.returncode)
+        self.assertIn(b"not UTF-8", result.stderr)
+        self.assertNotIn(b"Traceback", result.stderr)
 
 
 if __name__ == "__main__":

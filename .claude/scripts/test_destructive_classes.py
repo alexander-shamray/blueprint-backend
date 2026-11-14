@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from review_helpers import sign_nothing
+
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parents[1]
 DOC = ROOT / "docs" / "harness-boundaries.md"
@@ -273,6 +275,10 @@ def table():
 
 
 class DestructiveClasses(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        sign_nothing(self)
+
     def test_the_table_is_read(self):
         rows = table()
         self.assertGreaterEqual(

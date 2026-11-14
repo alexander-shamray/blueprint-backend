@@ -491,9 +491,11 @@ class RemoveShape(unittest.TestCase):
         file left under the old one's name, and the pid recorded in it."""
         root, native = self.fixture()
         lock, pending = self.state(native)
-        self.request(native)
         self.hold(native, 1)
+        # After the hold, whose holder takes the request away, so the marker is there for the helper to remove.
+        self.request(native)
         self.assertTrue(lock.exists())
+        self.assertTrue(pending.exists())
         result = self.remove(f"{root}/checkout")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.present(root))
@@ -506,8 +508,11 @@ class RemoveShape(unittest.TestCase):
         neighbour = lock.with_name("neighbour.lock")
         neighbour.parent.mkdir(parents=True, exist_ok=True)
         neighbour.write_text("", encoding="utf-8")
+        # A refused removal, so the cleanup after a removal does not take away a lock the wait wrongly made.
+        run_bash('printf x > "$W/notes.txt"', W=f"{root}/checkout/.claude/worktrees/probe")
         result = self.remove(f"{root}/checkout")
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
+        self.assertTrue(self.registered(root))
         self.assertFalse(lock.exists())
         self.assertTrue(neighbour.exists(), "another worktree's lock went")
 

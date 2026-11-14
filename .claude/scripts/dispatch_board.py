@@ -42,11 +42,13 @@ CLAUDE_TREE = re.compile(r"(^|[^\w])\.claude([/\\]|\b)", re.IGNORECASE)
 # What the Task cell and the body name beneath .claude/: a bare `.claude/` in prose names no file to change.
 CLAUDE_PATH = re.compile(r"(^|[^\w])\.claude/[\w.-]", re.IGNORECASE)
 # An issue in Depends on is written #n, after n, waits on n or n's; a bare number is a count, not an issue.
+# Without a # it takes two digits, so a count of 3 is none; after an explicit # one digit names an issue.
 ISSUE_REF = re.compile(
-    r"(?:#|\b(?:after|waits on|wait on|waiting on|blocked by)\s+#?)(\d{2,6})\b(?!\s*(?:day|week|hour|month|min))"
+    r"(?:#(\d{1,6})|\b(?:after|waits on|wait on|waiting on|blocked by)\s+#?(\d{2,6}))\b"
+    r"(?!\s*(?:day|week|hour|month|min))"
     r"|\b(\d{2,6})'s\b", re.IGNORECASE)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-NUMBER = re.compile(r"(?<![\w-])#?(\d{2,6})(?![\w-])")
+NUMBER = re.compile(r"(?<![\w-])(?:#(\d{1,6})|(\d{2,6}))(?![\w-])")
 OWNER = re.compile(r"\bOWNER\b")
 # What `tasks back` adds on a --berserk run: OWNER alone is a question, which the next flagged run would lift.
 SENT_BACK = "sent back under --berserk"
@@ -300,7 +302,7 @@ def extract_paths(text):
 
 
 def _numbers(text):
-    return {int(n) for n in NUMBER.findall(DATE.sub(" ", text))}
+    return {int("".join(groups)) for groups in NUMBER.findall(DATE.sub(" ", text))}
 
 
 def group_claim(group, bodies):
@@ -343,7 +345,8 @@ def _touch(a, b):
     if a == b:
         return True
     if "/" in a and "/" in b:
-        return a.startswith(b + "/") or b.startswith(a + "/")
+        # Either may be partial, named from below the root, so one matches the other at any run of whole segments.
+        return f"/{b}/" in f"/{a}/" or f"/{a}/" in f"/{b}/"
     if "/" in b:
         return b.endswith("/" + a)
     return "/" in a and a.endswith("/" + b)
@@ -374,7 +377,8 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
     """Why a row cannot launch, or None. `berserk` lifts the human wait and the .claude/ reach and nothing else."""
     if row.number is None:
         return "owed, not filed"
-    labels = {label.strip() for label in row.cells[LABELS].split(",")}
+    # GitHub's label names are case-insensitive: `Question` asks as `question` does.
+    labels = {label.strip().casefold() for label in row.cells[LABELS].split(",")}
     if not berserk and ("question" in labels or OWNER.search(f"{row.cells[TASK]} {row.cells[DEPENDS]}")):
         return "waits on a human"
     for label in ("paused", "tracking"):
@@ -387,11 +391,16 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
         return "unplaced: no session has chosen its wave and group"
     if depends.strip().casefold() != "none":
         dates = DATE.findall(depends)
-        numbers = {int(a or b) for a, b in ISSUE_REF.findall(DATE.sub(" ", depends))}
+        numbers = {int("".join(groups)) for groups in ISSUE_REF.findall(DATE.sub(" ", depends))}
         stray = re.search(r"\d", ISSUE_REF.sub(" ", DATE.sub(" ", depends)))
         if (not dates and not numbers) or stray:
             # Free text is never judged here; step 0 turns a human wait into OWNER.
             return "depends on text the helper cannot judge"
+        # A typo, a deleted or moved issue or a pull request is in no list: a closed issue's pass is not its own.
+        known = getattr(open_issues, "known", None)
+        unknown = sorted(n for n in numbers if known is not None and n not in known)
+        if unknown:
+            return "depends on " + ", ".join(f"#{n}" for n in unknown) + ", which no issue in the list holds"
         blocking = sorted(n for n in numbers if n in open_issues)
         if blocking:
             return "depends on open " + ", ".join(f"#{n}" for n in blocking)
@@ -742,6 +751,8 @@ def issues_from(data):
         if not isinstance(labels, list):
             raise Refusal(f"#{item['number']}'s labels are not a list")
         names = (label.get("name") if isinstance(label, dict) else label for label in labels)
+        # GitHub's label names are case-insensitive, so `Paused` files a row as `paused` does.
+        names = (name.casefold() if isinstance(name, str) else name for name in names)
         found[item["number"]] = Issue(item["number"], item["title"], item.get("state") == "OPEN",
                                       tuple(name for name in names if isinstance(name, str) and name))
     return found
@@ -1501,6 +1512,20 @@ def issue_body(root, number):
     return f"{data.get('title') or ''}\n{data.get('body') or ''}"
 
 
+class OpenIssues(frozenset):
+    """The open issues' numbers, and as `known` every number the list holds, open or closed."""
+
+    def __new__(cls, numbers=(), known=None):
+        made = super().__new__(cls, numbers)
+        made.known = None if known is None else frozenset(known)
+        return made
+
+    @classmethod
+    def of(cls, numbers):
+        # A source that knows only the open ones, as a test's set does, judges no number unknown.
+        return numbers if isinstance(numbers, cls) else cls(numbers)
+
+
 def open_issues(root):
     try:
         data = json.loads(helper(root, "gh-issue-list.sh"))
@@ -1508,8 +1533,9 @@ def open_issues(root):
         raise Refusal("gh-issue-list.sh did not print JSON") from None
     if not isinstance(data, list):
         raise Refusal("gh-issue-list.sh did not print a list")
-    return {item["number"] for item in data
-            if isinstance(item, dict) and item.get("state") == "OPEN" and _number(item.get("number"))}
+    issues = [item for item in data if isinstance(item, dict) and _number(item.get("number"))]
+    return OpenIssues((item["number"] for item in issues if item.get("state") == "OPEN"),
+                      known=(item["number"] for item in issues))
 
 
 def all_issues(root):
@@ -1658,7 +1684,8 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
                 # before anything below can refuse: a list the board refuses is the one a rebuild must repair.
                 _write(directory / READ_COPY, text)
             bodies = _bodies(parse_tasks(text), directory, bodies_from)
-            print("\n".join(board(text, today, bodies, set(open_from()), branch_from, *flag, owned=owned_from())))
+            listed = OpenIssues.of(open_from())
+            print("\n".join(board(text, today, bodies, listed, branch_from, *flag, owned=owned_from())))
         elif args.command == "tasks" and getattr(args, "run", None) is None:
             _day_command(args, issues_from_, merged_from, owned_from)
         elif args.command == "tasks":

@@ -313,9 +313,10 @@ def _check_protected(root: Path, local: list[str], exclude: list[str], problems:
     needed = [(rel, "the drift gate needs managed") for rel in GATE_FILES]
     needed += [(rel, f"a hook in {BASE} runs") for rel in hook_paths(base)]
     for rel, why in needed:
-        if _matches(local, rel):  # case-sensitive, as apply's is
+        # Folded, as apply's refusal is: a case-variant glob would keep the file unmanaged as surely.
+        if is_local(local, rel):
             problems.append(f"{CONFIG} makes {rel} local, which {why}")
-        if _matches(exclude, rel):
+        if is_local(exclude, rel):
             problems.append(f"{CONFIG} excludes {rel}, which {why}")
 
 
@@ -399,7 +400,7 @@ def _check_payload(
         except OSError as exc:
             problems.append(f"cannot read payload file {rel}: {exc}")
             continue
-        if _matches(local, rel):  # apply's local match is case-sensitive; a differing local file would have refused
+        if is_local(local, rel):  # folded, as apply's write path matches; a differing local file would have refused
             _check_local_copy(root, rel, digest, problems)
             continue
         expected[rel] = digest

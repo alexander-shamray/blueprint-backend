@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 
 from review_helpers import (
+    sign_nothing,
     SCRIPTS,
     BASH,
     GIT,
@@ -49,6 +50,7 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
     ]"""
 
     def setUp(self):
+        sign_nothing(self)
         self.bin = Path(temp_root(self))
         stub = self.bin / "gh"
         stub.write_text(

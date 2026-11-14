@@ -22,7 +22,11 @@ class GuardHelperArgv(unittest.TestCase):
         done = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(event).encode("utf-8"),
                               capture_output=True, check=True)
         out = done.stdout.decode("utf-8").strip()
-        return json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"] if out else None
+        if not out:
+            return None
+        decision = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual("deny", decision["permissionDecision"])
+        return decision["permissionDecisionReason"]
 
     def test_a_substitution_on_a_helper_line_is_refused(self):
         for command in (
@@ -50,6 +54,15 @@ class GuardHelperArgv(unittest.TestCase):
             f'timeout 60 {BOARD} x "$(id)"',
             f'timeout -k 5 60 {BOARD} x "$(id)"',
             f'nohup {BOARD} x "$(id)"',
+            # A prefix word's own option was read as the command word.
+            f'time -p {BOARD} x "$(id)"',
+            f'command -p {BOARD} x "$(id)"',
+            f'exec -a name {BOARD} x "$(id)"',
+            f'nohup -- {BOARD} x "$(id)"',
+            f'exec -la name {BOARD} x "$(id)"',
+            f'env -iu HOME {BOARD} x "$(id)"',
+            f'env time -o log {BOARD} x "$(id)"',
+            f'env --uns HOME {BOARD} x "$(id)"',
             'py -3.12 -X utf8 .claude/scripts/dispatch_board.py x "$(id)"',
             'python -W ignore .claude/scripts/sync_pr.py x `id`',
             'gh --repo o/r pr create --title "$(id)"',
@@ -112,7 +125,8 @@ class GuardHelperArgv(unittest.TestCase):
     def test_the_hook_is_registered_for_bash(self):
         settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
         commands = [hook.get("command", "") for entry in settings["hooks"]["PreToolUse"]
-                    if entry.get("matcher") == "Bash" for hook in entry.get("hooks", [])]
+                    if "Bash" in (entry.get("matcher") or "").split("|")
+                    for hook in entry.get("hooks", [])]
         mine = [command for command in commands if HOOK.name in command]
         self.assertEqual(1, len(mine), commands)
         assert_launched_on_the_floor(self, mine[0], HOOK.name)
@@ -125,8 +139,10 @@ class TheRunbooksKeepIssueTextFromTheShell(unittest.TestCase):
         for name in ("dispatch.md", "pr.md"):
             text = (COMMANDS / name).read_text(encoding="utf-8")
             # pr.md's create line is the helper's since the raw `gh pr create` grant was withdrawn.
-            lines = re.findall(r"^\s*(?:py -3\.12 \.claude/scripts/\S+|gh pr create|bash \.claude/scripts/gh-pr-create\.sh)"
-                               r".*$", text, re.MULTILINE)
+            helper = r"(?:py -3\.12 \.claude/scripts/\S+|gh pr create|bash \.claude/scripts/gh-pr-create\.sh)"
+            # A line in a fence, and a span in the prose: both are typed as written.
+            lines = re.findall(rf"^\s*{helper}.*$", text, re.MULTILINE)
+            lines += re.findall(rf"`({helper}[^`]*)`", text)
             self.assertTrue(lines, name)
             for found in lines:
                 with self.subTest(line=found):

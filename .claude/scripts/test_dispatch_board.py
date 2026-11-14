@@ -206,6 +206,28 @@ class ReadyTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("cannot judge", why)
 
+    def test_a_label_is_read_whatever_its_case(self):
+        # GitHub's label names are case-insensitive, so a hand-made `Question` is the label `question`.
+        for labels, why in (("Question, low", "waits on a human"), ("Paused", "labelled paused"),
+                            ("code, TRACKING", "labelled tracking")):
+            with self.subTest(labels=labels):
+                self.assertEqual((False, why), self.ready(line(labels=labels)))
+
+    def test_a_one_digit_issue_after_a_hash_is_an_issue(self):
+        self.assertEqual((False, "depends on open #7"), self.ready(line(depends="after #7"), {7}))
+        self.assertEqual((True, ""), self.ready(line(depends="#7"), {70}))
+
+    def test_a_depends_on_number_the_issue_list_does_not_hold_is_not_ready(self):
+        # gh-issue-list.sh lists issues alone, so a pull request's number is as unknown as a typo or a deleted issue.
+        listed = json.dumps([{"number": 1440, "title": "x", "state": "OPEN", "labels": []},
+                             {"number": 99, "title": "y", "state": "CLOSED", "labels": []}])
+        with mock.patch.object(db, "helper", return_value=listed):
+            issues = db.open_issues(".")
+        for text, verdict in (("after #1441", (False, "depends on #1441, which no issue in the list holds")),
+                              ("after #99", (True, "")), ("after #1440", (False, "depends on open #1440"))):
+            with self.subTest(text=text):
+                self.assertEqual(verdict, db.ready(group_of(line(depends=text)), issues, TODAY))
+
     def test_a_question_label_or_an_owed_row_is_not_ready(self):
         self.assertEqual((False, "waits on a human"), self.ready(line(labels="question, low")))
         owed = line().replace("| 1700 |", "| owed (not filed) |")
@@ -436,6 +458,15 @@ class PathTests(unittest.TestCase):
         self.assertTrue(self.over(inside, directory))
         self.assertFalse(self.over(directory, self.claim({"src/services/catalogue/a.cs"})))
 
+    def test_a_partial_path_overlaps_a_root_relative_path_through_it(self):
+        # A body names the subtree from below src, and a held branch's git diff names the file from the root.
+        partial, rooted = self.claim({"services/ordering"}), self.claim({"src/services/ordering/api.cs"})
+        self.assertTrue(self.over(partial, rooted))
+        self.assertTrue(self.over(rooted, partial))
+        self.assertTrue(self.over(self.claim({"ordering/api.cs"}), rooted))
+        self.assertFalse(self.over(partial, self.claim({"src/services/orderingx/api.cs"})))
+        self.assertFalse(self.over(self.claim({"rvices/ordering"}), rooted))
+
     def test_a_conflicts_cell_naming_a_group_makes_the_two_exclusive(self):
         groups = db.groups(db.parse_tasks(FIXTURE))
         m1 = next(g for g in groups if g.id == "M1")
@@ -452,6 +483,13 @@ class PathTests(unittest.TestCase):
         other = self.claim({"elsewhere/b.cs"})
         self.assertTrue(self.over(claim, other, b_issues={1682}))
         self.assertFalse(self.over(claim, other, b_issues={1999}))
+
+    def test_a_conflicts_cell_naming_a_one_digit_issue_after_a_hash_claims_it(self):
+        claim = db.group_claim(group_of(line(conflicts="with #7: same files")), {1700: "a.cs"})
+        self.assertEqual({7}, claim.issues)
+        self.assertTrue(self.over(claim, self.claim({"elsewhere/b.cs"}), b_issues={7}))
+        # Without the hash one digit is a count, as two were before.
+        self.assertEqual(frozenset(), db.group_claim(group_of(line(conflicts="with 7 others")), {1700: "a.cs"}).issues)
 
     def test_a_dateless_conflicts_cell_names_no_issue(self):
         claim = db.group_claim(group_of(line(conflicts="not inside Window B 2026-11-08")), {1700: "a.cs"})
@@ -681,7 +719,14 @@ class WriteTests(unittest.TestCase):
         self.start()
         before = (self.run_dir / "state.json").read_bytes()
         self.write(FIXTURE)
-        with mock.patch.object(db.os, "replace", side_effect=PermissionError("held open")):
+        real_replace = os.replace
+
+        def refuse_the_list(source, destination):
+            # The list alone, so the state write before it lands and the undo after it runs.
+            if Path(destination).name == "todo.md":
+                raise PermissionError("held open")
+            real_replace(source, destination)
+        with mock.patch.object(db.os, "replace", side_effect=refuse_the_list):
             code, err = self.cli("move", "S1")
         self.assertEqual(2, code)
         self.assertIn("refused: could not write", err)
@@ -1265,9 +1310,11 @@ class DayTests(unittest.TestCase):
 
     def test_a_crlf_list_stays_crlf(self):
         self.write(FIXTURE.replace("\n", "\r\n"))
-        self.start(1683)
-        self.cli("state", "1683", "PR open")
-        self.cli("back", "1683")
+        # Each step must land, or an unchanged file is what three refusals leave too.
+        self.assertEqual(0, self.start(1683)[0])
+        self.assertNotEqual(FIXTURE.replace("\n", "\r\n"), self.read())
+        self.assertEqual(0, self.cli("state", "1683", "PR open")[0])
+        self.assertEqual(0, self.cli("back", "1683")[0])
         self.assertEqual(FIXTURE.replace("\n", "\r\n"), self.read())
 
 
@@ -1339,6 +1386,18 @@ class EventTests(unittest.TestCase):
                          (self.find(1700).section, *self.find(1700).cells[1:2], *self.find(1700).cells[3:]))
         self.assertEqual(("Tracking", None, "none"), (self.find(1701).section, None if self.find(1701).group == "—"
                                                        else self.find(1701).group, self.find(1701).cells[5]))
+        self.assertEqual("OWNER; " + db.UNPLACED, self.find(1702).cells[5])
+        self.readable()
+
+    def test_a_capitalised_label_files_a_row_as_its_lowercase_name(self):
+        # Through issues_from, which reads gh-issue-list.sh's JSON, as `tasks` reads it.
+        listed = [(1700, "Parked", ["bug", "Paused"]), (1701, "Measured", ["enhancement", "Tracking"]),
+                  (1702, "Ask", ["QUESTION"])]
+        self.issues = db.issues_from([{"number": n, "title": t, "state": "OPEN", "labels": [{"name": x} for x in names]}
+                                      for n, t, names in listed])
+        for n in (1700, 1701, 1702):
+            self.assertEqual(0, self.cli("place", str(n))[0])
+        self.assertEqual(("Paused", "Tracking", "Remaining"), tuple(self.find(n).section for n in (1700, 1701, 1702)))
         self.assertEqual("OWNER; " + db.UNPLACED, self.find(1702).cells[5])
         self.readable()
 

@@ -112,6 +112,17 @@ class Subjects(unittest.TestCase):
         self.assertIsNotNone(subject_problem('Revert "update: a"'))
         self.assertIn("leftover", subject_problem('Revert "wip: a"') or "")
 
+    def test_a_revert_of_a_revert_is_judged_by_its_innermost_subject(self) -> None:
+        # git titles a revert of a revert `Reapply "<subject>"`, an older git `Revert "Revert "<subject>""`; either is
+        # what git-revert-pr.sh writes when a reverted pull request is landed again.
+        for subject in ('Reapply "docs: a"', 'Revert "Revert "docs: a""', 'Revert "Reapply "fix(x): a""',
+                        'Reapply "Revert "docs: a""'):
+            with self.subTest(subject=subject):
+                self.assertIsNone(subject_problem(subject))
+        self.assertIsNotNone(subject_problem('Reapply "update: a"'))
+        self.assertIsNotNone(subject_problem('Revert "Revert "update: a""'))
+        self.assertIn("leftover", subject_problem('Reapply "Revert "wip: a""') or "")
+
 
 def git(root: Path, *args: str, stdin: str | None = None) -> str:
     done = subprocess.run(

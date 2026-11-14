@@ -5,6 +5,7 @@ where no harness_sync package exists and the drift gate runs it (owner: shared-h
 """
 
 import copy
+import fnmatch
 import json
 import re
 
@@ -64,6 +65,35 @@ def _merge(base_list: list, extra: list) -> list:
     return out
 
 
+_RULE = re.compile(r"(\w+)(?:\((.*)\))?", re.DOTALL)
+# The tools whose specifier is a path pattern, which a deny matches as a glob.
+_PATH_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+
+def _covers(deny: str, allow: str) -> bool:
+    """Whether a deny matches every call the allow admits: a bare tool covers all its uses, `Bash(x:*)` covers `x`
+    and each command `x ` begins, `*` elsewhere in Bash is a wildcard, a path tool's specifier is a glob in which
+    `*` crosses `/`, and anything else covers only its own spelling."""
+    deny, allow = deny.strip(), allow.strip()
+    d, a = _RULE.fullmatch(deny), _RULE.fullmatch(allow)
+    if d is None or a is None or d.group(1) != a.group(1):
+        return deny == allow
+    tool, denied, allowed = d.group(1), d.group(2), a.group(2)
+    if denied is None:
+        return True
+    if allowed is None:
+        return False
+    if tool == "Bash":
+        command = allowed[:-2] if allowed.endswith(":*") else allowed
+        if denied.endswith(":*"):
+            prefix = denied[:-2]
+            return command == prefix or command.startswith(prefix + " ")
+        return fnmatch.fnmatchcase(command, denied) if "*" in denied else allowed == denied
+    if tool in _PATH_TOOLS:
+        return fnmatch.fnmatchcase(allowed.removeprefix("./"), denied.removeprefix("./"))
+    return allowed == denied
+
+
 def render_settings(base: dict, cfg: object) -> dict:
     """Return base plus cfg.settings; config can only add, never remove or override."""
     extra = cfg.settings  # type: ignore[attr-defined]  # duck-typed so a target can pass a SimpleNamespace
@@ -77,9 +107,8 @@ def render_settings(base: dict, cfg: object) -> dict:
     _write_rules("config deny", cfg_deny)
     # Denies win in Claude Code, so an allow the base denies would be dead text that hides intent
     # (owner: blueprint-backend docs/superpowers/specs/2026-11-02-shared-harness-design.md, 5.2).
-    denied = {entry.strip() for entry in base_deny}
     for entry in cfg_allow:
-        if entry.strip() in denied:
+        if any(_covers(deny, entry) for deny in base_deny):
             raise RenderError(f"config allow {entry!r} is denied by the base")
 
     env = dict(base.get("env", {}))

@@ -10,7 +10,7 @@ the whole is about 46k. `Grep -n "^## <title>"` gives its first line.
 | Purpose and provenance of this file | Why the section left backend's CLAUDE.md, the four edits made in the move, and the three passages since moved to backend's residuals. |
 | Edit denies and agent self-protection | Edit-only file rules, the denied .claude and .harness trees, and why the skill and index-wrapper grants need guarding. |
 | Index refresh and worktree seeding | The PostToolUse refresh hook, seeding worktree indexes, carrying MCP approval into forks, and the SessionStart refresh. |
-| Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
+| Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands carry no shell syntax. |
 | Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
 | Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards, the quoting bypass and the helper argv guard. |
@@ -355,7 +355,8 @@ only an `.exe` or a `.com` counts, never `PATHEXT`'s `.bat` or `.cmd`: those
 run through `cmd.exe` in the checkout, which looks there first for every
 command the script names, so a shim found safely would reopen the search this
 closes. pip writes the console script as an `.exe`. The worker runs that
-script, then the module through its own interpreter: `py -3.12 -m pip` is a
+script, then, on Python 3.11 or later, the module through its own interpreter,
+where `-P` keeps the checkout off the import path: `py -3.12 -m pip` is a
 supported install that leaves the script in a directory that need not be on
 `PATH`, so both `cbx` wrappers fall back the same way, and a pipx install has
 no module this interpreter can import, so the script is not dropped for it.
@@ -624,11 +625,24 @@ and it writes the hook's output to a file and not a pipe, so a launcher's
 orphaned child cannot hold it past the bound. **It wraps the two hints and
 no other hook**: the guards fail closed on their own and carry no timeout,
 and `index-mcp-root` and `refresh-index` print nothing a session reads as
-advice. Two residuals are accepted, because neither can be reported from
-inside the hook and neither has been seen: the wrapper's own start, where
-`bash` stalling past the settings timeout is a case no hook can report, and
-a machine without Git Bash, where the paragraph on hook commands needing no
-shell says why the hint is dropped. A fresh `bash -c true` on the owner's
+advice. Those two run under `.claude/hooks/index-hook.sh` instead, which
+takes the interpreter as this wrapper does and leaves the same way, with 0
+and a line naming the hook on any non-zero exit, but holds no bound: the
+root check reads two paths, and the refresh hands its work to a detached
+worker inside a 3 s git budget, so once started neither waits long. Its
+residual is the one this wrapper closes: an interpreter start that stalls
+past the settings timeout is killed by the harness and leaves no line, so
+a root check or refresh that did not run then looks like one with nothing
+to say, as it did under a raw `py -3.12`.
+Both wrappers take `py -3.12` where a `py` is on `PATH`, else `python3`,
+else `python`, in *The guard launcher*'s order, because a raw `py -3.12`
+exits 127 on every call on a host without the Windows launcher (#543); an
+interpreter older than `-P` fails into the line. Two residuals are
+accepted, because neither can be reported from inside the hook and neither
+has been seen: a wrapper's own start, where `bash` stalling past the
+settings timeout is a case no hook can report, and a machine without Git
+Bash, where the paragraph on hook commands carrying no shell syntax says
+why the hint is dropped. A fresh `bash -c true` on the owner's
 workstation, read 2026-10-13, took 0.1 s to 3.3 s over six starts, so the
 cold start that stalls a `py` launcher stays far below the settings
 timeout. A `shell` field with an invocation that needs no `bash` would
@@ -636,7 +650,10 @@ close the second, and is not taken: it would run a hint hook the wrapper
 cannot bound.
 `test_hint_bound.py` runs the wrapper against a launcher that never answers,
 one that fails and one that answers, and holds `settings.json` to routing
-both hints through it with a timeout above the bound.
+both hints through it with a timeout above the bound. `test_index_hook.py`
+runs each registered root check and refresh with no `py` on `PATH`, holds
+them to the launcher under their own events, and `test_run_guard.py` holds
+no hook command to naming `py -3.12` itself.
 
 **`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
 servers started through `npx` — `playwright` and `chrome-devtools` — failed
@@ -657,25 +674,24 @@ closes it everywhere; the owner's already carries it. No failure was a tool
 call, so `MCP_TOOL_TIMEOUT` stays at its default. `.mcp.json`'s
 `codebase-index` is not a plugin, and its failures are never cached.
 
-**A hook command needs no shell, and that is a constraint rather than a
-preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
-and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
-first, which on Windows may be Git Bash or the WSL launcher: different
+**A hook command carries no shell syntax, and that is a constraint rather
+than a preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that
+`cmd` and PowerShell do not run, and a bare `bash` is whatever `PATH`
+resolves first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
-redirect and reports nothing. So each index hook here is `py -3.12` and
-its arguments, with no env-var prefix and no bare `bash`. **The two hint
-hooks and the guards are the exceptions**, started as
-`bash …/hint-bound.sh` and `sh …/run-guard.sh`: Claude Code passes a hook's
-command to Git Bash on Windows, so the `bash` and `sh` inside it are Git's
-own and never the WSL launcher. A machine without Git Bash falls back to
-PowerShell, where neither wrapper runs: the hint is dropped, as it was before
-the wrapper existed, and the guards' residual is *The guard launcher*'s. The
-index hooks are
-started through `runpy` from `-c` rather than as a file argument, because
-Python exits 2 on a file it cannot open, as when a worktree is emptied under
-a session still running in it: under `UserPromptSubmit` that erases every
-prompt, and under `PostToolUse` it reports an error after every call, where
-through `runpy` the failure exits 1 and only reports. They read
+redirect and reports nothing. So each hook here is a launcher and its
+arguments, with no env-var prefix: `bash …/hint-bound.sh` for the hints,
+`bash …/index-hook.sh` for the root check and the refresh, and
+`sh …/run-guard.sh` for the guards. The `bash` and `sh` are safe where a bare
+one typed at a prompt is not: Claude Code passes a hook's command to Git Bash
+on Windows, so the `bash` and `sh` inside it are Git's own and never the WSL
+launcher. A machine without Git Bash falls back to PowerShell, where no
+wrapper runs: the hints, the root check and the refresh are dropped, and the
+guards' residual is *The guard launcher*'s. Python exits 2 on a file it
+cannot open, as when a worktree is emptied under a session still running in
+it, and under `UserPromptSubmit` that erases every prompt; the index hooks'
+launchers turn every non-zero exit into their line and 0, so none reaches
+the harness. Each starts its hook through `runpy` from `-c`, which reads
 `CLAUDE_PROJECT_DIR` from the environment rather than having it spliced into
 the program, which a path holding a quote would break. The refresh hook sets
 its own environment — `CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it
@@ -968,10 +984,13 @@ command through its config. It runs the five guards and nothing else.
   something was put inside cannot be removed, and refuses every call until
   somebody removes it, saying so.
 
-The hints keep `hint-bound.sh`, which bounds them and leaves with 0, and the
-index hooks keep `runpy`, which leaves with 1 on a file it cannot open
-(*Index hint hooks and hook wiring*): neither guards anything, and the
-launcher's exit 2 would erase a prompt or block every call.
+The hints keep `hint-bound.sh`, which bounds them, and the root check and
+the refresh take `index-hook.sh`, and both leave with 0 (*Index hint hooks
+and hook wiring*): this launcher's exit 2 would erase a prompt or block
+every index call. `index-mcp-root.py` does refuse calls, but it fails open
+by design, letting through every call it cannot judge, so a check that did
+not start gives the answer it gives on any failure, and says so in a line;
+the refresh refuses nothing.
 
 **Residuals.** A machine without Git Bash runs a hook command under
 PowerShell, which has no `sh`: the command fails with a status that is not
@@ -1641,7 +1660,8 @@ it, excluded or not. The settings proof executes code from the head: its
 `.harness/render.py`, read by oid and never from a tree, runs only once that
 commit is on the harness's `main` and the renderer and
 `.harness/settings.base.json` are manifest paths whose blobs are the payload's
-there, and it renders from those and the base commit's config. A difference, a
+there, and it renders from those and `main`'s config, the one the drift gate
+renders with. A difference, a
 missing file, a renderer that raises or one not trusted is a failure line.
 `review-diff` proves all of it first, on the head it then reads, and refuses
 with those lines. Its one write is a `.diff` under `artifacts/review/`. Not
@@ -1679,14 +1699,15 @@ where the old grant was `/ship`'s alone, so what bounds the subcommand is its
 own proof: it runs `verify <n> --head <oid>` and refuses a failure, so a test
 file committed on a local branch, with that branch's `HEAD` as the pin, runs
 nothing. It then refuses a `HEAD` other than the oid or a tree `git status
---short` says is not clean, the comparison the sync section requires and which
-`dispatch_board.py sync-launch` and `run` compare before a `--dispatched` run
-starts in it, and runs each path `local-suites` derives from
-`.harness/config.json` and `git ls-files` as `py -3.12 -m unittest discover -s
-<dir> -p <file>`. A target's *Ship checks* that runs the whole `.claude/scripts`
-suite runs `shard-harness-suite.py`, granted with no `:*` so that its `--ids
-<file>` and `--queue <file>`, its workers' own, stay out; its `--selective`
-is granted as a second whole command for the same reason. Residual: those suites
+--short --untracked-files=all` says is not clean, the comparison the sync
+section requires and which `dispatch_board.py sync-launch` and `run` compare
+before a `--dispatched` run starts in it, and runs each path `local-suites`
+derives from `.harness/config.json` and `git ls-files` as `py -3.12 -m
+unittest discover -s <dir> -p <file>`. A target's *Ship checks* that runs the
+whole `.claude/scripts` suite runs `shard-harness-suite.py`, granted with no
+`:*` so that its `--ids <file>` and `--queue <file>`, its workers' own, stay
+out; its `--selective` is granted as a second whole command for the same
+reason. Residual: those suites
 run with the session's credentials, and what they run is an open sync's head,
 which its pull request shows; a session can still run any test file by a command
 no grant names, which asks in the default mode and under `auto` is the
@@ -1849,7 +1870,7 @@ fields is a rule a reader follows and a prefix grant beside it is what the
 session can actually run.
 
 **`pr-locality.sh` prints a verdict and never the cell it judges.** It
-reads `body` from the pull request, with any carriage return removed, and
+reads `body` from the pull request, each CRLF read as a line ending, and
 `filename` and a rename's `previous_filename` from the files endpoint, so both
 ends of a move are judged as the CI gate judges them. It prints one `class`
 line whose value is letters it validated, then one line per changed path,
@@ -1881,6 +1902,19 @@ verdicts for part of the diff.
 **Its grammar refuses rather than guesses.** A body carrying neither row
 prints nothing, and the caller skips its touch-set check and says so; one
 row without the other is refused, because each caller reads the pair. A
+row inside a fenced code block is an example and is not read, the fence
+being CommonMark's as the CI gate reads it: a backtick or tilde run of three
+or more, indented at most three spaces, a backtick opener's info string
+holding no backtick, closed by a run of the same character at least as long
+with only blanks after it, or by the end of the body. Read otherwise, a
+quoted example beside the table is a second row and the round refuses a
+body the gate passes. A fence opened after a list item, a block quote or an
+HTML block start is the exception, and a row in it, indented or without its
+leading pipe, exits 3 as the gate refuses it: GitHub ends a fence in a list
+item when the list ends and hides one in an HTML comment, which a line reader
+cannot follow, so that row may be the table GitHub shows. A carriage return
+that ends no CRLF ends a line for GitHub and not for the helper, and exits 3
+too. A
 class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
 in balanced backticks, a backticked one optionally followed by a space and its
@@ -2061,11 +2095,13 @@ the pipeline will *execute* its stdin, and that cannot be settled by naming
 the wrappers which exec their argument — `command`, `env`, `nohup`, `nice`,
 `stdbuf`, `setsid`, `timeout`, `ionice` and `chrt` are nine before anyone has
 looked hard, and the tenth is the bypass. So a shell name **anywhere** in a
-stdin-consuming run counts, which is the direction `DATA_ONLY_COMMANDS`
-already argues for, and it costs `echo '…git push…' | grep bash` a refusal
-it does not deserve. That shape needs a printer writing a push into a pipeline
-whose far end merely mentions a shell; it has never been typed here, and the
-alternative fails open on a wrapper nobody listed.
+stdin-consuming run counts, unless a reader other than `git` leads the run
+(`READING_COMMANDS`, which takes a shell's name as a pattern or a file), which
+is the direction `DATA_ONLY_COMMANDS` already argues for. It costs
+`echo '…git push…' | xargs echo bash` a refusal it does not deserve: a
+printer writing into a run led by anything else that merely mentions a shell.
+That shape has never been typed here, and the alternative fails open on a
+wrapper nobody listed.
 
 ## Agent-type and push entries
 
@@ -2170,7 +2206,7 @@ and its gate stays green.
 **That guard holds no copy of any deny list, and refusing to write one is
 the whole of why it is safe to run on every write this repository makes.**
 A path deny is *correct* when the spelling is true of the file, so inside a
-checkout the session stands in, one holding the home aside, the hook judges
+checkout the session stands in, the home's own names aside, the hook judges
 only the disagreement and leaves every list — `.claude/settings.json`'s and
 both commands' frontmatter — to say what may be edited; where no rule
 reaches it reads that list rather than copying it, as the next paragraph
@@ -2195,10 +2231,13 @@ one only if git's backlink agrees, so a `.git` file alone makes none, and a
 checkout of another repository is not one, because this target's denies say
 nothing about what it protects.
 
-**Outside every checkout, and inside one holding the home, the guard refuses
-by name and admits the rest.** A checkout holding the home, a dotfiles one at
-`~` or a project directory set there or above, still refuses a link that
-disagrees, as any checkout does, but excuses none of these names.
+**Under the home, whatever checkout holds the target, the guard refuses by
+name and admits the rest.** A checkout holding the home, a dotfiles one at
+`~` or a project directory set there or above, or one inside a place below,
+a checkout at `~/.claude` or `~/.ssh` (#504), still refuses a link that
+disagrees, as any checkout does, but excuses none of these names: containing
+a target is not owning it, and the denies of one inside a place are anchored
+at its own root and name none of them.
 `~/.ssh`, the shell profiles and `~/.gitconfig` run at login under every
 session, and `~/.claude`'s credentials, settings, hooks, commands, agents,
 plugins, scripts, skills and sandbox apply to every project, judged on the
@@ -2520,8 +2559,10 @@ reads the file a `sed -i` names, because nothing in the command's text says
 what line endings that file holds. It reads the command's lines as bash
 does, continuations joined and comments and heredoc bodies dropped, splits
 them into simple commands with `shlex`, follows a plain `cd <dir>` within
-its subshell, finds `sed` behind the prefix words and the `env`, `nice`,
-`timeout` and `stdbuf` wrappers, judges what a shell runs — its `-c` line,
+its subshell, finds `sed` behind the prefix words, past the options of
+`command`, `exec`, `time`, `builtin` and `nohup`, and behind the `env`,
+`nice`, `timeout` and `stdbuf` wrappers, judges what a shell runs — its
+`-c` line,
 or a heredoc, a here-string, or an `echo` or a `cat` piped into one reading
 its input —
 as a command of its own, and reads sed's options as `getopt_long` does:
@@ -2573,7 +2614,8 @@ session started in the home directory or at a drive root, and a git that is
 only a `.cmd`, read as no git on `PATH`.
 
 **Where it fails open, by design rather than by crash.** An operand holding
-an expansion (`"$FILE"`, `$(git ls-files)`), a `cd` it cannot follow, a file
+an expansion (`"$FILE"`, `$(git ls-files)`), a `cd` it cannot follow, a
+`cd` or `pushd` to a directory not there when the hook runs, a file
 that does not exist or cannot be read, a command `shlex` cannot tokenise, no
 git on `PATH`, or a git that cannot answer: each is admitted, because a
 guard that refuses what it cannot resolve blocks ordinary work for want of
@@ -2814,6 +2856,7 @@ decision accepts, and Linux still judges them on every pull request.
 - name: Decide whether this leg tests
   id: reach
   if: runner.os != 'Linux'
+  shell: bash
   run: python .claude/scripts/harness-legs.py >> "$GITHUB_OUTPUT"
 - name: Test the harness
   if: runner.os == 'Linux' || steps.reach.outputs.test != 'false'

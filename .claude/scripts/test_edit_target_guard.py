@@ -33,38 +33,40 @@ def setUpModule():
     links, and the junction fallback would otherwise go unexercised.
     """
     global SYMLINKS, JUNCTIONS
-    # Removed at the end of this function, so a run leaves no tree behind.
+    # Removed however this function ends, so a run leaves no tree behind.
     probe = tempfile.mkdtemp()
-    target = os.path.join(probe, "target")
-    os.mkdir(target)
     try:
-        os.symlink(target, os.path.join(probe, "link"),
-                   target_is_directory=True)
-        SYMLINKS = True
-    except (OSError, NotImplementedError, AttributeError):
-        SYMLINKS = False
-    try:
-        from _winapi import CreateJunction
-    except ImportError:
-        CreateJunction = None
-    if CreateJunction is not None:
-        CreateJunction(target, os.path.join(probe, "junction"))
-        JUNCTIONS = CreateJunction
+        target = os.path.join(probe, "target")
+        os.mkdir(target)
+        try:
+            os.symlink(target, os.path.join(probe, "link"),
+                       target_is_directory=True)
+            SYMLINKS = True
+        except (OSError, NotImplementedError, AttributeError):
+            SYMLINKS = False
+        try:
+            from _winapi import CreateJunction
+        except ImportError:
+            CreateJunction = None
+        if CreateJunction is not None:
+            CreateJunction(target, os.path.join(probe, "junction"))
+            JUNCTIONS = CreateJunction
 
-    if not SYMLINKS and JUNCTIONS is None:
-        raise AssertionError(
-            "this platform grants neither a symbolic link nor a junction, so "
-            "the guard's whole subject is unreachable here and a green run "
-            "would mean nothing")
+        if not SYMLINKS and JUNCTIONS is None:
+            raise AssertionError(
+                "this platform grants neither a symbolic link nor a junction, so "
+                "the guard's whole subject is unreachable here and a green run "
+                "would mean nothing")
 
-    if not HOOK.exists():
-        raise AssertionError(f"the hook is missing: {HOOK}")
+        if not HOOK.exists():
+            raise AssertionError(f"the hook is missing: {HOOK}")
 
-    # Say what was exercised, because a green run does not: `unittest` names a
-    # subtest only when it fails, so a job that never reached the junction
-    # fallback reads the same as one that ran both.
-    print(f"link primitives exercised: {', '.join(linkers())}", file=sys.stderr)
-    shutil.rmtree(probe, ignore_errors=True)
+        # Say what was exercised, because a green run does not: `unittest` names a
+        # subtest only when it fails, so a job that never reached the junction
+        # fallback reads the same as one that ran both.
+        print(f"link primitives exercised: {', '.join(linkers())}", file=sys.stderr)
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
 
 
 def linkers():
@@ -140,7 +142,7 @@ class GuardCase(unittest.TestCase):
         return linkpath
 
     def judge(self, file_path, tool="Edit", cwd=None, key="file_path",
-              project=None, process_cwd=None, hook=HOOK, env=None):
+              project=None, process_cwd=None, hook=HOOK, env=None, extra=None):
         """The hook's verdict on one call: the reason, or `None` for allowed.
 
         `cwd` is the event's, for a relative path; `process_cwd` the hook
@@ -150,7 +152,7 @@ class GuardCase(unittest.TestCase):
             "hook_event_name": "PreToolUse",
             "cwd": self.root if cwd is None else cwd,
             "tool_name": tool,
-            "tool_input": {} if file_path is None else {key: file_path},
+            "tool_input": ({} if file_path is None else {key: file_path}) | (extra or {}),
         }
         result = subprocess.run(
             [sys.executable, str(hook)],
@@ -385,6 +387,15 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
             with self.subTest(link=linker):
                 self.assertRefused(self.link_to("book", target, linker),
                                    tool="NotebookEdit", key="notebook_path")
+
+    def test_a_harmless_file_path_beside_the_notebook_path_excuses_nothing(self):
+        # Every key a call carries is judged: the first one read is not the one the tool writes through.
+        target = os.path.join(self.root, ".claude", "scripts", "helper.sh")
+        harmless = {"file_path": os.path.join(self.root, "docs", "chapter.md")}
+        for linker in linkers():
+            with self.subTest(link=linker):
+                self.assertRefused(self.link_to("book2", target, linker),
+                                   tool="NotebookEdit", key="notebook_path", extra=harmless)
 
 
 class TheOrdinaryWriteIsNotDisturbed(GuardCase):
@@ -635,6 +646,22 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
                     self.assertAdmitted(plain)
                     self.assertAdmitted(through)
 
+    def test_a_differently_cased_link_to_the_checkout_is_judged_from_its_root(self):
+        # An anchor spelled through a link has a real root elsewhere, and a
+        # relative part taken by a comparison that does not fold climbs out of
+        # the spelled root to re-enter it, so the expected path lands beside
+        # the real root and an ordinary write reads as resolving elsewhere.
+        for linker in linkers():
+            with self.subTest(link=linker):
+                alias = os.path.join(self.outside, f"Alias-{linker}")
+                if linker == "symlink":
+                    os.symlink(self.root, alias, target_is_directory=True)
+                else:
+                    JUNCTIONS(self.root, alias)
+                other_case = os.path.join(
+                    self.outside, f"aLIAS-{linker}", "docs", "chapter.md")
+                self.assertAdmitted(other_case, project=alias)
+
     def test_the_case_of_a_windows_spelling_is_not_a_difference(self):
         # Windows' `realpath` answers with the on-disk case, so `DOCS` comes
         # back as `docs` and a case-sensitive comparison would read that as a
@@ -670,7 +697,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             os.path.join(self.HOME, ".gitconfig"),
         ):
             with self.subTest(target=target):
-                self.assertIn("no checkout below the home holds", self.assertRefused(target))
+                self.assertIn("what runs at login", self.assertRefused(target))
 
     def test_a_link_into_the_keys_is_held(self):
         for linker in linkers():
@@ -716,7 +743,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         # under it, and containing a target is not owning it.
         for project in (self.HOME, os.path.dirname(self.HOME)):
             with self.subTest(project=project):
-                self.assertIn("no checkout below the home holds", self.assertRefused(
+                self.assertIn("what runs at login", self.assertRefused(
                     os.path.join(self.HOME, ".ssh", "authorized_keys"),
                     project=project))
                 self.assertIn("control surface", self.assertRefused(
@@ -734,7 +761,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
                     "env": {"HOME": home, "USERPROFILE": home}}
         for name in ((".ssh", "authorized_keys"), (".bashrc",)):
             with self.subTest(name=name):
-                self.assertIn("no checkout below the home holds", self.assertRefused(
+                self.assertIn("what runs at login", self.assertRefused(
                     os.path.join(home, *name), **dotfiles))
         self.assertAdmitted(os.path.join(home, "notes", "todo.md"), **dotfiles)
         # A checkout at `~/.claude` beside it owns nothing the home anchor
@@ -743,6 +770,28 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         os.makedirs(os.path.join(control, ".git"))
         self.assertIn("control surface", self.assertRefused(
             os.path.join(control, "settings.json"), project=control, **dotfiles))
+
+    def test_an_anchor_inside_a_home_place_excuses_nothing_there(self):
+        # No anchor here holds the home, so only the place's own anchor
+        # contains the target; containing it is not owning it, and its deny
+        # rules, anchored one level down, name nothing the home protects.
+        home = os.path.join(self.outside, "home")
+        control = os.path.join(home, ".claude")
+        keys = os.path.join(home, ".ssh")
+        os.makedirs(os.path.join(control, ".git"))
+        os.makedirs(os.path.join(control, "notes"))
+        os.makedirs(keys)
+        env = {"HOME": home, "USERPROFILE": home}
+        for cwd in (self.root, os.path.join(control, "notes")):
+            with self.subTest(cwd=cwd):
+                for name in (("settings.json",), ("hooks", "anything.py")):
+                    self.assertIn("control surface", self.assertRefused(
+                        os.path.join(control, *name), project=control,
+                        cwd=cwd, env=env))
+                self.assertAdmitted(os.path.join(control, "notes", "todo.md"),
+                                    project=control, cwd=cwd, env=env)
+        self.assertIn("what runs at login", self.assertRefused(
+            os.path.join(keys, "authorized_keys"), project=keys, env=env))
 
     def test_names_that_cannot_be_read_refuse_the_home_and_nothing_else(self):
         # They live in `guard-git-argv.py`, so a guard copied without it fails
