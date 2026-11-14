@@ -20,7 +20,7 @@ internal static partial class SqlSchema
         return $"[{schema}].{table}";
     }
 
-    // Bounded at 128, which is what `sysname` holds.
-    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]{0,127}$")]
+    // Bounded at 128, which is what `sysname` holds; \z, since .NET's $ also matches before a final newline.
+    [GeneratedRegex(@"\A[A-Za-z_][A-Za-z0-9_]{0,127}\z")]
     private static partial Regex Identifier();
 }

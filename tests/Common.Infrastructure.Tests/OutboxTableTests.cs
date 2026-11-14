@@ -35,6 +35,7 @@ public class OutboxTableTests
     [InlineData("9catalog")]
     [InlineData("")]
     [InlineData(" catalog")]
+    [InlineData("catalog\n")]
     public void Anything_that_is_not_an_identifier_is_refused(string schema)
     {
         Should.Throw<ArgumentException>(() => new OutboxTable(schema));
