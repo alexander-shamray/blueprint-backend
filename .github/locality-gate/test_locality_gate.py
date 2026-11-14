@@ -154,8 +154,8 @@ class TouchSetGrammar(unittest.TestCase):
             with self.subTest(separator=repr(separator)):
                 text = "note" + separator + "```\n" + table + "```\n" + example
                 self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))
-        # GitHub ends a fence in a list item when the list ends and hides one in a comment, so those routes show
-        # the D table and fence E; a row in a fence after any container is refused rather than guessed.
+        # GitHub ends a fence in a list item when the list ends and hides one in a comment, so the list and comment
+        # cases show the D table and fence E; the block quote reads as the gate does and is refused as a precaution.
         for name, lead in (
             ("list item", "- note\n\n  ```\n"),
             ("numbered item", "1. note\n\n   ```\n"),
