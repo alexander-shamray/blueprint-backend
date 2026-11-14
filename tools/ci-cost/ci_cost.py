@@ -266,11 +266,18 @@ def versions_path(root: str, package: str) -> str:
 
 
 def package_versions(fetch: Fetch, repo: str) -> dict[str, list[dict]]:
-    """Each of the repository's container packages, with every version the listing holds."""
+    """Each of the repository's container packages, with every version the listing holds.
+
+    The name is matched case-folded, as GitHub resolves it and as ghcr_prune.unmatrixed does, and a listing that
+    holds none for the repository is a note rather than a measured nothing.
+    """
     root = package_root(fetch, repo)
-    return {package["name"]: list(paged(fetch, versions_path(root, package["name"])))
-            for package in paged(fetch, f"{root}?package_type=container")
-            if (package.get("repository") or {}).get("full_name") == repo}
+    names = [package["name"] for package in paged(fetch, f"{root}?package_type=container")
+             if (package.get("repository") or {}).get("full_name", "").casefold() == repo.casefold()]
+    if not names:
+        raise LookupError(f"the listing holds no container package for {repo}: it has none, the token cannot "
+                          "read them, or the name is spelled another way")
+    return {name: list(paged(fetch, versions_path(root, name))) for name in names}
 
 
 def registry(repo: str) -> Manifest:
@@ -506,7 +513,11 @@ def window_of(text: str, index: int) -> Window:
     match = WINDOW.fullmatch(text)
     if not match:
         raise argparse.ArgumentTypeError(f"{text!r} is not NAME=YYYY-MM-DD:YYYY-MM-DD")
-    first, last = date.fromisoformat(match[2]), date.fromisoformat(match[3])
+    try:
+        first, last = date.fromisoformat(match[2]), date.fromisoformat(match[3])
+    except ValueError:
+        # Well shaped but not a day, such as the 30th of February: a usage error, not a traceback.
+        raise argparse.ArgumentTypeError(f"{text!r} names a day the calendar does not have") from None
     if last < first:
         raise argparse.ArgumentTypeError(f"{text!r} ends before it starts")
     return Window(match[1] or chr(ord("A") + index), first, last)
