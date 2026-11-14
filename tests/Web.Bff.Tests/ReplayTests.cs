@@ -144,6 +144,9 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
             .ShouldBe(skippedBefore, "a type the queue does not bind was sent");
 
         report.OldestFrom(Named("Catalog")).ShouldBe(published.OccurredAt);
+        report.OldestFrom(Named("Ordering")).ShouldBe(
+            placedKept.OccurredAt,
+            "four Ordering rows were sent, so only the minimum of their times, not the last one read, is this");
         output.ToString().ShouldContain("Shipping: 1 event(s) sent");
     }
 
