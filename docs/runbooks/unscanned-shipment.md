@@ -105,10 +105,16 @@ answering in the carrier's place usually names itself there.
 
 ```promql
 sum(rate(shipping_carrier_not_yet_known_total[10m]))
+
+sum(rate(http_client_request_duration_seconds_count{
+  service_name="Shipping.Worker", http_request_method="GET", server_address="<the carrier's host>"
+}[10m]))
 ```
 
-beside the polling rate says the same from the worker's side: with the route
-gone, every events read is a 404, despatched shipments' included.
+say the same from the worker's side. The second is the worker's events reads,
+the only `GET` it sends the carrier: with the route gone the two rates match,
+since every events read is a 404, despatched shipments' included, where a
+healthy backlog awaiting collection leaves the first below the second.
 
 ## Fix it
 

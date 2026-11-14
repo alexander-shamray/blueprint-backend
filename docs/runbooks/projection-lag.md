@@ -105,19 +105,20 @@ If `LastError` is null and `Attempts` is 0 while the age climbs, the dispatcher
 is not getting to the row at all:
 
 ```sql
-SELECT
-    Lane,
-    Pending   = COUNT(*),
-    Oldest    = MIN(OccurredAt),
-    NextLease = MIN(LockedUntil)
+SELECT TOP 50 Lane, Id, OccurredAt, Attempts, LockedUntil
 FROM <schema>.OutboxMessages
 WHERE ProcessedAt IS NULL
-GROUP BY Lane;
+    AND LastError IS NULL
+ORDER BY LockedUntil DESC;
 ```
 
-A `LockedUntil` far in the future on a pod that has since restarted is a stale
-lease — the claim leases for 60 seconds, so it resolves itself within a minute.
-Anything longer than that is worth escalating rather than waiting out.
+A failure writes its backoff into the same `LockedUntil` the claim's lease uses,
+and writes `LastError` with it, so a row with no `LastError` holds a lease or
+nothing: `Attempts` 0 has never been claimed, and above 0 the claim that counted
+it set the lease. A `LockedUntil` far in the future on such a row, on a pod that
+has since restarted, is a stale lease — the claim leases for 60 seconds, so it
+resolves itself within a minute. Anything longer than that is worth escalating
+rather than waiting out.
 
 ## Serving from the write model meanwhile
 
