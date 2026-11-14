@@ -2105,6 +2105,21 @@ class AlertTests(unittest.TestCase):
                 self.assertEqual(len(problems), 1)
                 self.assertIn("so a second red attempt alerts nobody", problems[0])
 
+    def test_a_condition_holding_every_term_joined_otherwise_is_caught(self) -> None:
+        """Each edit keeps every term as text, so only a read of the operands hears it."""
+        for old, new, problem in (
+                ("needs.read-cancelled.result) ||", "needs.read-cancelled.result) &&",
+                 "so a job past its time limit alerts nobody"),
+                ("(contains(", "(!contains(", "does not file on `failure`"),
+                ("run_attempt == 1\n", "run_attempt == 10\n", "each rerun would start another"),
+                ("(needs.rerun.result != 'success' ||", "(needs.rerun.result != 'success' &&",
+                 "so a second red attempt alerts nobody")):
+            with self.subTest(new=new):
+                self.assertIn(old, ALERT)
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(old, new, 1))
+
+                self.assertTrue(any(problem in found for found in pipeline_gate.check_alerts(self.root)))
+
     def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
         self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")
         self.assertIn("vacuously", pipeline_gate.check_alerts(self.root)[0])
@@ -2447,6 +2462,15 @@ class CodeTests(unittest.TestCase):
                     f"steps.changes.outputs.{name} == 'true'",
                 )
                 self.assertIn(f"steps.changes.outputs.{name} != 'false'", self.problems(text))
+
+    def test_an_output_whose_terms_are_joined_or_negated_otherwise_is_caught(self) -> None:
+        """Every term is still there as text, so only a read of the `||` operands sees either."""
+        for old, new, term in (
+                (" || steps.changes.outputs.code", " && steps.changes.outputs.code", "github.event_name"),
+                ("steps.changes.outputs.stage-inputs != 'false'",
+                 "!(steps.changes.outputs.stage-inputs != 'false')", "stage-inputs")):
+            with self.subTest(new=new):
+                self.assertIn(term, self.problems(self.broken(old, new)))
 
     def test_an_output_that_is_gone_is_caught(self) -> None:
         text = re.sub(r"^      code: .*\n", "", self.text, count=1, flags=re.MULTILINE)

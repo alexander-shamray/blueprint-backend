@@ -1205,6 +1205,29 @@ def _unwrapped(term: str) -> str:
     return term
 
 
+def _expression(condition: str) -> str:
+    """A condition without its folding indicator or its `${{ }}`, each run of whitespace one space."""
+    expression = re.sub(r"\s+", " ", condition).strip()
+    expression = re.sub(r"^[>|][-+]? ?", "", expression)
+    return re.sub(r"^\$\{\{ ?(.*?) ?\}\}$", r"\1", expression)
+
+
+def _conjuncts(condition: str) -> list[str]:
+    """A condition's top-level `&&` terms, unwrapped; the whole as one term where a top-level `||` joins it.
+
+    Operands, not substrings: `&&` binds tighter than `||`, so a term sought here is one every run needs.
+    """
+    expression = _unwrapped(_expression(condition))
+    if len(_split_outside_parentheses(expression, "||")) > 1:
+        return [expression]
+    return [_unwrapped(term) for term in _split_outside_parentheses(expression, "&&")]
+
+
+def _disjuncts(term: str) -> list[str]:
+    """One term's top-level `||` operands, unwrapped, so an `&&` or a `!` keeps an operand from matching."""
+    return [_unwrapped(operand) for operand in _split_outside_parentheses(_unwrapped(_expression(term)), "||")]
+
+
 def _term_names_an_event_or_main(term: str, ref_decides: bool) -> bool:
     """One test that is false on a pull request's run, whatever else is true."""
     if "pull_request" in term:
@@ -1445,23 +1468,26 @@ def read_watched(alert_text: str) -> list[str]:
 
 def check_alert_conclusions(alert_text: str) -> list[str]:
     """The alert still hears every conclusion a red run ends on (ADR-155, ADR-196)."""
-    filing = read_job_condition(alert_text, "file") or ""
+    filing = _conjuncts(read_job_condition(alert_text, "file") or "")
 
-    # Read list by list: the run's conclusion and the need's result share a word.
-    def listed_beside(subject: str) -> str:
-        found = re.search(rf"fromJSON\('\[([^']*)\]'\),\s*{re.escape(subject)}", filing)
-        return found.group(1) if found else ""
+    # Read list by list, as `||` operands of one `&&` term: the conclusion and the need's result share a word.
+    def listed_beside(operands: list[str], subject: str) -> str:
+        pattern = rf"contains\(fromJSON\('\[([^']*)\]'\), {re.escape(subject)}\)"
+        return next((found.group(1) for operand in operands if (found := re.fullmatch(pattern, operand))), "")
 
-    conclusions = listed_beside("github.event.workflow_run.conclusion")
+    group = next((operands for operands in map(_disjuncts, filing)
+                  if listed_beside(operands, "github.event.workflow_run.conclusion")), [])
+    conclusions = listed_beside(group, "github.event.workflow_run.conclusion")
     problems = [
         f"{ALERT_WORKFLOW}'s `file` job does not file on `{conclusion}`, so a run ending so alerts nobody"
         for conclusion in ALERT_CONCLUSIONS
         if f'"{conclusion}"' not in conclusions
     ]
-    results = listed_beside("needs.read-cancelled.result")
-    if ("== 'cancelled'" not in (read_job_condition(alert_text, "read-cancelled") or "")
+    results = listed_beside(group, "needs.read-cancelled.result")
+    if ("github.event.workflow_run.conclusion == 'cancelled'"
+            not in _conjuncts(read_job_condition(alert_text, "read-cancelled") or "")
             or "always()" not in filing
-            or "needs.read-cancelled.outputs.reason" not in filing
+            or "needs.read-cancelled.outputs.reason != ''" not in group
             or '"failure"' not in results
             or '"cancelled"' not in results):
         problems.append(
@@ -1474,12 +1500,12 @@ def check_alert_conclusions(alert_text: str) -> list[str]:
 def check_alert_rerun(alert_text: str) -> list[str]:
     """A red first attempt is rerun once, and files unless its rerun said otherwise (ADR-210)."""
     problems: list[str] = []
-    if "github.event.workflow_run.run_attempt == 1" not in (read_job_condition(alert_text, "rerun") or ""):
+    if "github.event.workflow_run.run_attempt == 1" not in _conjuncts(read_job_condition(alert_text, "rerun") or ""):
         problems.append(
             f"{ALERT_WORKFLOW}'s `rerun` job does not keep to a first attempt, so each rerun would start another")
-    filing = read_job_condition(alert_text, "file") or ""
-    if ("needs.rerun.result != 'success'" not in filing
-            or "!contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)" not in filing):
+    unheard = {"needs.rerun.result != 'success'",
+               "!contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)"}
+    if not any(unheard <= set(_disjuncts(term)) for term in _conjuncts(read_job_condition(alert_text, "file") or "")):
         problems.append(
             f"{ALERT_WORKFLOW}'s `file` job does not file a red run its rerun did not see pass, "
             "so a second red attempt alerts nobody")
@@ -1956,8 +1982,10 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
         (line for line in read_jobs(workflow_text).get("changes", []) if re.match(rf"^\s{{6}}{CODE_FILTER}:", line)),
         "",
     )
+    # `||` operands, so an `&&` between them, or one negated, is a term the output no longer reads.
+    operands = _disjuncts(re.sub(rf"^\s*{CODE_FILTER}:", "", export))
     for term in CODE_OUTPUT_TERMS:
-        if term not in export:
+        if term not in operands:
             problems.append(
                 f"the changes job's `{CODE_FILTER}` output does not read `{term}`, so it can say false for "
                 "a push or a dispatch, for a change only `stage-inputs` selects, or for a lost step output"
