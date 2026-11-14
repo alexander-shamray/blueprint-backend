@@ -449,16 +449,16 @@ MASSTRANSIT_VERIFIED = ("8.5.3", "8.5.12")
 def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> list[str]:
     """Every series in `metrics`, against what vouches for it.
 
-    One a loaded alert's expression reads is matched on its whole instrument;
-    any other is an exact EXPORTED_SERIES entry of a meter Common.Web registers.
+    One is the exact name a loaded alert's expression reads, or an exact
+    EXPORTED_SERIES entry of a meter Common.Web registers.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
     registration = source / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
     try:
-        # Names out of the expressions, never the file's text: a substring
-        # test vouched for a truncated name and for one in a comment.
+        # Whole names out of the expressions, nothing stripped, as check.py's
+        # is_published: a suffix cut makes a gauge's _count look like a kind.
         alerted = {
-            _instrument_of(name)
+            name
             for rule in OBSERVABILITY_GATE.parse_rules(rules)
             for name in OBSERVABILITY_GATE.metrics_in(str(rule["expr"]))
         }
@@ -486,18 +486,13 @@ def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> li
                     f"AddMeter(\"{meter}\"), so nothing collects it"
                 )
             continue
-        if _instrument_of(metric) not in alerted:
+        if metric not in alerted:
             failures.append(
                 f"a template reads {metric}, which no loaded alert reads and "
                 "which is not an exported series in EXPORTED_SERIES, so "
                 "nothing establishes that it is published"
             )
     return failures
-
-
-def _instrument_of(series: str) -> str:
-    """A series without the suffix its instrument's kind adds."""
-    return re.sub(r"_(?:count|bucket|sum|total)$", "", series)
 
 
 # The pin the series table is held to.

@@ -97,7 +97,10 @@ class HttpExemptionTests(unittest.TestCase):
 class VouchingTests(unittest.TestCase):
     """Check 5, over a series no loaded alert reads."""
 
-    ALERTS = "  - alert: X\n    expr: http_server_request_duration_seconds_count\n"
+    ALERTS = (
+        "  - alert: X\n    expr: http_server_request_duration_seconds_count\n"
+        "  - alert: Y\n    expr: max by (service_name) (outbox_pending_count) > 0\n"
+    )
 
     def root_with(self, registration: str, alerts_text: str | None = None) -> Path:
         """A throwaway tree holding just the two files check 5 reads."""
@@ -180,19 +183,25 @@ class VouchingTests(unittest.TestCase):
     def test_an_alert_vouches_for_the_series_it_reads(self) -> None:
         root = self.root_with('.AddMeter("MassTransit")\n')
 
-        failures = repo_gate._metrics_are_vouched_for(
-            ["http_server_request_duration_seconds_bucket"], root, root)
+        for metric in ("http_server_request_duration_seconds_count", "outbox_pending_count"):
+            with self.subTest(metric=metric):
+                failures = repo_gate._metrics_are_vouched_for([metric], root, root)
 
-        self.assertEqual(failures, [])
+                self.assertEqual(failures, [])
 
-    def test_a_prefix_of_an_alerts_series_is_not_vouched_for(self) -> None:
-        """A truncated name is a series Prometheus does not hold, so it rolls
-        every canary back however much of an alert's name it spells."""
+    def test_a_near_spelling_of_an_alerts_series_is_not_vouched_for(self) -> None:
+        """A truncated or re-suffixed name is a series Prometheus may not hold,
+        so it rolls every canary back however much of an alert's name it
+        spells; a gauge's _count is its whole name, not a histogram's."""
         root = self.root_with('.AddMeter("MassTransit")\n')
         for metric in (
             "http_server_request_duration_bucket",
             "http_server_request_duration_seconds_co_bucket",
             "http_server_request_bucket",
+            "http_server_request_duration_seconds_bucket",
+            "outbox_pending",
+            "outbox_pending_count_total",
+            "outbox_pending_sum",
         ):
             with self.subTest(metric=metric):
                 failures = repo_gate._metrics_are_vouched_for([metric], root, root)
@@ -214,7 +223,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n', alerts)
 
         failures = repo_gate._metrics_are_vouched_for(
-            ["http_server_request_duration_seconds_bucket"], root, root)
+            ["http_server_request_duration_seconds_count"], root, root)
 
         self.assertTrue(failures)
 
