@@ -39,6 +39,10 @@ _TOUCH_ROW = re.compile(r"^\| *Touch set *\|(.*)$")
 # It closes on a run of its own character at least as long, then blanks alone; an unclosed one runs to the end.
 _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+# A list item, block quote or HTML block start. GitHub ends a fence opened inside one when the container ends,
+# and hides a fence line inside a comment, which a line reader cannot follow; so a row in a fence after one is
+# refused rather than skipped, since GitHub may show it as the table.
+_CONTAINER = re.compile(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)|^ {0,3}[<>]")
 _MAP_CLASS = re.compile(r"^([A-E]):\s*$")
 _MAP_ITEM = re.compile(r"^  - '([^']+)'\s*$")
 
@@ -125,15 +129,21 @@ def _unfenced(body: str) -> list[str]:
         raise InputRefused("the body carries a carriage return that is not part of a CRLF line ending")
     lines: list[str] = []
     fence = ""
+    contained = after_container = False
     for line in body.replace("\r", "").split("\n"):
         if fence:
+            if contained and (_CLASS_ROW.match(line) or _TOUCH_ROW.match(line)):
+                raise InputRefused(
+                    "a `| Class |` or `| Touch set |` row sits in a fenced block after a list, block quote or "
+                    "HTML block, where GitHub can end the fence sooner than this gate reads it")
             close = _FENCE_CLOSE.match(line)
             if close and close.group(1)[0] == fence[0] and len(close.group(1)) >= len(fence):
                 fence = ""
             continue
+        after_container = after_container or bool(_CONTAINER.match(line))
         opener = _FENCE_OPEN.match(line)
         if opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
-            fence = opener.group(1)
+            fence, contained = opener.group(1), after_container
             continue
         lines.append(line)
     return lines
