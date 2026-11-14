@@ -1590,7 +1590,7 @@ cannot answer the first question its runbook asks, and the abandoned count
 reads the dispatcher's cap rather than writing it again: §9.4 claims rows
 below it, this counts the rows at or above it that no lease holds, and two
 copies of one number stop agreeing on the day somebody tunes it. A leased row
-at the cap is its last attempt still running, since the claim counts an
+at the cap may be its last attempt still running, since the claim counts an
 attempt before its outcome
 ([ADR-211](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)),
 and the fail statement clears the lease when that attempt fails. **All three
@@ -1605,7 +1605,7 @@ The hint and the third query, from the constructor:
         string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
 
         // The dispatcher's cap (§9.4), not a copy that could drift from the loop it describes.
-        // A leased row is still being tried, since the claim counts its attempt before the outcome (ADR-211).
+        // A leased row may still be being tried, since the claim counts its attempt before the outcome (ADR-211).
         _abandonedSql =
             $"""
             SELECT COUNT(*)

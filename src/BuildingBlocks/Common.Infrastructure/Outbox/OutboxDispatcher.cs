@@ -151,7 +151,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             """;
 
         // Backs off by pushing the lease forward, on the attempts before the one the claim counted (ADR-211). At the
-        // cap the lease is cleared instead, since §13.6's abandoned count skips a leased row as still being tried.
+        // cap the lease is cleared instead, since §13.6's abandoned count skips a leased row as maybe still tried.
         _failSql =
             $"""
             UPDATE {table.QualifiedName}
