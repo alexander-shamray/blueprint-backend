@@ -864,20 +864,29 @@ def _acts_on_ancestry(commands: str) -> bool:
     for arm in body[:end[0].start()].split(";;") if end else []:
         if found := re.match(r"\s*([^\s)]+)\)(.*)", arm, re.S):
             arms[found.group(1)] = found.group(2)
-    return bool(_shell_words(arms.get("1", ""), "exit")) and bool(_shell_words(arms.get("*", ""), "exit 1"))
+    return (_first_exit(arms.get("1", "")) or "").startswith("exit") and _first_exit(arms.get("*", "")) == "exit 1"
+
+
+def _first_exit(text: str) -> str | None:
+    """The first `exit` every run of quoted-away text reaches at its own depth, or None where its block ends first.
+
+    One inside a nested `if`, `case` or loop, or after `&&` or `||`, is not reached on every run, so it is passed.
+    """
+    depth = 0
+    for word in _shell_words(text, r"if|case|for|while|until|fi|esac|done|else|elif|exit(?: \d+)?"):
+        name = word.group(0)
+        if name in ("if", "case", "for", "while", "until"):
+            depth += 1
+        elif depth and name in ("fi", "esac", "done"):
+            depth -= 1
+        elif depth == 0 and not (name.startswith("exit") and re.search(r"(?:&&|\|\|)\s*$", text[:word.start()])):
+            return name if name.startswith("exit") else None
+    return None
 
 
 def _exits_one(branch: str) -> bool:
-    """An `exit 1` in the `then` branch whose text follows, at its own depth rather than inside a nested `if`."""
-    depth = 0
-    for word in _shell_words(_quoted_away(branch), "if|fi|else|elif|exit 1"):
-        if word.group(0) == "if":
-            depth += 1
-        elif depth == 0:
-            return word.group(0) == "exit 1"
-        elif word.group(0) == "fi":
-            depth -= 1
-    return False
+    """The `then` branch whose text follows reaches `exit 1` before any other exit and before it ends."""
+    return _first_exit(_quoted_away(branch)) == "exit 1"
 
 
 def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
