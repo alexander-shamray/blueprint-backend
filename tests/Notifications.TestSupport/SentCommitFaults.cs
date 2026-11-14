@@ -9,7 +9,7 @@ namespace Notifications.TestSupport;
 public sealed class SentCommitFaults : SaveChangesInterceptor
 {
     private CommitFault? _armed;
-    private CommitFault? _committed;
+    private Parked? _committed;
 
     /// <summary>The transaction half of <c>afterCommit</c>: the acknowledgement that is lost.</summary>
     public DbTransactionInterceptor Acknowledgements { get; }
@@ -27,7 +27,13 @@ public sealed class SentCommitFaults : SaveChangesInterceptor
         return fault;
     }
 
-    internal void Disarm(CommitFault fault) => Interlocked.CompareExchange(ref _armed, null, fault);
+    // A parked fault whose save never committed is dropped with it, or it would fire on another test's commit.
+    internal void Disarm(CommitFault fault)
+    {
+        Interlocked.CompareExchange(ref _armed, null, fault);
+        if (Volatile.Read(ref _committed) is { } parked && parked.Fault == fault)
+            Interlocked.CompareExchange(ref _committed, null, parked);
+    }
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
@@ -49,7 +55,7 @@ public sealed class SentCommitFaults : SaveChangesInterceptor
 
         if (fault.AfterCommit)
         {
-            _committed = fault;
+            Volatile.Write(ref _committed, new Parked(fault, eventData.Context));
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
 
@@ -59,6 +65,31 @@ public sealed class SentCommitFaults : SaveChangesInterceptor
         throw new DbUpdateException("Injected commit fault.");
     }
 
+    // A save that failed or was cancelled never commits, as Payments' CommitFaultInterceptor reads it too.
+    public override Task SaveChangesFailedAsync(
+        DbContextErrorEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        Drop(eventData.Context);
+        return base.SaveChangesFailedAsync(eventData, cancellationToken);
+    }
+
+    public override Task SaveChangesCanceledAsync(
+        DbContextEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        Drop(eventData.Context);
+        return base.SaveChangesCanceledAsync(eventData, cancellationToken);
+    }
+
+    private void Drop(DbContext? context)
+    {
+        if (Volatile.Read(ref _committed) is { } parked && parked.Context == context)
+            Interlocked.CompareExchange(ref _committed, null, parked);
+    }
+
+    private sealed record Parked(CommitFault Fault, DbContext? Context);
+
     // A timeout, which the production strategy retries: the commit is durable and the unit runs again (§6.3).
     private sealed class LostAcknowledgements(SentCommitFaults owner) : DbTransactionInterceptor
     {
@@ -67,11 +98,14 @@ public sealed class SentCommitFaults : SaveChangesInterceptor
             TransactionEndEventData eventData,
             CancellationToken cancellationToken = default)
         {
-            CommitFault? fault = Interlocked.Exchange(ref owner._committed, null);
-            if (fault is null)
+            // Only the commit of the context that parked it, never another on the shared collection host.
+            if (Volatile.Read(ref owner._committed) is not { } parked || parked.Context != eventData.Context ||
+                Interlocked.CompareExchange(ref owner._committed, null, parked) != parked)
+            {
                 return base.TransactionCommittedAsync(transaction, eventData, cancellationToken);
+            }
 
-            fault.Fired = true;
+            parked.Fault.Fired = true;
             throw new TimeoutException("Injected lost acknowledgement.");
         }
     }
