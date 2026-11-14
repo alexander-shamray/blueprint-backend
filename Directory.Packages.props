@@ -27,7 +27,7 @@
          RedisCacheOptions. The IDistributedCache implementation over
          StackExchange.Redis — a separate package from both, and the one that
          actually stores an entry in Redis. -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.15" />
     <!-- The in-process cache §13.6's OutboxStats holds its five-second
          snapshot in. HybridCache above carries it transitively; the direct pin
          states the direct use, and central package management requires one for
