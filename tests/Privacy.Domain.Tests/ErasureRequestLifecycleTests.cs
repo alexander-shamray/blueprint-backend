@@ -132,6 +132,11 @@ public class ErasureRequestLifecycleTests
         heard.Count.ShouldBe(5, "a reissue that finds nothing left must not overwrite what the first pass removed");
         heard.ReceivedAt.ShouldBe(Now.AddDays(1));
         request.Status.ShouldBe(ErasureStatus.Open);
+
+        request.RecordCompletion("ordering", 8, Now.AddDays(2)).ShouldBe(CompletionOutcome.Repeated);
+
+        heard.Count.ShouldBe(8, "the larger count, whichever answer carried it, so keeping the first is not enough");
+        heard.ReceivedAt.ShouldBe(Now.AddDays(2));
     }
 
     [Fact]
