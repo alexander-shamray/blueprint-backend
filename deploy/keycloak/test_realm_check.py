@@ -2332,6 +2332,12 @@ class WhatTheGateHolds(unittest.TestCase):
             self.assertNotIn(key, held)
 
 
+# What changes a cluster or a release; `kubectl rollout status` and the `get`s only read.
+MUTATION = re.compile(
+    r"\b(?:kubectl\s+(?:patch|apply|scale|delete|create|replace|set|annotate|label|rollout\s+(?:restart|undo))"
+    r"|helm\s+(?:upgrade|install|uninstall|rollback))\b")
+
+
 def commands_of(relative: str) -> str:
     """A workflow's COMMANDS, with its comment lines removed.
 
@@ -2400,16 +2406,19 @@ class TheRolloutStillCallsThisGate(unittest.TestCase):
                          "the rollout derives, fetches and judges out of order")
 
     def test_they_run_before_the_first_command_that_changes_the_cluster(self):
-        """`kubectl patch` is the first mutation, and the check is upstream of it.
+        """The check is upstream of every mutation, whichever comes first.
 
         A check that runs after the HPA floor has moved is a check on a cluster
-        the rollout has already started changing.
+        the rollout has already started changing; the first `kubectl patch`
+        sits in a ladder-gated step, so a `helm upgrade` or `kubectl scale`
+        moved above the check would change the cluster first.
         """
         text = self.workflow()
         judged = text.find("realm_check.py check")
-        mutation = text.find("kubectl patch")
-        self.assertNotEqual(mutation, -1, "the rollout no longer patches the HPA")
-        self.assertLess(judged, mutation)
+        mutation = MUTATION.search(text)
+        self.assertNotEqual(judged, -1, "the rollout no longer judges the realm")
+        self.assertIsNotNone(mutation, "the rollout no longer changes the cluster")
+        self.assertLess(judged, mutation.start(), mutation.group(0))
 
     def upgrades(self) -> list[str]:
         """Each `helm upgrade` in the rollout, joined across its continuations.
