@@ -1499,9 +1499,10 @@ jobs:
           fi
           docker tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}" "$tag"
           docker push "$REGISTRY/${{ matrix.image }}:main"
-          moved=$(docker inspect --format '{{json .RepoDigests}}' "$REGISTRY/${{ matrix.image }}:main")
-          if ! printf '%s' "$moved" | grep -Fq "@$DIGEST"; then
-            echo "::error::The main tag of ${{ matrix.image }} was pushed but does not name the signed digest $DIGEST."
+          # From the registry: the local RepoDigests already hold $DIGEST from the push by sha.
+          moved=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" && !found { print $2; found = 1 }')
+          if [ "$moved" != "$DIGEST" ]; then
+            echo "::error::The main tag of ${{ matrix.image }} was pushed but the registry has it name ${moved:-nothing}, not the signed digest $DIGEST."
             exit 1
           fi
         env:
