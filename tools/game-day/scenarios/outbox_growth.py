@@ -44,9 +44,9 @@ _COUNT = "max by (service_name, lane) (outbox_pending_count)"
 _DERIV = "deriv(sum by (service_name) (max by (service_name, lane) (outbox_pending_count))[10m:])"
 _PURGE = """
 SELECT
-    Pending   = SUM(CASE WHEN ProcessedAt IS NULL THEN 1 ELSE 0 END),
-    Processed = SUM(CASE WHEN ProcessedAt IS NOT NULL THEN 1 ELSE 0 END),
-    Oldest    = MIN(OccurredAt)
+    Pending         = SUM(CASE WHEN ProcessedAt IS NULL THEN 1 ELSE 0 END),
+    Processed       = SUM(CASE WHEN ProcessedAt IS NOT NULL THEN 1 ELSE 0 END),
+    OldestProcessed = MIN(ProcessedAt)
 FROM ordering.OutboxMessages;
 """
 _REMOVE = f"DELETE FROM ordering.OutboxMessages WHERE MessageType = N'{MESSAGE_TYPE}';"
