@@ -100,7 +100,7 @@ public sealed class ProductPriceProjectionTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_stale_discontinue_does_not_withdraw_a_newer_price()
     {
-        // The same guard as the MERGE's, on the statement that has no MERGE.
+        // The price MERGE's guard, on the UPDATE that withdraws the rows a discontinue finds.
         Guid product = Guid.CreateVersion7();
         await HandleAsync(Publish(product, 19.99m, "EUR", Later));
 
@@ -168,6 +168,35 @@ public sealed class ProductPriceProjectionTests(ServiceFixture fixture) : IAsync
         (await ReadPriceAsync(product, "GBP")).ShouldBeNull(
             "the GBP price predates the withdrawal, so projecting it late must not make the product " +
             "orderable in a currency the withdrawal never saw");
+    }
+
+    [Fact]
+    public async Task A_stale_second_discontinue_does_not_move_the_withdrawal_back()
+    {
+        // The watermark MERGE's MATCHED guard: a redelivered older withdrawal must not undo a newer one.
+        Guid product = Guid.CreateVersion7();
+        await HandleAsync(Discontinue(product, Later));
+        await HandleAsync(Discontinue(product, Published));
+
+        await HandleAsync(PriceOf(product, 17.99m, "GBP", Published.AddMinutes(30)));
+
+        (await ReadPriceAsync(product, "GBP")).ShouldBeNull(
+            "the price predates the later withdrawal, so a watermark moved back to the earlier one would " +
+            "list it");
+    }
+
+    [Fact]
+    public async Task A_newer_second_discontinue_moves_the_withdrawal_forward()
+    {
+        // The watermark MERGE's MATCHED branch: a product withdrawn twice is withdrawn as of the later one.
+        Guid product = Guid.CreateVersion7();
+        await HandleAsync(Discontinue(product, Published));
+        await HandleAsync(Discontinue(product, Later));
+
+        await HandleAsync(PriceOf(product, 17.99m, "GBP", Published.AddMinutes(30)));
+
+        (await ReadPriceAsync(product, "GBP")).ShouldBeNull(
+            "the price predates the second withdrawal, so a watermark left at the first would list it");
     }
 
     [Fact]
