@@ -65,10 +65,11 @@ internal static class RequestBuilder
             // Closed objects are what a strict schema asks for, and cost nothing on a tool that is not.
             JsonObject closed = (JsonObject)descriptor.InputSchema.DeepClone();
             closed.TryAdd("type", "object");
-            Close(closed);
+            bool shut = Close(closed);
 
             (int tool, int union) = (Optional(closed), Unions(closed));
-            bool strict = strictTools < MaxStrictTools
+            bool strict = shut
+                && strictTools < MaxStrictTools
                 && optional + tool <= MaxOptionalParameters
                 && unions + union <= MaxUnionParameters;
 
@@ -153,11 +154,14 @@ internal static class RequestBuilder
 
     // Closes every object schema in the tree, the root and those under `properties`, `items`, `$defs` and the
     // combinators, without overruling one that already names `additionalProperties`, and moves each schema's
-    // unsupported bounds into its description. The walk follows the schema keywords alone, so a property called
-    // `type` or `minimum` in a `properties` map, or a `default` value, is never read as a schema. A schema is an
-    // object when its `type` names it, alone or in a list, or when it has no `type` and holds `properties`.
-    private static void Close(JsonNode? node)
+    // unsupported bounds into its description; whether every object ended closed, since a strict tool may not hold an
+    // open one. The walk follows the schema keywords alone, so a property called `type` or `minimum` in `properties`,
+    // or a `default` value, is never read as a schema. A schema is an object when its `type` names it, alone or in a
+    // list, or when it has no `type` and holds `properties`.
+    private static bool Close(JsonNode? node)
     {
+        bool shut = true;
+
         switch (node)
         {
             case JsonObject schema:
@@ -171,13 +175,15 @@ internal static class RequestBuilder
                 if (types.Contains("object") || (types.Count == 0 && schema["properties"] is JsonObject))
                 {
                     schema.TryAdd("additionalProperties", false);
+                    shut = schema["additionalProperties"] is JsonValue value
+                        && value.TryGetValue(out bool open) && !open;
                 }
 
                 MoveBoundsToDescription(schema);
 
                 foreach (string keyword in SchemaKeywords)
                 {
-                    Close(schema[keyword]);
+                    shut &= Close(schema[keyword]);
                 }
 
                 foreach (string keyword in SchemaMaps)
@@ -186,7 +192,7 @@ internal static class RequestBuilder
                     {
                         foreach (KeyValuePair<string, JsonNode?> entry in map)
                         {
-                            Close(entry.Value);
+                            shut &= Close(entry.Value);
                         }
                     }
                 }
@@ -195,11 +201,13 @@ internal static class RequestBuilder
             case JsonArray array:
                 foreach (JsonNode? item in array)
                 {
-                    Close(item);
+                    shut &= Close(item);
                 }
 
                 break;
         }
+
+        return shut;
     }
 
     private static void MoveBoundsToDescription(JsonObject schema)

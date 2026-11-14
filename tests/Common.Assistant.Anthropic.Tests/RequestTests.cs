@@ -193,7 +193,7 @@ public sealed class RequestTests
     }
 
     [Fact]
-    public async Task A_schema_that_already_names_additionalProperties_is_not_overruled()
+    public async Task A_schema_that_already_names_additionalProperties_is_not_overruled_and_an_open_one_is_not_strict()
     {
         TurnRequest request = Given.Request(new UserMessage("hi")) with
         {
@@ -204,6 +204,17 @@ public sealed class RequestTests
                     InputSchema = JsonNode.Parse(
                         """{"type":"object","properties":{},"additionalProperties":true}""")!.AsObject(),
                 },
+                Given.Tool("open_inside") with
+                {
+                    InputSchema = JsonNode.Parse(
+                        """{"type":"object","properties":{"o":{"type":"object","additionalProperties":{}}},""" +
+                        """ "required":["o"]}""")!.AsObject(),
+                },
+                Given.Tool("shut") with
+                {
+                    InputSchema = JsonNode.Parse(
+                        """{"type":"object","properties":{},"additionalProperties":false}""")!.AsObject(),
+                },
             ],
         };
 
@@ -211,6 +222,8 @@ public sealed class RequestTests
 
         // True, not the false that closing would write, so a close that overwrote the key would show here.
         tools[0]!["input_schema"]!["additionalProperties"]!.GetValue<bool>().ShouldBeTrue();
+        // A strict tool may hold no open object, at the root or below it, or the API refuses the request whole.
+        StrictOf(tools).ShouldBe([false, false, true]);
     }
 
     [Fact]
