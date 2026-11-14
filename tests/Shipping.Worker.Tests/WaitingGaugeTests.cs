@@ -113,6 +113,49 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Two_due_rows_read_as_the_older_wait_under_tracking()
+    {
+        // The older made second, so neither the first row nor the newest wait stands in for a stalled backlog.
+        Shipment recent = await fixture.BookedAsync("SIM-TRANSIT");
+        Shipment older = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            """
+            UPDATE shipping.Shipments
+            SET NextPollAt = DATEADD(second, CASE Id WHEN {0} THEN -60 ELSE -300 END, SYSDATETIMEOFFSET())
+            WHERE Id IN ({0}, {1});
+            """,
+            recent.Id.Value,
+            older.Id.Value);
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.Single(m => m.Tag == "tracking").Value.ShouldBeInRange(300, 360);
+    }
+
+    [Fact]
+    public async Task Two_due_rows_read_as_the_older_wait_under_fulfilment()
+    {
+        // Both cancelled, so both are the fulfilment claim's; each is due from its own cancellation.
+        Shipment recent = await fixture.BookedAsync("SIM-TRANSIT");
+        Shipment older = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            """
+            UPDATE shipping.Shipments
+            SET
+                NextAttemptAt           = DATEADD(day, -2, SYSDATETIMEOFFSET()),
+                CancellationRequestedAt =
+                    DATEADD(second, CASE Id WHEN {0} THEN -30 ELSE -200 END, SYSDATETIMEOFFSET())
+            WHERE Id IN ({0}, {1});
+            """,
+            recent.Id.Value,
+            older.Id.Value);
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(200, 260);
+    }
+
+    [Fact]
     public async Task A_row_a_pass_holds_has_no_wait()
     {
         // Due, and being worked: a MIN over the due column alone would read it.

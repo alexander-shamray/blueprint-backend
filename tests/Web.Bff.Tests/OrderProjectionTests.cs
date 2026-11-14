@@ -63,6 +63,25 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         (await fixture.LinesAsync(order)).Count.ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    [InlineData("Authorised")]
+    [InlineData("Refunded")]
+    [InlineData("Dispatched")]
+    [InlineData("Delivered")]
+    public async Task A_later_second_copy_of_any_other_event_writes_nothing(string name)
+    {
+        // Handled directly, as the inbox would skip a repeat before the handler; later, so only the guard holds it.
+        Guid order = Guid.CreateVersion7();
+        await EventAsync(name, order);
+        ProjectedOrder first = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+
+        await EventAsync(name, order, TimeSpan.FromHours(1));
+
+        (await fixture.OrderAsync(order)).ShouldBe(first, "a set column is never written again, AsOf included");
+    }
+
     public static TheoryData<string, string> Pairs()
     {
         string[] ordering = ["Placed", "Confirmed", "Cancelled"];
@@ -424,24 +443,28 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
             await handler.HandleAsync(message, TestContext.Current.CancellationToken);
     }
 
-    private Task EventAsync(string name, Guid order) =>
-        name switch
+    private Task EventAsync(string name, Guid order, TimeSpan later = default)
+    {
+        DateTimeOffset at = At + later;
+
+        return name switch
         {
-            "Placed" => ApplyAsync(OrderEvents.Placed(order, _customer, At)),
-            "Confirmed" => ApplyAsync(OrderEvents.Confirmed(order, _customer, At.AddMinutes(1))),
+            "Placed" => ApplyAsync(OrderEvents.Placed(order, _customer, at)),
+            "Confirmed" => ApplyAsync(OrderEvents.Confirmed(order, _customer, at.AddMinutes(1))),
             "Cancelled" => ApplyAsync(
                 OrderEvents.Cancelled(
                     order,
                     _customer,
-                    At.AddMinutes(2),
+                    at.AddMinutes(2),
                     CancelReasons.PaymentDeclined,
                     CancelOrigins.Workflow)),
-            "Authorised" => ApplyAsync(OrderEvents.Authorised(order, At.AddMinutes(3))),
-            "Refunded" => ApplyAsync(OrderEvents.Refunded(order, At.AddMinutes(4))),
-            "Dispatched" => ApplyAsync(OrderEvents.Dispatched(order, At.AddMinutes(5))),
-            "Delivered" => ApplyAsync(OrderEvents.Delivered(order, At.AddMinutes(6))),
+            "Authorised" => ApplyAsync(OrderEvents.Authorised(order, at.AddMinutes(3))),
+            "Refunded" => ApplyAsync(OrderEvents.Refunded(order, at.AddMinutes(4))),
+            "Dispatched" => ApplyAsync(OrderEvents.Dispatched(order, at.AddMinutes(5))),
+            "Delivered" => ApplyAsync(OrderEvents.Delivered(order, at.AddMinutes(6))),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not one of the seven order events")
         };
+    }
 
     /// <summary>The names of the warnings a handler logs, which is all a mismatch leaves behind.</summary>
     private sealed class WarningLog : ILogger<OrderProjection>

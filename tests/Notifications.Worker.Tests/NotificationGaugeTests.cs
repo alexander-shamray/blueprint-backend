@@ -78,6 +78,35 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
         overdue.ShouldBeInRange(120 - NotificationStats.OverdueGrace.TotalSeconds, 180);
     }
 
+    [Theory]
+    [InlineData(60, 300)]
+    [InlineData(300, 60)]
+    public async Task A_notice_and_a_delivery_both_due_read_as_the_older_wait(
+        int noticeSecondsAgo,
+        int deliverySecondsAgo)
+    {
+        // One row in each leg of the union, so the reading is the MIN across both whichever leg holds the older.
+        Notification notice = await fixture.PendingAsync(TemplateKeys.OrderPlaced, Guid.CreateVersion7());
+        await DueAsync(notice, TimeSpan.FromSeconds(noticeSecondsAgo));
+        Guid order = Guid.CreateVersion7();
+        await fixture.OrderAsync(order, Guid.CreateVersion7());
+        Notification fannedOut =
+            await fixture.PendingAsync(TemplateKeys.OrderPlaced, order, channel: ConsentVocabulary.Push);
+        await fixture.ExecuteAsync(
+            """
+            UPDATE notifications.NotificationLog
+            SET Status = 'Dispatched', CompletedAt = SYSDATETIMEOFFSET()
+            WHERE NotificationId = {0};
+            """,
+            fannedOut.NotificationId);
+        await DeliveryAsync(fannedOut, "fcm", attempts: 0, dueSecondsAgo: deliverySecondsAgo);
+
+        double overdue = ReadGauge("notifications.overdue").ShouldHaveSingleItem().Value;
+
+        double grace = NotificationStats.OverdueGrace.TotalSeconds;
+        overdue.ShouldBeInRange(300 - grace, 360 - grace);
+    }
+
     [Fact]
     public async Task A_notice_no_pass_has_failed_and_a_finished_one_wait_on_nothing()
     {
