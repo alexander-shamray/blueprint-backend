@@ -22,6 +22,7 @@ internal sealed class StreamMapper
     private long cached;
     private string? stop;
     private string? category;
+    private JsonException? malformed;
 
     /// <summary>Whether the stream reached its <c>message_stop</c>; one that ends without it was cut off.</summary>
     public bool Stopped { get; private set; }
@@ -78,6 +79,11 @@ internal sealed class StreamMapper
             if (stop is "max_tokens" or "model_context_window_exceeded")
             {
                 throw new IOException($"The reply was cut off before it finished ({stop}).");
+            }
+
+            if (malformed is not null)
+            {
+                throw malformed;
             }
 
             yield return stop == "refusal"
@@ -149,8 +155,10 @@ internal sealed class StreamMapper
 
         switch (pending.Kind)
         {
-            case PendingKind.Tool:
-                yield return new ToolCall(pending.Id!, pending.Name!, Input(pending.Text));
+            // A call cut off by the output limit stops with partial input; its failure waits for message_stop, so the
+            // round's usage is reported and a limit is named as the cause.
+            case PendingKind.Tool when Input(pending.Text) is { } input:
+                yield return new ToolCall(pending.Id!, pending.Name!, input);
 
                 break;
             case PendingKind.Thinking:
@@ -165,11 +173,25 @@ internal sealed class StreamMapper
     }
 
     // A tool with no arguments streams no JSON at all, and a model that streams an object streams it in pieces.
-    private static JsonObject Input(StringBuilder json) =>
-        json.Length == 0
-            ? []
-            : JsonNode.Parse(json.ToString()) as JsonObject
+    private JsonObject? Input(StringBuilder json)
+    {
+        if (json.Length == 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonNode.Parse(json.ToString()) as JsonObject
                 ?? throw new JsonException("A tool call's input was not an object.");
+        }
+        catch (JsonException e)
+        {
+            malformed ??= e;
+
+            return null;
+        }
+    }
 
     private enum PendingKind
     {
