@@ -2124,9 +2124,6 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
         chart that changed the key or the form would break the deploy path and
         nothing else would say so.
         """
-        import re
-        from pathlib import Path
-
         # `realm_check.CHART_VALUES`, NOT a `"deploy" / "helm"` spelled here.
         # The declared-inputs scan looks for path literals, and a join of two
         # bare segments is invisible to it — so this read would have been
@@ -2135,13 +2132,7 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
         charts = sorted((root / realm_check.CHART_VALUES).glob("*/values.yaml"))
         self.assertTrue(charts, "no chart values found under " + realm_check.CHART_VALUES)
 
-        # ANCHORED TO `identity:`, because that is the key path the deploy
-        # step walks. An unanchored `authority:` matches a chart that renamed
-        # the parent, which is exactly the change that would stop a rollout
-        # with this test green.
-        pattern = re.compile(
-            r"^identity:\s*$(?:\n(?![A-Za-z])[^\n]*)*?\n\s+authority:\s*(\S+)\s*$",
-            re.MULTILINE)
+        pattern = AUTHORITY_UNDER_IDENTITY
         # EVERY DEPLOYABLE CHART, and the set is derived rather than taken
         # from what still mentions an authority. Scoping by "mentions one"
         # excuses the chart that stopped mentioning one, which is the removal
@@ -2168,6 +2159,21 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
             # assertion. Calling it is the test.
             realm_check.split_authority(match.group(1))
         self.assertTrue(declared, "no chart declares identity.authority")
+
+    def test_an_authority_nested_deeper_under_identity_is_not_identity_authority(self):
+        """`identity.oidc.authority` is a path `authority_of` stops on (#2027)."""
+        self.assertIsNone(AUTHORITY_UNDER_IDENTITY.search(
+            "identity:\n  oidc:\n    authority: https://id.example.com/realms/commerce\n"))
+        self.assertIsNotNone(AUTHORITY_UNDER_IDENTITY.search(
+            "identity:\n  # a comment\n  authority: https://id.example.com/realms/commerce\n"))
+
+
+# ANCHORED TO `identity:`, and one level under it at the charts' two-space
+# indent, because `identity.authority` is the key path the deploy step walks:
+# a renamed parent or a deeper key stops a rollout with a looser pattern green.
+AUTHORITY_UNDER_IDENTITY = re.compile(
+    r"^identity:\s*$(?:\n(?![A-Za-z])[^\n]*)*?\n  authority:\s*(\S+)\s*$",
+    re.MULTILINE)
 
 
 class WhatTheGateHolds(unittest.TestCase):
@@ -2466,10 +2472,12 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
         job = self.job()
         match = re.search(r"^    if: (.*)$", job, re.MULTILINE)
         self.assertIsNotNone(match, "the deployed job carries no guard at all")
-        guard = match.group(1)
-        self.assertIn(f"vars.{realm_check.SCHEDULE_OPT_IN} == 'enabled'", guard)
-        self.assertIn("github.event_name == 'schedule'", guard)
-        self.assertIn("github.event_name == 'workflow_dispatch'", guard)
+        # The whole guard, not its parts: without the parentheses `&&` binds
+        # first, and every scheduled run would start the job unopted (#2027).
+        self.assertEqual(
+            match.group(1).strip(),
+            "${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') "
+            f"&& vars.{realm_check.SCHEDULE_OPT_IN} == 'enabled' }}}}")
 
     def test_the_job_runs_under_the_production_environment(self):
         self.assertIn("environment: production", self.job())
