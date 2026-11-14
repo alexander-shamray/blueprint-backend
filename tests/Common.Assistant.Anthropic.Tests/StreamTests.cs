@@ -150,6 +150,27 @@ public sealed class StreamTests
     }
 
     [Fact]
+    public async Task A_tool_call_cut_off_at_the_output_limit_reports_the_usage_and_names_the_limit_not_the_json()
+    {
+        FakeHttp http = new FakeHttp().Stream("tool-cut-at-max-tokens");
+        List<ProviderEvent> events = [];
+
+        IOException cut = await Should.ThrowAsync<IOException>(async () =>
+        {
+            await foreach (ProviderEvent value in Provider(http).TurnAsync(
+                Given.Request(new UserMessage("open the logs")),
+                TestContext.Current.CancellationToken))
+            {
+                events.Add(value);
+            }
+        });
+
+        cut.Message.ShouldContain("max_tokens");
+        events.OfType<ToolCall>().ShouldBeEmpty();
+        events.OfType<UsageReport>().Single().Usage.ShouldBe(new Usage(Input: 40, Output: 2048, Cached: 512));
+    }
+
+    [Fact]
     public async Task A_rejected_request_surfaces_as_the_exception_the_session_turns_into_an_error_event()
     {
         FakeHttp http = new FakeHttp().Status(
