@@ -805,6 +805,13 @@ class TheTokenWriters(Fixture):
         found = self.one(realm(browser(), contact(optionalClientScopes=["undefined-scope"])))
         self.assertIn("'undefined-scope', which the realm does not define", found)
 
+    def test_a_held_scope_that_is_not_a_name_is_refused_rather_than_raised(self):
+        """A hand-edited export is what this gate reads, and a traceback names nothing to fix."""
+        for entry in ({"name": "profile"}, ["profile"], 7):
+            with self.subTest(entry=entry):
+                found = self.one(realm(browser(), contact(optionalClientScopes=[entry])))
+                self.assertIn(f"lists {entry!r} among its client scopes, which is not a scope name", found)
+
     def test_mappers_that_are_not_an_array_are_refused(self):
         found = self.one(realm(browser(), contact(protocolMappers={"name": "aud"})))
         self.assertIn("not an array", found)
