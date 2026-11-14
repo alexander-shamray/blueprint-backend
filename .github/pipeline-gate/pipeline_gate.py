@@ -378,7 +378,7 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
 
 
 # A step's key, bare or quoted, and its value.
-STEP_KEY = r"""(?:([a-z-]+)|'([a-z-]+)'|"([a-z-]+)"):(?:\s+(.*))?$"""
+STEP_KEY = r"""(?:([a-z-]+)|'([a-z-]+)'|"([a-z-]+)")[ \t]*:(?:\s+(.*))?$"""
 
 
 def _step_key(found: re.Match[str]) -> tuple[str, str]:
@@ -1365,7 +1365,7 @@ def read_job_condition(workflow_text: str, job: str) -> str | None:
                 condition.append(line.strip())
                 continue
             break
-        if found := re.match(r"""^\s{4}(?:if|'if'|"if"):\s*(.*)$""", line):
+        if found := re.match(r"""^\s{4}(?:if|'if'|"if")[ \t]*:\s*(.*)$""", line):
             condition.append(found.group(1).strip())
     return " ".join(condition).strip()
 
