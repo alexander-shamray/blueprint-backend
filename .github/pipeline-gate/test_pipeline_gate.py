@@ -1812,21 +1812,27 @@ class ShardTests(Fixture):
         self.assertIn("parser", problems[0])
 
 
-def trx(total: int, assembly: str, tests: list[str]) -> str:
+def trx(executed: int, assembly: str, tests: list[str], skipped: tuple[str, ...] = ()) -> str:
     # The class name is deliberately NOT derived from the assembly: two
     # projects holding a `Suite` is what the identity has to survive, and a
     # fixture that made them differ would pass whether or not the production
-    # key carries the assembly.
-    results = "".join(
-        f'<UnitTest name="{name}"><TestMethod codeBase="/x/{assembly}.dll" '
+    # key carries the assembly. A skipped test is in `total` and not in `executed`.
+    definitions = "".join(
+        f'<UnitTest id="{assembly}-{name}" name="{name}"><TestMethod codeBase="/x/{assembly}.dll" '
         f'className="Suite" name="{name}" /></UnitTest>'
+        for name in tests
+    )
+    results = "".join(
+        f'<UnitTestResult testId="{assembly}-{name}" testName="{name}" '
+        f'outcome="{"NotExecuted" if name in skipped else "Passed"}" />'
         for name in tests
     )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">'
-        f'<Results />{results}'
-        f'<ResultSummary><Counters total="{total}" passed="{total}" failed="0" /></ResultSummary>'
+        f'<Results>{results}</Results><TestDefinitions>{definitions}</TestDefinitions>'
+        f'<ResultSummary><Counters total="{executed + len(skipped)}" executed="{executed}" '
+        f'passed="{executed}" failed="0" notExecuted="{len(skipped)}" /></ResultSummary>'
         "</TestRun>"
     )
 
@@ -2155,6 +2161,38 @@ class StageTests(unittest.TestCase):
         problems = pipeline_gate.check_stages([smoke], self.solution)
 
         self.assertTrue(any("not one of the stages" in problem for problem in problems))
+
+    def test_a_stage_whose_tests_were_all_skipped_ran_no_tests(self) -> None:
+        """A skipped test is `NotExecuted`, in `total` and every `TestMethod`
+        alike, so neither may be what clears a floor or covers a project (#2027)."""
+        architecture = self.stage("architecture", trx(18, "Catalog.Domain.Tests", ["arch"]))
+        unit = self.stage("unit", trx(600, "Catalog.Domain.Tests", ["a"]))
+        integration = self.stage(
+            "integration", trx(0, "Platform.IntegrationTests", ["c", "d"], skipped=("c", "d")))
+
+        problems = pipeline_gate.check_stages([architecture, unit, integration], self.solution)
+
+        self.assertTrue(any("integration stage ran no tests" in problem for problem in problems), problems)
+        self.assertTrue(any("Platform.IntegrationTests ran in no stage" in problem for problem in problems), problems)
+
+    def test_a_skipped_test_is_not_an_overlap(self) -> None:
+        architecture = self.stage("architecture", trx(18, "Catalog.Domain.Tests", ["arch"]))
+        unit = self.stage("unit", trx(600, "Catalog.Domain.Tests", ["a", "shared"], skipped=("shared",)))
+        integration = self.stage(
+            "integration",
+            trx(160, "Platform.IntegrationTests", ["c"]),
+            trx(1, "Catalog.Domain.Tests", ["shared"]),
+        )
+
+        self.assertEqual(pipeline_gate.check_stages([architecture, unit, integration], self.solution), [])
+
+    def test_a_counters_element_with_no_executed_count_is_refused(self) -> None:
+        unit = self.stage("unit", trx(600, "Catalog.Domain.Tests", ["a"]).replace(' executed="600"', ""))
+
+        with self.assertRaises(SystemExit) as raised:
+            pipeline_gate.read_stage(unit)
+
+        self.assertIn("no `executed` count", str(raised.exception))
 
     def test_a_stage_with_no_trx_is_not_zero_tests(self) -> None:
         """A logger that did not run and a filter that selected nothing are

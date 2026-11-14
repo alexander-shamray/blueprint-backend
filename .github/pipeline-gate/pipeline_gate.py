@@ -1607,12 +1607,12 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
 # --------------------------------------------------------------------------
 
 def read_stage(directory: Path) -> tuple[int, set[str], set[str]]:
-    """One stage's total, its test assemblies and its test identities.
+    """One stage's executed total, and the assemblies and identities of the tests it executed.
 
     `dotnet test` over a solution writes one TRX per test project, so this sums
     rather than reads a single number. A stage directory with no TRX in it is
     not zero tests — it is a logger that did not run, and the caller treats
-    the two differently.
+    the two differently. A skipped test is `NotExecuted` and counts for neither.
     """
     total = 0
     assemblies: set[str] = set()
@@ -1634,14 +1634,24 @@ def read_stage(directory: Path) -> tuple[int, set[str], set[str]]:
         # TRX carries a default namespace, so tags arrive as
         # `{...}Counters`. Matching on the local name keeps this working if the
         # schema URL is ever versioned.
-        for element in root.iter():
-            tag = element.tag.rsplit("}", 1)[-1]
+        elements = [(element.tag.rsplit("}", 1)[-1], element) for element in root.iter()]
+        executed = {
+            element.get("testId") for tag, element in elements
+            if tag == "UnitTestResult" and element.get("outcome") != "NotExecuted"
+        }
+        for tag, element in elements:
             if tag == "Counters":
-                total += int(element.get("total", "0"))
-            elif tag == "TestMethod":
+                if element.get("executed") is None:
+                    raise SystemExit(f"{path} has a Counters element with no `executed` count")
+                total += int(element.get("executed", "0"))
+            elif tag == "UnitTest" and element.get("id") in executed:
+                method = next((child for child in element if child.tag.rsplit("}", 1)[-1] == "TestMethod"), None)
+                if method is None:
+                    continue
                 # The assembly is part of the identity: two projects may hold a
                 # class of the same name, and an identity without it would
                 # report an overlap that is not there.
+                element = method
                 code_base = element.get("codeBase", "")
                 assembly = Path(code_base.replace("\\", "/")).stem if code_base else ""
                 if assembly:
