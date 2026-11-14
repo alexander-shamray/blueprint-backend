@@ -2468,11 +2468,16 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
         """The `deployed` job alone, so a property of it cannot be satisfied
         by the `check` job above it — both run this suite, and only one of
         them may go on to read a realm."""
+        return self.job_named("deployed")
+
+    def job_named(self, name: str) -> str:
+        """One job's lines, from its key to the next job's key or the end."""
         text = self.workflow()
-        start = text.find("\n  deployed:")
+        start = text.find(f"\n  {name}:")
         self.assertNotEqual(start, -1,
-                            f"{realm_check.WORKFLOW_PATH} has no `deployed` job")
-        return text[start:]
+                            f"{realm_check.WORKFLOW_PATH} has no `{name}` job")
+        following = re.search(r"\n  [A-Za-z0-9_-]+:", text[start + 1:])
+        return text[start:start + 1 + following.start()] if following else text[start:]
 
     def test_the_schedule_and_the_dispatch_are_declared(self):
         text = self.workflow()
@@ -2487,10 +2492,12 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
         """A schedule has no diff to gate, and the `deployed` job runs the
         suite itself — so the `check` job on a schedule would be the same
         command twice in one run, and its `if:` says so."""
-        text = self.workflow()
-        check = text[text.find("\n  check:"):text.find("\n  deployed:")]
-        self.assertIn("github.event_name == 'pull_request' || "
-                      "github.event_name == 'push'", check)
+        match = re.search(r"^    if: (.*)$", self.job_named("check"), re.MULTILINE)
+        self.assertIsNotNone(match, "the check job carries no guard at all")
+        # The whole guard: a substring still passes one widened to the schedule.
+        self.assertEqual(
+            match.group(1).strip(),
+            "${{ github.event_name == 'pull_request' || github.event_name == 'push' }}")
 
     def test_the_job_is_opted_in_by_the_declared_variable(self):
         """Not the fail-open skip this repository refuses: the guard reads a
