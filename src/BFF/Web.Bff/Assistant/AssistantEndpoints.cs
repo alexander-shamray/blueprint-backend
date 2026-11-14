@@ -337,7 +337,8 @@ public static class AssistantEndpoints
         return request.ClientTools.Any(t => HasControl(t.Name) || Over(t.Title, title) ||
             Over(t.Description, description) ||
             t.InputSchema.ToJsonString().Length > schema || SchemaHasControl(t.InputSchema))
-            ? ("clientTools", "A client tool's name, title, description and input schema are short, on one line.")
+            ? ("clientTools",
+                "A client tool's name is on one line, and its title, description and input schema short, on one line.")
             : null;
     }
 
