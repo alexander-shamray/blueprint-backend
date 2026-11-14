@@ -1567,7 +1567,7 @@ def _hears_every_conclusion(term: str) -> bool:
 
 
 # Every `&&` term each job may carry, each claiming one by what its check asks of it: one nobody claims could be
-# a `false` that files nothing. A group written wrong is refused here too, beside its own check's refusal.
+# a `false` that files nothing. A group written wrong is refused here, and by its own check where it has one.
 ALERT_TERMS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "read-cancelled": (PUSH_RUN.__eq__, f"{ALERT_CONCLUSION} == 'cancelled'".__eq__),
     "rerun": ("always()".__eq__, PUSH_RUN.__eq__, FIRST_ATTEMPT.__eq__, _hears_every_conclusion),
