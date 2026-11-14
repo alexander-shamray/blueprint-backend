@@ -74,9 +74,11 @@ def read_filters(workflow_text: str) -> list[str]:
 
 
 # One list item of the block: single-quoted, double-quoted or a bare plain scalar, before any comment.
-# A quote or escape inside the item, or a bare item opening on a YAML indicator, is read by none of these.
+# A quote or escape inside the item, a bare item opening on a YAML indicator, or a mapping such as
+# `- added: 'x'`, is read by none of these.
 FILTER_ITEM = re.compile(
-    r"""^\s*-[ \t]+(?:'([^']+)'|"([^"\\]+)"|([^\s'"*&!|>%@`#,\[\]{}?:-](?:[^\s#]|[ \t]+(?![ \t]*(?:#|$))|(?<=\S)#)*))"""
+    r"""^\s*-[ \t]+(?:'([^']+)'|"([^"\\]+)"|"""
+    r"""([^\s'"*&!|>%@`#,\[\]{}?:-](?:[^\s#:]|:(?![ \t]|$)|[ \t]+(?![ \t]*(?:#|$))|(?<=\S)#)*))"""
     r"""[ \t]*(?:#.*)?$"""
 )
 # An alias, `- *shared`, names another filter's patterns rather than holding one.

@@ -355,6 +355,9 @@ class FilterTests(Fixture):
             ('  - "a\\"b"', None),
             ("  - *shared", None),
             ("  - [a]", None),
+            ("  - added: '!a/**'", None),
+            ("  - a/**:", None),
+            ("  - a:b/**", "a:b/**"),
             ("  -'a'", None),
         ):
             with self.subTest(line=line):
@@ -2157,7 +2160,8 @@ class CodeTests(unittest.TestCase):
 
     def test_a_filter_line_it_cannot_read_is_refused(self) -> None:
         """A new spelling the reader drops would leave its pattern unjudged, so it fails instead."""
-        for line in ("- ['!tests/**']", "- '!tests/**' '!src/**'", '- "!tests\\x2F**"', "- !tests/**"):
+        lines = ("- ['!tests/**']", "- '!tests/**' '!src/**'", '- "!tests\\x2F**"', "- !tests/**", "- added: '!tests/**'")
+        for line in lines:
             with self.subTest(line=line):
                 text = self.broken("              - '!docs/**'\n", f"              - '!docs/**'\n              {line}\n")
                 self.assertIn(f"holds `{line}`, a line this check cannot read", self.problems(text))
