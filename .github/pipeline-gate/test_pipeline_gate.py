@@ -1341,6 +1341,8 @@ class SupplyChainTests(Fixture):
                 ('1) echo "a newer build moved it"; exit 0 ;;', '1) [ -n "$x" ] && exit 0 ;;'),
                 ('*) echo "could not compare"; exit 1 ;;', '*) [ -n "$x" ] && exit 1 ;;'),
                 ('*) echo "could not compare"; exit 1 ;;', '*) exit 0; exit 1 ;;'),
+                ('1) echo "a newer build moved it"; exit 0 ;;', "1) ( exit 0 ) ;;"),
+                ('1) echo "a newer build moved it"; exit 0 ;;', "1) true | exit 0 ;;"),
                 ('case "$ancestor" in', 'case "$other" in')):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
@@ -1361,12 +1363,15 @@ class SupplyChainTests(Fixture):
                 (mismatch, "            exit 0\n" + mismatch),
                 (mismatch, '            [ -n "$x" ] && exit 1\n          fi'),
                 (mismatch, '            case "$x" in\n              y) exit 1 ;;\n            esac\n          fi'),
-                (mismatch, "            for x in a; do\n              exit 1\n            done\n          fi")):
+                (mismatch, "            for x in a; do\n              exit 1\n            done\n          fi"),
+                (mismatch, '            [ -n "$x" ] && { echo "no"; exit 1; }\n          fi'),
+                (mismatch, '            [ -n "$x" ] && \\\n              exit 1\n          fi'),
+                (mismatch, "            ( exit 1 )\n          fi")):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
 
                 self.assertEqual(len(problems), 1, problems)
-                self.assertIn("has no `exit 1` of its own", problems[0])
+                self.assertIn("does not reach `exit 1` on every run", problems[0])
 
     def test_a_main_tag_that_asks_after_it_pushes_is_caught(self) -> None:
         guard = '          git merge-base --is-ancestor "$named" "$GITHUB_SHA" || ancestor=$?' + chr(10)
