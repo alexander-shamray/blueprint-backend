@@ -29,8 +29,8 @@ public static class ProblemDetailsExtensions
         return services.AddProblemDetails(options =>
             options.CustomizeProblemDetails = context =>
             {
-                context.ProblemDetails.Instance =
-                    $"{context.HttpContext.Request.Method} {context.HttpContext.Request.Path}";
+                // RFC 9457 §3.1.5 makes instance a URI reference, so the path alone, escaped by PathString.
+                context.ProblemDetails.Instance = context.HttpContext.Request.Path.ToUriComponent();
 
                 // From the request, which survives an unwinding exception where the log scope does not (§10.4).
                 context.ProblemDetails.Extensions["correlationId"] =

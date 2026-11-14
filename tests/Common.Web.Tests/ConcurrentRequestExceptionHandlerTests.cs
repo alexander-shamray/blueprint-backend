@@ -44,7 +44,7 @@ public class ConcurrentRequestExceptionHandlerTests
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/orders");
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
         body.RootElement.TryGetProperty("correlationId", out _).ShouldBeTrue();
     }

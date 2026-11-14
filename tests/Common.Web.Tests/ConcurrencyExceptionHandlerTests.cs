@@ -42,7 +42,7 @@ public class ConcurrencyExceptionHandlerTests
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // §10.5's one error shape, which a status written around IProblemDetailsService loses.
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders/cancel");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/orders/cancel");
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
         body.RootElement.TryGetProperty("correlationId", out _).ShouldBeTrue();
     }

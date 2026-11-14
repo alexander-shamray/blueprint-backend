@@ -70,7 +70,7 @@ public class ProblemDetailsCompositionTests
         using JsonDocument body = await FailingRequestAsync();
 
         // The path, not the type URI, since an incident starts from the request that failed.
-        body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders/cancel");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe("/orders/cancel");
     }
 
     private static async Task<JsonDocument> FailingRequestAsync()

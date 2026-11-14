@@ -66,7 +66,7 @@ public class BadHttpRequestExceptionHandlerTests
         using JsonDocument body = await BodyOfAsync(new BadHttpRequestException("Failed to read the body."));
 
         body.RootElement.GetProperty("title").GetString().ShouldBe("Bad Request");
-        body.RootElement.GetProperty("instance").GetString().ShouldBe($"GET {Route}");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe(Route);
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
         body.RootElement.TryGetProperty("correlationId", out _).ShouldBeTrue();
     }

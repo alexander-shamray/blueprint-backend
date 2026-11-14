@@ -40,7 +40,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
 
         body.RootElement.GetProperty("status").GetInt32().ShouldBe(413);
-        body.RootElement.GetProperty("instance").GetString().ShouldBe($"POST {Route}");
+        body.RootElement.GetProperty("instance").GetString().ShouldBe(Route);
         body.RootElement.GetProperty("correlationId").GetString().ShouldNotBeNullOrWhiteSpace();
         body.RootElement
             .TryGetProperty("code", out _)
