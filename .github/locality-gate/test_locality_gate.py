@@ -154,6 +154,19 @@ class TouchSetGrammar(unittest.TestCase):
             with self.subTest(separator=repr(separator)):
                 text = "note" + separator + "```\n" + table + "```\n" + example
                 self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))
+        # GitHub ends a fence in a list item when the list ends and hides one in a comment, so those routes show
+        # the D table and fence E; a row in a fence after any container is refused rather than guessed.
+        for name, lead in (
+            ("list item", "- note\n\n  ```\n"),
+            ("numbered item", "1. note\n\n   ```\n"),
+            ("block quote", "> note\n\n```\n"),
+            ("html comment", "<!--\n```\n-->\n"),
+        ):
+            with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "after a list, block quote or HTML"):
+                read_rows(lead + table + "```\n" + example + "```\n")
+        # A fence after a container that holds no row hides nothing a reviewer reads as the declaration.
+        self.assertEqual(read_rows("- item\n\n```\ncode\n```\n" + table), (["D"], ["docs/x.md"]))
+        self.assertEqual(read_rows(table + "\n- item\n\n```\ncode\n```\n"), (["D"], ["docs/x.md"]))
         # A lone carriage return ends a line for GitHub and not for pr-locality.sh, so it is refused, not read.
         with self.assertRaisesRegex(InputRefused, "carriage return"):
             read_rows("note\r```\n" + table + "```\n" + example)
