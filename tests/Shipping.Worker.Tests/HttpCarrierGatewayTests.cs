@@ -261,6 +261,38 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
+    public async Task An_event_at_the_clock_skew_is_kept_and_one_a_tick_past_it_refuses_the_page()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        DateTimeOffset now = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
+        DateTimeOffset ceiling = now + CarrierHop.MaxClockSkew;
+        (string Reference, DateTimeOffset At)[] pages = [("crr_edge", ceiling), ("crr_past", ceiling.AddTicks(1))];
+        foreach ((string reference, DateTimeOffset at) in pages)
+        {
+            string body = JsonSerializer.Serialize(
+                new { events = new[] { new { id = "e1", status = "delivered", occurredAt = at } } });
+            _server
+                .Given(Request.Create().WithPath($"/v1/shipments/{reference}/events").UsingGet())
+                .AtPriority(0)
+                .RespondWith(Response.Create().WithStatusCode(200).WithBody(body));
+        }
+
+        // The host's clock is the real one, so the gateway is built over the host's client with a fixed clock.
+        using HttpClient http = _factory.Services.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(nameof(ICarrierGateway));
+        CarrierMetrics metrics = _factory.Services.GetRequiredService<CarrierMetrics>();
+        HttpCarrierGateway carrier = new(http, metrics, new FixedClock(now));
+
+        (await carrier.GetEventsAsync("crr_edge", ct)).ShouldHaveSingleItem().OccurredAt.ShouldBe(ceiling);
+        await Should.ThrowAsync<CarrierUnavailableException>(() => carrier.GetEventsAsync("crr_past", ct));
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    [Fact]
     public async Task A_strange_booking_names_its_order_in_the_reference_and_so_in_the_feeds_path()
     {
         // A client scoping its reads to one order's polls needs a path no other order shares.
