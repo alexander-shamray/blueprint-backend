@@ -72,4 +72,5 @@ a path it does not know is a build, and a failed git read fails the step. It
 is a superset of what compiles: a commit
 editing `docs/personal-data.md` builds although only a test reads that file,
 because a second list is what would drift. `test_commit_builds.py` runs the
-step's own text over a scratch repository with `dotnet` stubbed.
+two steps' own text over a scratch repository with `dotnet` stubbed: the one
+that decides which commits build and which SDKs they pin, and the loop.

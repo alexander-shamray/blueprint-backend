@@ -878,7 +878,8 @@ jobs:
       # did, so it is skipped by name. Decided ahead of the loop, whose checkouts
       # and clean take the script away, and through a file so that its failure
       # stops the step rather than reading as no commits.
-      - name: Every commit before the head builds
+      - name: Decide which commits build
+        id: decide
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -886,6 +887,32 @@ jobs:
         run: |
           set -euo pipefail
           python .github/pipeline-gate/commit_builds.py "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/commits.txt"
+          versions=""
+          sdk_of='import json, sys; print(json.load(sys.stdin)["sdk"]["version"])'
+          while read -r verdict sha _; do
+            [ "$verdict" = build ] || continue
+            # A commit with no global.json pins nothing, so takes the SDK installed above.
+            git cat-file -e "$sha:global.json" 2>/dev/null || continue
+            pinned=$(git show "$sha:global.json" | python -c "$sdk_of")
+            versions="$versions$pinned"$'\n'
+          done < "$RUNNER_TEMP/commits.txt"
+          {
+            echo "sdks<<EOF"
+            printf '%s' "$versions" | sort -u
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # An earlier commit can pin another SDK under `rollForward: disable`, and
+      # without it installed that commit fails on the SDK, not on its build.
+      - uses: actions/setup-dotnet@v6
+        if: steps.decide.outputs.sdks != ''
+        with:
+          dotnet-version: ${{ steps.decide.outputs.sdks }}
+
+      - name: Every commit before the head builds
+        shell: bash
+        run: |
+          set -euo pipefail
           mapfile -t verdicts < "$RUNNER_TEMP/commits.txt"
           echo "${#verdicts[@]} commit(s) besides the head"
           for line in "${verdicts[@]}"; do
