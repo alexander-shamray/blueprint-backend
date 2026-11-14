@@ -99,12 +99,13 @@ class VouchingTests(unittest.TestCase):
 
     ALERTS = "  - alert: X\n    expr: http_server_request_duration_seconds_count\n"
 
-    def root_with(self, registration: str) -> Path:
+    def root_with(self, registration: str, alerts_text: str | None = None) -> Path:
         """A throwaway tree holding just the two files check 5 reads."""
         tmp = Path(tempfile.mkdtemp())
         alerts = tmp / "deploy" / "observability" / "alerts"
         alerts.mkdir(parents=True)
-        (alerts / "platform-alerts.yaml").write_text(self.ALERTS, encoding="utf-8")
+        (alerts / "platform-alerts.yaml").write_text(
+            self.ALERTS if alerts_text is None else alerts_text, encoding="utf-8")
         web = tmp / "src" / "BuildingBlocks" / "Common.Web"
         web.mkdir(parents=True)
         (web / "ObservabilityExtensions.cs").write_text(registration, encoding="utf-8")
@@ -183,6 +184,39 @@ class VouchingTests(unittest.TestCase):
             ["http_server_request_duration_seconds_bucket"], root, root)
 
         self.assertEqual(failures, [])
+
+    def test_a_prefix_of_an_alerts_series_is_not_vouched_for(self) -> None:
+        """A truncated name is a series Prometheus does not hold, so it rolls
+        every canary back however much of an alert's name it spells."""
+        root = self.root_with('.AddMeter("MassTransit")\n')
+        for metric in (
+            "http_server_request_duration_bucket",
+            "http_server_request_duration_seconds_co_bucket",
+            "http_server_request_bucket",
+        ):
+            with self.subTest(metric=metric):
+                failures = repo_gate._metrics_are_vouched_for([metric], root, root)
+
+                self.assertTrue(failures)
+
+    def test_a_series_named_outside_an_expression_is_not_vouched_for(self) -> None:
+        """A comment, an alert's name or an annotation reads no series."""
+        alerts = (
+            "  # http_server_request_duration_seconds_count is the HTTP histogram\n"
+            "  - alert: http_server_request_duration_seconds_count\n"
+            "    expr: |\n"
+            "      # http_server_request_duration_seconds_count\n"
+            "      up == 0\n"
+            "    for: 5m\n"
+            "    annotations:\n"
+            "      summary: http_server_request_duration_seconds_count is high\n"
+        )
+        root = self.root_with('.AddMeter("MassTransit")\n', alerts)
+
+        failures = repo_gate._metrics_are_vouched_for(
+            ["http_server_request_duration_seconds_bucket"], root, root)
+
+        self.assertTrue(failures)
 
 
 class VerifiedVersionTests(unittest.TestCase):
