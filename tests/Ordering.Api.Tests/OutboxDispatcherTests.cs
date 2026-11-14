@@ -65,6 +65,9 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);   // 9 → 10
 
+        // Cleared at the cap, so §13.6's count, which skips a leased row, sees it at once (ADR-211).
+        (await fixture.OutboxAsync()).ShouldHaveSingleItem().LockedUntil.ShouldBeNull();
+
         // Clears the backoff lease, so the second pass is blocked by the attempt cap alone.
         await fixture.ExpireOutboxLeasesAsync();
 

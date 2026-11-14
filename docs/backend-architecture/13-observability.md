@@ -1588,11 +1588,15 @@ literally, because a second literal in code is a second place the schema has
 to be right. The lane predicate is on all three, because an untagged gauge
 cannot answer the first question its runbook asks, and the abandoned count
 reads the dispatcher's cap rather than writing it again: §9.4 claims rows
-below it, this counts the rows at or above it, and two copies of one number
-stop agreeing on the day somebody tunes it. **All three name §9.4's claim
-index in a hint**, because a plan compiled while the outbox was empty can
-scan the clustered index for as long as it stays cached, and the processed rows
-the purge has yet to delete are what make that scan long
+below it, this counts the rows at or above it that no lease holds, and two
+copies of one number stop agreeing on the day somebody tunes it. A leased row
+at the cap is its last attempt still running, since the claim counts an
+attempt before its outcome
+([ADR-211](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)),
+and the fail statement clears the lease when that attempt fails. **All three
+name §9.4's claim index in a hint**, because a plan compiled while the outbox
+was empty can scan the clustered index for as long as it stays cached, and the
+processed rows the purge has yet to delete are what make that scan long
 ([ADR-195](adr/ADR-195-the-outbox-gauges-hint-the-claim-index-which-includes-processedat-1713-adding-to-adr-180.md)).
 The hint and the third query, from the constructor:
 
@@ -1601,13 +1605,15 @@ The hint and the third query, from the constructor:
         string unprocessed = $"{table.QualifiedName} WITH (INDEX({OutboxMessage.UnprocessedIndex}))";
 
         // The dispatcher's cap (§9.4), not a copy that could drift from the loop it describes.
+        // A leased row is still being tried, since the claim counts its attempt before the outcome (ADR-211).
         _abandonedSql =
             $"""
             SELECT COUNT(*)
             FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane
-                AND Attempts >= {OutboxDispatcher.MaxAttempts};
+                AND Attempts >= {OutboxDispatcher.MaxAttempts}
+                AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET());
             """;
 ```
 

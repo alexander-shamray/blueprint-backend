@@ -5,9 +5,13 @@ every row it leases, and the fail statement no longer does: it writes
 `LastError` and backs the lease off on the attempts before the one the claim
 counted, so the ladder's waits are the ones they were. `OutboxClaim.Attempts`
 is that counted value, and the delivery-failed log reports it as the attempt
-number. `MaxAttempts`, the claim's `Attempts < @MaxAttempts` filter and
-§13.6's abandoned-rows gauge are unchanged
-([§9.4](../09-messaging.md#94-the-transactional-outbox)).
+number. A row's last attempt therefore sits at `MaxAttempts` while it is still
+running, so §13.6's abandoned-rows gauge counts only rows at the cap that no
+lease holds, and the fail statement clears the lease, rather than backing it
+off, on a row it leaves at the cap. `MaxAttempts` and the claim's
+`Attempts < @MaxAttempts` filter are unchanged
+([§9.4](../09-messaging.md#94-the-transactional-outbox),
+[§13.6](../13-observability.md)).
 **Why.** Counted by the fail statement, an attempt was recorded only when the
 dispatcher lived to write it. A fail statement that itself failed, which
 #2067 logs as `BookkeepingFailed` and survives, left the count where it was,
@@ -27,8 +31,11 @@ delivery would abandon it, which takes ten of those landing on one row and is
 the cost of not trusting the dispatcher to outlive its delivery. An abandoned
 row can now carry a null `LastError`, when its attempts ended in a killed
 replica or a failed write rather than a delivery's exception, and the
-service's logs, not the row, then say why.
-The ladder itself is unchanged, so
+service's logs, not the row, then say why. A last attempt that kills its
+replica or loses its fail statement is counted abandoned only once its lease
+ends, `LeaseSeconds` after the claim, which is the delay the gauge accepts so
+as not to page on an attempt that may yet deliver. The ladder itself is
+unchanged, so
 [ADR-024](ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md)'s
 cumulative waits still hold.
 

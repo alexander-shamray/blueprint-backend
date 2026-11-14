@@ -64,6 +64,27 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_row_leased_for_its_last_attempt_is_not_abandoned_until_its_lease_ends()
+    {
+        // The claim counts an attempt before its outcome (ADR-211), so a leased row at the cap may still deliver.
+        OutboxMessage last = await StageOneAsync(OutboxLane.Broker);
+        await fixture.SetOutboxAttemptsAsync(last.MessageId, OutboxDispatcher.MaxAttempts);
+        await fixture.ExecuteAsync(
+            """
+            UPDATE ordering.OutboxMessages
+            SET LockedUntil = DATEADD(second, 60, SYSDATETIMEOFFSET())
+            WHERE MessageId = {0};
+            """,
+            last.MessageId);
+
+        NewStats().AbandonedCount(OutboxLane.Broker).ShouldBe(0);
+
+        await fixture.ExpireOutboxLeasesAsync();
+
+        NewStats().AbandonedCount(OutboxLane.Broker).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task An_abandoned_row_on_one_lane_is_not_counted_on_the_other()
     {
         OutboxMessage local = await StageOneAsync(OutboxLane.Local);

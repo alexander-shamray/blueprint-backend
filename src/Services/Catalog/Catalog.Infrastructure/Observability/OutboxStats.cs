@@ -51,13 +51,15 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
             """;
 
         // The dispatcher's own cap, so this gauge cannot disagree with §9.4's claim loop.
+        // A leased row is still being tried, since the claim counts its attempt before the outcome (ADR-211).
         _abandonedSql =
             $"""
             SELECT COUNT(*)
             FROM {unprocessed}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane
-                AND Attempts >= {OutboxDispatcher.MaxAttempts};
+                AND Attempts >= {OutboxDispatcher.MaxAttempts}
+                AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET());
             """;
     }
 

@@ -150,19 +150,22 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 ON delivered.Id = outbox.Id;
             """;
 
-        // Backs off by pushing the lease forward. The claim already counted this attempt (ADR-211), so the ladder
-        // reads the attempts before it.
+        // Backs off by pushing the lease forward, on the attempts before the one the claim counted (ADR-211). At the
+        // cap the lease is cleared instead, since §13.6's abandoned count skips a leased row as still being tried.
         _failSql =
             $"""
             UPDATE {table.QualifiedName}
             SET
                 LastError   = LEFT(@Error, {OutboxMessage.LastErrorMaxLength}),
-                LockedUntil = DATEADD(
-                    second,
-                    POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
-                                  THEN {BackoffAttemptCap}
-                                  ELSE Attempts - 1 END) * {BackoffBaseSeconds},
-                    SYSDATETIMEOFFSET())
+                LockedUntil = CASE
+                    WHEN Attempts >= {MaxAttempts} THEN NULL
+                    ELSE DATEADD(
+                        second,
+                        POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
+                                      THEN {BackoffAttemptCap}
+                                      ELSE Attempts - 1 END) * {BackoffBaseSeconds},
+                        SYSDATETIMEOFFSET())
+                END
             WHERE Id = @Id;
             """;
     }
