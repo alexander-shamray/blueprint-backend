@@ -520,9 +520,10 @@ def _unread_steps(job: str, unread: list[str]) -> list[str]:
 
 
 def check_image_commands(workflow_text: str) -> list[str]:
-    """Each image job builds and pushes only as `docker build` and `docker push`, the forms the checks read.
+    """No image job builds or pushes with a `buildx`, `image`, `builder` or `compose` form or a Docker build action.
 
-    Beside one plain build, another form's image is one no SBOM, signing or attestation check sees.
+    The checks read `docker build` and `docker push` alone, so beside one plain build another form's image
+    is one no SBOM, signing or attestation check sees.
     """
     problems: list[str] = []
     for job in ("images", PUBLISH_JOB):
