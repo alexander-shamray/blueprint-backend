@@ -132,8 +132,13 @@ def check_filters(root: Path = ROOT) -> list[str]:
 
     # §15.1: without `some-with-excludes` the default quantifier never
     # evaluates a negated pattern, and the `deploy` filter's exclusion of the
-    # compose tree would be decoration.
-    if "some-with-excludes" not in text:
+    # compose tree would be decoration. The step's key, never the text: a comment names the word too.
+    quantifiers = [
+        step.get("predicate-quantifier", "").split(" #")[0].strip().strip("'\"")
+        for step in read_job_steps(text, "changes")
+        if step.get("uses", "").startswith("dorny/paths-filter@")
+    ]
+    if not quantifiers or any(quantifier != "some-with-excludes" for quantifier in quantifiers):
         problems.append(
             "the paths-filter step does not set predicate-quantifier: "
             "'some-with-excludes'. The default quantifier never evaluates a "
