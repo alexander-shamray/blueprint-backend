@@ -404,7 +404,8 @@ def _step_key(found: re.Match[str]) -> tuple[str, str]:
 
 
 def _scan_job_steps(workflow_text: str, job: str) -> tuple[list[dict[str, str]], list[str]]:
-    """The steps, and each line at a step's or a step key's column that opens neither, which a caller refuses.
+    """The steps, and each line a caller refuses: one at a step's or a step key's column that opens neither, and
+    one under a bare dash before its first key.
 
     Folded into the key above, such a line would hide its own key, as a flow step hides its `continue-on-error`.
     """
