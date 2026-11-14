@@ -1693,7 +1693,11 @@ class SupplyChainTests(Fixture):
     def test_a_substitution_among_the_verify_words_fails_rather_than_passing(self) -> None:
         """Bash runs on past the substitution's `)`, so a flag after it would reach cosign unread."""
         for words in ("--annotations=$(echo x) --certificate-identity-regexp '.*'",
-                      "--attachment-tag-prefix <(true) --certificate-identity-regexp '.*'"):
+                      "--attachment-tag-prefix <(true) --certificate-identity-regexp '.*'",
+                      "--annotations=`echo a;b` --certificate-identity-regexp '.*'",
+                      "--annotations=${unset:-;} --certificate-identity-regexp '.*'",
+                      "$'\\x2d-certificate-identity-regexp' '.*'",
+                      "{--certificate-identity-regexp,--annotations} '.*'"):
             with self.subTest(words=words):
                 problems = self.broken(
                     "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
