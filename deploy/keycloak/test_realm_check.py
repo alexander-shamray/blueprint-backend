@@ -282,6 +282,16 @@ class TheLifetime(Fixture):
                                      "access.token.lifespan": "5 min"})
         self.assertIn("not a number of seconds", self.one(realm(client)))
 
+    def test_an_override_int_cannot_read_is_refused_by_name_not_raised(self):
+        """Two minus signs, or a superscript isdigit admits, once reached int and a traceback quoting the value."""
+        for value in ("--300", "²"):
+            with self.subTest(value=value):
+                client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
+                                             "access.token.lifespan": value})
+                found = self.one(realm(client))
+                self.assertIn("not a number of seconds", found)
+                self.assertNotIn(value, found.split("access.token.lifespan", 1)[1])
+
     def test_an_override_equal_to_the_realm_value_is_not_a_finding(self):
         """Redundant is not wrong, and refusing it would fail a compliant realm."""
         client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
@@ -293,6 +303,18 @@ class TheLifetime(Fixture):
         client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": 300})
         self.assertEqual(self.problems(realm(client)), [])
+
+
+class TheAttributesAreAnObject(Fixture):
+    """Attributes of another type would be read as empty, and every attribute obligation pass unjudged."""
+
+    def test_a_list_of_attributes_is_refused(self):
+        found = self.problems(realm(browser(attributes=[["access.token.lifespan", "18000"]])))
+        self.assertTrue(any("rather than an object" in p for p in found), found)
+
+    def test_null_attributes_read_as_absent(self):
+        found = self.problems(realm(browser(attributes=None)))
+        self.assertFalse(any("rather than an object" in p for p in found), found)
 
 
 class TheFlagsAreBooleans(Fixture):

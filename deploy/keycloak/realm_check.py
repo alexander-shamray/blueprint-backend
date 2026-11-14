@@ -644,6 +644,7 @@ def check_realm(realm: dict, kind: str, lifetime: int, audience: str, contact_gr
             "obligations are a property of the client object")
 
     problems += check_flags_are_booleans(clients)
+    problems += check_attributes_are_objects(clients)
     problems += check_lifetime(realm, clients, lifetime)
     problems += check_implicit_flow(clients)
     problems += check_every_client(clients, kind)
@@ -705,6 +706,27 @@ def check_flags_are_booleans(clients: list[dict]) -> list[str]:
     return problems
 
 
+def check_attributes_are_objects(clients: list[dict]) -> list[str]:
+    """A client's attributes that are not an object are refused rather than skipped.
+
+    `check_every_client` and `check_lifetime` read them as empty, so the
+    grant-attribute and lifetime-override obligations would pass unjudged.
+    `null` is an unstated value and reads as absent, as a flag's does.
+    """
+    problems: list[str] = []
+    for client in clients:
+        if not isinstance(client, dict):
+            continue
+        attributes = client.get("attributes")
+        if attributes is not None and not isinstance(attributes, dict):
+            problems.append(
+                f"client {client.get('clientId')!r} has attributes that are a "
+                f"{type(attributes).__name__} rather than an object, which "
+                "Keycloak never serialises; this is a hand-edited realm, and "
+                "every attribute obligation would pass it unjudged")
+    return problems
+
+
 def check_lifetime(realm: dict, clients: list[dict], lifetime: int) -> list[str]:
     """The realm's lifetime is the chapter's, and no client overrides it.
 
@@ -736,7 +758,9 @@ def check_lifetime(realm: dict, clients: list[dict], lifetime: int) -> list[str]
             continue
 
         seconds = str(override).strip()
-        if not seconds.lstrip("-").isdigit():
+        # One optional minus and ASCII digits alone: isdigit admits a
+        # superscript that int refuses, and a traceback would quote the value.
+        if not re.fullmatch(r"-?[0-9]+", seconds):
             # The value is named, not echoed: `access.token.lifespan` is a
             # token-shaped name, so a message quoting whatever a realm put
             # there is a credential-shaped read reaching a log.
