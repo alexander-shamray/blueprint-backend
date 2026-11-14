@@ -2146,8 +2146,8 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
         # bare segments is invisible to it — so this read would have been
         # undeclared while the constant that declares it sat unused.
         root = Path(realm_check.__file__).resolve().parents[2]
-        charts = sorted((root / realm_check.CHART_VALUES).glob("*/values.yaml"))
-        self.assertTrue(charts, "no chart values found under " + realm_check.CHART_VALUES)
+        charts = sorted((root / realm_check.CHART_VALUES).glob("*/Chart.yaml"))
+        self.assertTrue(charts, "no chart found under " + realm_check.CHART_VALUES)
 
         pattern = AUTHORITY_UNDER_IDENTITY
         # EVERY DEPLOYABLE CHART, and the set is derived rather than taken
@@ -2158,10 +2158,11 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
         # classification — every directory with a `Chart.yaml`, less the
         # library chart and the umbrella, which render no workload of their own.
         deployables = sorted(
-            v for v in charts
-            if v.parent.name not in ("common", "platform")
-            and (v.parent / "Chart.yaml").exists())
+            c.parent / "values.yaml" for c in charts
+            if c.parent.name not in ("common", "platform"))
         self.assertTrue(deployables, "no deployable chart found")
+        for values in deployables:
+            self.assertTrue(values.exists(), f"{values.parent.name} has no values.yaml to declare an authority in")
 
         declared = 0
         for values in deployables:
