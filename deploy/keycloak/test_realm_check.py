@@ -1588,6 +1588,16 @@ class TheLifetimeIsRead(unittest.TestCase):
             realm_check.read_access_token_lifetime(self.root)
         self.assertIn("0 time(s)", str(stop.exception))
 
+    def test_a_block_comment_quoting_the_assignment_is_not_the_declaration(self):
+        """Only whole-line `//` comments are stripped, so the line start is what keeps this one out."""
+        self.write("    /* readonly TimeSpan AccessTokenLifetime = "
+                   "TimeSpan.FromSeconds(300); */\n"
+                   "    public static readonly TimeSpan AccessTokenLifetime = "
+                   "TimeSpan.FromMinutes(1);\n")
+        with self.assertRaises(SystemExit) as stop:
+            realm_check.read_access_token_lifetime(self.root)
+        self.assertIn("0 time(s)", str(stop.exception))
+
     def test_a_similarly_named_local_is_not_the_declaration(self):
         """`readonly TimeSpan` is the anchor, so a look-alike cannot stand in."""
         self.write("var AccessTokenLifetime = TimeSpan.FromSeconds(600);")
