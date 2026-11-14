@@ -955,6 +955,12 @@ class GrantTests(unittest.TestCase):
             "on:\n  - pull_request\n  - push\n",
             "on: [pull_request, push]\n",
             "on: pull_request\n",
+            # yamllint's truthy rule asks for the quoted key (#2027).
+            '"on": [pull_request, push]\n',
+            "'on':\n  'pull_request':\n",
+            # The review events start from a pull request's branch too (#2027).
+            "on:\n  pull_request_review:\n",
+            "on: [pull_request_review_comment]\n",
         ):
             with self.subTest(trigger=trigger):
                 self.write(GRANTED.replace(
@@ -964,6 +970,20 @@ class GrantTests(unittest.TestCase):
                     "  build:\n    permissions:\n      packages: write\n    steps:"))
 
                 self.assertEqual(len(pipeline_gate.check_grants(self.root)), 1)
+
+    def test_a_trigger_it_cannot_read_is_refused(self) -> None:
+        for trigger in (
+            "on: {pull_request: {}}\n", "on:\n  pull_request: {types: [opened]}\n", "on:\n- pull_request\n",
+            "on: [pull_request,\n  push]\n", "on: &events [pull_request]\n", "on:\n  pull_request: *types\n",
+            "on :\n  pull_request:\n", "",
+        ):
+            with self.subTest(trigger=trigger):
+                self.write(GRANTED.replace("on:\n  pull_request:\n  push:\n    branches: [main]\n", trigger))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("ci.yml writes `on:` in a form this check cannot read", problems[0])
 
     def test_a_grant_at_the_workflow_level_reaches_a_job_with_no_block(self) -> None:
         self.write(GRANTED.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  packages: write\n\njobs:"))
@@ -1554,6 +1574,27 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("compose.yml writes `on:` as a flow mapping", problems[0])
 
+    def test_a_pushed_workflow_in_another_readable_form_is_still_caught(self) -> None:
+        """Each read as no push before #2027, so the alert stopped asking for the watch."""
+        for on in ('"on":\n  push:\n    branches: [main]\n', "on:\n  - push\n", "on:\n  push:\n    branches: ['m*']\n"):
+            with self.subTest(on=on):
+                self.write("compose.yml", "name: Compose\n" + on)
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("compose.yml runs on a push to main", problems[0])
+
+    def test_an_on_this_check_cannot_read_is_refused(self) -> None:
+        for on in ("on:\n  push: {branches: [main]}\n", "on:\n- push\n", "on:\n"):
+            with self.subTest(on=on):
+                self.write("compose.yml", "name: Compose\n" + on)
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("compose.yml writes `on:` as a flow mapping or another form", problems[0])
+
     def test_a_watched_workflow_written_as_a_flow_mapping_has_the_refusal_as_its_only_problem(self) -> None:
         self.write("helm.yml", "name: Helm\non: {push: {branches: [main]}}\n")
 
@@ -1656,6 +1697,21 @@ class AlertTests(unittest.TestCase):
             "on:\n  push:\n    tags: ['v*']\n": False,
             "on:\n  pull_request:\n    branches: [main]\n": False,
             "on:\n  workflow_dispatch:\njobs:\n  push:\n    branches: [main]\n": False,
+            # A quoted key, as yamllint's truthy rule asks, and a list of events (#2027).
+            '"on":\n  push:\n    branches: [main]\n': True,
+            "'on':\n  'push':\n": True,
+            "on:\n  - pull_request\n  - push\n": True,
+            "on:\n  - pull_request\n": False,
+            # Each entry a glob as GitHub matches it, a later `!` overruling (#2027).
+            "on:\n  push:\n    branches: ['ma*']\n": True,
+            "on:\n  push:\n    branches: ['**']\n": True,
+            "on:\n  push:\n    branches: ['mai+n']\n": True,
+            "on:\n  push:\n    branches: ['release/*']\n": False,
+            "on:\n  push:\n    branches: ['*/main']\n": False,
+            "on:\n  push:\n    branches: ['**', '!main']\n": False,
+            "on:\n  push:\n    branches-ignore: ['m*']\n": False,
+            "on:\n  push:\n    branches-ignore: ['ma?in']\n": False,
+            "on:\n  push:\n    branches-ignore: ['release/**']\n": True,
         }
         for text, expected in cases.items():
             with self.subTest(text=text):

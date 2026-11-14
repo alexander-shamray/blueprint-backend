@@ -828,8 +828,8 @@ def check_actions(root: Path = ROOT) -> list[str]:
 # --------------------------------------------------------------------------
 
 CHECKOUT = re.compile(r"^\s*(?:-\s+)?uses:\s*['\"]?actions/checkout@", flags=re.MULTILINE)
-PULL_REQUEST_TRIGGER = re.compile(
-    r"^on:.*\bpull_request|^  (?:-\s+)?['\"]?pull_request(?:_target)?\b", flags=re.MULTILINE)
+# Every event a pull request starts; the review events run on its branch too.
+PULL_REQUEST_EVENTS = ("pull_request", "pull_request_target", "pull_request_review", "pull_request_review_comment")
 
 
 def read_jobs(workflow_text: str) -> dict[str, list[str]]:
@@ -964,6 +964,11 @@ def check_grants(root: Path = ROOT) -> list[str]:
     problems: list[str] = []
     for path in workflows:
         text = path.read_text(encoding="utf-8")
+        events = read_events(text)
+        if events is None:
+            # Refused, and its jobs still read as a pull request's, so a grant there is not passed either.
+            problems.append(f"{path.name} writes `on:` in a form this check cannot read; {ON_FORMS}")
+        reached = events is None or any(event in events for event in PULL_REQUEST_EVENTS)
         inherited = read_grants(text.splitlines(), 0) or []
         for job, lines in read_jobs(text).items():
             own = read_grants(lines, 4)
@@ -971,7 +976,7 @@ def check_grants(root: Path = ROOT) -> list[str]:
             if not grants:
                 continue
             held += 1
-            if not PULL_REQUEST_TRIGGER.search(text) or not CHECKOUT.search("\n".join(lines)):
+            if not reached or not CHECKOUT.search("\n".join(lines)):
                 continue
             condition = read_job_condition(text, job) or ""
             if not _keeps_pull_requests_out(condition, ref_decides="pull_request_target" not in text):
@@ -998,8 +1003,8 @@ ALERT_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
 
 
 def _key(lines: list[str], key: str, indent: int) -> tuple[str, list[str]] | None:
-    """A key at one indentation: its inline value and the lines nested under it."""
-    pattern = re.compile(rf"^ {{{indent}}}{re.escape(key)}:(.*)$")
+    """A key at one indentation, bare or quoted: its inline value and the lines nested under it."""
+    pattern = re.compile(rf"^ {{{indent}}}(?:{re.escape(key)}|'{re.escape(key)}'|\"{re.escape(key)}\"):(.*)$")
     for index, line in enumerate(lines):
         match = pattern.match(line)
         if not match:
@@ -1030,22 +1035,97 @@ def read_workflow_name(workflow_text: str) -> str | None:
     return match.group(1) if match else None
 
 
-def runs_on_main_push(workflow_text: str) -> bool:
-    """Whether a push to `main` starts this workflow."""
+ON_FORMS = "write it as a block mapping, a list or one event"
+
+
+def read_events(workflow_text: str) -> dict[str, list[str]] | None:
+    """Each event `on:` names, with the lines nested under it; None for a form this cannot read.
+
+    Anything else is refused, a flow mapping, an anchor or a missing `on:` among
+    them: read as text it names no event, and a reader that passed it would pass
+    every check on it.
+    """
     on = _key(workflow_text.splitlines(), "on", 0)
     if on is None:
-        return False
+        return None
     value, nested = on
+    if value and not re.fullmatch(r"\[[^\[\]{}&*!|>]*\]|(['\"]?)[a-z_]+\1", value):
+        return None
     if value:
-        return "push" in _list(value, [])
-    push = _key(nested, "push", 2)
-    if push is None:
+        return {event: [] for event in _list(value, [])}
+    events: dict[str, list[str]] = {}
+    for line in nested:
+        if not line.strip() or line.lstrip().startswith("#") or line.startswith("   "):
+            continue
+        if item := re.match(r"^  -\s+(['\"]?)([a-z_]+)\1\s*(?:#.*)?$", line):
+            events[item.group(2)] = []
+        elif key := re.match(r"^  (['\"]?)([a-z_]+)\1:", line):
+            inline, lines = _key(nested, key.group(2), 2) or ("", [])
+            if inline not in ("", "null", "~"):
+                return None
+            events[key.group(2)] = lines
+        else:
+            return None
+    return events or None
+
+
+def _branch_glob(pattern: str) -> re.Pattern[str] | None:
+    """A branch filter entry as GitHub matches it, or None for one that is not a pattern.
+
+    `*` stops at a slash and `**` does not; `?`, `+` and `[...]` are the regular
+    expression's own, quantifying or listing as GitHub's filter syntax has them.
+    """
+    translated = ""
+    index = 0
+    while index < len(pattern):
+        if pattern.startswith("**", index):
+            translated, index = translated + ".*", index + 2
+            continue
+        character = pattern[index]
+        if character == "*":
+            translated += "[^/]*"
+        elif character == "[":
+            end = pattern.find("]", index + 1)
+            if end < 0:
+                return None
+            translated, index = translated + pattern[index:end + 1], end + 1
+            continue
+        elif character in "?+":
+            translated += character
+        else:
+            translated += re.escape(character)
+        index += 1
+    try:
+        return re.compile(translated)
+    except re.error:
+        return None
+
+
+def _filter_names(entries: list[str], branch: str, *, unread_selects: bool) -> bool:
+    """Whether a branch filter's entries select a branch, a later `!` entry overruling an earlier.
+
+    An entry no glob reads is read whichever way `unread_selects` says, so the caller
+    chooses the side that costs a watch rather than the side that loses one.
+    """
+    selected = False
+    for entry in entries:
+        negated = entry.startswith("!")
+        glob = _branch_glob(entry[1:] if negated else entry)
+        matched = glob.fullmatch(branch) is not None if glob else unread_selects != negated
+        if matched:
+            selected = not negated
+    return selected
+
+
+def runs_on_main_push(workflow_text: str) -> bool:
+    """Whether a push to `main` starts this workflow; an `on:` it cannot read is `check_alerts`' refusal."""
+    filters = (read_events(workflow_text) or {}).get("push")
+    if filters is None:
         return False
-    filters = push[1]
     if (branches := _key(filters, "branches", 4)) is not None:
-        return "main" in _list(*branches)
+        return _filter_names(_list(*branches), "main", unread_selects=True)
     if (ignored := _key(filters, "branches-ignore", 4)) is not None:
-        return "main" not in _list(*ignored)
+        return not _filter_names(_list(*ignored), "main", unread_selects=False)
     # A push filtered to tags alone starts no run for a branch.
     return _key(filters, "tags", 4) is None
 
@@ -1126,14 +1206,13 @@ def check_alerts(root: Path = ROOT) -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         name = read_workflow_name(text)
-        on = _key(text.splitlines(), "on", 0)
-        if on is not None and on[0].startswith("{"):
-            # A flow mapping would read as no push at all, so it is refused rather than passed;
+        if read_events(text) is None:
+            # An unread form would read as no push at all, so it is refused rather than passed;
             # its name still counts as carried, so the refusal is its only problem.
             if name is not None:
                 pushed_by_name[name] = True
             problems.append(
-                f"{path.name} writes `on:` as a flow mapping, which this check cannot read; write it as a block")
+                f"{path.name} writes `on:` as a flow mapping or another form this check cannot read; {ON_FORMS}")
             continue
         pushed = runs_on_main_push(text)
         if name is not None:
