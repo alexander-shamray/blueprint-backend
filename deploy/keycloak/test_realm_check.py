@@ -2161,7 +2161,7 @@ class TheAuthorityDecidesWhichRealmIsRead(unittest.TestCase):
         self.assertTrue(declared, "no chart declares identity.authority")
 
     def test_an_authority_nested_deeper_under_identity_is_not_identity_authority(self):
-        """`identity.oidc.authority` is a path `authority_of` stops on (#2027)."""
+        """`identity.oidc.authority` is a path `authority_of` stops on."""
         self.assertIsNone(AUTHORITY_UNDER_IDENTITY.search(
             "identity:\n  oidc:\n    authority: https://id.example.com/realms/commerce\n"))
         self.assertIsNotNone(AUTHORITY_UNDER_IDENTITY.search(
@@ -2473,7 +2473,7 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
         match = re.search(r"^    if: (.*)$", job, re.MULTILINE)
         self.assertIsNotNone(match, "the deployed job carries no guard at all")
         # The whole guard, not its parts: without the parentheses `&&` binds
-        # first, and every scheduled run would start the job unopted (#2027).
+        # first, and every scheduled run would start the job unopted.
         self.assertEqual(
             match.group(1).strip(),
             "${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') "
