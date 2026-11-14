@@ -2,7 +2,8 @@ name: Main red
 
 # A red push run on main files a tracker issue, or comments on the open one
 # (ADR-155). A pull request is not tested against the main it lands on, so two
-# green ones can turn main red together, and this is where that is heard.
+# green ones can turn main red together, and this is where that is heard. A red
+# first attempt is rerun once and files unless the second passes (ADR-210).
 on:
   workflow_run:
     # By name, which is what `workflow_run` matches. `pipeline-gate alerts`
@@ -55,17 +56,67 @@ jobs:
           REASON=$(python3 .github/pipeline-gate/read_cancelled_run.py "$REPO" "$RUN_ID")
           echo "reason=$REASON" >> "$GITHUB_OUTPUT"
 
-  file:
+  # Most red runs on main were a loaded runner or an outside service, and a
+  # rerun turned them green. A run cannot rerun itself while a job of its own
+  # runs, so the watcher reruns it, then waits for the second attempt rather
+  # than hearing it: whether GitHub sends `workflow_run` for a rerun this token
+  # started is not something the filing may rest on (ADR-210).
+  rerun:
     needs: read-cancelled
+    # The first attempt alone, or each rerun would start another.
+    if: >-
+      always() &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.run_attempt == 1 &&
+      (contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion) ||
+      contains(fromJSON('["failure", "cancelled"]'), needs.read-cancelled.result) ||
+      needs.read-cancelled.outputs.reason != '')
+    runs-on: ubuntu-latest
+    # Above the script's own deadline, so a rerun that outlasts it is filed.
+    timeout-minutes: 320
+    # No concurrency group: a pending job a newer one displaced would leave its
+    # first attempt neither rerun nor filed.
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      issues: write
+    outputs:
+      second: ${{ steps.rerun.outputs.second }}
+      conclusion: ${{ steps.rerun.outputs.conclusion }}
+      why: ${{ steps.rerun.outputs.why }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: rerun
+        name: Rerun the failed jobs once and wait for the second attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: python3 .github/pipeline-gate/rerun_red_run.py "$REPO" "$RUN_ID"
+
+  file:
+    needs: [read-cancelled, rerun]
     # Push runs alone: realm.yml and object-store.yml file their own issue for
     # a red scheduled run. `always()` because a skipped need skips this job
     # otherwise, and a read that did not finish files rather than stays silent.
+    # A first attempt files unless its rerun said the second passed or was
+    # replaced; a later one files unless `rerun` started it, and so files it.
     if: >-
       always() &&
       github.event.workflow_run.event == 'push' &&
       (contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion) ||
       contains(fromJSON('["failure", "cancelled"]'), needs.read-cancelled.result) ||
-      needs.read-cancelled.outputs.reason != '')
+      needs.read-cancelled.outputs.reason != '') &&
+      (needs.rerun.result != 'success' ||
+      !contains(fromJSON('["passed", "replaced"]'), needs.rerun.outputs.second)) &&
+      (github.event.workflow_run.run_attempt == 1 ||
+      github.event.workflow_run.triggering_actor.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # One group per watched workflow, so two red runs never both see no open
@@ -87,7 +138,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           WORKFLOW: ${{ github.event.workflow_run.name }}
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CONCLUSION: ${{ needs.rerun.outputs.conclusion || github.event.workflow_run.conclusion }}
+          RERUN: >-
+            ${{ needs.rerun.outputs.why ||
+            (needs.rerun.result != 'skipped' && 'Its failed jobs were not rerun: the rerun job did not finish.' || '') }}
           WHY: >-
             ${{ needs.read-cancelled.outputs.reason ||
             (needs.read-cancelled.result != 'skipped' && 'Its jobs could not be read.' || '') }}
@@ -102,7 +156,9 @@ jobs:
           [ "$(jq length <<<"$LIST")" -lt 1000 ] || { echo "::error::the issue list reached its limit and may be cut"; exit 1; }
           EXISTING=$(jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty' <<<"$LIST")
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "Still red ($CONCLUSION) at $HEAD_SHA: $RUN_URL $WHY"
+            gh issue comment "$EXISTING" --body "Still red ($CONCLUSION) at $HEAD_SHA: $RUN_URL $WHY
+
+          $RERUN"
           else
             gh issue create --title "$TITLE" --label bug --label high --label code --body "$(cat <<EOF
           ## What happened
@@ -111,6 +167,8 @@ jobs:
           $HEAD_SHA: $RUN_URL
 
           $WHY
+
+          $RERUN
 
           ## What to do
 

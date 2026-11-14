@@ -91,6 +91,10 @@ which names the pull-request checks a push does not run again). A cancelled
 push run is filed too unless a newer run replaced it or it has no job, and one
 cancelled by hand owes no revert
 ([ADR-196](adr/ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md)).
+A red first attempt has its failed jobs rerun once and noted on the flaky
+tests tracker, and is filed unless the second attempt passes or a newer run
+replaced it
+([ADR-210](adr/ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md)).
 
 Only services whose files changed are built and deployed. Path filters are what
 make a monorepo practical at this size. They are the `changes` job's, in
