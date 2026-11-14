@@ -382,7 +382,9 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     [Theory]
     [InlineData(true, "token_endpoint")]
     [InlineData(false, "access_token")]
-    public async Task A_success_that_is_not_a_json_object_is_refused_as_missing_its_member(bool discovery, string member)
+    public async Task A_success_that_is_not_a_json_object_is_refused_as_missing_its_member(
+        bool discovery,
+        string member)
     {
         if (discovery)
             _provider.DiscoveryBody = "[]";
