@@ -14,6 +14,7 @@ import commit_builds
 import pipeline_gate
 
 HERE = Path(__file__).resolve().parent
+DECIDE_STEP = "      - name: Decide which commits build\n"
 RUN_STEP = "      - name: Every commit before the head builds\n"
 
 
@@ -40,10 +41,10 @@ def real_filters() -> dict[str, list[str]]:
     return pipeline_gate.read_filters_by_name(pipeline_gate.WORKFLOW.read_text(encoding="utf-8"))
 
 
-def run_block() -> str:
+def run_block(step: str) -> str:
     """The step's `run: |` from the real workflow, dedented, so the job itself is what runs."""
     text = pipeline_gate.WORKFLOW.read_text(encoding="utf-8")
-    after = text.split(RUN_STEP, 1)[1].split("        run: |\n", 1)[1]
+    after = text.split(step, 1)[1].split("        run: |\n", 1)[1]
     lines = []
     for line in after.splitlines():
         if line.strip() and not line.startswith(" " * 10):
@@ -237,22 +238,32 @@ class WorkflowStepTests(ScratchRepository):
         workflows = self.repo / ".github" / "workflows"
         workflows.mkdir(parents=True, exist_ok=True)
         shutil.copy(pipeline_gate.WORKFLOW, workflows)
-        script = self.temp / "step.sh"
-        script.write_text(run_block(), encoding="utf-8", newline="\n")
-        return subprocess.run(
-            [BASH, script.as_posix()],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-            env={
-                **os.environ,
-                "PATH": f"{self.stubs}{os.pathsep}{os.environ['PATH']}",
-                "BASE_SHA": base,
-                "HEAD_SHA": head,
-                "RUNNER_TEMP": self.temp.as_posix(),
-            },
-        )
+        env = {
+            **os.environ,
+            "PATH": f"{self.stubs}{os.pathsep}{os.environ['PATH']}",
+            "BASE_SHA": base,
+            "HEAD_SHA": head,
+            "RUNNER_TEMP": self.temp.as_posix(),
+            "GITHUB_OUTPUT": self.output.as_posix(),
+        }
+        # The two steps in order, as the job runs them; the second runs only if the first passed.
+        for step in (DECIDE_STEP, RUN_STEP):
+            script = self.temp / "step.sh"
+            script.write_text(run_block(step), encoding="utf-8", newline="\n")
+            result = subprocess.run(
+                [BASH, script.as_posix()], capture_output=True, text=True, encoding="utf-8", check=False, env=env)
+            if result.returncode:
+                break
+        return result
+
+    @property
+    def output(self) -> Path:
+        return self.temp / "github-output"
+
+    def sdks(self) -> list[str]:
+        """The SDK versions the decide step handed setup-dotnet."""
+        text = self.output.read_text(encoding="utf-8")
+        return text.split("sdks<<EOF\n", 1)[1].split("EOF\n", 1)[0].splitlines()
 
     def built(self) -> list[str]:
         return self.calls.read_text(encoding="utf-8").splitlines() if self.calls.exists() else []
@@ -283,6 +294,19 @@ class WorkflowStepTests(ScratchRepository):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.built(), [f"{source} restore", f"{source} build"])
+
+    def test_each_built_commit_s_pinned_sdk_is_installed_once(self) -> None:
+        """An earlier commit can pin another SDK under rollForward disable, and fails on its absence."""
+        self.commit({"global.json": '{"sdk": {"version": "10.0.100", "rollForward": "disable"}}\n'})
+        self.commit({"src/App/B.cs": "b\n"})
+        self.commit({"docs/a.md": "a\n", "global.json": '{"sdk": {"version": "10.0.302"}}\n'})
+        self.commit({"src/App/C.cs": "c\n"})
+        head = self.commit({"global.json": '{"sdk": {"version": "10.0.400"}}\n'})
+
+        result = self.run_step(self.base, head)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.sdks(), ["10.0.100", "10.0.302"])
 
     def test_a_one_commit_pull_request_builds_nothing_and_passes(self) -> None:
         head = self.commit({"src/App/B.cs": "b\n"})
