@@ -2174,7 +2174,8 @@ That last sentence is an instruction until something measures it, so
 `coverage.runsettings` does:
 
 ```bash
-dotnet test Platform.slnx --filter "FullyQualifiedName!~ArchitectureTests&Category!=Integration" \
+rm -rf ./TestResults
+dotnet test Platform.slnx --filter 'FullyQualifiedName!~ArchitectureTests&Category!=Integration' \
     --collect:"Code Coverage" --settings coverage.runsettings \
     --results-directory ./TestResults/unit
 dotnet test Platform.slnx --filter "Category=Integration" \
@@ -2189,8 +2190,7 @@ py -3.12 .github/coverage/domain_coverage.py ./TestResults/unit ./TestResults/in
 filter is what keeps §4.2's gates out of the instrumented run, for the reason
 the callout below gives. Two invocations rather than one, because the figure
 is a union across §15.1's stages — the paragraph on the union below says why
-— and `docs/testing.md` carries the same three lines beside every other
-runner.
+— and `docs/testing.md` carries the same block beside every other runner.
 
 The file filters the report to `.*\.Domain\.dll$` and emits Cobertura, and CI
 prints the figure to the job summary. **Reported, never gated** — a diagnostic
