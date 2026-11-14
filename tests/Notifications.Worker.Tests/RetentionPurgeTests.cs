@@ -224,18 +224,31 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task A_backlog_larger_than_one_batch_drains_over_batches_and_stops_at_the_ceiling()
     {
         // A policy of its own: five inbox rows in batches of two show both edges.
-        for (int row = 0; row < 5; row++)
-            await fixture.StageInboxAsync(new InboxMessage(Guid.CreateVersion7(), "notifications-events", LongAgo));
+        Guid[] staged = [.. Enumerable.Range(0, 5).Select(_ => Guid.CreateVersion7())];
+
+        foreach (Guid messageId in staged)
+            await fixture.StageInboxAsync(new InboxMessage(messageId, "notifications-events", LongAgo));
 
         RetentionPolicy twoAtATime = new() { BatchSize = 2, MaxBatchesPerPass = 2 };
 
         // Four of five: two batches of two, then the ceiling.
         (await fixture.PurgeWithAsync(twoAtATime)).Inbox.ShouldBe(4);
-        (await fixture.InboxAsync()).Count.ShouldBe(1);
+        (await StagedRowsLeftAsync(staged)).ShouldBe(1);
 
         // The next pass takes the remainder and stops short of its ceiling, on the partial batch.
         (await fixture.PurgeWithAsync(twoAtATime)).Inbox.ShouldBe(1);
-        (await fixture.InboxAsync()).ShouldBeEmpty();
+        (await StagedRowsLeftAsync(staged)).ShouldBe(0);
+    }
+
+    /// <summary>The staged rows still in the inbox, read by id so a row a consumer wrote is not counted.</summary>
+    private async Task<int> StagedRowsLeftAsync(IEnumerable<Guid> messageIds)
+    {
+        int left = 0;
+
+        foreach (Guid messageId in messageIds)
+            left += (await fixture.InboxAsync(messageId)).Count;
+
+        return left;
     }
 
     [Fact]

@@ -16,16 +16,22 @@ public sealed class RetentionPurgeTests(BffServiceFixture fixture) : IAsyncLifet
     public async Task A_pass_purges_the_aged_inbox_row_and_reports_no_outbox_and_no_markers()
     {
         // Far from the window on either side, so the test is about the predicate, not a boundary.
+        Guid agedId = Guid.CreateVersion7();
+        Guid recentId = Guid.CreateVersion7();
+
         await fixture.StageInboxAsync(
-            new InboxMessage(Guid.CreateVersion7(), "bff-probe", DateTimeOffset.UtcNow.AddDays(-30)),
-            new InboxMessage(Guid.CreateVersion7(), "bff-probe", DateTimeOffset.UtcNow.AddDays(-1)));
+            new InboxMessage(agedId, "bff-probe", DateTimeOffset.UtcNow.AddDays(-30)),
+            new InboxMessage(recentId, "bff-probe", DateTimeOffset.UtcNow.AddDays(-1)));
 
         (int outbox, int inbox, int idempotency) = await fixture.PurgeRetentionAsync();
 
         outbox.ShouldBe(0);
         inbox.ShouldBe(1);
         idempotency.ShouldBe(0);
-        (await fixture.InboxAsync()).Count.ShouldBe(1);
+
+        // Read by id, so a row a consumer wrote after the reset is not counted.
+        (await fixture.InboxAsync(agedId)).ShouldBeEmpty();
+        (await fixture.InboxAsync(recentId)).ShouldHaveSingleItem();
     }
 
     // An index keyed on HandledAt took every insert on its last page; the purge scans the key instead (ADR-186).
