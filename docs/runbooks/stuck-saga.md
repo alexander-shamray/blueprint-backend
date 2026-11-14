@@ -357,9 +357,10 @@ closed.
 than the last**, and what it is looking for is a `ConfirmOrder`. There is no
 peer to have gone quiet: the command is Ordering's own, so a row still sitting
 here unsent — or, with none, a command sent and never consumed, which the
-`ordering-commands` queue depth and its error queue show — is the whole fault. **Read the order's own status rather than assuming it.**
-Normally it is still `AwaitingPayment` with the card authorised, which is why
-that wait escalates rather than compensating when its ten minutes run out. If
+`ordering-commands` queue depth and its error queue show — is the whole
+fault. **Read the order's own status rather than assuming it.** Normally it
+is still `AwaitingPayment` with the card authorised, which is why that wait
+escalates rather than compensating when its ten minutes run out. If
 it is already `Confirmed`, the command committed and it is the acknowledgement
 that went missing — a different incident, and
 [`order-review.md`](order-review.md)'s `not_confirmed` procedure branches on
