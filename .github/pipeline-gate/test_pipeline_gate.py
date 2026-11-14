@@ -2466,9 +2466,10 @@ class CodeTests(unittest.TestCase):
     def test_an_output_whose_terms_are_joined_or_negated_otherwise_is_caught(self) -> None:
         """Every term is still there as text, so only a read of the `||` operands sees either."""
         for old, new, term in (
-                (" || steps.changes.outputs.code", " && steps.changes.outputs.code", "github.event_name"),
+                (" || steps.changes.outputs.code", " && steps.changes.outputs.code",
+                 "github.event_name != 'pull_request'"),
                 ("steps.changes.outputs.stage-inputs != 'false'",
-                 "!(steps.changes.outputs.stage-inputs != 'false')", "stage-inputs")):
+                 "!(steps.changes.outputs.stage-inputs != 'false')", "steps.changes.outputs.stage-inputs != 'false'")):
             with self.subTest(new=new):
                 self.assertIn(term, self.problems(self.broken(old, new)))
 
