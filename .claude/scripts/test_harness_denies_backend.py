@@ -199,11 +199,25 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         # against that case rather than passed on. After the case, `$mode`
         # reaches only the timings recorder's `--mode`.
         source = (SCRIPTS / "dotnet-test.sh").read_text(encoding="utf-8")
-        self.assertIn("all) args=(Platform.slnx) ;;", source)
-        self.assertIn('fast) args=(Platform.slnx --filter "Category!=Integration") ;;', source)
-        self.assertIn('dotnet test "${args[@]}"', source)
-        self.assertNotIn('"$@"', source)
+        code = [line.strip() for line in source.splitlines() if not line.lstrip().startswith("#")]
+        self.assertIn("all) args=(Platform.slnx) ;;", code)
+        self.assertIn('fast) args=(Platform.slnx --filter "Category!=Integration") ;;', code)
+        # The one `dotnet` line whole, and a positional parameter in any spelling read only by the
+        # mode assignment: a word added to either is a parameter however it is spelled (#2028).
+        self.assertEqual(['dotnet test "${args[@]}" || code=$?'],
+                         [line for line in code if re.search(r"\bdotnet\s", line)])
+        positional = re.compile(r"\$(?:\{[#!]?)?[0-9@*]|\bshift\b|\bset --|BASH_ARGV")
+        self.assertEqual(['mode="${1:-all}"'], [line for line in code if positional.search(line)])
         self.assertNotIn("$mode\"", source.replace('"$mode" in', "").replace('--mode "$mode"', ""))
+
+    def test_the_timings_record_runs_where_no_py_launcher_exists(self):
+        # Linux and macOS have no `py`, so the recorder falls back to python3 as mutation-run.sh does (#2013).
+        code = [line.strip() for line in (SCRIPTS / "dotnet-test.sh").read_text(encoding="utf-8").splitlines()]
+        self.assertIn("python=python3", code)
+        self.assertIn('command -v py >/dev/null 2>&1 && python="py -3.12"', code)
+        self.assertEqual([], [line for line in code if line.startswith("py ")])
+        self.assertTrue(any(line.startswith("$python -I .claude/scripts/harness_timings.py record ")
+                            for line in code))
 
     # What `/validate-blueprint` actually audits, from its own opening lines.
     AUDITED_BY_VALIDATE_BLUEPRINT = {

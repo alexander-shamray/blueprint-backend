@@ -49,7 +49,7 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
 
     @staticmethod
     def writes(tool):
-        return re.match(r"(Write|Edit)(\(|$)", tool) is not None
+        return re.match(r"(Write|Edit|MultiEdit|NotebookEdit)(\(|$)", tool) is not None
 
     def writers(self):
         managed = json.loads(self.MANIFEST.read_text(encoding="utf-8"))["files"]
@@ -57,6 +57,15 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
         return [path for path in paths
                 if any(self.writes(tool)
                        for tool in payload.frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"))]
+
+    def test_every_tool_that_writes_a_file_counts_as_a_write(self):
+        # MultiEdit and NotebookEdit write as Edit does, so a grant of either is held to the denies (#2028).
+        for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit", "Edit(docs/**)", "NotebookEdit(**/*.ipynb)"):
+            with self.subTest(tool=tool):
+                self.assertTrue(self.writes(tool))
+        for tool in ("Read", "Bash(git status)", "Editor"):
+            with self.subTest(tool=tool):
+                self.assertFalse(self.writes(tool))
 
     def test_the_local_writing_commands_are_found(self):
         # The positive control: a set that found none would pass the case below. `/mutation-sweep` is local and holds
