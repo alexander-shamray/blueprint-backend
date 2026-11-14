@@ -2813,7 +2813,7 @@ class VerifiesAScaffoldCommit(unittest.TestCase):
 
         self.assertEqual(1, code)
         self.assertEqual("", out)
-        self.assertIn(f"{'0' * 40} is not a commit in this checkout", err)
+        self.assertIn(f"{'0' * 40} names no commit in this checkout", err)
 
     def test_a_commit_that_is_not_a_scaffold_fails_in_one_line(self):
         code, out, err = self.run_main("--verify", SHIPPING_FIRST_FEATURE)
@@ -2846,6 +2846,29 @@ class VerifiesAScaffoldCommit(unittest.TestCase):
                 scaffold.reproduce.arguments(root, elsewhere)
             with self.assertRaisesRegex(ScaffoldError, "has no parent"):
                 scaffold.reproduce.arguments(root, head)
+
+    def test_a_name_that_is_no_commit_blames_a_shallow_clone_only_in_one(self):
+        """A typo in a full clone is a typo; only a shallow one can lack a commit that exists."""
+        with tempfile.TemporaryDirectory() as directory:
+            full, shallow = Path(directory) / "full", Path(directory) / "shallow"
+            full.mkdir()
+
+            def git(root: Path, *args: str, stdin: bytes | None = None) -> str:
+                return scaffold.reproduce.git(root, *args, stdin=stdin).decode("ascii").strip()
+
+            git(full, "init", "--quiet")
+            tree = git(full, "hash-object", "-w", "-t", "tree", "--stdin", stdin=b"")
+            identity = ("-c", "user.name=scaffold", "-c", "user.email=scaffold@example.invalid")
+            first = git(full, *identity, "commit-tree", tree, "-m", "first")
+            git(full, "update-ref", "HEAD", git(full, *identity, "commit-tree", tree, "-p", first, "-m", "second"))
+            git(full, "clone", "--quiet", "--depth", "1", full.resolve().as_uri(), str(shallow))
+
+            with self.assertRaises(ScaffoldError) as typo:
+                scaffold.reproduce.arguments(full, "no-such-name")
+            self.assertIn("names no commit in this checkout", str(typo.exception))
+            self.assertNotIn("shallow", str(typo.exception))
+            with self.assertRaisesRegex(ScaffoldError, "a shallow clone lacks"):
+                scaffold.reproduce.arguments(shallow, first)
 
     def test_verify_takes_no_render_arguments(self):
         with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
