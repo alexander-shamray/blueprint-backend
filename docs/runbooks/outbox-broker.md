@@ -171,8 +171,8 @@ whose `Attempts` rise and whose `LastError` is rewritten after the broker came
 back is failing on its own — a poison message, and
 [`outbox-abandoned.md`](outbox-abandoned.md) once it hits the cap. Its
 `LockedUntil` will be in the future too, since every failure sets the next
-step, so that column alone tells the two apart only before a retry has run.
-Read it now rather than waiting:
+step, so that column never tells the two apart; only `Attempts` and
+`LastError` compared across the two reads do. Read it now rather than waiting:
 
 ```sql
 SELECT TOP 10
