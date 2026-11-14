@@ -301,6 +301,8 @@ class WorkflowStepTests(ScratchRepository):
         self.commit({"src/App/B.cs": "b\n"})
         self.commit({"docs/a.md": "a\n", "global.json": '{"sdk": {"version": "10.0.302"}}\n'})
         self.commit({"src/App/C.cs": "c\n"})
+        # A global.json naming no version pins nothing, as one that is absent does.
+        self.commit({"global.json": '{"sdk": {"rollForward": "latestFeature"}}\n'})
         head = self.commit({"global.json": '{"sdk": {"version": "10.0.400"}}\n'})
 
         result = self.run_step(self.base, head)

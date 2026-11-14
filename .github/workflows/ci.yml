@@ -888,12 +888,13 @@ jobs:
           set -euo pipefail
           python .github/pipeline-gate/commit_builds.py "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/commits.txt"
           versions=""
-          sdk_of='import json, sys; print(json.load(sys.stdin)["sdk"]["version"])'
+          sdk_of='import json, sys; print(json.load(sys.stdin).get("sdk", {}).get("version", ""))'
           while read -r verdict sha _; do
             [ "$verdict" = build ] || continue
-            # A commit with no global.json pins nothing, so takes the SDK installed above.
+            # A commit with no global.json, or one naming no version, pins nothing: it takes the SDK above.
             git cat-file -e "$sha:global.json" 2>/dev/null || continue
             pinned=$(git show "$sha:global.json" | python -c "$sdk_of")
+            [ -n "$pinned" ] || continue
             versions="$versions$pinned"$'\n'
           done < "$RUNNER_TEMP/commits.txt"
           {
