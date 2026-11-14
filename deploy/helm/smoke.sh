@@ -506,8 +506,8 @@ pass 'platform resolves its subcharts'
 
 # `helm dependency update` only checks that every NAMED dependency resolves —
 # deleting one from the list still updates cleanly, the routed-service section
-# further down reports "no chart yet" for what it dropped and passes, and every
-# render after this point simply has one fewer subchart. So the umbrella's own
+# further down fails it only where src/ dials its host, and every render
+# after this point simply has one fewer subchart. So the umbrella's own
 # dependency names are reconciled against SERVICE_CHARTS directly, both ways.
 deps_declared="$(awk '/^dependencies:/ { d = 1; next } d && /^  - name: / { print $3 }' \
     "$CHARTS_DIR/platform/Chart.yaml" | sort | tr '\n' ' ' | sed 's/ *$//')"
