@@ -1680,6 +1680,25 @@ done
 # --------------------------------------------------------------------------
 section 'Migration hook (§7.4, ADR-007)'
 # --------------------------------------------------------------------------
+# The name label inside the first Service's spec.selector, not its metadata's,
+# which commerce.labels renders first and which decides no endpoint.
+service_selector_name() {
+    # service_selector_name <render>
+    awk '/^---$/ { s = 0; sel = 0 }
+        /^kind: Service$/ { s = 1 }
+        s && /^  selector:$/ { sel = 1; next }
+        sel && !/^    / { sel = 0 }
+        sel && /^    app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$1"
+}
+printf '%s\n' '---' 'kind: Service' 'metadata:' '  labels:' '    app.kubernetes.io/name: labelled' \
+    'spec:' '  selector:' '    app.kubernetes.io/name: selected' >"$OUT/selector.yaml"
+check 'service_selector_name reads the selector, not the labels before it' \
+    test "$(service_selector_name "$OUT/selector.yaml")" = selected
+printf '%s\n' '---' 'kind: Service' 'metadata:' '  labels:' '    app.kubernetes.io/name: labelled' \
+    'spec:' '  type: ClusterIP' >"$OUT/selector.yaml"
+check 'service_selector_name reads nothing from a Service with no selector' \
+    test -z "$(service_selector_name "$OUT/selector.yaml")"
+
 for chart in $MIGRATOR_CHARTS; do
     check "$chart renders a migration Job" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 1
     check "$chart runs it pre-install,pre-upgrade" \
@@ -1698,16 +1717,20 @@ for chart in $MIGRATOR_CHARTS; do
     check "$chart mounts the MIGRATOR connection string, not the runtime one" \
         grep -qE '^ *- name: ConnectionStrings__[A-Za-z]+Migrator$' "$OUT/$chart.yaml"
 
-    # The migrator must not be selectable by the Service it migrates: for the
-    # length of every pre-upgrade hook a pod with a database connection and no
-    # HTTP listener would otherwise be an endpoint of a live service, and
-    # inside its PDB. The Service's selector name is compared with the Job pod
-    # template's, which is the pair that decides endpoint membership; the Job
-    # object's labels still carry the ordinary identity.
-    svc_name="$(awk '/^kind: Service$/ { s = 1 } s && /^    app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
+    # The migrator must not be selectable by the Service it migrates: during a
+    # pre-upgrade hook a pod with a database connection and no HTTP listener
+    # would be an endpoint of a live service, inside its PDB. The selector's
+    # name and the Job pod template's decide endpoint membership; an empty read
+    # fails, and a worker with no Service has only the pod's to read.
+    svc_name="$(service_selector_name "$OUT/$chart.yaml")"
     job_pod_name="$(awk '/^kind: Job$/ { j = 1 } j && /^  template:/ { t = 1 } t && /^        app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
-    check "$chart's migrator pod is not an endpoint of its own Service ($job_pod_name vs $svc_name)" \
-        test "$job_pod_name" != "$svc_name"
+    if [ "$(count '^kind: Service$' "$OUT/$chart.yaml")" -eq 0 ]; then
+        check "$chart's migrator pod carries a name label, with no Service to answer ($job_pod_name)" \
+            test -n "$job_pod_name"
+    else
+        check "$chart's migrator pod is not an endpoint of its own Service ($job_pod_name vs $svc_name)" \
+            sh -c '[ -n "$1" ] && [ -n "$2" ] && [ "$1" != "$2" ]' _ "$job_pod_name" "$svc_name"
+    fi
     check "$chart's migrator pod says what it is" \
         grep -q 'app.kubernetes.io/component: migrator' "$OUT/$chart.yaml"
 
