@@ -675,7 +675,7 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
     """The shell words after every `words` command a workflow runs, up to its operator; None if one will not split."""
     lines = [line for line in workflow_text.splitlines() if not line.lstrip().startswith("#")]
     joined = re.sub(r"\\\n[ \t]*", " ", "\n".join(lines))
-    opening = re.compile(r"(?:^|(?<=[\s;&|(`]))" + r"\s+".join(map(re.escape, words)) + r"(?![\w-])")
+    opening = re.compile(r"(?:^|(?<=[\s;&|(`/]))" + r"\s+".join(map(re.escape, words)) + r"(?![\w-])")
     commands = []
     for line in joined.splitlines():
         for found in opening.finditer(line):
@@ -735,6 +735,9 @@ def _check_admission(deploy_text: str) -> list[str]:
                 "words, so its flags cannot be read"]
     subject = "deploy.yml's `cosign verify` step is not"
     problems = []
+    if not verifies:
+        problems.append(f"{subject} pinned to ci.yml on main: no `cosign verify` command reads as one, so no "
+                        "identity or issuer is checked")
     for arguments in verifies:
         for flag, expected, value, why in (
             ("certificate-identity", lambda repository: rf"https://github\.com/{repository}{re.escape(CI_IDENTITY)}",
