@@ -242,10 +242,12 @@ path the render writes or the commit changes, byte for byte once line endings
 are set aside:
 
 ```bash
-py -3.12 tools/new-service/new_service.py --verify <commit>
+py -3.12 tools/new-service/new_service.py --verify df82bac4
 ```
 
-It exits non-zero on a difference that
+(`df82bac4`, Shipping's scaffold commit, rather than a `<commit>`
+placeholder, which this `bash` fence would read as a redirection; give it
+the commit to prove.) It exits non-zero on a difference that
 [`known-differences.txt`](known-differences.txt) does not list, and on a
 listed one the render reproduces. That file records, as of each commit it
 names, what this rule would have refused; a commit after the rule adds no
