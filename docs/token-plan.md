@@ -228,14 +228,14 @@ cut is the window, not another rule: `autoCompactWindow` at 500,000 in
 the owner's user settings, at the top level and in place of the 800,000
 under `modelSettings`, the owner's decision of 2026-11-01 on #1664, a
 change outside the repository. The plan had asked for 260,000, which
-fires under 250k, the one window whose replay read under 150k; the owner
-kept 500,000. Rejected also: the same key in the committed
-`.claude/settings.json`, which would hold the window to this repository
-alone but is a self-locking harness change of its own.
+fires under 250k, the largest whose replay read under 150k on both
+spans; the owner kept 500,000. Rejected also: the same key in the
+committed `.claude/settings.json`, which would hold the window to this
+repository alone but is a self-locking harness change of its own.
 
 **The bar follows the window** (`token-usage.md`, 2026-11-14). Over the
-thirteen days after it the window held every compaction under 500k, at a
-median 252k, and a main session read 169k a call, against 236k on the
+thirteen days after it the window held every automatic compaction under
+500k, at a median 252k, and a main session read 169k a call, against 236k on the
 span that failed; the replay reaches 150k on that span only with a window
 under 300k. With the window the owner's, 150k measures a setting no
 change here can make, so the bar is 200k: over every span the 500k replay
