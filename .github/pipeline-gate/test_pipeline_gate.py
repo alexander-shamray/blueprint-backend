@@ -851,6 +851,19 @@ class GrantTests(unittest.TestCase):
                 self.assertEqual(len(problems), 1, problems)
                 self.assertIn("job `build`", problems[0])
 
+    def test_a_grant_beside_a_reusable_workflow_call_on_a_pull_request_is_caught(self) -> None:
+        """The called workflow's trigger is workflow_call, so the caller is the one place the grant is judged."""
+        for call in ("./.github/workflows/build.yml", "octo/tools/.github/workflows/build.yml@v1"):
+            with self.subTest(call=call):
+                self.write(GRANTED.replace(
+                    "  build:\n    steps:\n      - uses: actions/checkout@v7\n",
+                    f"  build:\n    permissions:\n      packages: write\n    uses: {call}\n"))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("job `build`", problems[0])
+
     def test_a_job_key_this_check_cannot_read_is_refused(self) -> None:
         self.write(GRANTED.replace("  build:\n", "  build: &build\n"))
 

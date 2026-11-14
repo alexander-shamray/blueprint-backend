@@ -856,6 +856,8 @@ def check_actions(root: Path = ROOT) -> list[str]:
 # --------------------------------------------------------------------------
 
 CHECKOUT = re.compile(USES_KEY + r"['\"]?actions/checkout@", flags=re.MULTILINE)
+# A job that calls a reusable workflow runs that workflow under its grants, and its checkout is unread here.
+WORKFLOW_CALL = re.compile(r"""^ {4}['"]?uses['"]?[ \t]*:""", flags=re.MULTILINE)
 # Every event a pull request starts; the review events run on its branch too.
 PULL_REQUEST_EVENTS = ("pull_request", "pull_request_target", "pull_request_review", "pull_request_review_comment")
 
@@ -1019,7 +1021,8 @@ def check_grants(root: Path = ROOT) -> list[str]:
             if not grants:
                 continue
             held += 1
-            if not reached or not CHECKOUT.search("\n".join(lines)):
+            body = "\n".join(lines)
+            if not reached or not (CHECKOUT.search(body) or WORKFLOW_CALL.search(body)):
                 continue
             condition = read_job_condition(text, job) or ""
             if not _keeps_pull_requests_out(condition, ref_decides="pull_request_target" not in text):
