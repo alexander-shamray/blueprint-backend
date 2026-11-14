@@ -611,11 +611,8 @@ MOVING_TAG_ANSWER = re.compile(r'(?:^|(?<=[\s;]))git merge-base --is-ancestor "\
 # The tag itself read, then compared with the signed digest, not merely named beside it.
 MOVING_TAG_READBACK = r'\b(\w+)=\$\(docker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
 MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
-# An `exit` right after `&&`, `||` or a pipe, or inside a `{` group one opens or any `(` still open. By the
-# brackets rather than `;`, since the step reader folds a run block's line breaks into spaces.
-CONDITIONAL_EXIT = re.compile(
-    r"(?:(?:&&|\|\|?)\s*(?:\\\s*)?(?:\{(?:[^{}]|\{[^{}]*\})*)?|\((?:[^()]|\([^()]*\))*)$"
-)
+# `&&`, `||` or a pipe ending the text, directly or through a line continuation.
+AFTER_OPERATOR = re.compile(r"(?:&&|\|)\s*(?:\\\s*)?$")
 MOVING_TAG_COMPARISON = r'(?:^|(?<=[\s;]))if \[\s+"\${read}"\s+!=\s+"\$DIGEST"\s+\];?\s+then(?=[\s;]|$)'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
@@ -875,7 +872,7 @@ def _acts_on_ancestry(commands: str) -> bool:
 def _first_exit(text: str) -> str | None:
     """The first `exit` every run of quoted-away text reaches at its own depth, or None where its block ends first.
 
-    One inside a nested `if`, `case` or loop, or one CONDITIONAL_EXIT reads, is not reached on every run: passed.
+    One inside a nested `if`, `case` or loop, or one `_conditional` reads, is not reached on every run: passed.
     """
     depth = 0
     for word in _shell_words(text, r"if|case|for|while|until|fi|esac|done|else|elif|exit(?: \d+)?"):
@@ -884,9 +881,21 @@ def _first_exit(text: str) -> str | None:
             depth += 1
         elif depth and name in ("fi", "esac", "done"):
             depth -= 1
-        elif depth == 0 and not (name.startswith("exit") and CONDITIONAL_EXIT.search(text[:word.start()])):
+        elif depth == 0 and not (name.startswith("exit") and _conditional(text[:word.start()])):
             return name if name.startswith("exit") else None
     return None
+
+
+def _conditional(before: str) -> bool:
+    """An `exit` after `before` runs only sometimes: right after an operator, or inside an open `(`, or an open `{`
+    an operator opened. Brackets, not `;`, since the step reader folds line breaks; a scan, so groups nest."""
+    opened: list[bool] = []
+    for index, character in enumerate(before):
+        if character in "{(":
+            opened.append(character == "(" or AFTER_OPERATOR.search(before[:index]) is not None)
+        elif character in "})" and opened:
+            opened.pop()
+    return any(opened) or AFTER_OPERATOR.search(before) is not None
 
 
 def _exits_one(branch: str) -> bool:
