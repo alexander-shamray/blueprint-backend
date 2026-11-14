@@ -18,8 +18,9 @@ for the first two; this gate is §3 enforced.
   alone, and a body holding a carriage return outside a CRLF is refused,
   since GitHub and the helper would fence different lines. A row in a fence
   that opens after a list item, block quote or HTML block is refused rather
-  than skipped: GitHub can end such a fence sooner, or hide its opener, and a
-  line reader cannot tell.
+  than skipped: GitHub ends a fence in a list item when the list ends, and
+  hides a fence line inside a comment, which a line reader cannot follow; a
+  block quote is refused too, as a precaution.
 - [`classes.yml`](classes.yml), the one place the class → tree-set map
   lives. The contract's table states each class in words and cites the file.
   It is read by a parser that accepts the one shape the file's header states
