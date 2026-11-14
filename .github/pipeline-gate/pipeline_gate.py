@@ -1400,6 +1400,14 @@ def check_grants(root: Path = ROOT) -> list[str]:
 
 ALERT_WORKFLOW = "main-red.yml"
 ALERT_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
+ALERT_CONCLUSION = "github.event.workflow_run.conclusion"
+PUSH_RUN = "github.event.workflow_run.event == 'push'"
+FIRST_ATTEMPT = "github.event.workflow_run.run_attempt == 1"
+UNHEARD_RERUN = frozenset({
+    "needs.rerun.result != 'success'",
+    "!contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)"})
+NOT_ITS_OWN_RERUN = frozenset({
+    FIRST_ATTEMPT, "github.event.workflow_run.triggering_actor.login != 'github-actions[bot]'"})
 
 
 def _key(lines: list[str], key: str, indent: int) -> tuple[str, list[str]] | None:
@@ -1543,25 +1551,59 @@ def read_watched(alert_text: str) -> list[str]:
     return _list(*workflows) if workflows else []
 
 
+def _listed_beside(operands: list[str], subject: str) -> str:
+    """Read list by list, as `||` operands of one `&&` term: the conclusion and the need's result share a word."""
+    pattern = rf"contains\(fromJSON\('\[([^']*)\]'\), {re.escape(subject)}\)"
+    return next((found.group(1) for operand in operands if (found := re.fullmatch(pattern, operand))), "")
+
+
+def _holds_operands(operands: frozenset[str]) -> Callable[[str], bool]:
+    return lambda term: operands <= set(_disjuncts(term))
+
+
+def _mentions(subject: str) -> Callable[[str], bool]:
+    return lambda term: subject in term
+
+
+# Every `&&` term each job may carry, each claiming one: one nobody reads could be a `false` that files nothing.
+# A group is claimed by what it is about, so one written wrong is its own check's refusal, not a second one here.
+ALERT_TERMS: dict[str, tuple[Callable[[str], bool], ...]] = {
+    "read-cancelled": (PUSH_RUN.__eq__, _mentions(ALERT_CONCLUSION)),
+    "rerun": ("always()".__eq__, PUSH_RUN.__eq__, _mentions("run_attempt"), _mentions(ALERT_CONCLUSION)),
+    "file": ("always()".__eq__, PUSH_RUN.__eq__, _mentions(ALERT_CONCLUSION), _mentions("needs.rerun."),
+             _mentions("run_attempt")),
+}
+
+
+def check_alert_terms(alert_text: str) -> list[str]:
+    """No job of the alert's carries an `&&` term beside those the checks read (ADR-155, ADR-210)."""
+    problems: list[str] = []
+    for job, known in ALERT_TERMS.items():
+        unclaimed = list(known)
+        # A job gone, or a condition gone, is the other checks' refusal; this one reads what is there.
+        for term in _conjuncts(condition) if (condition := read_job_condition(alert_text, job)) else []:
+            if claimed := next((reader for reader in unclaimed if reader(term)), None):
+                unclaimed.remove(claimed)
+                continue
+            problems.append(
+                f"{ALERT_WORKFLOW}'s `{job}` job's `if:` holds `{term}`, an `&&` term no check here reads, "
+                "so it could keep the job from a run it must hear")
+    return problems
+
+
 def check_alert_conclusions(alert_text: str) -> list[str]:
     """The alert still hears every conclusion a red run ends on (ADR-155, ADR-196)."""
     filing = _conjuncts(read_job_condition(alert_text, "file") or "")
-
-    # Read list by list, as `||` operands of one `&&` term: the conclusion and the need's result share a word.
-    def listed_beside(operands: list[str], subject: str) -> str:
-        pattern = rf"contains\(fromJSON\('\[([^']*)\]'\), {re.escape(subject)}\)"
-        return next((found.group(1) for operand in operands if (found := re.fullmatch(pattern, operand))), "")
-
     group = next((operands for operands in map(_disjuncts, filing)
-                  if listed_beside(operands, "github.event.workflow_run.conclusion")), [])
-    conclusions = listed_beside(group, "github.event.workflow_run.conclusion")
+                  if _listed_beside(operands, ALERT_CONCLUSION)), [])
+    conclusions = _listed_beside(group, ALERT_CONCLUSION)
     problems = [
         f"{ALERT_WORKFLOW}'s `file` job does not file on `{conclusion}`, so a run ending so alerts nobody"
         for conclusion in ALERT_CONCLUSIONS
         if f'"{conclusion}"' not in conclusions
     ]
-    results = listed_beside(group, "needs.read-cancelled.result")
-    if ("github.event.workflow_run.conclusion == 'cancelled'"
+    results = _listed_beside(group, "needs.read-cancelled.result")
+    if (f"{ALERT_CONCLUSION} == 'cancelled'"
             not in _conjuncts(read_job_condition(alert_text, "read-cancelled") or "")
             or "always()" not in filing
             or "needs.read-cancelled.outputs.reason != ''" not in group
@@ -1577,15 +1619,18 @@ def check_alert_conclusions(alert_text: str) -> list[str]:
 def check_alert_rerun(alert_text: str) -> list[str]:
     """A red first attempt is rerun once, and files unless its rerun said otherwise (ADR-210)."""
     problems: list[str] = []
-    if "github.event.workflow_run.run_attempt == 1" not in _conjuncts(read_job_condition(alert_text, "rerun") or ""):
+    if FIRST_ATTEMPT not in _conjuncts(read_job_condition(alert_text, "rerun") or ""):
         problems.append(
             f"{ALERT_WORKFLOW}'s `rerun` job does not keep to a first attempt, so each rerun would start another")
-    unheard = {"needs.rerun.result != 'success'",
-               "!contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)"}
-    if not any(unheard <= set(_disjuncts(term)) for term in _conjuncts(read_job_condition(alert_text, "file") or "")):
+    filing = _conjuncts(read_job_condition(alert_text, "file") or "")
+    if not any(map(_holds_operands(UNHEARD_RERUN), filing)):
         problems.append(
             f"{ALERT_WORKFLOW}'s `file` job does not file a red run its rerun did not see pass, "
             "so a second red attempt alerts nobody")
+    if not any(map(_holds_operands(NOT_ITS_OWN_RERUN), filing)):
+        problems.append(
+            f"{ALERT_WORKFLOW}'s `file` job does not keep to a first attempt or one a person started, so the "
+            "attempt `rerun` started files a second time, or a person's red rerun alerts nobody")
     return problems
 
 
@@ -1608,7 +1653,8 @@ def check_alerts(root: Path = ROOT) -> list[str]:
         ]
 
     pushed_by_name: dict[str, bool] = {}
-    problems: list[str] = check_alert_conclusions(alert_text) + check_alert_rerun(alert_text)
+    problems: list[str] = (check_alert_conclusions(alert_text) + check_alert_rerun(alert_text)
+                           + check_alert_terms(alert_text))
     for path in sorted(directory.glob("*")):
         if path.suffix not in (".yml", ".yaml") or path.name == ALERT_WORKFLOW:
             continue
