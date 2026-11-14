@@ -714,7 +714,10 @@ public sealed class AssistantSession : IDisposable
             if (value is JsonValue scalar)
             {
                 string text = scalar.ToString();
-                args[key] = text.Length <= 80 ? scalar.DeepClone() : JsonValue.Create(text[..80]);
+
+                // As in Bound: a cut inside a surrogate pair would store and send half a character in the label.
+                int keep = text.Length > 80 && char.IsHighSurrogate(text[79]) ? 79 : 80;
+                args[key] = text.Length <= 80 ? scalar.DeepClone() : JsonValue.Create(text[..keep]);
             }
         }
 
