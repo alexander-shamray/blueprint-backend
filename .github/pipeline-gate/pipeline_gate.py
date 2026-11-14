@@ -771,8 +771,8 @@ def _check_admission(deploy_text: str) -> list[str]:
     attestations = read_command_arguments(deploy_text, ("gh", "attestation", "verify"))
     if verifies is None or attestations is None:
         return ["deploy.yml has a `cosign verify` or `gh attestation verify` line that does not split into shell "
-                "words: an unbalanced quote, a substitution, an expansion or a quoting this gate does not follow, so its "
-                "flags cannot be read"]
+                "words this gate follows: an unbalanced quote, a substitution, an expansion, a parenthesis or a brace "
+                "list, quoted or not, so its flags cannot be read"]
     subject = "deploy.yml's `cosign verify` step is not"
     problems = []
     if not verifies:
