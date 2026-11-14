@@ -112,30 +112,38 @@ class Rerun(unittest.TestCase):
         with unittest.mock.patch.object(read_cancelled_run, "read_run", side_effect=refused):
             self.assertEqual(self.run_it()["second"], "red")
 
-    def test_a_newer_run_still_going_on_main_is_waited_for_before_the_rerun(self) -> None:
-        newer = iter(["8\n", "8\n", ""])
-        self.answers[f"repos/{REPO}/actions/workflows/42/runs?branch=main&event=push"] = lambda *a: next(newer)
+    def test_newer_runs_are_read_before_the_rerun(self) -> None:
+        self.run_it()
 
-        self.assertEqual(self.run_it()["second"], "passed")
+        [runs] = [index for index, call in enumerate(self.calls) if "/workflows/42/runs?branch=main" in call[1]]
+        self.assertEqual(self.calls[runs][-1], f".workflow_runs[] | select(.id > {RUN}) | .id")
+        self.assertLess(runs, self.calls.index(("run", "rerun", RUN, "--failed", "-R", REPO)))
 
-        runs = [index for index, call in enumerate(self.calls) if "/workflows/42/runs" in " ".join(call)]
-        rerun = self.calls.index(("run", "rerun", RUN, "--failed", "-R", REPO))
-        self.assertEqual(len(runs), 3)
-        self.assertLess(runs[-1], rerun)
-        self.assertIn(f"select(.id > {RUN} and", " ".join(self.calls[runs[0]]))
+    def test_a_newer_run_on_main_is_the_one_heard_so_this_one_is_neither_rerun_nor_filed(self) -> None:
+        for status in ("completed", "in_progress"):
+            with self.subTest(status=status):
+                # The read selects by id alone, so a newer run that already finished stands this one down too.
+                self.calls, self.answers = [], {"/workflows/42/runs": "8\n"}
 
-    def test_a_newer_run_still_going_at_the_deadline_is_filed_and_not_rerun(self) -> None:
-        self.answers["/workflows/42/runs"] = "8\n"
+                outputs = self.run_it()
+
+                self.assertEqual(outputs, {"second": "superseded", "conclusion": "", "why": ""})
+                self.assertFalse(any(call[:2] == ("run", "rerun") for call in self.calls))
+                self.assertEqual(self.commented(), [])
+
+    def test_newer_runs_that_cannot_be_read_file_at_once_and_rerun_nothing(self) -> None:
+        self.answers["/workflows/42/runs"] = refused
 
         outputs = self.run_it()
 
-        self.assertEqual(outputs["second"], "unfinished")
-        self.assertIn("a rerun beside it could cancel it", outputs["why"])
+        self.assertEqual(outputs["second"], "unread")
+        self.assertIn("could not be read", outputs["why"])
+        self.assertIn("`Run the shard`", outputs["why"])
         self.assertFalse(any(call[:2] == ("run", "rerun") for call in self.calls))
-        self.assertEqual(self.commented(), [])
 
     def test_a_refused_rerun_is_filed_at_once_and_waits_for_nothing(self) -> None:
         self.answers["run rerun"] = refused
+        self.answers["--jq .run_attempt"] = "1\n"
 
         outputs = self.run_it()
 
@@ -143,7 +151,14 @@ class Rerun(unittest.TestCase):
         self.assertIn("GitHub refused to rerun", outputs["why"])
         self.assertIn("`Run the shard`", outputs["why"])
         self.assertEqual(self.commented(), [])
-        self.assertFalse(any(call[1] == f"repos/{REPO}/actions/runs/{RUN}" for call in self.calls))
+        self.assertEqual(self.now, 0)
+
+    def test_a_rerun_refused_because_a_person_reran_it_waits_on_that_attempt(self) -> None:
+        self.answers["run rerun"] = refused
+        self.answers["--jq .run_attempt"] = "2\n"
+        self.attempts = [("2", "completed", "success")]
+
+        self.assertEqual(self.run_it()["second"], "passed")
 
     def test_a_rerun_that_outlasts_the_deadline_is_filed_rather_than_waited_on(self) -> None:
         self.attempts = [("2", "in_progress", "")]

@@ -280,6 +280,7 @@ vocabulary, which `.github/issue-form-gate/` reads from this section:
   ([ADR-194](backend-architecture/adr/ADR-194-auto-merge-stays-off-on-its-own-argument-1716-amending-adr-155.md)).
 - **`main-red.yml` files `main is red: <workflow>`** for a red push run,
   or comments on the open one, unless one rerun of its failed jobs passes
+  or a newer run of it is the one heard
   ([ADR-210](backend-architecture/adr/ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md)).
 - **The commit gate stands down for a Dependabot pull request only when
   every commit's author and committer are Dependabot's**

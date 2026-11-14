@@ -1,8 +1,8 @@
 """Rerun a red first attempt of a push run on main once, and say how the second attempt ended (ADR-210).
 
 Usage: rerun_red_run.py <owner/repo> <run-id>; it writes `second`, `conclusion` and `why` to `$GITHUB_OUTPUT`
-and exits 0 whatever the rerun did, as `main-red.yml`'s `file` job files every `second` but `passed` and
-`replaced`."""
+and exits 0 whatever the rerun did, as `main-red.yml`'s `file` job files every `second` but `passed`,
+`replaced` and `superseded`."""
 
 from __future__ import annotations
 
@@ -83,24 +83,25 @@ def wait_for_second(gh: Gh, repo: str, run_id: str,
         sleep(POLL_SECONDS)
 
 
-def wait_for_newer(gh: Gh, repo: str, run_id: str, workflow_id: str,
-                   sleep: Callable[[float], None], clock: Callable[[], float], deadline: float) -> bool:
-    """Whether no newer push run of the workflow on main is still going, waited for until the deadline.
+def newer_runs(gh: Gh, repo: str, run_id: str, workflow_id: str) -> str | None:
+    """The ids of the workflow's push runs on main newer than this one, None when they cannot be read.
 
-    Most watched workflows cancel a running run of `main` when another joins their group, so a rerun
-    started beside a newer run would cancel the newer one, and main's head would go untested.
+    A newer run tests main's newer head and is heard on its own; rerunning this one beside it would, under
+    the ref-keyed `cancel-in-progress` groups most watched workflows use, cancel it or its own rerun.
     """
-    newer = (f'.workflow_runs[] | select(.id > {int(run_id)} and .status != "completed") | .id')
-    while True:
-        try:
-            if not gh("api", f"repos/{repo}/actions/workflows/{workflow_id}/runs?branch=main&event=push&per_page=20",
-                      "--jq", newer).strip():
-                return True
-        except (subprocess.CalledProcessError, ValueError):
-            pass  # A read that fails once is read again; the deadline bounds it.
-        if clock() >= deadline:
-            return False
-        sleep(POLL_SECONDS)
+    try:
+        return gh("api", f"repos/{repo}/actions/workflows/{workflow_id}/runs?branch=main&event=push&per_page=20",
+                  "--jq", f".workflow_runs[] | select(.id > {int(run_id)}) | .id").strip()
+    except (subprocess.CalledProcessError, ValueError):
+        return None
+
+
+def rerun_attempt(gh: Gh, repo: str, run_id: str) -> int:
+    """The run's latest attempt, 1 when it cannot be read."""
+    try:
+        return int(gh("api", f"repos/{repo}/actions/runs/{run_id}", "--jq", ".run_attempt").strip())
+    except (subprocess.CalledProcessError, ValueError):
+        return 1
 
 
 def judge_second(gh: Gh, repo: str, run_id: str, conclusion: str) -> tuple[str, str]:
@@ -120,16 +121,22 @@ def rerun(gh: Gh, repo: str, run_id: str, env: Mapping[str, str],
           sleep: Callable[[float], None], clock: Callable[[], float]) -> dict[str, str]:
     deadline = clock() + DEADLINE_MINUTES * 60
     failed = read_failed(gh, repo, run_id)
-    if not wait_for_newer(gh, repo, run_id, env.get("WORKFLOW_ID", ""), sleep, clock, deadline):
-        return {"second": "unfinished", "conclusion": "",
-                "why": f"A newer run of it on main was still running after {DEADLINE_MINUTES} minutes, and a "
-                       f"rerun beside it could cancel it, so its failed jobs were not rerun.\n\n{failed}"}
+    newer = newer_runs(gh, repo, run_id, env.get("WORKFLOW_ID", ""))
+    if newer is None:
+        return {"second": "unread", "conclusion": "",
+                "why": "Whether a newer run of it on main exists could not be read, and a rerun beside one "
+                       f"could cancel it, so its failed jobs were not rerun.\n\n{failed}"}
+    if newer:
+        print(f"a newer push run on main ({newer.split()[0]}) is the one heard, so this one is not rerun")
+        return {"second": "superseded", "conclusion": "", "why": ""}
     try:
         gh("run", "rerun", run_id, "--failed", "-R", repo)
     except subprocess.CalledProcessError:
-        print("::error::the failed jobs could not be rerun, so the first attempt is filed")
-        return {"second": "refused", "conclusion": "",
-                "why": f"GitHub refused to rerun its failed jobs, so this is its first attempt.\n\n{failed}"}
+        # A person may have rerun it first; then that attempt is the second one.
+        if rerun_attempt(gh, repo, run_id) < 2:
+            print("::error::the failed jobs could not be rerun, so the first attempt is filed")
+            return {"second": "refused", "conclusion": "",
+                    "why": f"GitHub refused to rerun its failed jobs, so this is its first attempt.\n\n{failed}"}
 
     workflow = env.get("WORKFLOW", "")
     comment_on_tracker(gh, repo, "\n".join((
