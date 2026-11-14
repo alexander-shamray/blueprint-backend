@@ -370,7 +370,8 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     public async Task A_jwt_exp_that_is_not_a_number_counts_as_no_exp()
     {
         string claims = Base64Url.EncodeToString(Encoding.UTF8.GetBytes("""{"exp":"4102444800"}"""));
-        _provider.TokenSuccessBody = $$"""{"access_token":"header.{{claims}}.signature","expires_in":300}""";
+        _provider.TokenSuccessBody =
+            JsonSerializer.Serialize(new { access_token = $"header.{claims}.signature", expires_in = 300 });
 
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
@@ -379,9 +380,9 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_success_that_is_not_a_json_object_is_refused_as_missing_its_member(bool discovery)
+    [InlineData(true, "token_endpoint")]
+    [InlineData(false, "access_token")]
+    public async Task A_success_that_is_not_a_json_object_is_refused_as_missing_its_member(bool discovery, string member)
     {
         if (discovery)
             _provider.DiscoveryBody = "[]";
@@ -391,7 +392,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
 
-        thrown.Message.ShouldContain(discovery ? "no usable token_endpoint" : "no usable access_token");
+        thrown.Message.ShouldContain($"no usable {member}");
     }
 
     /// <summary>A callee that answers every call 401 and keeps each bearer token it was sent.</summary>
