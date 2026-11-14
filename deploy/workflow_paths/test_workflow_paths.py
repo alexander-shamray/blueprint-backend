@@ -93,6 +93,17 @@ class TheGlob(unittest.TestCase):
             with self.subTest(path=path, entry=entry):
                 self.assertEqual(workflow_paths.covers(path, entry), expected)
 
+    def test_a_later_negation_uncovers_what_it_may_match_as_github_skips_it(self):
+        for patterns, entry, expected in (
+                (["deploy/**", "!deploy/canary/**"], "deploy/canary", False),
+                (["deploy/**", "!deploy/canary/**"], "deploy", False),
+                (["deploy/**", "!deploy/canary/**"], "deploy/helm", True),
+                (["deploy/**", "!**/*.md"], "deploy/helm", False),
+                (["!deploy/canary/**", "deploy/**"], "deploy/canary", True),
+                (["!deploy/**"], "deploy", False)):
+            with self.subTest(patterns=patterns, entry=entry):
+                self.assertEqual(workflow_paths.covered(entry, patterns), expected)
+
 
 class TheWorkflowCheck(unittest.TestCase):
 

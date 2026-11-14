@@ -77,7 +77,25 @@ def covers(path: str, entry: str) -> bool:
 
 
 def covered(entry: str, patterns: list[str]) -> bool:
-    return any(covers(pattern, entry) for pattern in patterns)
+    """Patterns apply in order, as GitHub's do: a later `!` entry that may
+    match anything inside `entry` uncovers it, since GitHub skips the run."""
+    result = False
+    for pattern in patterns:
+        if pattern.startswith("!"):
+            result = result and not _may_overlap(pattern[1:], entry)
+        elif covers(pattern, entry):
+            result = True
+    return result
+
+
+def _may_overlap(pattern: str, entry: str) -> bool:
+    """False only where a literal segment of `pattern` differs from `entry`'s."""
+    for glob, literal in zip(pattern.split("/"), entry.split("/")):
+        if any(c in glob for c in "*?[+"):
+            return True
+        if glob != literal:
+            return False
+    return True
 
 
 def check_workflow_covers_inputs(
