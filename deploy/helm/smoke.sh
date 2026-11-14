@@ -2749,7 +2749,7 @@ for chart in $LADDER_CHARTS; do
         "$OUT/$chart-canary.yaml" | sort -u >"$OUT/$chart-canary-mounted.txt"
     awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, ""); print; want = 0 }' \
         "$OUT/$chart-canary.yaml" | sort -u >"$OUT/$chart-canary-rendered.txt"
-    # Non-empty first, or a lost envFrom passes both comparisons vacuously.
+    # Non-empty first, or a lost envFrom passes the forward comparison vacuously.
     check "$chart: the canary mounts a ConfigMap at all" test -s "$OUT/$chart-canary-mounted.txt"
     check "$chart: every ConfigMap the canary mounts, the canary renders" \
         test -z "$(comm -23 "$OUT/$chart-canary-mounted.txt" "$OUT/$chart-canary-rendered.txt")"
