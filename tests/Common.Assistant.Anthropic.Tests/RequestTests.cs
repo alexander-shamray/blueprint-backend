@@ -275,6 +275,41 @@ public sealed class RequestTests
     }
 
     [Fact]
+    public async Task A_schema_with_a_type_list_or_no_type_in_an_anyOf_branch_is_closed_and_loses_its_bounds_too()
+    {
+        // A nullable object and a nullable integer, and an anyOf branch with no `type`; a `default` holding a bound's
+        // name is a value, not a schema.
+        TurnRequest request = Given.Request(new UserMessage("hi")) with
+        {
+            Tools =
+            [
+                Given.Tool("listed") with
+                {
+                    InputSchema = JsonNode.Parse("""
+                        {"type":"object","properties":{
+                          "where":{"type":["object","null"],"properties":{"x":{"type":"string"}}},
+                          "count":{"type":["integer","null"],"minimum":1},
+                          "pick":{"anyOf":[{"properties":{"p":{"type":"string"}},"maxLength":9},{"type":"null"}]},
+                          "shape":{"type":"object","properties":{},"default":{"minimum":3}}},
+                        "required":["where","count","pick","shape"]}
+                        """)!.AsObject(),
+                },
+            ],
+        };
+
+        JsonObject properties = (await SentFor(request)).Body!["tools"]![0]!["input_schema"]!["properties"]!.AsObject();
+
+        properties["where"]!["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        properties["count"]!.AsObject().ContainsKey("minimum").ShouldBeFalse();
+        properties["count"]!["description"]!.GetValue<string>().ShouldBe("""{"minimum":1}""");
+        properties["count"]!.AsObject().ContainsKey("additionalProperties").ShouldBeFalse();
+        JsonObject branch = properties["pick"]!["anyOf"]![0]!.AsObject();
+        branch["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        branch.ContainsKey("maxLength").ShouldBeFalse();
+        properties["shape"]!["default"]!["minimum"]!.GetValue<int>().ShouldBe(3);
+    }
+
+    [Fact]
     public async Task The_system_text_and_catalogue_are_cached_and_nothing_that_varies_comes_before_the_breakpoint()
     {
         JsonObject body = (await SentFor(Given.Request(new UserMessage("hi")))).Body!.AsObject();
