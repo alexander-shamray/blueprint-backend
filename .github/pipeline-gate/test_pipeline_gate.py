@@ -1735,6 +1735,7 @@ class AlertTests(unittest.TestCase):
             # Each entry a glob as GitHub matches it, a later `!` overruling.
             "on:\n  push:\n    branches: ['ma*']\n": True,
             "on:\n  push:\n    branches: ['**']\n": True,
+            "on:\n  push:\n    branches: ['**/main']\n": True,
             "on:\n  push:\n    branches: ['mai+n']\n": True,
             "on:\n  push:\n    branches: ['release/*']\n": False,
             "on:\n  push:\n    branches: ['*/main']\n": False,

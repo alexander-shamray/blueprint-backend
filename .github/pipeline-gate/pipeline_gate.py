@@ -1090,6 +1090,10 @@ def _branch_glob(pattern: str) -> re.Pattern[str] | None:
     translated = ""
     index = 0
     while index < len(pattern):
+        if pattern.startswith("**/", index):
+            # As GitHub's cheat sheet has it: `**/migrate-*.sql` matches `migrate-10909.sql`.
+            translated, index = translated + "(?:.*/)?", index + 3
+            continue
         if pattern.startswith("**", index):
             translated, index = translated + ".*", index + 2
             continue
