@@ -1015,6 +1015,19 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public void An_IdleTimeout_reaching_past_year_one_keeps_every_conversation()
+    {
+        FakeTimeProvider time = new();
+        using AssistantCore core =
+            Core(new ScriptedProvider(), new AssistantLimits { IdleTimeout = TimeSpan.MaxValue }, time);
+        AssistantSession session = Open(core);
+
+        time.Advance(TimeSpan.FromDays(3650));
+
+        core.Find(Operator, session.Id).ShouldBe(session);
+    }
+
+    [Fact]
     public void A_disposed_core_stops_sweeping()
     {
         FakeTimeProvider time = new();
