@@ -1216,7 +1216,7 @@ class JobReaderTests(unittest.TestCase):
         """Valid YAML that Actions honours, so a reader that skips them fails open."""
         text = (
             self.TEXT.replace("    if:", '    "if" :')
-            .replace("    steps:\n      - run: one", "    'steps':\n      - 'run': one\n        \"if\": always()")
+            .replace("    steps:\n      - run: one", "    'steps' :\n      - 'run': one\n        \"if\": always()")
         )
         self.assertEqual(pipeline_gate.read_job_condition(text, "build"), "github.event_name == 'push'")
         self.assertEqual(

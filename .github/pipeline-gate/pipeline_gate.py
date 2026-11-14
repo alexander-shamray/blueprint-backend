@@ -422,7 +422,7 @@ def _scan_job_steps(workflow_text: str, job: str) -> tuple[list[dict[str, str]],
     for line in lines[index + 1:]:
         if NEXT_JOB.match(line):
             break
-        if re.match(r"""^\s{4}(?:steps|'steps'|"steps"):\s*(?:#.*)?$""", line):
+        if re.match(r"""^\s{4}(?:steps|'steps'|"steps")[ \t]*:\s*(?:#.*)?$""", line):
             inside = True
             continue
         if not inside or not line.strip() or line.lstrip().startswith("#"):
