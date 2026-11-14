@@ -128,7 +128,9 @@ curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: applicati
 Answers already heard are counted again against the new set, so the
 `Counted = 0` row of a holder you add now counts. If nothing is left missing
 the request closes there and then, which the view's `status` shows; otherwise
-reissue it as above, so a holder you added is asked. A closed request answers
+reissue it as above, so a holder you added is asked. That is a new reissue, so
+mint a new `COMMAND_ID` for it first: the earlier id replays the earlier
+reissue and asks nobody. A closed request answers
 422 with `erasure_request.closed`, as a reissue does; a change the set cannot
 take answers 422 with `erasure_request.amendment_refused` and says why: a name
 already in the set, one not in it, or a set that would be left empty. A
