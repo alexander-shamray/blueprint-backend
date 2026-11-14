@@ -17,11 +17,12 @@ updates:
       prefix: chore
       include: scope
     groups:
-      # The 10.0 line's servicing patches move together, as the runtime does.
+      # The 10.0 line's servicing patches move together, as the runtime does;
+      # dotnet-ef with them, since MigrationToolPinTests holds it to EF Core's.
       dotnet-servicing:
         applies-to: version-updates
         update-types: [patch]
-        patterns: ['Microsoft.*', 'System.*']
+        patterns: ['Microsoft.*', 'System.*', 'dotnet-ef']
       grpc:
         applies-to: version-updates
         patterns: ['Grpc.*', 'Google.Protobuf']
@@ -38,6 +39,8 @@ updates:
       - dependency-name: 'Microsoft.AspNetCore.*'
         update-types: [version-update:semver-major]
       - dependency-name: 'Microsoft.EntityFrameworkCore*'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'dotnet-ef'
         update-types: [version-update:semver-major]
       - dependency-name: 'Microsoft.Extensions.*'
         update-types: [version-update:semver-major]
