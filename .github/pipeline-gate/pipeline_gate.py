@@ -584,6 +584,9 @@ REPOSITORY_EXPRESSION = r"\$\{\{\s*github\.repository\s*\}\}"
 REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHUB_REPOSITORY\}})"
 SHELL_OPERATOR = re.compile(r"[;&|()]+")
 REDIRECTION = re.compile(r"&?[<>]+&?")
+# Shell forms whose words or operators shlex reads otherwise than bash: a backtick, a `${` with an operator,
+# `$'...'` or `$"..."` quoting, and brace expansion.
+UNFOLLOWED = re.compile(r"`|\$\{(?!\w+\}|\{)|\$['\"]|\{[^}\s]*,[^}]*\}")
 # Helm takes its global flags before the subcommand too, as `helm -n prod upgrade`, each with or without a value.
 HELM_FLAGS = r"(?:\s+-{1,2}[A-Za-z][\w-]*(?:=\S*|\s+[^\s-]\S*)?)*"
 HELM_COMMAND = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+[a-z]")
@@ -680,7 +683,10 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
     commands = []
     for line in joined.splitlines():
         for found in opening.finditer(line):
-            lexer = shlex.shlex(_uncommented(line[found.end():]), posix=True, punctuation_chars=True)
+            remainder = _uncommented(line[found.end():])
+            if UNFOLLOWED.search(remainder):
+                return None
+            lexer = shlex.shlex(remainder, posix=True, punctuation_chars=True)
             lexer.whitespace_split, lexer.commenters = True, ""
             try:
                 words_read = list(lexer)
@@ -764,7 +770,8 @@ def _check_admission(deploy_text: str) -> list[str]:
     attestations = read_command_arguments(deploy_text, ("gh", "attestation", "verify"))
     if verifies is None or attestations is None:
         return ["deploy.yml has a `cosign verify` or `gh attestation verify` line that does not split into shell "
-                "words, an unbalanced quote or a substitution among them, so its flags cannot be read"]
+                "words: an unbalanced quote, a substitution, an expansion or a quoting this gate does not follow, so its "
+                "flags cannot be read"]
     subject = "deploy.yml's `cosign verify` step is not"
     problems = []
     if not verifies:
