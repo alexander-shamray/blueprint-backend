@@ -839,6 +839,25 @@ class GrantTests(unittest.TestCase):
         self.assertIn("job `build`", problems[0])
         self.assertIn("packages: write", problems[0])
 
+    def test_a_grant_beside_a_checkout_is_caught_under_a_commented_or_quoted_job_key(self) -> None:
+        for key in ("  build: # the solution", "  'build':", '  "build":'):
+            with self.subTest(key=key):
+                self.write(GRANTED.replace(
+                    "  build:\n    steps:",
+                    f"{key}\n    permissions:\n      packages: write\n    steps:"))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("job `build`", problems[0])
+
+    def test_a_job_key_this_check_cannot_read_is_refused(self) -> None:
+        self.write(GRANTED.replace("  build:\n", "  build: &build\n"))
+
+        problems = pipeline_gate.check_grants(self.root)
+
+        self.assertTrue(any("`build: &build`, a key this check cannot read" in p for p in problems), problems)
+
     def test_a_checkout_in_the_report_job_is_caught(self) -> None:
         """Its grant is harmless only while it holds none of the branch."""
         self.write(GRANTED.replace(
@@ -1505,6 +1524,19 @@ class ActionTests(unittest.TestCase):
 
         self.assertEqual(len(pipeline_gate.check_actions(self.root)), 2)
 
+    def test_a_flow_mapping_step_or_a_quoted_uses_key_is_still_read(self) -> None:
+        self.write("ci.yml", (
+            "jobs:\n  a:\n    steps:\n"
+            "      - { name: Helm, uses: azure/setup-helm@v4 }\n"
+            "      - \"uses\": 'dorny/paths-filter@v3'\n"
+            "      - {uses: actions/checkout@v4}\n"))
+
+        problems = pipeline_gate.check_actions(self.root)
+
+        self.assertEqual(len(problems), 2, problems)
+        self.assertIn("azure/setup-helm@v4", problems[0])
+        self.assertIn("dorny/paths-filter@v3", problems[1])
+
     def test_an_image_without_a_digest_is_caught(self) -> None:
         self.write("ci.yml", "jobs:\n  a:\n    steps:\n      - uses: docker://alpine:3\n")
 
@@ -1527,10 +1559,13 @@ class ActionTests(unittest.TestCase):
         total = 0
         for path in (pipeline_gate.ROOT / ".github" / "workflows").glob("*.y*ml"):
             text = path.read_text(encoding="utf-8")
-            lines = [line for line in text.splitlines() if "uses:" in line and not line.lstrip().startswith("#")]
-            total += len(lines)
+            # Any spelling of the key, quoted or in a flow mapping, so a form the reader skips is counted.
+            keys = sum(
+                len(re.findall(r"\buses['\"]?\s*:", line))
+                for line in text.splitlines() if not line.lstrip().startswith("#"))
+            total += keys
             with self.subTest(workflow=path.name):
-                self.assertEqual(len(pipeline_gate.read_uses(text)), len(lines))
+                self.assertEqual(len(pipeline_gate.read_uses(text)), keys)
         # A workflow that runs no action has none to read; none anywhere is a reader or a directory broken.
         self.assertGreater(total, 0)
 

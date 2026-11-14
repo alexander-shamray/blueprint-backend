@@ -357,6 +357,15 @@ def _check_publish_job(workflow_text: str) -> list[str]:
 # The next job's key; a comment at that indent sits inside a job body, not after it.
 NEXT_JOB = re.compile(r"^\s{2}[^\s#]")
 
+# A job's key at column 2, bare or quoted, with or without a trailing comment.
+JOB_KEY = re.compile(r"""^  (?:([A-Za-z0-9_-]+)|'([A-Za-z0-9_-]+)'|"([A-Za-z0-9_-]+)"):\s*(?:#.*)?$""")
+
+
+def job_key(line: str) -> str | None:
+    """The job a column-2 line opens, or None for any other line."""
+    found = JOB_KEY.match(line)
+    return next(name for name in found.groups() if name) if found else None
+
 
 def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     """One job's steps, in order, as {key: value} over the keys a step holds.
@@ -366,7 +375,7 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
-        if re.match(rf"^\s{{2}}{re.escape(job)}:\s*$", line):
+        if job_key(line) == job:
             break
     else:
         return []
@@ -792,9 +801,13 @@ def _check_rollout(workflow_text: str, deploy_text: str) -> list[str]:
 FIRST_PARTY_OWNERS = {"actions"}
 
 
+# A `uses` key where a block or flow mapping can open one, bare or quoted.
+USES_KEY = r"(?:^[ \t]*(?:-[ \t]+)?|[{,][ \t]*)['\"]?uses['\"]?[ \t]*:[ \t]*"
+
+
 def read_uses(workflow_text: str) -> list[str]:
-    """Every `uses:` reference in one workflow, a step's or a job's."""
-    return re.findall(r"^\s*(?:-\s+)?uses:\s*['\"]?([^\s'\"#]+)", workflow_text, flags=re.MULTILINE)
+    """Every `uses:` reference in one workflow, a step's or a job's, in block or flow style."""
+    return re.findall(USES_KEY + r"['\"]?([^\s'\"#,}]+)", workflow_text, flags=re.MULTILINE)
 
 
 def check_actions(root: Path = ROOT) -> list[str]:
@@ -842,14 +855,20 @@ def check_actions(root: Path = ROOT) -> list[str]:
 # grants
 # --------------------------------------------------------------------------
 
-CHECKOUT = re.compile(r"^\s*(?:-\s+)?uses:\s*['\"]?actions/checkout@", flags=re.MULTILINE)
+CHECKOUT = re.compile(USES_KEY + r"['\"]?actions/checkout@", flags=re.MULTILINE)
 # Every event a pull request starts; the review events run on its branch too.
 PULL_REQUEST_EVENTS = ("pull_request", "pull_request_target", "pull_request_review", "pull_request_review_comment")
 
 
 def read_jobs(workflow_text: str) -> dict[str, list[str]]:
     """Each job's own lines under `jobs:`, by its key."""
+    return _scan_jobs(workflow_text)[0]
+
+
+def _scan_jobs(workflow_text: str) -> tuple[dict[str, list[str]], list[str]]:
+    """The jobs, and each column-2 line under `jobs:` that opens none, which a caller refuses."""
     jobs: dict[str, list[str]] = {}
+    unread: list[str] = []
     current: list[str] | None = None
     inside = False
     for line in workflow_text.splitlines():
@@ -859,11 +878,14 @@ def read_jobs(workflow_text: str) -> dict[str, list[str]]:
             continue
         elif re.match(r"^[^\s#]", line):
             break
-        elif found := re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line):
-            current = jobs.setdefault(found.group(1), [])
+        elif name := job_key(line):
+            current = jobs.setdefault(name, [])
+        elif NEXT_JOB.match(line):
+            unread.append(line.strip())
+            current = None
         elif current is not None:
             current.append(line)
-    return jobs
+    return jobs, unread
 
 
 def read_grants(lines: list[str], indent: int) -> list[str] | None:
@@ -985,7 +1007,13 @@ def check_grants(root: Path = ROOT) -> list[str]:
             problems.append(f"{path.name} writes `on:` in a form this check cannot read; {ON_FORMS}")
         reached = events is None or any(event in events for event in PULL_REQUEST_EVENTS)
         inherited = read_grants(text.splitlines(), 0) or []
-        for job, lines in read_jobs(text).items():
+        jobs, unread = _scan_jobs(text)
+        problems.extend(
+            f"{path.name} opens a job as `{line}`, a key this check cannot read, so its grants "
+            "and checkout would go unread; write the job's key bare or quoted, on a line of its own"
+            for line in unread
+        )
+        for job, lines in jobs.items():
             own = read_grants(lines, 4)
             grants = inherited if own is None else own
             if not grants:
@@ -1266,7 +1294,7 @@ def read_job_condition(workflow_text: str, job: str) -> str | None:
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
-        if re.match(rf"^\s{{2}}{re.escape(job)}:\s*$", line):
+        if job_key(line) == job:
             break
     else:
         return None
@@ -1296,7 +1324,7 @@ def read_job_outputs(workflow_text: str, job: str) -> set[str]:
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
-        if re.match(rf"^\s{{2}}{re.escape(job)}:\s*$", line):
+        if job_key(line) == job:
             break
     else:
         return set()
