@@ -42,7 +42,7 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid product = await SeedPriceAsync();
         Guid request = Guid.CreateVersion7();
-        PauseBefore pause = new("INSERT INTO [ordering].[PersonalDataErasures]");
+        using PauseBefore pause = new("INSERT INTO [ordering].[PersonalDataErasures]");
 
         Task<Result<int>> erasure = EraseAsync(request, pause, ct);
         (await pause.Reached.Task.WaitAsync(Deadline, ct))
@@ -72,7 +72,7 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid product = await SeedPriceAsync();
-        PauseBefore pause = new("INSERT INTO [ordering].[Orders]");
+        using PauseBefore pause = new("INSERT INTO [ordering].[Orders]");
 
         Task<Result<Guid>> placed = PlaceAsync(product, pause, ct);
         (await pause.Reached.Task.WaitAsync(Deadline, ct))
@@ -260,7 +260,7 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
     }
 
     /// <summary>Holds a unit at the first command whose text holds the given insert, until released.</summary>
-    private sealed class PauseBefore(string insert) : DbCommandInterceptor
+    private sealed class PauseBefore(string insert) : DbCommandInterceptor, IDisposable
     {
         public TaskCompletionSource<bool> Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -280,5 +280,8 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
 
             return result;
         }
+
+        // So a failed assertion leaves no unit holding the subject's applock for the tests after it.
+        public void Dispose() => Release.TrySetResult();
     }
 }
