@@ -14,8 +14,8 @@ of content is `/validate-blueprint`.
    exists. Every `#anchor` matches a real heading slug in the target file. A
    link to an ADR names the ADR's file rather than an anchor in Appendix A,
    which has none left to hit; the path is relative to the linking file, so
-   a chapter writes `adr/ADR-0NN-<slug>.md`, a sibling ADR writes
-   `ADR-0NN-<slug>.md`, and an ADR's links to a chapter start with `../`.
+   a chapter writes `adr/ADR-NNN-<slug>.md`, a sibling ADR writes
+   `ADR-NNN-<slug>.md`, and an ADR's links to a chapter start with `../`.
 2. **Section references resolve.** Every `§n` and `§n.m` corresponds to a
    heading that exists. Flag references to sections that were renumbered away.
 3. **Link text agrees with target.** `[§9.3](09-messaging.md)` must point at

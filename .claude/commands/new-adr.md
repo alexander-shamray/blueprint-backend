@@ -22,7 +22,7 @@ one index row apiece, and the row is the only place they meet.
    that each take `highest + 1` collide only when the second merges, and
    `/check-links` check 5 is what catches the duplicate number; the later
    branch renumbers its own ADR, never the one already on `main`.
-2. **Name the file** `ADR-0NN-<slug>.md`: the title lower-cased, punctuation
+2. **Name the file** `ADR-NNN-<slug>.md`: the title lower-cased, punctuation
    dropped, spaces to hyphens — the slug the title's heading anchor would
    carry, so a reader who knows one knows the other. The exception is a title
    long enough to take the path past `LIMIT` in
@@ -33,7 +33,7 @@ one index row apiece, and the row is the only place they meet.
 3. **Write the file** in exactly this form:
 
    ```markdown
-   # ADR-0NN — <Title>
+   # ADR-NNN — <Title>
 
    **Decision.** <What was decided. Imperative, specific, testable.>
    **Why.** <The forces. What breaks without it.>
@@ -52,11 +52,11 @@ one index row apiece, and the row is the only place they meet.
    `[§9.3](../09-messaging.md)` — and a link to another ADR names its file,
    `[ADR-021](ADR-021-saga-timeouts-are-scheduled-by-the-broker.md)`.
 4. **Add the index row** at the end of Appendix A's table:
-   `| **ADR-0NN** | [<Title>](adr/ADR-0NN-<slug>.md) |`. Nothing else in
+   `| **ADR-NNN** | [<Title>](adr/ADR-NNN-<slug>.md) |`. Nothing else in
    Appendix A changes.
 5. **Cross-reference.** Link the chapter section the ADR governs and check
    whether that chapter should link back; a chapter cites the ADR as
-   `[ADR-0NN](adr/ADR-0NN-<slug>.md)`.
+   `[ADR-NNN](adr/ADR-NNN-<slug>.md)`.
 6. **Check for conflict.** Grep the existing ADR files for the same subject.
    An ADR that contradicts an earlier one without superseding it is the exact
    defect `/validate-blueprint` exists to catch.

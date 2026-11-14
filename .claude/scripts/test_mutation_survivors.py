@@ -5,10 +5,8 @@ against the shapes a broken run leaves, and the helper's refusals before it reac
 """
 
 import json
-import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -93,8 +91,7 @@ class AReport(unittest.TestCase):
             ms.summarise("A.Domain", report, "src/A.Domain")
 
     def test_a_missing_report_refuses_the_whole_run(self):
-        reports = tempfile.mkdtemp(prefix="mutation-reports-")
-        self.addCleanup(shutil.rmtree, reports, ignore_errors=True)
+        reports = str(Path(temp_root(self)))
         with self.assertRaisesRegex(ms.Refusal, "cannot read"):
             ms.report(reports, REPO)
 
@@ -108,8 +105,7 @@ class AReport(unittest.TestCase):
         self.assertEqual(0, made.returncode, made.stderr)
         report = stryker_report(mutant("Killed"), mutant("Survived"))
         next(iter(report["files"].values()))["source"] = "if (a < b) // a \u2192 b\n"
-        reports = Path(tempfile.mkdtemp(prefix="mutation-reports-"))
-        self.addCleanup(shutil.rmtree, reports, ignore_errors=True)
+        reports = Path(temp_root(self))
         target = reports / "A.Domain" / "reports" / "mutation-report.json"
         target.parent.mkdir(parents=True)
         target.write_text(json.dumps(report), encoding="utf-8")
@@ -155,13 +151,11 @@ class TheHelper(unittest.TestCase):
     """mutation-run.sh against a small repository, with a `dotnet` that records any call and refuses it."""
 
     def setUp(self):
-        self.repo = tempfile.mkdtemp(prefix="mutationrun-")
-        self.addCleanup(shutil.rmtree, self.repo, ignore_errors=True)
+        self.repo = str(Path(temp_root(self)))
         made = run_bash('cd "$R" && git init -q --initial-branch=main . && echo x > a.txt && git add a.txt'
                         f' && git {GIT_ID} commit -q -m init', R=self.repo)
         self.assertEqual(0, made.returncode, made.stderr)
-        self.bin = tempfile.mkdtemp(prefix="mutationrun-bin-")
-        self.addCleanup(shutil.rmtree, self.bin, ignore_errors=True)
+        self.bin = str(Path(temp_root(self)))
         stub = Path(self.bin, "dotnet")
         stub.write_text('#!/usr/bin/env bash\necho "$*" >> "$(dirname "$0")/calls"\nexit 99\n')
         stub.chmod(0o755)
