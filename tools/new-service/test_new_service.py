@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from unittest import mock
 
@@ -2686,7 +2687,17 @@ class TheCommandLine(unittest.TestCase):
             self.assertIn("20261301000000", err)
 
     def test_the_migration_id_defaults_to_a_utc_timestamp(self):
-        with tempfile.TemporaryDirectory() as directory:
+        # The clock is fixed and its local zone is five hours east, so an id read in local time is another id;
+        # on a UTC runner the two would agree and fourteen digits alone would pass either.
+        instant = datetime(2026, 11, 14, 23, 30, 5, tzinfo=timezone.utc)
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                local = instant.astimezone(timezone(timedelta(hours=5)))
+                return instant.astimezone(tz) if tz else local.replace(tzinfo=None)
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(new_service, "datetime", Clock):
             root = template_copy(Path(directory))
 
             self.assertEqual(0, self.run_main(
@@ -2695,8 +2706,7 @@ class TheCommandLine(unittest.TestCase):
 
             migrations = root / "src/Services/Zulu/Zulu.Infrastructure/Persistence/Migrations"
             generated = [p.name for p in migrations.glob("*_InitialCreate.cs")]
-            self.assertEqual(1, len(generated), generated)
-            self.assertRegex(generated[0], r"^\d{14}_InitialCreate\.cs$")
+            self.assertEqual(["20261114233005_InitialCreate.cs"], generated)
 
 
 
