@@ -210,11 +210,13 @@ no peer.** The saga sent `ConfirmOrder` to Ordering's own `ordering-commands`
 queue and is waiting for the `OrderConfirmed` the aggregate publishes when it
 commits — so a saga stuck there is **this service** failing to consume its own
 command, and the scheduler section below is the wrong place to start. Go
-straight to the outbox query further down and look for the `ConfirmOrder` that
-never left, then at whether `ordering-commands` is being drained at all. The
-aggregate *refusing* the command does not land here: that is a `Rule` failure
-`CommandConsumer` acks, and the cancellation behind it moves the saga to
-`Compensating` on its own event.
+straight to `ordering.OutboxMessage` further down — MassTransit's table, not
+the query over §9.4's `ordering.OutboxMessages` — and look for a
+`ConfirmOrder` that never left; no row is the normal state once it was sent,
+so then look at whether `ordering-commands` is being drained at all, and at
+its error queue. The aggregate *refusing* the command does not land here:
+that is a `Rule` failure `CommandConsumer` acks, and the cancellation behind
+it moves the saga to `Compensating` on its own event.
 
 ## The timeout scheduler is the usual culprit
 
@@ -351,11 +353,11 @@ indistinguishable from a command nobody sent — the defect
 [#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)
 closed.
 
-**For a saga in `AwaitingConfirmation` this is the first query rather than the
-last**, and what it is looking for is a `ConfirmOrder`. There is no peer to have
-gone quiet: the command is Ordering's own, so a row still sitting here unsent —
-or sent and never consumed, which the `ordering-commands` queue depth shows —
-is the whole fault. **Read the order's own status rather than assuming it.**
+**For a saga in `AwaitingConfirmation` this is the first table to open rather
+than the last**, and what it is looking for is a `ConfirmOrder`. There is no
+peer to have gone quiet: the command is Ordering's own, so a row still sitting
+here unsent — or, with none, a command sent and never consumed, which the
+`ordering-commands` queue depth and its error queue show — is the whole fault. **Read the order's own status rather than assuming it.**
 Normally it is still `AwaitingPayment` with the card authorised, which is why
 that wait escalates rather than compensating when its ten minutes run out. If
 it is already `Confirmed`, the command committed and it is the acknowledgement
