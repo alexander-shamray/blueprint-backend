@@ -102,13 +102,13 @@ public sealed partial class CachingTokenClient(
             if (IsTransient(response.StatusCode))
             {
                 throw new HttpRequestException(
-                    Failure(response.StatusCode, body),
+                    Failure(response.StatusCode, body, transient: true),
                     inner: null,
                     response.StatusCode);
             }
 
             // A credential or configuration refusal stays a deployment error, never retried.
-            throw new InvalidOperationException(Failure(response.StatusCode, body));
+            throw new InvalidOperationException(Failure(response.StatusCode, body, transient: false));
         }
 
         using JsonDocument document = Parse(body, "token endpoint's success answer");
@@ -279,7 +279,7 @@ public sealed partial class CachingTokenClient(
         $"than the authority '{authorityKey.Name}' names (§11.3).";
 
     /// <summary>The failure message, with RFC 6749's <c>error</c> member and never the body (§13.4).</summary>
-    private static string Failure(HttpStatusCode status, string body)
+    private static string Failure(HttpStatusCode status, string body, bool transient)
     {
         string detail = "";
 
@@ -303,6 +303,13 @@ public sealed partial class CachingTokenClient(
 
         // Formatted here: the concatenation below keeps string.Create's handler overload from binding (CS1620).
         string code = ((int)status).ToString(CultureInfo.InvariantCulture);
+
+        // A 5xx, 408 or 429 says the provider is down or busy, not that the credentials are wrong.
+        if (transient)
+        {
+            return $"The token endpoint could not answer this host's token request, with {code}{detail}. " +
+                "The identity provider is down or overloaded, so the request is retried (§11.5).";
+        }
 
         return $"The token endpoint refused this host's client credentials with {code}{detail}. " +
             $"'{ServiceIdentityOptions.SectionName}' is this host's credential set (§11.5), " +

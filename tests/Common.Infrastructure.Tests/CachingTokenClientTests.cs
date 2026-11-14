@@ -207,8 +207,12 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         _provider.TokenStatus = status;
 
         // The type is the point: §9.7's resilience pipeline retries on what it sees.
-        await Should.ThrowAsync<HttpRequestException>(
+        HttpRequestException thrown = await Should.ThrowAsync<HttpRequestException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        // An outage is not a credential fault, so the message may not send an operator to the secret.
+        thrown.Message.ShouldContain("is retried");
+        thrown.Message.ShouldNotContain("client credentials");
     }
 
     [Theory]
