@@ -188,14 +188,19 @@ first request did, and never on the command line:
 # argument, so the encoder written to keep the password off the command line
 # put it on the command line of its own child — visible in the process list for
 # as long as Python ran.
-enc() { python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.stdin.read(), safe=""), end="")'; }
+enc() { py -3.12 -c 'import sys,urllib.parse as u; print(u.quote(sys.stdin.read(), safe=""), end="")'; }
 read -r -p 'replay identity: ' REPLAY_USER
 read -rs -p 'replay password: ' REPLAY_PASSWORD; echo
-uri="amqp://$(printf '%s' "$REPLAY_USER" | enc):$(printf '%s' "$REPLAY_PASSWORD" | enc)@localhost:5672/%2F"
+user=$(printf '%s' "$REPLAY_USER" | enc); secret=$(printf '%s' "$REPLAY_PASSWORD" | enc)
 unset REPLAY_PASSWORD
+uri="amqp://$user:$secret@localhost:5672/%2F"
+
+# An encoder that failed prints nothing, and a URI without its credential is
+# accepted and then fails silently, below. Stop here instead.
+[ -n "$user" ] && [ -n "$secret" ] || echo 'the encoder failed: do not run the PUT' >&2
 
 # Unquoted heredoc, so $uri expands. Everything else here is literal.
-curl -sS --config "$HOME/.rabbit.curl" -X PUT \
+[ -n "$user" ] && [ -n "$secret" ] && curl -sS --config "$HOME/.rabbit.curl" -X PUT \
   -H 'content-type: application/json' \
   -d @- http://localhost:15672/api/parameters/shovel/%2F/replay-ENDPOINT <<EOF
 {"value":{
