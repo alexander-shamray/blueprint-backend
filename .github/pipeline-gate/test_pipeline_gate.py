@@ -2145,6 +2145,19 @@ class CodeTests(unittest.TestCase):
         self.assertNotIn("names compose", problems)
         self.assertEqual(problems.count("tests/A/A.cs names"), 1)
 
+    def test_each_excluded_root_name_in_a_list_is_caught(self) -> None:
+        """The first root name's match spans the list, and the later names in it are judged too."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "tests" / "A"
+            source.mkdir(parents=True)
+            (root / "src").mkdir()
+            (root / "tools").mkdir()
+            (source / "A.cs").write_text('string[] read = ["README.md", "Program.cs", "CLAUDE.md"];\n', encoding="utf-8")
+            code = pipeline_gate.read_filters_by_name(self.text)[pipeline_gate.CODE_FILTER]
+            named = [path for _source, path in pipeline_gate.read_tested_paths(root, code)]
+        self.assertEqual(named, ["README.md", "CLAUDE.md"])
+
     def test_a_document_a_test_reads_that_stage_inputs_lacks_is_caught(self) -> None:
         text = self.broken("              - 'docs/personal-data.md'\n", "")
         self.assertIn("docs/personal-data.md", self.problems(text))
