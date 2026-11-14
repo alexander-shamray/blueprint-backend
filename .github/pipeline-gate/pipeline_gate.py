@@ -68,10 +68,25 @@ def read_filters(workflow_text: str) -> list[str]:
             continue
         if len(line) - len(line.lstrip()) <= indent and not line.lstrip().startswith("#"):
             break
-        found = re.match(r"\s*-\s*'([^']+)'", line)
-        if found:
-            patterns.append(found.group(1))
+        if (found := filter_item(line)) is not None:
+            patterns.append(found)
     return patterns
+
+
+# One list item of the block: single-quoted, double-quoted or a bare plain scalar, before any comment.
+# A quote or escape inside the item, or a bare item opening on a YAML indicator, is read by none of these.
+FILTER_ITEM = re.compile(
+    r"""^\s*-[ \t]+(?:'([^']+)'|"([^"\\]+)"|([^\s'"*&!|>%@`#,\[\]{}?:-](?:[^\s#]|[ \t]+(?![ \t]*(?:#|$))|(?<=\S)#)*))"""
+    r"""[ \t]*(?:#.*)?$"""
+)
+# An alias, `- *shared`, names another filter's patterns rather than holding one.
+FILTER_ALIAS = re.compile(r"^\s*-[ \t]+\*[\w-]+[ \t]*(?:#.*)?$")
+
+
+def filter_item(line: str) -> str | None:
+    """The pattern a paths-filter list line holds, or None for any other line."""
+    found = FILTER_ITEM.match(line)
+    return next(item for item in found.groups() if item) if found else None
 
 
 def covers(pattern: str, directory: str) -> bool:
@@ -1407,33 +1422,40 @@ def read_filters_by_name(workflow_text: str) -> dict[str, list[str]]:
 
     `read_filters` flattens, which is all the `filters` check needs — it asks
     whether a directory is reachable by any filter. Pairing needs to know
-    which, so this keeps them apart. A `*shared` alias line carries no quoted
+    which, so this keeps them apart. A `*shared` alias line carries no
     pattern and is skipped, and that costs nothing here: every Dockerfile lives
     under its own service's tree, never under `shared`.
     """
+    return _scan_filters(workflow_text)[0]
+
+
+def _scan_filters(workflow_text: str) -> tuple[dict[str, list[str]], list[str]]:
+    """The filters, and each line of the block that is no header, item, alias or comment, which a caller refuses."""
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
         match = re.match(r"^(\s*)filters:\s*\|", line)
         if match:
             break
     else:
-        return {}
+        return {}, []
 
     indent = len(match.group(1))
     found: dict[str, list[str]] = {}
+    unread: list[str] = []
     current: str | None = None
     for line in lines[index + 1:]:
-        if not line.strip():
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if len(line) - len(line.lstrip()) <= indent and not line.lstrip().startswith("#"):
+        if len(line) - len(line.lstrip()) <= indent:
             break
-        if header := re.match(r"^\s+([a-z][a-z0-9-]*):\s*(?:&\w+)?\s*$", line):
+        if header := re.match(r"^\s+([a-z][a-z0-9-]*):\s*(?:&\w+)?\s*(?:#.*)?$", line):
             current = header.group(1)
             found.setdefault(current, [])
-        elif pattern := re.match(r"\s*-\s*'([^']+)'", line):
-            if current:
-                found[current].append(pattern.group(1))
-    return found
+        elif current and (pattern := filter_item(line)) is not None:
+            found[current].append(pattern)
+        elif not (current and FILTER_ALIAS.match(line)):
+            unread.append(line.strip())
+    return found, unread
 
 
 def _matches(pattern: str, path: str) -> bool:
@@ -1718,8 +1740,13 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
         except OSError as error:
             return [f".github/workflows/ci.yml is not readable: {error}"]
 
-    filters = read_filters_by_name(workflow_text)
+    filters, unread = _scan_filters(workflow_text)
     problems = check_code_filters(filters)
+    problems.extend(
+        f"the paths-filter block holds `{line}`, a line this check cannot read, so a pattern in it would go "
+        "unjudged; write each item quoted or bare, one to a line, under a bare filter key"
+        for line in unread
+    )
     if CODE_FILTER not in filters or STAGE_INPUTS_FILTER not in filters:
         return problems
 

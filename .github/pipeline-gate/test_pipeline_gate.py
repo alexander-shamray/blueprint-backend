@@ -336,6 +336,30 @@ class FilterTests(Fixture):
         exclusion satisfy the inventory it exists to carve out of."""
         self.assertFalse(pipeline_gate.covers("!src/Gateway/**", "src/Gateway"))
 
+    def test_a_double_quoted_or_bare_item_is_a_filter(self) -> None:
+        """Valid YAML either way, and dropped it reads as a deployable no filter reaches."""
+        for item in ('"src/Gateway/**"', "src/Gateway/**", "'src/Gateway/**' # a comment"):
+            with self.subTest(item=item):
+                self.write(WORKFLOW.replace("- 'src/Gateway/**'", f"- {item}"))
+
+                self.assertEqual(pipeline_gate.check_filters(self.root), [])
+
+    def test_each_spelling_of_an_item_is_read(self) -> None:
+        for line, expected in (
+            ("  - 'a/**'", "a/**"),
+            ('  - "!a/**"', "!a/**"),
+            ("  - a/**", "a/**"),
+            ("  - a/** # why", "a/**"),
+            ("  - a/b#c", "a/b#c"),
+            ("  - 'a' 'b'", None),
+            ('  - "a\\"b"', None),
+            ("  - *shared", None),
+            ("  - [a]", None),
+            ("  -'a'", None),
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(pipeline_gate.filter_item(line), expected)
+
 
 class ImageTests(Fixture):
     def test_the_fixture_is_clean(self) -> None:
@@ -2120,6 +2144,23 @@ class CodeTests(unittest.TestCase):
     def test_a_negation_in_stage_inputs_is_caught(self) -> None:
         text = self.broken("              - 'docs/personal-data.md'\n", "              - '!docs/personal-data.md'\n")
         self.assertIn("narrowing it", self.problems(text))
+
+    def test_a_double_quoted_exclusion_is_judged(self) -> None:
+        """Dropped, it would pass while a test-only change skipped every stage (#2053)."""
+        exclusion = '              - "!deploy/helm/**"\n'
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/**'\n" + exclusion)
+        self.assertIn("tests/Common.Web.Tests/RequestTimeoutTests.cs names deploy/helm/?", self.problems(text))
+
+    def test_a_bare_item_beside_the_exclusions_is_judged(self) -> None:
+        text = self.broken("              - '!docs/**'\n", "              - '!docs/**'\n              - tools/**\n")
+        self.assertIn("a new path nobody listed", self.problems(text))
+
+    def test_a_filter_line_it_cannot_read_is_refused(self) -> None:
+        """A new spelling the reader drops would leave its pattern unjudged, so it fails instead."""
+        for line in ("- ['!tests/**']", "- '!tests/**' '!src/**'", '- "!tests\\x2F**"', "- !tests/**"):
+            with self.subTest(line=line):
+                text = self.broken("              - '!docs/**'\n", f"              - '!docs/**'\n              {line}\n")
+                self.assertIn(f"holds `{line}`, a line this check cannot read", self.problems(text))
 
     def test_glob_syntax_the_classifier_cannot_read_is_caught(self) -> None:
         text = self.broken("              - '!docs/**'\n", "              - '!docs/{a,b}/**'\n")
