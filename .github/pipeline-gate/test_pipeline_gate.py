@@ -625,6 +625,22 @@ class SbomTests(Fixture):
         self.assertEqual(len(problems), 3)
         self.assertTrue(all("vacuously" in problem for problem in problems))
 
+    def test_a_build_or_push_form_no_check_reads_is_caught(self) -> None:
+        """Beside the plain build the vacuity guards stay quiet, so the form itself is what fails."""
+        guard = "        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}\n"
+        for body, form in (
+            ('        run: docker buildx build --push --tag "$REGISTRY/x:main" .\n', "docker buildx build"),
+            ('        run: docker image push "$REGISTRY/x:main"\n', "docker image push"),
+            ("        uses: docker/build-push-action@v6\n", "docker/build-push-action@v6"),
+        ):
+            with self.subTest(form=form):
+                self.write(WORKFLOW.replace(SBOM_STEP, f"      - name: Another build\n{guard}{body}\n{SBOM_STEP}", 1))
+
+                problems = [p for p in pipeline_gate.check_images(self.root) if "no check here reads" in p]
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(f"uses `{form}`", problems[0])
+
     def test_the_step_reader_joins_a_folded_run_and_keeps_with_inputs(self) -> None:
         steps = pipeline_gate.read_job_steps(WORKFLOW_HEAD + SBOM_STEP, "publish-images")
 
