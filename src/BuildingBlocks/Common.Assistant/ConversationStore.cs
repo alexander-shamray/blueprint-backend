@@ -128,7 +128,11 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
 
     private void Sweep()
     {
-        DateTimeOffset cutoff = time.GetUtcNow() - limits.IdleTimeout;
+        // A long IdleTimeout is valid (AssistantCore), and one reaching past year one would throw on every call.
+        DateTimeOffset now = time.GetUtcNow();
+        DateTimeOffset cutoff = limits.IdleTimeout < now - DateTimeOffset.MinValue
+            ? now - limits.IdleTimeout
+            : DateTimeOffset.MinValue;
 
         foreach ((string callerId, Dictionary<string, AssistantSession> own) in byCaller.ToList())
         {
