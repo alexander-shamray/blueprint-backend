@@ -502,7 +502,19 @@ public sealed class AssistantSession : IDisposable
             _ => new ToolOutcome(false, $"There is no tool named {call.Name}."),
         };
 
-        string content = Bound(core.Redactor.Redact(outcome.Content, Caller));
+        string content;
+
+        try
+        {
+            content = Bound(core.Redactor.Redact(outcome.Content, Caller));
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The host's redactor failed, not the provider: the result is withheld and the model reads why, so the
+            // turn is not ended as a provider error.
+            outcome = new ToolOutcome(false, $"{call.Name}'s result could not be redacted, so it is withheld.");
+            content = outcome.Content;
+        }
 
         lock (gate)
         {
