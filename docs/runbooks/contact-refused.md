@@ -38,8 +38,10 @@ Both hold rows on the `contact` step of `notifications.waiting`. An outage —
 Keycloak unreachable, slow or answering 5xx — counts nothing here, serves a
 stale contact where one is stored, and clears when Keycloak does. A refusal
 counts here and clears only when somebody fixes it. The count takes the
-alert's window, since a row at the top of the backoff ladder is retried only
-once every 1280 seconds and a shorter one reads zero between its retries.
+alert's window, which outlasts the backoff ladder's longest step
+(`OutboxDispatcher.BackoffBaseSeconds`, doubling up to
+`OutboxDispatcher.BackoffAttemptCap`); a shorter one reads zero between a
+capped row's retries.
 
 ```promql
 sum(increase(notifications_contact_refused_total[30m]))
@@ -83,8 +85,8 @@ three never reach it.
   realm that is not the authority's, so a mismatch here is a base URL pointing
   at another Keycloak.
 
-The backed-off rows are claimed again on their own, so once the 30-minute count
-falls to zero, watch the `contact` step drain and the alert resolve. **A waiting
+The backed-off rows are claimed again on their own, so once that count falls to
+zero, watch the `contact` step drain and the alert resolve. **A waiting
 set that falls is not by itself recovery**: rows given up during the refusal
 leave it too. Look for rows in `notifications.NotificationLog` marked
 `Undeliverable` with `gave_up` since the refusal began; each is a customer who
