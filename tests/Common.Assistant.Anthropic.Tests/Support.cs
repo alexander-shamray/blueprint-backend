@@ -17,13 +17,13 @@ internal sealed record Sent(HttpMethod Method, Uri Uri, IReadOnlyDictionary<stri
 /// </summary>
 internal sealed class FakeHttp : HttpMessageHandler
 {
-    private readonly Queue<Func<HttpResponseMessage>> responses = new();
+    private readonly Queue<Func<Task<HttpResponseMessage>>> responses = new();
 
     public List<Sent> Requests { get; } = [];
 
     public FakeHttp Stream(string recording)
     {
-        responses.Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK)
+        Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(Recorded(recording), Encoding.UTF8, "text/event-stream"),
         });
@@ -35,7 +35,7 @@ internal sealed class FakeHttp : HttpMessageHandler
         HttpStatusCode status,
         string body = """{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}""")
     {
-        responses.Enqueue(() => new HttpResponseMessage(status)
+        Enqueue(() => new HttpResponseMessage(status)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         });
@@ -45,7 +45,7 @@ internal sealed class FakeHttp : HttpMessageHandler
 
     public FakeHttp Json(string body)
     {
-        responses.Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK)
+        Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         });
@@ -53,9 +53,25 @@ internal sealed class FakeHttp : HttpMessageHandler
         return this;
     }
 
+    /// <summary>Answers only once <paramref name="release"/> completes, so the read stays out until then.</summary>
+    public FakeHttp JsonAfter(Task release, string body)
+    {
+        responses.Enqueue(async () =>
+        {
+            await release;
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+        });
+
+        return this;
+    }
+
     public FakeHttp Fails()
     {
-        responses.Enqueue(() => throw new HttpRequestException("connection refused"));
+        Enqueue(() => throw new HttpRequestException("connection refused"));
 
         return this;
     }
@@ -71,14 +87,23 @@ internal sealed class FakeHttp : HttpMessageHandler
         Dictionary<string, string> headers =
             request.Headers.ToDictionary(h => h.Key.ToLowerInvariant(), h => string.Join(",", h.Value));
 
-        Requests.Add(new Sent(
-            request.Method,
-            request.RequestUri!,
-            headers,
-            string.IsNullOrEmpty(body) ? null : JsonNode.Parse(body)));
+        Func<Task<HttpResponseMessage>> respond;
 
-        return responses.Dequeue()();
+        // Concurrent probes reach here only when a status read is not shared, which the test exists to catch.
+        lock (responses)
+        {
+            Requests.Add(new Sent(
+                request.Method,
+                request.RequestUri!,
+                headers,
+                string.IsNullOrEmpty(body) ? null : JsonNode.Parse(body)));
+            respond = responses.Dequeue();
+        }
+
+        return await respond();
     }
+
+    private void Enqueue(Func<HttpResponseMessage> respond) => responses.Enqueue(() => Task.FromResult(respond()));
 
     private static string Recorded(string name)
     {

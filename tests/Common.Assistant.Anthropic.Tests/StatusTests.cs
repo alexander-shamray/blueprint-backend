@@ -42,12 +42,25 @@ public sealed class StatusTests
     }
 
     [Fact]
-    public async Task A_read_that_cannot_answer_is_unreachable_and_not_a_missing_credential()
+    public async Task A_read_that_cannot_connect_is_unreachable_and_not_a_missing_credential()
     {
-        FakeHttp http = new FakeHttp().Fails().Status(HttpStatusCode.BadGateway, "{}");
+        FakeHttp http = new FakeHttp().Fails();
         AnthropicProvider provider = Provider(http, TimeProvider.System);
 
         (await provider.StatusAsync(CancellationToken.None)).Reason.ShouldBe(StatusReason.Unreachable);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task A_server_error_is_unreachable_and_not_a_missing_credential(HttpStatusCode failure)
+    {
+        FakeHttp http = new FakeHttp().Status(failure, """{"type":"error","error":{"type":"api_error"}}""");
+        AnthropicProvider provider = Provider(http, TimeProvider.System);
+
+        (await provider.StatusAsync(CancellationToken.None)).Reason.ShouldBe(StatusReason.Unreachable);
+        http.Requests.Count.ShouldBe(1);
     }
 
     [Fact]
@@ -118,13 +131,17 @@ public sealed class StatusTests
     [Fact]
     public async Task Callers_that_arrive_while_a_read_is_out_share_it()
     {
-        FakeHttp http = new FakeHttp().Json(Model);
+        // The answer is held until all five have asked, so no caller can be answered from the cache instead.
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeHttp http = new FakeHttp().JsonAfter(release.Task, Model);
         AnthropicProvider provider = Provider(http, TimeProvider.System);
 
-        ProviderStatus[] all = await Task.WhenAll(
-            Enumerable.Range(0, 5).Select(_ => provider.StatusAsync(CancellationToken.None).AsTask()));
+        Task<ProviderStatus>[] calls =
+            [.. Enumerable.Range(0, 5).Select(_ => provider.StatusAsync(CancellationToken.None).AsTask())];
+        calls.ShouldAllBe(c => !c.IsCompleted);
+        release.SetResult();
 
-        all.ShouldAllBe(s => s.Available);
+        (await Task.WhenAll(calls)).ShouldAllBe(s => s.Available);
         http.Requests.Count.ShouldBe(1);
     }
 
