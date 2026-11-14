@@ -78,7 +78,7 @@ def read_filters(workflow_text: str) -> list[str]:
 # `- added: 'x'`, is read by none of these.
 FILTER_ITEM = re.compile(
     r"""^\s*-[ \t]+(?:'([^']+)'|"([^"\\]+)"|"""
-    r"""([^\s'"*&!|>%@`#,\[\]{}?:-](?:[^\s#:]|:(?![ \t]|$)|[ \t]+(?![ \t]*(?:#|$))|(?<=\S)#)*))"""
+    r"""([^\s'"*&!|>%@`#,\[\]{}?:-](?:[^\s#:]|:(?![ \t]|$)|[ \t]+(?=[^\s#])|(?<=\S)#)*))"""
     r"""[ \t]*(?:#.*)?$"""
 )
 # An alias, `- *shared`, names another filter's patterns rather than holding one.
