@@ -35,7 +35,10 @@ indent_size = 2
 end_of_line = lf
 indent_size = 4
 
-[{*.sh,.claude/skills/codebase-index/scripts/cbx}]
+[*.sh]
+end_of_line = lf
+
+[.claude/skills/codebase-index/scripts/cbx]
 end_of_line = lf
 
 [{deploy/helm,deploy/canary,deploy/observability,deploy/keycloak}/**]
