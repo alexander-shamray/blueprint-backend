@@ -993,22 +993,27 @@ public sealed class AssistantSessionTests
         session.TryStart(Given.Turn("hello")).ShouldBeTrue();
     }
 
+    // The redactor is the host's, so its failure is a withheld result the model reads, never a provider error.
     [Fact]
-    public async Task A_redactor_that_throws_on_a_tool_result_ends_the_turn_with_error_and_frees_it()
+    public async Task A_redactor_that_throws_on_a_tool_result_withholds_it_and_the_turn_goes_on()
     {
         ScriptedTools tools =
             new(("stack_status", (_, _, _) => Task.FromResult(new ToolOutcome(true, "UNREDACTABLE output"))));
         ScriptedProvider provider = new ScriptedProvider()
-            .Round(new ToolCall("c1", "stack_status", []), new RoundEnd(ProviderStop.Done));
+            .Round(new ToolCall("c1", "stack_status", []), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta("It is withheld."), new RoundEnd(ProviderStop.Done));
         AssistantSession session = Open(Core(provider, redactor: new ThrowingRedactor("UNREDACTABLE"), sources: tools));
 
         session.TryStart(Given.Turn("status"));
         List<AssistantEvent> events = await Given.UntilEnded(session);
 
-        events.OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Error);
+        events.OfType<TurnEndedEvent>().Single().Reason.ShouldBe(TurnEndReason.Done);
+        events.OfType<ErrorEvent>().ShouldBeEmpty();
         session.Running.ShouldBeFalse();
         session.View().Items.OfType<ToolItem>().Single().Ok.ShouldBe(false);
-        session.History[^1].ShouldBeOfType<ToolResultsMessage>().Results.Single().Ok.ShouldBeFalse();
+        ToolResult sent = provider.Requests[1].History[^1].ShouldBeOfType<ToolResultsMessage>().Results.Single();
+        sent.Ok.ShouldBeFalse();
+        sent.Content.ShouldNotContain("UNREDACTABLE");
     }
 
     /// <summary>
