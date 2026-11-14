@@ -1368,7 +1368,10 @@ class SupplyChainTests(Fixture):
                 (mismatch, '            [ -n "$x" ] && \\\n              exit 1\n          fi'),
                 (mismatch, "            ( exit 1 )\n          fi"),
                 (mismatch, '            [ -n "$x" ] && {\n              echo "no"\n'
-                           "              exit 1\n            }\n          fi")):
+                           "              exit 1\n            }\n          fi"),
+                # Nested deeper than one level.
+                (mismatch, '            [ -n "$x" ] && { { exit 1; }; }\n          fi'),
+                (mismatch, "            ( ( ( echo ) ); exit 1 )\n          fi")):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
 
