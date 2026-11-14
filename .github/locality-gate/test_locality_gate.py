@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 import unittest.mock
@@ -628,6 +629,25 @@ class Main(unittest.TestCase):
         code, _, err = self.run_main("{not json")
         self.assertEqual(code, 2)
         self.assertIn("not JSON", err)
+
+    def test_the_documented_pipe_is_read_as_utf_8_whatever_the_console_s_encoding(self) -> None:
+        """docs/testing.md pipes the payload in; ascii stands in for a Windows code page, so the case fails anywhere."""
+        import json
+
+        data = payload(["src/Services/Catalog/X.cs"])
+        data["title"] = "a \u2014 b"
+        text = json.dumps(data, ensure_ascii=False)
+        with tempfile.TemporaryDirectory() as directory:
+            map_path = Path(directory) / "classes.yml"
+            map_path.write_text(MAP, encoding="utf-8")
+            git(Path(directory), "init", "-q")
+            command = [sys.executable, str(HERE / "locality_gate.py"), "--map", str(map_path), "--root", directory]
+            env = {**os.environ, "PYTHONIOENCODING": "ascii", "PYTHONUTF8": "0"}
+            read = subprocess.run(command, input=text.encode("utf-8"), capture_output=True, env=env, check=False)
+            broken = subprocess.run(command, input=b'{"body": "\xff"}', capture_output=True, env=env, check=False)
+        self.assertEqual(read.returncode, 0, read.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual(broken.returncode, 2, broken.stderr.decode("utf-8", errors="replace"))
+        self.assertIn(b"not UTF-8", broken.stderr)
 
 
 def git(root: Path, *args: str) -> None:
