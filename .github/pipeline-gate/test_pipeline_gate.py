@@ -1477,7 +1477,7 @@ ALERT = (
     "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n"
     "      needs.read-cancelled.outputs.reason != '') &&\n"
     "      (needs.rerun.result != 'success' ||\n"
-    "      !contains(fromJSON('[\"passed\", \"replaced\"]'), needs.rerun.outputs.second))\n"
+    "      !contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second))\n"
     "    runs-on: ubuntu-latest\n"
 )
 

@@ -1090,7 +1090,7 @@ def check_alert_rerun(alert_text: str) -> list[str]:
             f"{ALERT_WORKFLOW}'s `rerun` job does not keep to a first attempt, so each rerun would start another")
     filing = read_job_condition(alert_text, "file") or ""
     if ("needs.rerun.result != 'success'" not in filing
-            or "!contains(fromJSON('[\"passed\", \"replaced\"]'), needs.rerun.outputs.second)" not in filing):
+            or "!contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)" not in filing):
         problems.append(
             f"{ALERT_WORKFLOW}'s `file` job does not file a red run its rerun did not see pass, "
             "so a second red attempt alerts nobody")

@@ -106,8 +106,8 @@ jobs:
     # Push runs alone: realm.yml and object-store.yml file their own issue for
     # a red scheduled run. `always()` because a skipped need skips this job
     # otherwise, and a read that did not finish files rather than stays silent.
-    # A first attempt files unless its rerun said the second passed or was
-    # replaced; a later one files unless `rerun` started it, and so files it.
+    # A first attempt files unless `rerun` saw it pass, replaced or stood in
+    # for; a later one only if a person, not `rerun`, started it (ADR-210).
     if: >-
       always() &&
       github.event.workflow_run.event == 'push' &&
@@ -115,7 +115,7 @@ jobs:
       contains(fromJSON('["failure", "cancelled"]'), needs.read-cancelled.result) ||
       needs.read-cancelled.outputs.reason != '') &&
       (needs.rerun.result != 'success' ||
-      !contains(fromJSON('["passed", "replaced"]'), needs.rerun.outputs.second)) &&
+      !contains(fromJSON('["passed", "replaced", "superseded"]'), needs.rerun.outputs.second)) &&
       (github.event.workflow_run.run_attempt == 1 ||
       github.event.workflow_run.triggering_actor.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
