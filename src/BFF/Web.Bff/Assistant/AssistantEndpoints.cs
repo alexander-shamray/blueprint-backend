@@ -302,10 +302,10 @@ public static class AssistantEndpoints
             { Catalogue: null } => ("catalogue", "Send catalogue, empty when the client has none."),
             { Catalogue.Count: > MaxCatalogue } => ("catalogue", $"A catalogue holds at most {MaxCatalogue} entries."),
             { ClientTools: null } => ("clientTools", "Send clientTools, empty when the client has none."),
-            _ when request.Catalogue.Any(e => e is null || e.Id is null || e.Label is null || e.Help is null ||
-                e.Where is null) => ("catalogue", "Every catalogue entry needs id, label, where and help."),
-            _ when request.ClientTools.Any(t => t is null || t.Name is null || t.Title is null ||
-                t.Description is null || t.InputSchema is null || t.Annotations is null) =>
+            _ when request.Catalogue.Any(e => e is null || Blank(e.Id) || Blank(e.Label) || Blank(e.Help) ||
+                Blank(e.Where)) => ("catalogue", "Every catalogue entry needs id, label, where and help."),
+            _ when request.ClientTools.Any(t => t is null || t.Name is null || Blank(t.Title) ||
+                Blank(t.Description) || t.InputSchema is null || t.Annotations is null) =>
                 ("clientTools", "Every client tool needs name, title, description, inputSchema and annotations."),
             _ => Bounded(request)
         };
@@ -334,7 +334,8 @@ public static class AssistantEndpoints
 
         (int title, int description, int schema) = ToolLimits;
 
-        return request.ClientTools.Any(t => Over(t.Title, title) || Over(t.Description, description) ||
+        return request.ClientTools.Any(t => HasControl(t.Name) || Over(t.Title, title) ||
+            Over(t.Description, description) ||
             t.InputSchema.ToJsonString().Length > schema || SchemaHasControl(t.InputSchema))
             ? ("clientTools", "A client tool's title, description and input schema are short, on one line.")
             : null;
@@ -359,6 +360,9 @@ public static class AssistantEndpoints
     };
 
     private static bool Over(string text, int limit) => text.Length > limit || HasControl(text);
+
+    // A blank id or label passes Over and writes a catalogue line with nothing in it, so blank is refused as missing.
+    private static bool Blank(string? text) => string.IsNullOrWhiteSpace(text);
 
     // IsControl misses the Unicode line and paragraph separators, which a model reads as a line break all the same.
     private static bool HasControl(string text) =>
