@@ -1233,6 +1233,25 @@ class JobReaderTests(unittest.TestCase):
             pipeline_gate.read_job_steps(text, "build"), [{"run": "one", "if": "always()"}, {"run": "two"}]
         )
 
+    def test_a_bare_dash_opens_a_step_of_its_own(self) -> None:
+        """Folded into the step above, its keys would overwrite that step's, and a first one would vanish."""
+        text = self.TEXT.replace("      - run: one\n", "      -\n        run: zero\n      - run: one\n").replace(
+            "      - run: two\n", "      - # a comment\n        run: two\n        if: always()\n")
+
+        steps, unread = pipeline_gate._scan_job_steps(text, "build")
+
+        self.assertEqual(steps, [{"run": "zero"}, {"run": "one"}, {"run": "two", "if": "always()"}])
+        self.assertEqual(unread, [])
+
+    def test_a_bare_dash_whose_keys_this_reader_cannot_place_is_refused(self) -> None:
+        """Dropped, a deeper `continue-on-error` would leave check_retries a step it skips."""
+        text = self.TEXT.replace("      - run: two\n", "      -\n            continue-on-error: true\n")
+
+        steps, unread = pipeline_gate._scan_job_steps(text, "build")
+
+        self.assertEqual(steps, [{"run": "one"}, {}])
+        self.assertEqual(unread, ["continue-on-error: true"])
+
 
 class SupplyChainTests(Fixture):
     """ADR-109's coverage: every build is pushed, signed and attested by digest on

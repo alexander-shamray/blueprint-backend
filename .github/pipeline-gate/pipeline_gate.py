@@ -436,12 +436,19 @@ def _scan_job_steps(workflow_text: str, job: str) -> tuple[list[dict[str, str]],
         if found := re.match(r"^\s{6}-\s+" + STEP_KEY, line):
             steps.append({})
             key, steps[-1][key] = _step_key(found)
+        elif re.match(r"^\s{6}-[ \t]*(?:#.*)?$", line):
+            # A bare dash opens a step whose keys follow; read as unread, its keys would overwrite the step above.
+            steps.append({})
+            key = None
         elif steps and (found := re.match(r"^(?:\s{8}|\s{10})" + STEP_KEY, line)):
             key, steps[-1][key] = _step_key(found)
         elif re.match(r"^(?:\s{6}|\s{8})\S", line):
             unread.append(line.strip())
         elif steps and key is not None:
             steps[-1][key] += " " + line.strip()
+        elif steps:
+            # Under a bare dash before its first key, so a key indented past the step-key column is not dropped.
+            unread.append(line.strip())
     return steps, unread
 
 
