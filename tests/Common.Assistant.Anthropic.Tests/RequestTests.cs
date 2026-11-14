@@ -133,17 +133,15 @@ public sealed class RequestTests
         {
             Tools =
             [
-                .. Enumerable.Range(0, 12)
+                .. Enumerable.Range(0, 13)
                     .Select(i => Given.Tool($"n{i:00}") with { InputSchema = (JsonObject)nested.DeepClone() }),
-                Given.Tool("z"),
             ],
         };
 
         JsonArray tools = (await SentFor(request)).Body!["tools"]!.AsArray();
 
-        // Two nested optional parameters per tool: twelve tools reach 24, and `z`, with none, is the thirteenth strict
-        // one.
-        StrictOf(tools).ShouldAllBe(s => s);
+        // Two nested optional parameters per tool: twelve tools reach 24, and the thirteenth would make 26.
+        StrictOf(tools).ShouldBe([.. Enumerable.Repeat(true, 12), false]);
     }
 
     [Fact]
