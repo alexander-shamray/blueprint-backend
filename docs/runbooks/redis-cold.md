@@ -86,6 +86,8 @@ redis() {
             redis-cli --user "$0" --no-auth-warning "$@"' "$operator" "$@"
 }
 
+redis info keyspace
+redis info server      | grep -E 'uptime_in_seconds'
 redis info stats       | grep -E 'keyspace|evicted'
 redis info memory      | grep -E 'used_memory_human|maxmemory'
 redis info replication
