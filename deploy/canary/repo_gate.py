@@ -72,6 +72,13 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     thresholds = entries(plan_document.get("thresholds", {}))
     workloads = entries(plan_document.get("workloads", {}))
 
+    # 0. The descriptor fields the checks below hash, compare or join are of
+    #    their JSON type, so a wrong one is reported, never a TypeError; with
+    #    one wrong, nothing below can be read safely, so it is all reported.
+    shapes = _descriptor_types(workloads)
+    if shapes:
+        return shapes
+
     # A tag names one workload's image, so only that workload is read from it
     # (ADR-050). The others are running images built from other revisions,
     # and judging their plan entries against this one refuses rollouts that
@@ -283,6 +290,22 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
 
 # The keys the plan holds: canary.json's, and the descriptors as workloads.
 PLAN_KEYS = {"steps", "tolerance", "thresholds", "workloads"}
+
+
+def _descriptor_types(workloads: dict) -> list[str]:
+    """Each descriptor is an object whose serviceName, chart and signals are strings, where present."""
+    failures = []
+    for name, entry in sorted(workloads.items()):
+        if not isinstance(entry, dict):
+            failures.append(f"workloads.{name} is {entry!r}, which is not a JSON object")
+            continue
+        for key in ("serviceName", "chart"):
+            if key in entry and not isinstance(entry[key], str):
+                failures.append(f"workloads.{name}.{key} is {entry[key]!r}, which is not a string")
+        signals = entry.get("signals", [])
+        if not isinstance(signals, list) or not all(isinstance(signal, str) for signal in signals):
+            failures.append(f"workloads.{name}.signals is {signals!r}, which is not a list of strings")
+    return failures
 
 
 def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
