@@ -293,6 +293,33 @@ class LadderTests(unittest.TestCase):
         self.assertFalse(any("weight" in f for f in failures), failures)
 
 
+class DescriptorTypeTests(unittest.TestCase):
+    """A descriptor field of the wrong JSON type is a failure, never a traceback."""
+
+    def test_a_field_of_the_wrong_type_is_a_failure_not_a_type_error(self) -> None:
+        for key, bad in (("serviceName", ["Ordering.Api"]), ("chart", 7),
+                         ("signals", [["http"]]), ("signals", "http")):
+            with self.subTest(key=key, value=bad):
+                plan = descriptor_model.load_plan()
+                name = sorted(descriptor_model.entries(plan["workloads"]))[0]
+                plan["workloads"][name][key] = bad
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any(f.startswith(f"workloads.{name}.{key} is ") for f in failures), failures)
+
+    def test_a_descriptor_that_is_not_an_object_is_a_failure(self) -> None:
+        plan = descriptor_model.load_plan()
+        plan["workloads"]["broken"] = ["not", "an", "object"]
+
+        self.assertIn(
+            "workloads.broken is ['not', 'an', 'object'], which is not a JSON object",
+            repo_gate.check(plan))
+
+    def test_the_shipped_descriptors_pass(self) -> None:
+        self.assertEqual(repo_gate._descriptor_types(descriptor_model.load_plan()["workloads"]), [])
+
+
 class MinimumRequestsTests(unittest.TestCase):
     """canary.json states minimumRequests as 1/errorRate; the gate holds it to that."""
 
