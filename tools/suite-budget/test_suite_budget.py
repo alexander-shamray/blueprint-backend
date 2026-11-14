@@ -150,6 +150,13 @@ class Runs(unittest.TestCase):
         stdout.flush()
         self.assertIn(b"red \\u2192 green", written.getvalue())
 
+    def test_a_directory_with_no_module_exits_non_zero_naming_it(self):
+        empty = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+            self.assertEqual(suite_budget.main(["--dir", str(empty)]), 2)
+        self.assertIn(str(empty), stderr.getvalue())
+
     def test_the_run_exits_non_zero_when_any_module_is_not_ok(self):
         for module, expected in (("test_passing.py", 0), ("test_failing.py", 1)):
             with self.subTest(module), contextlib.redirect_stdout(io.StringIO()), \
