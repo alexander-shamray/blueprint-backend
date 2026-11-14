@@ -573,13 +573,14 @@ decision no chapter has yet taken about any particular object.
 Three things sit outside that tree because §4.1 does not draw them:
 `global.json`, whose SDK pin §4.1's prose relies on for the `.slnx` floor;
 `.config/dotnet-tools.json`, which pins `dotnet-ef` to the EF Core version,
-because a tool a major behind the runtime fails with an error that names
-neither; and `src/AppHost`, the optional Aspire host of §14.2. **Aspire is not
-adopted** — Compose is the baseline (§14.1), nothing references an `Aspire.*`
-package, and §4.4 therefore pins none. If it is adopted, `src/AppHost` is the
-only project taking `Aspire.Hosting.*`, but each service picks up the client
-integrations for the resources it consumes — so backing it out again costs a
-line per resource per service, not one deletion (§14.2).
+because a tool a major away from the runtime fails with an error that names
+neither, and `MigrationToolPinTests` holds the two equal; and `src/AppHost`, the
+optional Aspire host of §14.2. **Aspire is not adopted** — Compose is the
+baseline (§14.1), nothing references an `Aspire.*` package, and §4.4 therefore
+pins none. If it is adopted, `src/AppHost` is the only project taking
+`Aspire.Hosting.*`, but each service picks up the client integrations for the
+resources it consumes — so backing it out again costs a line per resource per
+service, not one deletion (§14.2).
 
 ## Edges between building blocks
 
