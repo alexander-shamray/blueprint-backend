@@ -374,37 +374,58 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     Its own keys and `with:`'s are both kept, so `image` is the SBOM step's
     input, and a value runs on over deeper lines to read a folded `run: >`.
     """
+    return _scan_job_steps(workflow_text, job)[0]
+
+
+# A step's key, bare or quoted, and its value.
+STEP_KEY = r"""(?:([a-z-]+)|'([a-z-]+)'|"([a-z-]+)"):(?:\s+(.*))?$"""
+
+
+def _step_key(found: re.Match[str]) -> tuple[str, str]:
+    name = next(group for group in found.groups()[:3] if group)
+    return name, found.group(4) or ""
+
+
+def _scan_job_steps(workflow_text: str, job: str) -> tuple[list[dict[str, str]], list[str]]:
+    """The steps, and each line at a step's or a step key's column that opens neither, which a caller refuses.
+
+    Folded into the key above, such a line would hide its own key: a quoted `continue-on-error` or a flow step.
+    """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
         if job_key(line) == job:
             break
     else:
-        return []
+        return [], []
 
     steps: list[dict[str, str]] = []
+    unread: list[str] = []
     inside = False
     key: str | None = None
     for line in lines[index + 1:]:
         if NEXT_JOB.match(line):
             break
-        if re.match(r"^\s{4}steps:\s*$", line):
+        if re.match(r"""^\s{4}(?:steps|'steps'|"steps"):\s*(?:#.*)?$""", line):
             inside = True
             continue
         if not inside or not line.strip() or line.lstrip().startswith("#"):
             continue
+        if re.match(r"^\s{4}-", line):
+            unread.append(line.strip())
+            continue
         if re.match(r"^\s{4}\S", line):
             inside = False
             continue
-        if found := re.match(r"^\s{6}-\s+([a-z-]+):\s*(.*)$", line):
+        if found := re.match(r"^\s{6}-\s+" + STEP_KEY, line):
             steps.append({})
-            key = found.group(1)
-            steps[-1][key] = found.group(2)
-        elif steps and (found := re.match(r"^(?:\s{8}|\s{10})([a-z-]+):\s*(.*)$", line)):
-            key = found.group(1)
-            steps[-1][key] = found.group(2)
+            key, steps[-1][key] = _step_key(found)
+        elif steps and (found := re.match(r"^(?:\s{8}|\s{10})" + STEP_KEY, line)):
+            key, steps[-1][key] = _step_key(found)
+        elif re.match(r"^(?:\s{6}|\s{8})\S", line):
+            unread.append(line.strip())
         elif steps and key is not None:
             steps[-1][key] += " " + line.strip()
-    return steps
+    return steps, unread
 
 
 def check_sboms(workflow_text: str) -> list[str]:
@@ -462,6 +483,14 @@ def _keeps_the_retry_record(step: dict[str, str]) -> bool:
     return step.get("uses", "").strip().startswith(NOTE_ARTIFACT_ACTION) and RETRY_RECORD in step.get("path", "")
 
 
+def _unread_steps(job: str, unread: list[str]) -> list[str]:
+    return [
+        f"the {job} job holds `{line}`, a step line this check cannot read, so a key on it would go unjudged; "
+        "write each step as a block mapping, its keys bare or quoted, one to a line"
+        for line in unread
+    ]
+
+
 def check_retries(workflow_text: str) -> list[str]:
     """A step of an image job may fail only with a noted second attempt behind it.
 
@@ -470,7 +499,8 @@ def check_retries(workflow_text: str) -> list[str]:
     """
     problems: list[str] = []
     for job in ("images", PUBLISH_JOB):
-        steps = read_job_steps(workflow_text, job)
+        steps, unread = _scan_job_steps(workflow_text, job)
+        problems.extend(_unread_steps(job, unread))
         for index, step in enumerate(steps):
             if "continue-on-error" not in step or _keeps_the_retry_record(step):
                 continue
@@ -1335,7 +1365,7 @@ def read_job_condition(workflow_text: str, job: str) -> str | None:
                 condition.append(line.strip())
                 continue
             break
-        if found := re.match(r"^\s{4}if:\s*(.*)$", line):
+        if found := re.match(r"""^\s{4}(?:if|'if'|"if"):\s*(.*)$""", line):
             condition.append(found.group(1).strip())
     return " ".join(condition).strip()
 
@@ -1711,7 +1741,8 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
                 f"the {job} job carries a job-level `if: {condition}`. Skipped there it reports no shard's "
                 f"name and skips what needs it; each step's `if: {CODE_GATE}` keeps the check and passes it"
             )
-        steps = read_job_steps(workflow_text, job)
+        steps, unread = _scan_job_steps(workflow_text, job)
+        problems.extend(_unread_steps(job, unread))
         if not steps:
             problems.append(
                 f"found no steps in a `{job}:` job in ci.yml: the check on them would pass vacuously, so "
