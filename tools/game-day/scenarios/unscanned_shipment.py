@@ -36,9 +36,11 @@ FROM shipping.TrackingEvents;
 _UNSCANNED = """
 SELECT Id, OrderId, CarrierReference, CreatedAt
 FROM shipping.Shipments s
-WHERE s.Status = 'Booked'
+WHERE s.NextPollAt IS NOT NULL
+    AND s.Status = 'Booked'
     AND (s.CancellationRequestedAt IS NULL
         OR s.CancellationRefusedAt IS NOT NULL)
+    AND s.CreatedAt < DATEADD(day, -3, SYSDATETIMEOFFSET())
     AND NOT EXISTS (
         SELECT 1 FROM shipping.TrackingEvents e WHERE e.ShipmentId = s.Id)
 ORDER BY CreatedAt;

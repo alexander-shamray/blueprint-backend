@@ -383,6 +383,13 @@ class Planted(unittest.TestCase):
         self.assertIn(squash(module._LAST_SCAN), squash(text))
         self.assertIn(squash(module._UNSCANNED), squash(text))
 
+    def test_unscanned_runbook_query_ages_by_the_gauges_first_scan_age(self):
+        from scenarios import unscanned_shipment as module
+        stats = harness.ROOT / "src/Services/Shipping/Shipping.Infrastructure/Observability/ShipmentStats.cs"
+        age_days = re.search(r"FirstScanAge = TimeSpan.FromDays.(.+?).;", stats.read_text(encoding="utf-8")).group(1)
+        self.assertIn(f"s.CreatedAt < DATEADD(day, -{age_days}, SYSDATETIMEOFFSET())", module._UNSCANNED)
+        self.assertIn("s.NextPollAt IS NOT NULL", module._UNSCANNED)
+
     def test_unattributed_plants_an_unowned_row_that_satisfies_the_tables_checks(self):
         from scenarios import unattributed_order as module
         plant = " ".join(module._PLANT.split())

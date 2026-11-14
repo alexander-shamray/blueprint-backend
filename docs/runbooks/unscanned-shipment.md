@@ -68,13 +68,19 @@ FROM shipping.TrackingEvents;
 
 SELECT Id, OrderId, CarrierReference, CreatedAt
 FROM shipping.Shipments s
-WHERE s.Status = 'Booked'
+WHERE s.NextPollAt IS NOT NULL
+    AND s.Status = 'Booked'
     AND (s.CancellationRequestedAt IS NULL
         OR s.CancellationRefusedAt IS NOT NULL)
+    AND s.CreatedAt < DATEADD(day, -3, SYSDATETIMEOFFSET())
     AND NOT EXISTS (
         SELECT 1 FROM shipping.TrackingEvents e WHERE e.ShipmentId = s.Id)
 ORDER BY CreatedAt;
 ```
+
+The second query is the gauge's own, `ShipmentStats.UnscannedSql`, with
+`ShipmentStats.FirstScanAge` written in as its days, so it lists only the
+bookings the alert counts and not the healthy ones still inside the window.
 
 - **No scan since about the oldest row's `CreatedAt`, and the count climbing
   day by day**: no shipment is being scanned, so the route, not the parcels.
