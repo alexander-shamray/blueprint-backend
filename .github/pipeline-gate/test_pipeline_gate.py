@@ -664,7 +664,7 @@ class RetryTests(Fixture):
         self.assertIn("no note", problems[0])
 
     def test_a_quoted_continue_on_error_is_read(self) -> None:
-        """Folded into the key above, it would pass a step that may fail unnoted (#2062)."""
+        """Folded into the key above, it would pass a step that may fail unnoted."""
         for key in ('"continue-on-error"', "'continue-on-error'", "continue-on-error "):
             with self.subTest(key=key):
                 first = SBOM_STEP.replace("        uses:", f"        id: sbom\n        {key}: true\n        uses:", 1)
@@ -1027,7 +1027,7 @@ class GrantTests(unittest.TestCase):
                 self.assertIn("job `build`", problems[0])
 
     def test_a_quoted_scope_is_a_grant(self) -> None:
-        """The closing quote sits between the scope and its colon; still the same grant (#2072)."""
+        """The closing quote sits between the scope and its colon; still the same grant."""
         for permissions in (
             "    permissions:\n      'packages': write\n",
             '    permissions:\n      "packages": "write"\n',
@@ -1207,7 +1207,7 @@ class JobReaderTests(unittest.TestCase):
         self.assertEqual(pipeline_gate.read_job_steps(self.TEXT, "build"), [{"run": "one"}, {"run": "two"}])
 
     def test_quoted_keys_are_read(self) -> None:
-        """Valid YAML that Actions honours, so a reader that skips them fails open (#2062)."""
+        """Valid YAML that Actions honours, so a reader that skips them fails open."""
         text = (
             self.TEXT.replace("    if:", '    "if" :')
             .replace("    steps:\n      - run: one", "    'steps':\n      - 'run': one\n        \"if\": always()")
@@ -2146,7 +2146,7 @@ class CodeTests(unittest.TestCase):
         self.assertIn("narrowing it", self.problems(text))
 
     def test_a_double_quoted_exclusion_is_judged(self) -> None:
-        """Dropped, it would pass while a test-only change skipped every stage (#2053)."""
+        """Dropped, it would pass while a test-only change skipped every stage."""
         exclusion = '              - "!deploy/helm/**"\n'
         text = self.broken("              - '!docs/**'\n", "              - '!docs/**'\n" + exclusion)
         self.assertIn("tests/Common.Web.Tests/RequestTimeoutTests.cs names deploy/helm/?", self.problems(text))
