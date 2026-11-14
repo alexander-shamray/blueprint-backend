@@ -1789,8 +1789,8 @@ CODE_GATE = "needs.changes.outputs.code != 'false'"
 # Step-level, because a matrix job skipped by its own `if:` is never expanded and a
 # skipped stage skips what `needs:` it (the comment above `images`).
 CODE_GATED_JOBS = ("build", "integration", "stage-gate")
-# These run only behind a step that ran, so a gated job with nothing to do skips them.
-STATUS_GUARD = re.compile(r"\b(?:failure|always)\(\)")
+# `always()` runs in a job whose steps all skipped, so it passes only beside what a skipped step never leaves.
+STATUS_NARROWING = re.compile(r"hashFiles\([^)]*\) != ''|steps\.[\w-]+\.outputs\.[\w-]+ == '[^']+'")
 # Everything else a pull request's run needs to tell a skip from a lost answer.
 CODE_OUTPUT_TERMS = (
     "github.event_name != 'pull_request'",
@@ -1833,6 +1833,17 @@ def is_code(filters: dict[str, list[str]], path: str) -> bool:
     if any(_glob(pattern[1:], path) for pattern in patterns if pattern.startswith("!")):
         return False
     return any(_glob(pattern, path) for pattern in patterns if not pattern.startswith("!"))
+
+
+def _behind_a_step_that_ran(guard: str) -> bool:
+    """`failure()`, or `always()` beside a file or step output, each a top-level `&&` term, so `||` frees neither."""
+    expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", guard.strip())
+    terms = [_unwrapped(term) for term in _split_outside_parentheses(_unwrapped(expression), "&&")]
+    if any(len(_split_outside_parentheses(term, "||")) > 1 for term in terms):
+        return False
+    if "failure()" in terms:
+        return True
+    return "always()" in terms and any(STATUS_NARROWING.fullmatch(term) for term in terms)
 
 
 def check_code_filters(filters: dict[str, list[str]]) -> list[str]:
@@ -1962,7 +1973,7 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
             )
         for index, step in enumerate(steps):
             guard = step.get("if", "")
-            if CODE_GATE not in guard and not STATUS_GUARD.search(guard):
+            if CODE_GATE not in guard and not _behind_a_step_that_ran(guard):
                 name = step.get("name", step.get("uses", step.get("run", ""))).strip()[:60]
                 problems.append(
                     f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}`, so a change no "
