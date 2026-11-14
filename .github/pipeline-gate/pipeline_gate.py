@@ -1418,13 +1418,10 @@ def read_job_outputs(workflow_text: str, job: str) -> set[str]:
 
 
 def read_filters_by_name(workflow_text: str) -> dict[str, list[str]]:
-    """The paths-filter block as {filter: [its own patterns]}.
+    """The paths-filter block as {filter: [its own patterns]}; `read_filters` flattens, and pairing needs which.
 
-    `read_filters` flattens, which is all the `filters` check needs — it asks
-    whether a directory is reachable by any filter. Pairing needs to know
-    which, so this keeps them apart. A `*shared` alias line carries no
-    pattern and is skipped, and that costs nothing here: every Dockerfile lives
-    under its own service's tree, never under `shared`.
+    A `*shared` alias line carries no pattern and is skipped, which costs nothing here: every
+    Dockerfile lives under its own service's tree, never under `shared`.
     """
     return _scan_filters(workflow_text)[0]
 
