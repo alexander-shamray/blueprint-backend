@@ -624,7 +624,8 @@ def _shared_values_reads(name: str, workloads: dict) -> list[str]:
 # `image:`, so the descriptor and the chart cannot each say something different about one release.
 STRATEGY = re.compile(r"(?m)^strategy:[ \t]*(\S+)[ \t]*(?:#.*)?$")
 
-TELEMETRY_NAME = re.compile(r"[ \t]+telemetryName:[ \t]*(\S+)")
+# The direct two-space child alone, the key Helm and smoke.sh read; a nested one is another key.
+TELEMETRY_NAME = re.compile(r"  telemetryName:[ \t]*(\S+)")
 
 
 def _chart_telemetry_name(values: str) -> str | None:
@@ -634,7 +635,7 @@ def _chart_telemetry_name(values: str) -> str | None:
         if line[:1] not in ("", " ", "\t", "#"):
             inside = line.rstrip() == "observability:"
         elif inside and (found := TELEMETRY_NAME.match(line)):
-            return found.group(1)
+            return found.group(1).strip("\"'")
     return None
 
 

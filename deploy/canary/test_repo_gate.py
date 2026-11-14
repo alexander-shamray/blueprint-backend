@@ -779,6 +779,15 @@ class SecondReleaseTests(unittest.TestCase):
         self.assertEqual("Right", repo_gate._chart_telemetry_name(values))
         self.assertIsNone(repo_gate._chart_telemetry_name("observability:\n  otlp: x\nnext:\n  telemetryName: No\n"))
 
+    def test_only_the_direct_child_of_observability_is_read_and_its_quotes_are_not_the_name(self) -> None:
+        nested = "observability:\n  otlp:\n    telemetryName: Nested\nnext:\n"
+        quoted = "observability:\n  telemetryName: \"Web.Bff.Assistant\"\n"
+        single = "observability:\n  telemetryName: 'Web.Bff.Assistant'\n"
+
+        self.assertIsNone(repo_gate._chart_telemetry_name(nested))
+        self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(quoted))
+        self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(single))
+
     def test_a_release_off_the_ladder_without_an_argument_is_refused(self) -> None:
         for argued in ("", "  ", None, 1):
             with self.subTest(argued=argued):
