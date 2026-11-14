@@ -370,11 +370,11 @@ class RelativeThresholdTests(unittest.TestCase):
     def test_a_value_that_is_not_a_number_fails(self) -> None:
         # True compares as 1.0, a floor no error rate reaches, so its relative check would be switched off.
         for key in ("errorRateFloor", "latencyP99FloorSeconds", "regressionFactor"):
-            for bad in (True, "0.01", None):
+            for bad in (True, "0.01", None, float("inf"), float("nan")):
                 with self.subTest(key=key, value=bad):
                     failures = repo_gate._relative_thresholds_are_numbers(self.shipped() | {key: bad})
 
-                    self.assertEqual(failures, [f"thresholds.{key} is {bad!r}, which is not a number"])
+                    self.assertEqual(failures, [f"thresholds.{key} is {bad!r}, which is not a finite number"])
 
     def test_a_factor_that_is_not_positive_fails(self) -> None:
         for bad in (0, -1.5):
@@ -388,7 +388,7 @@ class RelativeThresholdTests(unittest.TestCase):
         plan = descriptor_model.load_plan()
         plan["thresholds"] = dict(plan["thresholds"]) | {"errorRateFloor": "0.01"}
 
-        self.assertIn("thresholds.errorRateFloor is '0.01', which is not a number", repo_gate.check(plan))
+        self.assertIn("thresholds.errorRateFloor is '0.01', which is not a finite number", repo_gate.check(plan))
 
 
 class AlertThresholdTests(unittest.TestCase):

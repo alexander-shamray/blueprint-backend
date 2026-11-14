@@ -4,6 +4,7 @@ against the C# sources, the alerts, the charts, smoke.sh and the deploy workflow
 from __future__ import annotations
 
 import importlib.util
+import math
 import re
 import sys
 from pathlib import Path
@@ -396,8 +397,8 @@ def _relative_thresholds_are_numbers(thresholds: dict) -> list[str]:
         value = thresholds.get(key)
         if key not in thresholds:
             continue
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            failures.append(f"thresholds.{key} is {value!r}, which is not a number")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            failures.append(f"thresholds.{key} is {value!r}, which is not a finite number")
         elif key == "regressionFactor" and value <= 0:
             failures.append(
                 f"thresholds.regressionFactor is {value}, so every canary reading above its floor is a regression"
