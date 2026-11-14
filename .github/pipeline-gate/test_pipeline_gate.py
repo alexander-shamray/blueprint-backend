@@ -1267,6 +1267,8 @@ class SupplyChainTests(Fixture):
             # The digest read rather than the tag, and the digest named rather than compared.
             ('inspect "$tag")', 'inspect "$REGISTRY/${{ matrix.image }}@$DIGEST")'),
             ('[ "$moved" = "$DIGEST" ]', 'echo "$moved $DIGEST"'),
+            # A comparison of some other variable than the one the read assigned.
+            ('[ "$moved" = "$DIGEST" ]', '[ "$DIGEST" = "$DIGEST" ]'),
             # `$tag` read, but naming something other than the main tag.
             ('tag="$REGISTRY/${{ matrix.image }}:main"', 'tag="$REGISTRY/${{ matrix.image }}:${{ github.sha }}"'),
         ):
