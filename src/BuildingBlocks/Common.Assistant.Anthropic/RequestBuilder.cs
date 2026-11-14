@@ -153,11 +153,10 @@ internal static class RequestBuilder
         "dependentSchemas"];
 
     // Closes every object schema in the tree, the root and those under `properties`, `items`, `$defs` and the
-    // combinators, without overruling one that already names `additionalProperties`, and moves each schema's
-    // unsupported bounds into its description; whether every object ended closed, since a strict tool may not hold an
-    // open one. The walk follows the schema keywords alone, so a property called `type` or `minimum` in `properties`,
-    // or a `default` value, is never read as a schema. A schema is an object when its `type` names it, alone or in a
-    // list, or when it has no `type` and holds `properties`.
+    // combinators, keeping an `additionalProperties` already named, and moves unsupported bounds into the description;
+    // it says whether every object ended closed, as a strict tool may hold no open one. The walk follows the schema
+    // keywords alone, so a property called `type` or `minimum`, or a `default` value, is never read as a schema. An
+    // object is a schema whose `type` names it, alone or in a list, or with no `type` that holds `properties`.
     private static bool Close(JsonNode? node)
     {
         bool shut = true;

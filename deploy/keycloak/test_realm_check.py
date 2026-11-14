@@ -2408,10 +2408,8 @@ class TheRolloutStillCallsThisGate(unittest.TestCase):
     def test_they_run_before_the_first_command_that_changes_the_cluster(self):
         """The check is upstream of every mutation, whichever comes first.
 
-        A check that runs after the HPA floor has moved is a check on a cluster
-        the rollout has already started changing; the first `kubectl patch`
-        sits in a ladder-gated step, so a `helm upgrade` or `kubectl scale`
-        moved above the check would change the cluster first.
+        A check after the HPA floor moved judges a cluster already changing, and
+        the first `kubectl patch` is ladder-gated, so any mutation may lead.
         """
         text = self.workflow()
         judged = text.find("realm_check.py check")
