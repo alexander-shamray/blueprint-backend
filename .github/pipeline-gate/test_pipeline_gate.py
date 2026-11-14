@@ -1209,6 +1209,32 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("the push of the main tag does not run under the main-push condition", problems[0])
 
+    def test_a_condition_holding_every_term_but_not_as_and_terms_is_caught(self) -> None:
+        """Substrings passed each of these, and each runs the step on main for a leg that built nothing."""
+        filtered = "needs.changes.outputs[matrix.filter] == 'true'"
+        main = "github.ref == 'refs/heads/main'"
+        event = "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name)"
+        for condition in (
+            f"${{{{ {filtered} || {event} && {main} }}}}",
+            f"${{{{ {filtered} && ({event} || {main}) }}}}",
+            f"${{{{ {filtered} && github.event_name != 'push' && {main} && '\"push\"' }}}}",
+            f"${{{{ {filtered} && contains(fromJSON('[\"push\",\"pull_request\"]'), github.event_name) && {main} }}}}",
+        ):
+            with self.subTest(condition=condition):
+                move = SIGNING_STEPS.split("      - name: Move the main tag")[1]
+                self.write(WORKFLOW.replace(move, move.replace(MAIN_PUSH, condition)))
+
+                problems = pipeline_gate.check_images(self.root)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("the push of the main tag does not run under the main-push condition", problems[0])
+
+    def test_a_single_push_event_test_is_a_main_push(self) -> None:
+        step = {"if": "${{ needs.changes.outputs[matrix.filter] == 'true' && github.event_name == 'push' "
+                      "&& github.ref == 'refs/heads/main' }}"}
+
+        self.assertTrue(pipeline_gate._on_main_push(step))
+
     def test_a_main_tag_moved_before_its_attestations_is_caught(self) -> None:
         move = "      - name: Move the main tag" + SIGNING_STEPS.split("      - name: Move the main tag")[1]
         self.write(WORKFLOW.replace(move, "").replace(
