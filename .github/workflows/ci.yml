@@ -710,9 +710,9 @@ jobs:
 
   # Each step of `build`, `integration` and `stage-gate` asks `changes` whether a
   # stage reads this change, but for those on `failure()`, or `always()` beside a
-  # file or step output, which run only behind a step that ran. The jobs carry no
-  # `if:` (`pipeline-gate code`): skipped steps pass, so the check keeps its name
-  # and `needs:` still run.
+  # non-empty `hashFiles` or a step output equal to a non-empty value, which run
+  # only behind a step that ran. The jobs carry no `if:` (`pipeline-gate code`):
+  # skipped steps pass, so the check keeps its name and `needs:` still run.
   build:
     needs: changes
     runs-on: ubuntu-latest
