@@ -58,8 +58,8 @@ nothing, and that silence is not the dispatcher's.
 
 - **`Outbox claim failed`**, or **`Outbox fail statement failed`** or
   **`Outbox complete statement failed`** — the dispatcher cannot reach *SQL
-  Server*, to claim or to record what it delivered. This is a database
-  incident wearing an outbox costume; readiness should be red too
+  Server*, to claim, or to record a delivery or a failure. This is a
+  database incident wearing an outbox costume; readiness should be red too
   ([§13.5](../backend-architecture/13-observability.md)).
 - **`Outbox message … failed, attempt N of 10`** — the dispatcher is running and
   delivery is failing. Continue below.
