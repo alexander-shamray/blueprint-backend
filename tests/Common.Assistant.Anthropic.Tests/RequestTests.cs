@@ -202,14 +202,15 @@ public sealed class RequestTests
                 Given.Tool("open") with
                 {
                     InputSchema = JsonNode.Parse(
-                        """{"type":"object","properties":{},"additionalProperties":false}""")!.AsObject(),
+                        """{"type":"object","properties":{},"additionalProperties":true}""")!.AsObject(),
                 },
             ],
         };
 
         JsonArray tools = (await SentFor(request)).Body!["tools"]!.AsArray();
 
-        tools[0]!["input_schema"]!["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        // True, not the false that closing would write, so a close that overwrote the key would show here.
+        tools[0]!["input_schema"]!["additionalProperties"]!.GetValue<bool>().ShouldBeTrue();
     }
 
     [Fact]
@@ -244,7 +245,7 @@ public sealed class RequestTests
         Bounds_a_strict_schema_may_not_carry_move_into_the_description_and_a_property_named_like_one_stays()
     {
         // A recent_logs schema as a host might declare it, plus a string length, an array floor, and a property
-        // called `minimum` that is a name, not a bound.
+        // called `minimum` that is a name, not a bound: a schema the walk enters, so its own floor moves too.
         TurnRequest request = Given.Request(new UserMessage("hi")) with
         {
             Tools =
@@ -256,7 +257,7 @@ public sealed class RequestTests
                           "lines":{"type":"integer","minimum":1,"maximum":200,"description":"How many lines."},
                           "filter":{"type":"string","maxLength":80},
                           "ids":{"type":"array","minItems":2,"items":{"type":"string"}},
-                          "minimum":{"type":"integer","minItems":1}}}
+                          "minimum":{"type":"array","minItems":3,"items":{"type":"integer"}}}}
                         """)!.AsObject(),
                 },
             ],
@@ -271,7 +272,8 @@ public sealed class RequestTests
         properties["filter"]!["description"]!.GetValue<string>().ShouldBe("""{"maxLength":80}""");
         properties["ids"]!.AsObject().ContainsKey("minItems").ShouldBeFalse();
         properties.ContainsKey("minimum").ShouldBeTrue();
-        properties["minimum"]!["minItems"]!.GetValue<int>().ShouldBe(1);
+        properties["minimum"]!.AsObject().ContainsKey("minItems").ShouldBeFalse();
+        properties["minimum"]!["description"]!.GetValue<string>().ShouldBe("""{"minItems":3}""");
     }
 
     [Fact]
