@@ -505,7 +505,10 @@ MOVING_TAG_PUSH = r'\bdocker push\s+"\$REGISTRY/[^"]*:main"'
 # `docker buildx imagetools inspect` reads a tag and builds nothing.
 DOCKER_BUILD = re.compile(r"\bdocker build\b")
 MOVING_TAG_GUARD = r"\bgit merge-base --is-ancestor\b"
-MOVING_TAG_READBACK = r"\bdocker buildx imagetools inspect\b"
+# The tag itself read, then compared with the signed digest, not merely named beside it.
+MOVING_TAG_READBACK = r'\bdocker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
+MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
+MOVING_TAG_COMPARISON = r'\[\s+"\$\w+"\s+!?=\s+"\$DIGEST"\s+\]'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
 HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
@@ -650,7 +653,9 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
 
         # After the push, from the registry: the local image's digests already name the signed one.
         reads = [found for found in re.finditer(MOVING_TAG_READBACK, commands) if move and found.start() > move.end()]
-        if move and (not reads or "$DIGEST" not in commands[reads[0].end():]):
+        named = not reads or "$tag" not in reads[0].group(0) or re.search(MOVING_TAG_NAME, commands)
+        compared = reads and re.search(MOVING_TAG_COMPARISON, commands[reads[0].end():])
+        if move and not (reads and named and compared):
             problems.append(
                 f"{subject}: the step that moves the main tag does not read the tag back from the registry "
                 "after it pushes and compare it with $DIGEST, so a push that left the tag on other bytes passes"

@@ -166,6 +166,7 @@ SIGNING_STEPS = f"""\
       - name: Move the main tag of ${{{{ matrix.image }}}}
         if: {MAIN_PUSH}
         run: |
+          tag="$REGISTRY/${{{{ matrix.image }}}}:main"
           docker buildx imagetools inspect "$REGISTRY/${{{{ matrix.image }}}}:main"
           git merge-base --is-ancestor "$named" "$GITHUB_SHA"
           docker tag "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}" "$REGISTRY/${{{{ matrix.image }}}}:main"
@@ -1263,6 +1264,11 @@ class SupplyChainTests(Fixture):
             ('          moved=$(docker buildx imagetools inspect "$tag")\n', ""),
             ('docker buildx imagetools inspect "$tag")', "docker inspect --format '{{json .RepoDigests}}' \"$tag\")"),
             ('[ "$moved" = "$DIGEST" ]', '[ -n "$moved" ]'),
+            # The digest read rather than the tag, and the digest named rather than compared.
+            ('inspect "$tag")', 'inspect "$REGISTRY/${{ matrix.image }}@$DIGEST")'),
+            ('[ "$moved" = "$DIGEST" ]', 'echo "$moved $DIGEST"'),
+            # `$tag` read, but naming something other than the main tag.
+            ('tag="$REGISTRY/${{ matrix.image }}:main"', 'tag="$REGISTRY/${{ matrix.image }}:${{ github.sha }}"'),
         ):
             with self.subTest(old=old):
                 problems = self.broken(old, new)
