@@ -69,8 +69,10 @@ def resolve(repo_root: Path, commit: str) -> str:
     try:
         full = git(repo_root, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
     except ScaffoldError:
-        raise ScaffoldError(
-            f"{commit} is not a commit in this checkout, whose history a shallow clone lacks") from None
+        if git(repo_root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+            raise ScaffoldError(
+                f"{commit} is not a commit in this checkout, whose history a shallow clone lacks") from None
+        raise ScaffoldError(f"{commit} names no commit in this checkout") from None
     full_sha = full.decode("ascii").strip()
     # The render runs the scaffold the parent carried, so only HEAD's own history.
     ancestry = subprocess.run(
