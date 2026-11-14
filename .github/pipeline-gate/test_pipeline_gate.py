@@ -2010,24 +2010,33 @@ ALERT = (
     "jobs:\n"
     "  read-cancelled:\n"
     "    if: >-\n"
+    "      github.event.workflow_run.event == 'push' &&\n"
     "      github.event.workflow_run.conclusion == 'cancelled'\n"
     "    runs-on: ubuntu-latest\n"
     "  rerun:\n"
     "    needs: read-cancelled\n"
     "    if: >-\n"
     "      always() &&\n"
-    "      github.event.workflow_run.run_attempt == 1\n"
+    "      github.event.workflow_run.event == 'push' &&\n"
+    "      github.event.workflow_run.run_attempt == 1 &&\n"
+    "      (contains(fromJSON('[\"failure\", \"timed_out\", \"startup_failure\"]'), "
+    "github.event.workflow_run.conclusion) ||\n"
+    "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n"
+    "      needs.read-cancelled.outputs.reason != '')\n"
     "    runs-on: ubuntu-latest\n"
     "  file:\n"
     "    needs: [read-cancelled, rerun]\n"
     "    if: >-\n"
     "      always() &&\n"
+    "      github.event.workflow_run.event == 'push' &&\n"
     "      (contains(fromJSON('[\"failure\", \"timed_out\", \"startup_failure\"]'), "
     "github.event.workflow_run.conclusion) ||\n"
     "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n"
     "      needs.read-cancelled.outputs.reason != '') &&\n"
     "      (needs.rerun.result != 'success' ||\n"
-    "      !contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second))\n"
+    "      !contains(fromJSON('[\"passed\", \"replaced\", \"superseded\"]'), needs.rerun.outputs.second)) &&\n"
+    "      (github.event.workflow_run.run_attempt == 1 ||\n"
+    "      github.event.workflow_run.triggering_actor.login != 'github-actions[bot]')\n"
     "    runs-on: ubuntu-latest\n"
 )
 
@@ -2140,7 +2149,7 @@ class AlertTests(unittest.TestCase):
                     "so a run ending so alerts nobody"])
 
     def test_a_cancelled_run_nothing_reads_is_caught(self) -> None:
-        for dropped in ("      github.event.workflow_run.conclusion == 'cancelled'\n",
+        for dropped in (" &&\n      github.event.workflow_run.conclusion == 'cancelled'",
                         "      always() &&\n",
                         "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n",
                         "\"failure\", ",
@@ -2157,7 +2166,7 @@ class AlertTests(unittest.TestCase):
                 self.assertIn("so a job past its time limit alerts nobody", problems[0])
 
     def test_a_rerun_that_would_rerun_its_own_reruns_is_caught(self) -> None:
-        for edit, replacement in ((" &&\n      github.event.workflow_run.run_attempt == 1\n", "\n"),
+        for edit, replacement in (("      github.event.workflow_run.run_attempt == 1 &&\n", ""),
                                   ("  rerun:\n", "  later:\n")):
             with self.subTest(edit=edit):
                 self.assertIn(edit, ALERT)
@@ -2169,14 +2178,14 @@ class AlertTests(unittest.TestCase):
                 self.assertIn("each rerun would start another", problems[0])
 
     def test_a_filing_job_that_trusts_a_rerun_it_did_not_hear_from_is_caught(self) -> None:
-        for dropped in ("(needs.rerun.result != 'success' ||\n      ", "!"):
+        for dropped, kept in (("(needs.rerun.result != 'success' ||\n      !", "(!"), ("!contains", "contains")):
             with self.subTest(dropped=dropped):
-                self.assertIn(dropped, ALERT)
-                self.write(pipeline_gate.ALERT_WORKFLOW, "".join(ALERT.rsplit(dropped, 1)))
+                self.assertEqual(ALERT.count(dropped), 1)
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(dropped, kept))
 
                 problems = pipeline_gate.check_alerts(self.root)
 
-                self.assertEqual(len(problems), 1)
+                self.assertEqual(len(problems), 1, problems)
                 self.assertIn("so a second red attempt alerts nobody", problems[0])
 
     def test_a_condition_holding_every_term_joined_otherwise_is_caught(self) -> None:
@@ -2185,14 +2194,57 @@ class AlertTests(unittest.TestCase):
                 ("needs.read-cancelled.result) ||", "needs.read-cancelled.result) &&",
                  "so a job past its time limit alerts nobody"),
                 ("(contains(", "(!contains(", "does not file on `failure`"),
-                ("run_attempt == 1\n", "run_attempt == 10\n", "each rerun would start another"),
+                ("run_attempt == 1 &&", "run_attempt == 10 &&", "each rerun would start another"),
                 ("(needs.rerun.result != 'success' ||", "(needs.rerun.result != 'success' &&",
                  "so a second red attempt alerts nobody")):
             with self.subTest(new=new):
                 self.assertIn(old, ALERT)
-                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(old, new, 1))
+                # The last occurrence: the `rerun` job's own group comes first, and these read `file`'s.
+                self.write(pipeline_gate.ALERT_WORKFLOW, new.join(ALERT.rsplit(old, 1)))
 
                 self.assertTrue(any(problem in found for found in pipeline_gate.check_alerts(self.root)))
+
+    def test_a_term_no_check_reads_beside_the_ones_they_do_is_caught(self) -> None:
+        """Each would keep its job from a run it must hear, with every term a check reads still there."""
+        last = "'github-actions[bot]')\n"
+        terms = (
+            ("read-cancelled", "  read-cancelled:\n    if: >-\n", "false"),
+            ("rerun", "  rerun:\n    needs: read-cancelled\n    if: >-\n", "github.event.workflow_run.run_number == 0"),
+            ("file", "  file:\n    needs: [read-cancelled, rerun]\n    if: >-\n", "false"),
+            # A second list of conclusions after the one read, which a red run must be on too.
+            ("file", last, "contains(fromJSON('[\"neutral\"]'), github.event.workflow_run.conclusion)"),
+        )
+        for job, anchor, term in terms:
+            with self.subTest(job=job, term=term):
+                self.assertEqual(ALERT.count(anchor), 1)
+                added = f"{anchor[:-1]} &&\n      {term}\n" if anchor == last else f"{anchor}      {term} &&\n"
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(anchor, added))
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(problems, [
+                    f"{pipeline_gate.ALERT_WORKFLOW}'s `{job}` job's `if:` holds `{term}`, an `&&` term no check "
+                    "here reads, so it could keep the job from a run it must hear"])
+
+    def test_a_filing_job_that_files_its_reruns_own_attempt_is_caught(self) -> None:
+        for old, new in (
+                (" &&\n      (github.event.workflow_run.run_attempt == 1 ||\n"
+                 "      github.event.workflow_run.triggering_actor.login != 'github-actions[bot]')", ""),
+                ("(github.event.workflow_run.run_attempt == 1 ||", "(github.event.workflow_run.run_attempt == 1 &&"),
+                ("login != 'github-actions[bot]'", "login == 'github-actions[bot]'")):
+            with self.subTest(new=new):
+                self.assertIn(old, ALERT)
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(old, new))
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertTrue(any("or one a person started" in problem for problem in problems), problems)
+
+    def test_this_repositorys_alert_passes(self) -> None:
+        """The subject is the real file: a term the readers refuse there is a false refusal, not a finding."""
+        alert = pipeline_gate.ROOT / ".github" / "workflows" / pipeline_gate.ALERT_WORKFLOW
+        text = alert.read_text(encoding="utf-8")
+        self.assertEqual(pipeline_gate.check_alert_conclusions(text) + pipeline_gate.check_alert_rerun(text), [])
 
     def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
         self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")
