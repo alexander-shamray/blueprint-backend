@@ -372,21 +372,33 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
                     .UseSqlServer(fixture.ConnectionString)
                     .AddInterceptors(pause)
                     .Options);
-            IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+            IDbContextTransaction? transaction = null;
+            Task saving = Task.CompletedTask;
 
-            ErasePersonalDataHandler handler = new(
-                new SqlNotificationsPersonalDataStore(
-                    db,
-                    new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>())),
-                new PersonalDataErasureRepository(db),
-                TimeProvider.System);
+            try
+            {
+                transaction = await db.Database.BeginTransactionAsync(ct);
 
-            await handler.HandleAsync(new ErasePersonalDataCommand(Guid.CreateVersion7(), subject), ct);
-            Task saving = db.SaveChangesAsync(ct);
-            (await pause.Reached.Task.WaitAsync(ServiceFixture.StepDeadline, ct))
-                .ShouldBeTrue("the erasure has run its deletes and not yet written its audit row");
+                ErasePersonalDataHandler handler = new(
+                    new SqlNotificationsPersonalDataStore(
+                        db,
+                        new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>())),
+                    new PersonalDataErasureRepository(db),
+                    TimeProvider.System);
 
-            return new ErasureAtItsAudit(db, transaction, pause, saving);
+                await handler.HandleAsync(new ErasePersonalDataCommand(Guid.CreateVersion7(), subject), ct);
+                saving = db.SaveChangesAsync(ct);
+                (await pause.Reached.Task.WaitAsync(ServiceFixture.StepDeadline, ct))
+                    .ShouldBeTrue("the erasure has run its deletes and not yet written its audit row");
+
+                return new ErasureAtItsAudit(db, transaction, pause, saving);
+            }
+            catch
+            {
+                // Else the open transaction keeps the erasure's locks while the collection resets.
+                await CloseAsync(pause, saving, transaction, db);
+                throw;
+            }
         }
 
         public async Task FinishAsync(CancellationToken ct)
@@ -396,11 +408,22 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
             await _transaction.CommitAsync(ct);
         }
 
-        public async ValueTask DisposeAsync()
+        public async ValueTask DisposeAsync() => await CloseAsync(_pause, _saving, _transaction, _db);
+
+        /// <summary>Lets a parked save finish, bounded, so the context is not disposed under it.</summary>
+        private static async Task CloseAsync(
+            PauseBeforeAudit pause,
+            Task saving,
+            IDbContextTransaction? transaction,
+            NotificationsDbContext db)
         {
-            _pause.Release.TrySetResult();
-            await _transaction.DisposeAsync();
-            await _db.DisposeAsync();
+            pause.Release.TrySetResult();
+            await saving.WaitAsync(ServiceFixture.StepDeadline).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+
+            await db.DisposeAsync();
         }
     }
 
