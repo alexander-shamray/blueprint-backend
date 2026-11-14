@@ -38,6 +38,12 @@ the alert for a run with a replaced job beside it; a run with no replaced job
 still files. As ADR-155 says of the filing step, `read-cancelled`'s first live
 run is the first cancelled run on `main` after it merges.
 
+**Amended by
+[ADR-210](ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md)**:
+a run read as red here, a job at its time limit included, is no longer filed
+when a newer push run of its workflow on `main` exists; the newer run is the
+one heard. How a cancelled run is read is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

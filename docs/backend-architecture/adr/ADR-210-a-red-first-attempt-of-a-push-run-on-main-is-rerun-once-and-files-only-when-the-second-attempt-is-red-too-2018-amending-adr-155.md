@@ -32,6 +32,13 @@ because most watched workflows cancel a running run of `main` when another
 joins their group: a rerun of an older run would cancel the newer run, or the
 newer run's own rerun, and leave `main`'s head untested. The tracker comment
 is written before the wait, so a flake that reruns green is still counted.
+This amends ADR-196 as well: a job at its time limit is red there, and here it
+too stands down for a newer run. ADR-196 rejected asking whether a newer run
+exists as the way to tell a timed-out run from a replaced one, since a job can
+time out beside a newer run; that reading stands. What changes is whether a
+red run with a newer one beside it is filed, and it is not, because the newer
+run tests a later head of the same workflow: if the time limit is real it
+times out again and files, and if it passes, `main` is green.
 **Consequences.** A red `main` reaches its issue one rerun later, the length
 of the failed jobs' second attempt, and a runner is held for that long; the
 repository is public, so the wait costs a concurrent job slot, not minutes.
