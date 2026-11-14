@@ -187,20 +187,38 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     public async Task The_gauges_count_overdue_requests_and_name_the_holders_that_have_not_answered()
     {
         Guid request = await RaiseAsync();
+        Guid other = await RaiseAsync(Guid.CreateVersion7());
+        Guid open = await RaiseAsync(Guid.CreateVersion7());
+        Guid closed = await RaiseAsync(Guid.CreateVersion7());
         await fixture.ExecuteAsync(
             """
             INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt)
-            VALUES ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()), ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET())
+            VALUES ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()), ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET()),
+                ({1}, 'payments', 1, 1, SYSDATETIMEOFFSET()), ({1}, 'shipping', 1, 1, SYSDATETIMEOFFSET())
             """,
-            request);
+            request,
+            other);
         await MakeDueAsync(request);
+        await MakeDueAsync(other);
+        await fixture.ExecuteAsync(
+            "UPDATE privacy.ErasureRequests SET Status = 'Closed', SubjectId = NULL WHERE RequestId = {0}",
+            closed);
         await Sweep.RunOnceAsync(TestContext.Current.CancellationToken);
+        (await StatusAsync(open)).ShouldBe("Open");
 
         IErasureStats stats = fixture.Factory.Services.GetRequiredService<IErasureStats>();
 
-        stats.OverdueCount().ShouldBe(1);
+        // Neither the open nor the closed request counts, and one request's answer clears no holder of another's.
+        stats.OverdueCount().ShouldBe(2);
         stats.OverdueMissingByResponder().ShouldBe(
-            new Dictionary<string, int> { ["payments"] = 1, ["shipping"] = 1, ["notifications"] = 1, ["bff"] = 1 },
+            new Dictionary<string, int>
+            {
+                ["ordering"] = 1,
+                ["payments"] = 1,
+                ["shipping"] = 1,
+                ["notifications"] = 2,
+                ["bff"] = 2
+            },
             ignoreOrder: true);
     }
 
