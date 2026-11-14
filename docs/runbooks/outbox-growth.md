@@ -119,34 +119,46 @@ goes:
 
 - **Broker lane** — publish latency to RabbitMQ. A broker under memory pressure
   throttles publishers rather than refusing them, which reads as slowness.
-- **Local lane** — the projection handler's own SQL. `projection.lag` is the
-  instrument, and a handler doing a row-at-a-time write inside a `MERGE` loop is
-  the usual finding.
+- **Local lane** — the projection handler's own SQL. A handler doing a
+  row-at-a-time write inside a `MERGE` loop is the usual finding.
+
+The instrument is the dispatcher's own timing of one delivery, per service and
+lane. Not `projection.lag`: it runs from the event being raised to its being
+applied, so during the backlog this alert is about it reads high however fast
+the handler is, and it says how stale a read model is rather than why.
 
 ```promql
-histogram_quantile(0.95, sum by (le) (rate(projection_lag_seconds_bucket[10m])))
+histogram_quantile(0.95, sum by (service_name, lane, le) (
+  rate(outbox_delivery_duration_seconds_bucket{outcome="delivered"}[10m])))
 ```
 
 ## Has the retention purge failed?
 
-This is the cause people miss, because it produces a large count with a *low*
-age. `RetentionPurgeService` deletes processed outbox rows past the window
-(§9.4, §9.5). If it has stopped, the table grows without any delivery problem at
-all — and `outbox.pending.count` counts only unprocessed rows, so a purge
-failure alone should **not** move this gauge.
+This is the cause people miss, because it grows the table without moving any
+gauge. `RetentionPurgeService` deletes processed outbox rows whose
+`ProcessedAt` is older than `RetentionPolicy.OutboxWindow` (§9.4, §9.5). If it
+has stopped, the table grows without any delivery problem at all — and
+`outbox.pending.count` counts only unprocessed rows, so a purge failure alone
+should **not** move this gauge.
 
 That makes the check diagnostic rather than corrective: if pending is high but
 the table is enormous, you have two problems.
 
 ```sql
 SELECT
-    Pending   = SUM(CASE WHEN ProcessedAt IS NULL THEN 1 ELSE 0 END),
-    Processed = SUM(CASE WHEN ProcessedAt IS NOT NULL THEN 1 ELSE 0 END),
-    Oldest    = MIN(OccurredAt)
+    Pending         = SUM(CASE WHEN ProcessedAt IS NULL THEN 1 ELSE 0 END),
+    Processed       = SUM(CASE WHEN ProcessedAt IS NOT NULL THEN 1 ELSE 0 END),
+    OldestProcessed = MIN(ProcessedAt)
 FROM <schema>.OutboxMessages;
 ```
 
-A large `Processed` count is a purge that is not running — check the hosted
+**Read `OldestProcessed`, not the `Processed` count.** A busy, healthy service
+holds a whole window of processed rows, so a large count is normal, and the
+oldest `OccurredAt` is no better: a single pending or abandoned row makes it
+old. An `OldestProcessed` older than `RetentionPolicy.OutboxWindow` plus one
+`RetentionPolicy.Interval` is a purge that is not running, or one behind on a
+backlog that `RetentionPolicy.MaxBatchesPerPass` drains over several passes —
+which falls pass by pass, where a stopped one does not. Check the hosted
 service's logs, and remember it is registered last and therefore stopped first
 on every deploy, so a crash-looping pod may never reach a purge pass.
 
