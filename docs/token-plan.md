@@ -195,7 +195,8 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
   sets of step 1, except for the tasks step 7d's table names.
 
 **Exit.** Measured again over a comparable span: `general-purpose` under
-0.5M a context and a main session's mean context under 150k a call.
+0.5M a context and a main session's mean context under 200k a call, the
+bar the owner's window sets below, where it was 150k until #1664.
 
 **Landed:** the report's `--tools` view of what fills a main session, and
 `CLAUDE.md`'s *Subagents, review rounds and plans*, holding the
@@ -204,14 +205,16 @@ section of that name owns since the shared harness's second plan, with
 their reasons in `docs/harness/token-rules.md`, *Briefing a subagent*; the
 review loop it held moved to `/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
-the repository; the plugin's own settings, where it has them; and a main
-session's mean context, #1664, whose cut is the window below. The
+the repository; and the plugin's own settings, where it has them. The
 cheaper model waits on step 1's quality sets.
 
 **Measured** over 2026-10-07 to 2026-10-31 (`token-usage.md`, 2026-10-31):
 the `general-purpose` half of the exit passes; a main session's mean
 context does not, and from 2026-10-19 on it read higher than the week
-before.
+before. Measured again over 2026-11-01 to 2026-11-13, under the window
+below (`token-usage.md`, 2026-11-14): `general-purpose` at 352k a context
+and a main session at 169k a call, so both halves pass the exit as
+amended.
 
 **Why, and the cut** (`token-usage.md`, 2026-10-31, *what a main session
 carried*). From 2026-10-19 on a call adds what it did before and a session
@@ -220,17 +223,28 @@ empties it: more prompts past 150 calls, three times the wakes a call,
 and later tasks typed into the same session. Nothing the model can do
 empties it: a person's `/compact` or `/clear` does, and auto-compaction,
 which in that span fired at a median 340k and up to 968k, under an 800k
-window for `claude-opus-5-5`; a model has no tool that compacts. The bar
-stays at 150k: a session's first call is 63k of it, and the replay with
-compaction at 250k reads 137k over the span that failed.
-So the cut is the window, not another rule: `autoCompactWindow` at 260,000
-in the owner's user settings, at the top level and in place of the 800,000
-under `modelSettings`, which fires the compaction under 250k. That is a
-change outside the repository, owed with the measurement after it over a
-span of at least thirteen days. Rejected: the same key in the committed
+window for `claude-opus-5-5`; a model has no tool that compacts. So the
+cut is the window, not another rule: `autoCompactWindow` at 500,000 in
+the owner's user settings, at the top level and in place of the 800,000
+under `modelSettings`, the owner's decision of 2026-11-01 on #1664, a
+change outside the repository. The plan had asked for 260,000, which
+fires under 250k, the one window whose replay read under 150k; the owner
+kept 500,000. Rejected also: the same key in the committed
 `.claude/settings.json`, which would hold the window to this repository
-alone but is a self-locking harness change of its own; and 300k or 500k,
-which cut 26% and 15% against 250k's 29% and leave the span over the bar.
+alone but is a self-locking harness change of its own.
+
+**The bar follows the window** (`token-usage.md`, 2026-11-14). Over the
+thirteen days after it the window held every compaction under 500k, at a
+median 252k, and a main session read 169k a call, against 236k on the
+span that failed; the replay reaches 150k on that span only with a window
+under 300k. With the window the owner's, 150k measures a setting no
+change here can make, so the bar is 200k: over every span the 500k replay
+or this measurement read, 161k to 192k, and under the 228k and 236k of
+the spans an 800k window left to run, so it still fails a return to
+sessions that run long uncompacted. Rejected: 150k kept with the half
+recorded as failing, an exit no step can pass while the window stands;
+and 175k, which the 500k replay of the span that failed would itself
+miss.
 
 ### Step 3 — what every session loads
 
@@ -399,7 +413,7 @@ left alone.
   its own background task wakes nobody, so the wait runs as one background
   task in the waiting session, whose exit is the only wake. #1664 found
   that no tool compacts, so the rule dropped its compacting half for the
-  auto-compact window step 2 owes.
+  owner's auto-compact window step 2 records.
 - `/validate-blueprint`'s main session dispatches its passes and holds only
   what they return; it reads no chapter whole. A fix its findings call for
   is a task of its own after `/clear`, never an implementer spawned inside
@@ -421,7 +435,10 @@ the wake share passes; the main session's mean context does not, and is
 step 2's exit, which still fails, #1664; the plan limit holds with no plan
 added; and no `/validate-blueprint` run had a main session of its own,
 since `/ship` dispatches the audit, so that part has no subject, and no
-implementer ran inside an audit.
+implementer ran inside an audit. Over 2026-11-01 to 2026-11-13
+(`token-usage.md`, 2026-11-14) the main session's mean context passes
+step 2's amended exit at 169k, and 38% of the input equivalent came after
+a wake.
 
 ### Step 7d — which model a subagent runs on
 
