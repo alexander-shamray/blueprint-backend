@@ -675,12 +675,20 @@ public sealed class AssistantSession : IDisposable
         }
     }
 
-    private string Bound(string content) =>
-        content.Length <= core.Limits.MaxToolResultChars
-            ? content
-            : string.Concat(
-                content.AsSpan(0, core.Limits.MaxToolResultChars),
-                $"\n[cut to {core.Limits.MaxToolResultChars} characters]");
+    private string Bound(string content)
+    {
+        int max = core.Limits.MaxToolResultChars;
+
+        if (content.Length <= max)
+        {
+            return content;
+        }
+
+        // A cut inside a surrogate pair would keep half a character in the append-only history, re-sent every round.
+        int keep = max > 0 && char.IsHighSurrogate(content[max - 1]) ? max - 1 : max;
+
+        return string.Concat(content.AsSpan(0, keep), $"\n[cut to {max} characters]");
+    }
 
     /// <summary>
     /// The few input values a label shows (design §5.3): top-level strings, numbers and booleans, each short.
