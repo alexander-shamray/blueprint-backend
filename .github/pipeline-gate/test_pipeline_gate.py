@@ -1667,6 +1667,23 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("-regexp", problems[0])
 
+    def test_words_after_a_hash_inside_a_word_or_a_redirection_still_reach_cosign(self) -> None:
+        """Bash opens a comment only at a word's start, and runs on past a redirection's target."""
+        for words in ("--annotations=a#b --certificate-identity-regexp '.*'",
+                      "> out.json --certificate-identity-regexp '.*'",
+                      "2>&1 --certificate-identity-regexp '.*'"):
+            with self.subTest(words=words):
+                problems = self.broken(
+                    "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
+                    f"--certificate-oidc-issuer https://token.actions.githubusercontent.com {words}\n", deploy=True)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("-regexp", problems[0])
+        self.assertEqual(self.broken(
+            "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
+            "--certificate-oidc-issuer https://token.actions.githubusercontent.com # --certificate-identity-regexp\n",
+            deploy=True), [])
+
     def test_a_verify_line_that_will_not_split_fails_rather_than_passing(self) -> None:
         problems = self.broken('cosign verify "$REGISTRY/$1:$TAG"', 'cosign verify "$REGISTRY/$1:$TAG', deploy=True)
 
