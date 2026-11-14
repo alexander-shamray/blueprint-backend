@@ -286,14 +286,16 @@ gate asserts, and why it needs both, is
 [its README](../.github/output-gate/README.md)'s.
 
 **The closure gate and the locality gate need a pull request**, so their live
-runs take a number and a `gh` session that CI has and a checkout does not:
+runs take a number, `pr` below, and a `gh` session that CI has and a checkout
+does not:
 
 ```bash
-gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid,author |
+pr=1700
+gh pr view "$pr" --json number,url,body,commits,closingIssuesReferences,headRefOid,author |
     py -3.12 .github/closure-gate/closure_gate.py
 
-gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
-    jq -s --argjson pr "$(gh pr view <n> --json number,body,changedFiles)" '$pr + {files: .}' |
+gh api "repos/{owner}/{repo}/pulls/$pr/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
+    jq -s --argjson pr "$(gh pr view "$pr" --json number,body,changedFiles)" '$pr + {files: .}' |
     py -3.12 .github/locality-gate/locality_gate.py
 ```
 
@@ -305,11 +307,13 @@ against the checkout it runs in, so run it on the pull request's branch. What
 the first compares is [its README](../.github/closure-gate/README.md)'s.
 
 **The commit gate needs a pull request's number and a base**, and reads git
-rather than `gh`, so a branch can run it once its pull request exists:
+rather than `gh`, so a branch can run it once its pull request exists, `pr`
+again its number:
 
 ```bash
+pr=1700
 git fetch origin main
-py -3.12 .github/commit-gate/commit_gate.py --pr <n> origin/main HEAD
+py -3.12 .github/commit-gate/commit_gate.py --pr "$pr" origin/main HEAD
 ```
 
 What it reads and judges is [its README](../.github/commit-gate/README.md)'s.
