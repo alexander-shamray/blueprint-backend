@@ -157,10 +157,17 @@ max by (service_name) (outbox_pending_count{lane="Broker"})
 ```
 
 The age gauge should drop to near zero within a minute or two of the backlog
-draining. If the count falls but the **age does not**, a specific old row is
-failing while newer ones succeed — that is a poison message, and it is
-[`outbox-abandoned.md`](outbox-abandoned.md) once it hits the cap. Read it now
-rather than waiting:
+draining — **except for the rows the outage itself failed.** Each failure
+pushes a row's `LockedUntil` out along §9.4's backoff ladder
+(`OutboxDispatcher.BackoffBaseSeconds`, doubling up to
+`OutboxDispatcher.BackoffAttemptCap`), and the claim skips a row until that
+passes. So after a long outage the oldest rows sit out their backoff while
+newer ones drain, and the age gauge — the oldest unprocessed row, waiting or
+not — holds for up to the ladder's longest step with nothing wrong. A count
+that falls while the **age does not** is therefore not yet a poison message.
+It is one when the old row's `LockedUntil` has already passed and its
+`Attempts` keep climbing, or when it is at the cap, which is
+[`outbox-abandoned.md`](outbox-abandoned.md). Read it now rather than waiting:
 
 ```sql
 SELECT TOP 10
