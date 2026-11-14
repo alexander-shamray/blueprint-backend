@@ -76,6 +76,17 @@ public sealed class StreamTests
     }
 
     [Fact]
+    public async Task A_refusal_that_cuts_a_tool_input_short_is_still_a_refusal_not_a_broken_input()
+    {
+        FakeHttp http = new FakeHttp().Stream("tool-cut-by-refusal");
+
+        List<ProviderEvent> events = await Provider(http).Played(Given.Request(new UserMessage("open the logs")));
+
+        events.OfType<ToolCall>().ShouldBeEmpty();
+        events.Last().ShouldBe(new RoundEnd(ProviderStop.Refused, "cyber"));
+    }
+
+    [Fact]
     public async Task Redacted_reasoning_is_kept_whole_for_the_next_request()
     {
         FakeHttp http = new FakeHttp().Stream("redacted-thinking");
