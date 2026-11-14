@@ -2004,8 +2004,13 @@ awk '/configMapRef:/ { want = 1; next } want && /name:/ { sub(/^ *name: /, ""); 
     "$OUT/platform.yaml" | sort -u >"$OUT/mounted.txt"
 awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, ""); print; want = 0 }' \
     "$OUT/platform.yaml" | sort -u >"$OUT/rendered.txt"
+# An empty read passes the comparison below, so a template that drops or
+# reshapes envFrom would leave it green with no pod configured.
+check 'the render mounts ConfigMaps at all' test -s "$OUT/mounted.txt"
 check 'every mounted ConfigMap exists in the render' \
     test -z "$(comm -23 "$OUT/mounted.txt" "$OUT/rendered.txt")"
+check 'every rendered -config ConfigMap is mounted' \
+    test -z "$(grep -- '-config$' "$OUT/rendered.txt" | comm -13 "$OUT/mounted.txt" -)"
 
 # ...and a change to any of them rolls the pods: a checksum over only the
 # ConfigMap the library renders leaves `gateway-edge` out, so editing
@@ -2744,8 +2749,12 @@ for chart in $LADDER_CHARTS; do
         "$OUT/$chart-canary.yaml" | sort -u >"$OUT/$chart-canary-mounted.txt"
     awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, ""); print; want = 0 }' \
         "$OUT/$chart-canary.yaml" | sort -u >"$OUT/$chart-canary-rendered.txt"
+    # Non-empty first, or a lost envFrom passes both comparisons vacuously.
+    check "$chart: the canary mounts a ConfigMap at all" test -s "$OUT/$chart-canary-mounted.txt"
     check "$chart: every ConfigMap the canary mounts, the canary renders" \
         test -z "$(comm -23 "$OUT/$chart-canary-mounted.txt" "$OUT/$chart-canary-rendered.txt")"
+    check "$chart: every -config ConfigMap the canary renders, the canary mounts" \
+        test -z "$(grep -- '-config$' "$OUT/$chart-canary-rendered.txt" | comm -13 "$OUT/$chart-canary-mounted.txt" -)"
     check "$chart: and none of them is the stable release's" \
         test "$(grep -cvE -- '-canary(-|$)' "$OUT/$chart-canary-rendered.txt")" -eq 0
 
