@@ -84,6 +84,14 @@ class BothSweepsAgreeOnWhatSuppresses(unittest.TestCase):
             with self.subTest(sweep=name):
                 self.assertIn("files normally", self.sweep(name))
 
+    def test_a_closed_issue_is_not_tracking_as_the_helper_answers(self):
+        # The helper exits 1 for a closed issue, the owner's included; a runbook
+        # that still let a closed issue block would have the parent decide in
+        # prose what the helper exists to decide in code.
+        for name in self.SWEEPS:
+            with self.subTest(sweep=name):
+                self.assertIn("a closed one, the owner's included", self.sweep(name))
+
     def test_a_verifier_record_that_is_not_a_verdict_is_retried_then_an_error(self):
         # A dropped record let a round end clean and mark its commit, and the
         # unverified candidate's file then left every incremental sweep.
@@ -127,7 +135,7 @@ class SuppressionStub:
                 fi
                 if [ "${{1:-}}" = "issue" ] && [ "${{2:-}}" = "view" ]; then
                   {"exit 1" if issue_fails else ""}
-                  awk -v n="${{3:-}}" '$1 == n {{ print $2 }}' {table.as_posix()!r}
+                  awk -v n="${{3:-}}" '$1 == n {{ print $2 "\t" ($3 == "" ? "OPEN" : $3 == "-" ? "" : $3) }}' {table.as_posix()!r}
                   exit 0
                 fi
                 echo "stub gh: unexpected call: $*" >&2
@@ -181,6 +189,21 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         result = self.stub(owner="ada", authors={"42": "mallory"}).run("42")
         self.assertIn("mallory", result.stdout)
 
+    def test_a_closed_issue_the_owner_opened_is_not_tracking(self):
+        # Only an open issue suppresses: a closed one whose fix was reverted would otherwise hide the regression.
+        for state in ("CLOSED", "closed"):
+            with self.subTest(state=state):
+                result = self.stub(owner="ada", authors={"42": f"ada {state}"}).run("42")
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertIn(f"#42 is {state}", result.stdout)
+                self.assertNotIn("tracking: #42 was opened", result.stdout)
+
+    def test_an_issue_reporting_no_state_is_undetermined(self):
+        # The stub reads `-` as a state gh left empty.
+        result = self.stub(owner="ada", authors={"42": "ada -"}).run("42")
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertIn("reports no state", result.stderr)
+
     def test_an_unresolvable_owner_is_undetermined_and_not_tracking(self):
         # Fail direction. Suppressing is the dangerous answer, and 3 is not 1:
         # "somebody else opened it" and "I could not find out" are different
@@ -226,10 +249,19 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         self.assertNotIn("--json body", code)
 
     def test_the_gh_pattern_sees_every_spelling_of_the_grant(self):
-        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api", "gh.exe:*", "GH:*", "GH_TOKEN=x gh:*"):
+        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api", "gh.exe:*", "GH:*", "GH_TOKEN=x gh:*",
+                      "env gh:*", "command gh issue:*", "/usr/bin/gh:*", "env GH_TOKEN=x gh"):
             with self.subTest(grant=grant):
-                self.assertIsNotNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.match(grant))
-        self.assertIsNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.match("bash .claude/scripts/gh-issue-sweep.sh:*"))
+                self.assertIsNotNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.search(grant))
+        self.assertIsNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.search("bash .claude/scripts/gh-issue-sweep.sh:*"))
+        self.assertIsNone(TheSweepsReachIssuesOnlyThroughTheHelpers.GH_GRANT.search("ghost"))
+
+    def test_the_grant_reader_reads_the_whole_allowed_tools_value(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "x.md"
+            path.write_text("---\nallowed-tools: Read,\n  Bash(env gh:*)\nallowed-tools: Bash(gh api:*)\n---\n",
+                            encoding="utf-8")
+            self.assertEqual(["env gh:*", "gh api:*"], TheSweepsReachIssuesOnlyThroughTheHelpers.granted_bash(path))
 
     def test_the_listing_helper_fixes_its_field_set(self):
         code = "\n".join(code_lines(ISSUE_LIST.read_text(encoding="utf-8")))
@@ -332,17 +364,16 @@ class TheSweepsReachIssuesOnlyThroughTheHelpers(unittest.TestCase):
     SWEEPS = ("security-sweep.md", "bug-sweep.md")
 
     # A `gh` grant in any spelling, as `granted_bash` returns it: `gh:*`, `gh*`, `gh issue:*`, `gh`, `gh.exe`,
-    # any case, or behind an env assignment.
-    GH_GRANT = re.compile(r"(?:\w+=\S*\s+)*gh(?:\.exe)?(?:[\s*:]|$)", re.IGNORECASE)
+    # any case, and `gh` as a command word anywhere, behind an env assignment, `env`, `command` or a path. Searched.
+    GH_GRANT = re.compile(r"(?:^|[\s/])gh(?:\.exe)?(?:[\s*:]|$)", re.IGNORECASE)
 
     @staticmethod
     def granted_bash(path):
-        """The `Bash(...)` grants on one command's allowed-tools line: what it may run, not what its prose says."""
+        """The `Bash(...)` grants in one command's allowed-tools value: what it may run, not what its prose says."""
         frontmatter = path.read_text(encoding="utf-8").split("---")[1]
-        line = next(
-            (ln for ln in frontmatter.splitlines()
-             if ln.startswith("allowed-tools:")), "")
-        return re.findall(r"Bash\(([^)]*)\)", line)
+        # Every allowed-tools key, each with the indented or listed lines that continue its value.
+        value = " ".join(re.findall(r"^allowed-tools:(.*(?:\n[ \t-].*)*)", frontmatter, re.MULTILINE))
+        return re.findall(r"Bash\(([^)]*)\)", value)
 
     def test_both_sweeps_grant_the_helper(self):
         for name in self.SWEEPS:
@@ -372,7 +403,7 @@ class TheSweepsReachIssuesOnlyThroughTheHelpers(unittest.TestCase):
         for name in self.SWEEPS:
             for grant in self.granted_bash(COMMANDS / name):
                 with self.subTest(command=name, grant=grant):
-                    self.assertIsNone(self.GH_GRANT.match(grant))
+                    self.assertIsNone(self.GH_GRANT.search(grant))
 
     def test_both_sweeps_reach_the_issue_set_only_through_the_helper(self):
         for name in self.SWEEPS:

@@ -131,6 +131,15 @@ def common_dir(root: Path) -> Path | None:
         return None
 
 
+def safe_path() -> list[str]:
+    """`-P`, which keeps the script's or the working directory off `sys.path`, where the interpreter has it: 3.11's.
+
+    An older `python3` may run the hook and exits at once on the option, stderr discarded, so nothing would refresh.
+    Without it the worker's path gains only the hook's own directory; the module route, run in the checkout, would
+    gain the checkout, so `refresh` drops that route instead."""
+    return ["-P"] if sys.version_info >= (3, 11) else []
+
+
 def linked(path: Path) -> bool:
     # `isjunction` is Python 3.12's, and an older `python3` may run the hook.
     isjunction = getattr(os.path, "isjunction", None)
@@ -681,7 +690,7 @@ def running_indexer(handle) -> int | None:
 def refresh(root: Path, handle=None) -> bool:
     """One update, waited on and answered, because the streams are gone.
 
-    The script by its full path, then the module through this interpreter:
+    The script by its full path, then, where `-P` exists, the module through this interpreter:
     `docs/harness-boundaries.md`, *Index refresh and worktree seeding*. The
     indexer's pid goes in the lock's `handle` and is cleared once it is gone."""
     environment = dict(os.environ, CBX_NO_SKILL_AUTO_UPDATE="1", PYTHONSAFEPATH="1",
@@ -689,7 +698,8 @@ def refresh(root: Path, handle=None) -> bool:
     script = console_script(root)
     for command in (
         *([[script, "update"]] if script else []),
-        [sys.executable, "-P", "-m", "codebase_index", "update"],
+        # Only where `-P` exists: `-m` in the checkout without it imports a branch's own `codebase_index.py`.
+        *([[sys.executable, *safe_path(), "-m", "codebase_index", "update"]] if safe_path() else []),
     ):
         note(handle, str(os.getpid()))
         try:
@@ -959,7 +969,7 @@ def main() -> int:
     root = root.absolute()
     try:
         subprocess.Popen(
-            [sys.executable, "-P", str(Path(__file__).resolve()), "--worker", str(root)],
+            [sys.executable, *safe_path(), str(Path(__file__).resolve()), "--worker", str(root)],
             cwd=tempfile.gettempdir(),
             env=dict(os.environ, **{NO_CWD_SEARCH: "1"}),
             stdin=subprocess.DEVNULL,

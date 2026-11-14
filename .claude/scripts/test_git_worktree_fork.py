@@ -280,6 +280,58 @@ git -C "$root/origin" cat-file blob HEAD:payload.txt | git -C "$root/checkout" h
 WORKTREE_ADD = '[ "$1" = -c ] && [ "$3" = worktree ] && [ "$4" = add ]'
 
 
+class NeitherCreatorTakesMain(unittest.TestCase):
+    """git-worktree-fork.sh and git-branch-create.sh refuse `main` however it is spelled.
+
+    With `main` packed only, `Main` passes an existence check, and on a case-insensitive filesystem its new loose ref
+    is `main`'s.
+    """
+
+    SPELLINGS = ("main", "Main", "MAIN", "heads/main", "refs/heads/main", "origin/main", "refs/remotes/origin/main")
+    CREATE = SCRIPTS / "git-branch-create.sh"
+    fixture = ForkShape.fixture
+    fork = ForkShape.fork
+
+    def packed(self):
+        root = self.fixture()
+        made = run_bash('git -C "$C" pack-refs --all', C=f"{root}/checkout")
+        self.assertEqual(0, made.returncode, made.stderr)
+        return root
+
+    def refs(self, root):
+        return run_bash('git -C "$C" for-each-ref --format="%(refname) %(objectname)"', C=f"{root}/checkout").stdout
+
+    def test_the_fork_refuses_main_however_it_is_spelled(self):
+        root = self.packed()
+        before = self.refs(root)
+        for spelling in self.SPELLINGS:
+            with self.subTest(spelling=spelling):
+                result = self.fork(f"{root}/checkout", ".claude/worktrees/probe", spelling)
+                self.assertEqual(3, result.returncode, f"{spelling!r}: {result.stderr}")
+                self.assertIn("refusing to create main", result.stderr)
+                self.assertFalse(Path(root, "checkout", ".claude", "worktrees", "probe").exists())
+                self.assertEqual(before, self.refs(root))
+
+    def test_the_in_place_create_refuses_main_however_it_is_spelled(self):
+        root = self.packed()
+        before = self.refs(root)
+        for spelling in self.SPELLINGS:
+            for base in ("HEAD", "origin/main"):
+                with self.subTest(spelling=spelling, base=base):
+                    result = run_bash('cd "$C" && bash "$H" "$B" "$S"', C=f"{root}/checkout", H=str(self.CREATE),
+                                      B=spelling, S=base)
+                    self.assertEqual(3, result.returncode, f"{spelling!r}: {result.stderr}")
+                    self.assertIn("refusing to create main", result.stderr)
+                    self.assertEqual(before, self.refs(root))
+
+    def test_a_name_that_only_holds_main_is_created(self):
+        root = self.packed()
+        result = run_bash('cd "$C" && bash "$H" feat/main HEAD', C=f"{root}/checkout", H=str(self.CREATE))
+        self.assertEqual(0, result.returncode, result.stderr)
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe", "fix/main")
+        self.assertEqual(0, result.returncode, result.stderr)
+
+
 class TheAddAsksForLongPaths(unittest.TestCase):
     def test_the_add_spells_core_longpaths_in_a_code_line(self):
         # Only a Windows run can fail on a path past 260 characters, so the spelling is held on every platform,

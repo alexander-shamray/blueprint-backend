@@ -58,8 +58,11 @@ title=$(tr -d '\r\n' < "$tf")
 
 branch=$(git branch --show-current)
 [ -n "$branch" ] || { echo "detached HEAD: there is no branch to open a PR for" >&2; exit 3; }
-[ "$branch" != main ] ||
-  { echo "refusing to open a pull request from main into main" >&2; exit 3; }
+# Folded and spelled out as git-trailer-pr.sh does: on a case-insensitive filesystem `Main` is `main`'s ref.
+case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
+  main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
+    echo "refusing to open a pull request from main into main, spelled $branch" >&2; exit 3 ;;
+esac
 
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 3; }

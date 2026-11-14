@@ -110,6 +110,14 @@ class LabelHelperBehaviour(unittest.TestCase):
             "an existing label must never reach `gh label create`",
         )
 
+    def test_a_label_present_in_another_case_is_left_alone(self):
+        # GitHub's label names are unique case-insensitively, so `gh label create bug` beside `Bug` is refused.
+        s = self.stub(before=["Bug"], create_fails=True)
+        r = s.run("bug")
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("already exists", r.stdout)
+        self.assertFalse([c for c in s.calls() if "label create" in c])
+
     def test_a_missing_label_is_created_with_no_free_parameter(self):
         s = self.stub(before=[])
         r = s.run("medium")

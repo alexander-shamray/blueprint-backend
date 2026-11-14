@@ -10,8 +10,10 @@ set -euo pipefail
   { echo "usage: main-red-open.sh   (no arguments)" >&2; exit 2; }
 
 TITLE="main is red"
-LIMIT=100
-rows=$(gh_read issue list --state open --label bug --search "in:title \"$TITLE\"" \
+# Every open bug, with no `--search`: a search reads the search index, which lags a filing, so a `main is red` issue
+# filed moments ago would not be listed and a red main would read green. The title is matched below instead.
+LIMIT=1000
+rows=$(gh_read issue list --state open --label bug \
          --limit "$LIMIT" --json number,title,url) ||
   { echo "cannot list the open issues, so whether main is red is unknown" >&2; exit 2; }
 count=$(printf '%s\n' "$rows" | jq length | tr -d '\r') ||
@@ -19,15 +21,15 @@ count=$(printf '%s\n' "$rows" | jq length | tr -d '\r') ||
 [ "$count" -lt "$LIMIT" ] ||
   { echo "gh issue list returned $count issues, the limit, so the listing may be cut" >&2; exit 2; }
 
-# The search is full text, so a title that only contains the phrase comes back too. This rule decides, and every
-# target's red-main workflow writes the bare title or `main is red: <workflow>`.
+# Every open bug comes back, so this rule decides, and every target's red-main workflow writes the bare title or
+# `main is red: <workflow>`.
 cands=$(printf '%s\n' "$rows" | jq -r --arg title "$TITLE" \
   '.[] | select(.title == $title or (.title | startswith($title + ": "))) | "\(.number) \(.url)"' |
   tr -d '\r') ||
   { echo "cannot read the listing, so whether main is red is unknown" >&2; exit 2; }
 
-# The search index lags a closure, so a just-closed issue still lists as open and would take the CI-not-green stop.
-# Each candidate's own state is read from the issue, not the index, and only one reading OPEN counts.
+# A listing can still hold an issue closed since it was read, which would take the CI-not-green stop. Each
+# candidate's own state is read from the issue, and only one reading OPEN counts.
 open=""
 while read -r number url; do
   [ -n "$number" ] || continue

@@ -36,6 +36,8 @@ RESIDENT = {
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
 # A `(why:` that opens on a docs/commands argument, the one form CITATION parses; others cite the boundaries.
 OPENING = re.compile(r"\(why: `?docs/commands/")
+# An opening and the citation it opens, as one match, so a stray citation elsewhere cannot stand in for a broken one.
+CITED_OPENING = re.compile(OPENING.pattern + CITATION.pattern.removeprefix("docs/commands/"))
 INDEX_ROW = re.compile(r"^\| (?P<name>[^|]+?) \| ")
 
 
@@ -82,7 +84,7 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
             with self.subTest(command=name):
                 text = collapsed(COMMANDS / name)
                 openings = len(OPENING.findall(text))
-                parsed = len(CITATION.findall(text))
+                parsed = len(CITED_OPENING.findall(text))
                 self.assertGreater(openings, 0, f"{name} cites no docs/commands section")
                 self.assertEqual(openings, parsed, f"{name} has {openings} openings but {parsed} parse as citations")
 

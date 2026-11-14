@@ -92,5 +92,18 @@ class TheHelperRefusesARedirectedPush(Fixture):
         self.assertEqual(self.git("rev-parse", "HEAD"), self.git("ls-remote", "origin", "feat/x").split()[0])
 
 
+class TheLeaseIsReadUnderANarrowedFetch(Fixture):
+    def test_a_fetch_refspec_naming_only_main_still_reads_the_branch_tip(self):
+        # A bare `git fetch origin main <branch>` writes no origin/<branch> that remote.origin.fetch does not map.
+        self.branch()
+        self.commit("one", "feat(x): one")
+        self.git("config", "--local", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
+        self.git("update-ref", "-d", "refs/remotes/origin/feat/x")
+        out = self.run_helper(TRAILER)
+        self.assertEqual(0, out.returncode, out.stderr)
+        self.assertEqual(["feat(x): one|#7"], self.subjects_and_trailers("origin/main..HEAD"))
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.git("ls-remote", "origin", "feat/x").split()[0])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,12 @@ case "$branch" in
 esac
 [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] ||
   { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
+# Folded and spelled out as git-rebase-onto-main.sh does: on a case-insensitive filesystem with `main` packed only,
+# `Main` passes the existence check below and its new loose ref is then `main`'s.
+case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
+  main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
+    echo "refusing to create main, spelled $branch" >&2; exit 3 ;;
+esac
 # Creation only: a name that already exists is refused, as the fork helper does,
 # rather than reset, so no caller can reach -B/-B-like behaviour through here.
 ! git show-ref --verify --quiet "refs/heads/$branch" ||

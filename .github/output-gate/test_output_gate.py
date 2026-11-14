@@ -217,7 +217,9 @@ class Subject(TemporaryRepository):
         self.assertEqual(code, 1)
         self.assertIn("samples/Catalog.Sample/Catalog.Sample.csproj", output)
         self.assertIn("did not find", output)
-        self.assertNotIn("is not on disk", output)
+        # The gate's own words: it names the second possibility rather than calling the file missing.
+        self.assertIn("the file is missing, or it sits outside the roots this gate walks", output)
+        self.assertNotIn("Catalog.Sample.csproj is on disk and absent from", output)
 
     def test_a_project_moved_without_the_solution_following_it_fails(self) -> None:
         """Reconciled by path, so a move is visible where a stem is not.

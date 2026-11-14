@@ -707,9 +707,8 @@ def reader_for(path):
 
 
 def _line_starts(text):
-    starts = [0]
-    for line in io.StringIO(text, newline=""):
-        starts.append(starts[-1] + len(line))
+    # LF alone ends a line, as git numbers a diff's: a universal-newline read would start one at a lone CR too.
+    starts = [0] + [found.end() for found in re.finditer("\n", text)]
     if starts[-1] == len(text) and len(starts) > 1:
         starts.pop()
     return starts
@@ -1044,14 +1043,14 @@ def main(argv):
             raise Unreadable(f"{span} changes no file, so the base or the "
                              "head is not the pull request's")
         changed = _git("diff", "--name-only", "-z", *_RENAMES,
-                       "--diff-filter=AMR", span).decode("utf-8",
+                       "--diff-filter=AMRT", span).decode("utf-8",
                                                          errors="strict")
         paths = [p for p in changed.split("\0") if p]
         diff = _git("-c", "core.quotePath=false", "diff", "-U0", "--no-color",
                     "--no-ext-diff", "--text", "--no-textconv",
                     "--diff-algorithm=myers", "--no-indent-heuristic",
                     "--inter-hunk-context=0", "--src-prefix=a/",
-                    "--dst-prefix=b/", *_RENAMES, "--diff-filter=AMR", span)
+                    "--dst-prefix=b/", *_RENAMES, "--diff-filter=AMRT", span)
         # A textual patch of an image is not UTF-8, and only its line breaks
         # and the headers around it are read; the file list above has already
         # refused a path that is not.

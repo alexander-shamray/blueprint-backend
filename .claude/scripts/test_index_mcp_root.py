@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,8 +23,8 @@ CBX = CLAUDE / "skills" / "codebase-index" / "scripts" / "cbx"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "PreToolUse"
 MATCHER = "mcp__codebase-index__.*"
-COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
-           " + '/.claude/hooks/index-mcp-root.py', run_name='__main__')\"")
+WRAPPER = CLAUDE / "hooks" / "index-hook.sh"
+COMMAND = 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/index-hook.sh" PreToolUse index-mcp-root.py'
 
 
 def load(name: str, path: Path):
@@ -87,13 +88,18 @@ class TheWiring(unittest.TestCase):
         self.assertEqual([(EVENT, MATCHER)], running)
 
     def test_the_registered_command_survives_a_missing_file(self):
-        """Through `runpy` a file it cannot open exits 1, where a file argument
-        exits 2, which under this event would refuse every index call."""
-        argv = [sys.executable, *shlex.split(COMMAND)[2:]]
+        """A file Python cannot open exits 2, which under this event would
+        refuse every index call; the launcher leaves 0 and a line saying the
+        check did not run."""
+        argv = [shutil.which("bash"), str(WRAPPER), *shlex.split(COMMAND)[2:]]
         with tempfile.TemporaryDirectory() as scratch:
             done = subprocess.run(argv, input=b"{}", capture_output=True, timeout=30, check=False,
                                   env=dict(os.environ, CLAUDE_PROJECT_DIR=scratch))
-            self.assertNotEqual(2, done.returncode, done.stderr)
+            self.assertEqual(0, done.returncode, done.stderr)
+            output = json.loads(done.stdout)["hookSpecificOutput"]
+            self.assertEqual(EVENT, output["hookEventName"])
+            self.assertNotIn("permissionDecision", output)
+            self.assertIn("index-mcp-root.py did not run", output["additionalContext"])
 
     def test_the_matcher_reaches_every_tool_it_knows(self):
         hook = load("index_mcp_root", HOOK)

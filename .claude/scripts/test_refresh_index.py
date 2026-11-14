@@ -22,23 +22,41 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from review_helpers import BASH, python_as_py, sign_nothing
 from test_link_skips import skip_only_without_links
+
+# Captured at import, before any case patches them, for the canary at the end: any stand-in is not these.
+ORIGINAL_POPEN = subprocess.Popen
+ORIGINAL_RUN = subprocess.run
 
 SCRIPTS = Path(__file__).resolve().parent
 NO_CWD_SEARCH = "NoDefaultCurrentDirectoryInExePath"
 HOOK = SCRIPTS.parent / "hooks" / "refresh-index.py"
+WRAPPER = SCRIPTS.parent / "hooks" / "index-hook.sh"
 SETTINGS = SCRIPTS.parent / "settings.json"
 EXAMPLE = (SCRIPTS.parent / "skills" / "codebase-index" / "examples" / "hooks"
            / "settings.json")
 CACHE = Path(".claude") / "cache" / "codebase-index"
 INDEX = CACHE / "index.sqlite"
 
-# What settings.json has to run, spelled once. Matched whole, because
-# `not-refresh-index.py` and `refresh-index.py.disabled` both contain the
-# file's name and neither of them runs it — and the hook swallows every
-# failure, so a registration broken that way is green everywhere else.
-COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
-           " + '/.claude/hooks/refresh-index.py', run_name='__main__')\"")
+# What settings.json has to run under each event, spelled once. Matched whole,
+# because `not-refresh-index.py` and `refresh-index.py.disabled` both contain
+# the file's name and neither of them runs it — and the hook swallows every
+# failure, so a registration broken that way is green everywhere else. The
+# event is the launcher's, which names it in the line it prints on a failure.
+def command(event: str) -> str:
+    return f'bash "${{CLAUDE_PROJECT_DIR}}/.claude/hooks/index-hook.sh" {event} refresh-index.py'
+
+
+def launch(event: str, payload: bytes, environment: dict, timeout: int):
+    """Run what settings.json registers under `event`: the launcher, from this
+    tree, with the arguments the registration hands it, and a `py` that is
+    this interpreter, so the worker the hook starts is this one too."""
+    with tempfile.TemporaryDirectory() as shim:
+        return subprocess.run(
+            [BASH, str(WRAPPER), *shlex.split(command(event))[2:]], input=payload,
+            capture_output=True, timeout=timeout, check=False,
+            env=python_as_py(environment, shim))
 
 
 def _load():
@@ -68,7 +86,7 @@ def entries_running_the_hook(settings: Path) -> dict:
         matched = [
             entry
             for entry in entries
-            if any(hook.get("type") == "command" and hook.get("command") == COMMAND
+            if any(hook.get("type") == "command" and hook.get("command") == command(event)
                    for hook in entry.get("hooks", []))
         ]
         if matched:
@@ -1265,6 +1283,7 @@ class IgnoredPaths(unittest.TestCase):
     git is asked of a real repository whether the path is ignored."""
 
     def setUp(self):
+        sign_nothing(self)
         self.mod = _load()
         self.base = Path(tempfile.mkdtemp())
         self.addCleanup(remove_tree, self.base)
@@ -2182,6 +2201,26 @@ class Refreshing(Base):
             [arguments[0] for arguments, _ in self.ran])
 
 
+    def test_an_interpreter_without_the_safe_path_flag_is_not_handed_it(self):
+        """`-P` is Python 3.11's; an older `python3` exits at once on it, with stderr discarded, so nothing would
+        refresh. The worker drops it there; the module route, which without it would import a checkout's own
+        `codebase_index.py`, is not started at all, and the console script still is. From 3.11 both keep it."""
+        script = str(self.tmp / "bin" / "codebase-index")
+        root = self.checkout("main")
+        for version, flags in (((3, 9, 6), []), ((3, 10, 12), []), ((3, 11, 0), ["-P"]), ((3, 12, 10), ["-P"])):
+            module = [[self.mod.sys.executable, *flags, "-m", "codebase_index", "update"]] if flags else []
+            with self.subTest(version=version), mock.patch.object(self.mod.sys, "version_info", version):
+                for found, started in ((None, module), (script, [[script, "update"]])):
+                    with mock.patch.object(self.mod, "console_script", lambda _root, found=found: found):
+                        self.ran.clear()
+                        self.mod.refresh(root)
+                        self.assertEqual(started, [arguments[0] for arguments, _ in self.ran])
+                self.spawned.clear()
+                self.run_event({"cwd": str(root)})
+                self.assertEqual(1, len(self.spawned))
+                self.assertEqual([self.mod.sys.executable, *flags], self.spawned[0][0][0][:-3])
+
+
 class TheWorkerIsDetached(Base):
     """The worker has to outlive the hook, whose own session or console ends
     with the call, and has to run: the hook discards every stream and always
@@ -2417,17 +2456,19 @@ class Registration(Base):
 
 
 class RegisteredCommand(unittest.TestCase):
-    def test_a_missing_hook_file_does_not_exit_2(self):
+    def test_a_missing_hook_file_leaves_a_line_and_exits_0(self):
         """Python exits 2 on a file it cannot open, a worktree emptied under a
         running session, and under `PostToolUse` that is an error after every
-        call; through `runpy` the same failure exits 1."""
-        with tempfile.TemporaryDirectory() as gone:
-            done = subprocess.run(
-                [sys.executable, *shlex.split(COMMAND)[2:]], input=b"{}", capture_output=True,
-                timeout=30, check=False, env=dict(os.environ, CLAUDE_PROJECT_DIR=gone))
+        call; the launcher leaves 0 and a line saying the refresh did not run."""
+        for event in ("PostToolUse", "SessionStart"):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as gone:
+                done = launch(event, b"{}", dict(os.environ, CLAUDE_PROJECT_DIR=gone), 30)
 
-        self.assertNotEqual(2, done.returncode, done.stderr)
-        self.assertIn(b"FileNotFoundError", done.stderr)
+                self.assertEqual(0, done.returncode, done.stderr)
+                self.assertIn(b"FileNotFoundError", done.stderr)
+                output = json.loads(done.stdout)["hookSpecificOutput"]
+                self.assertEqual(event, output["hookEventName"])
+                self.assertIn("refresh-index.py did not run", output["additionalContext"])
 
 
 class DocumentedConfiguration(unittest.TestCase):
@@ -2481,6 +2522,7 @@ class TheDetachedWorkerReallyRuns(unittest.TestCase):
     lock."""
 
     def setUp(self):
+        sign_nothing(self)
         self.base = Path(tempfile.mkdtemp())
         self.addCleanup(remove_tree, self.base)
         self.owner = self.base / "owner"
@@ -2523,10 +2565,9 @@ class TheDetachedWorkerReallyRuns(unittest.TestCase):
 
     def test_an_event_reaches_the_cli_through_the_detached_worker(self):
         event = json.dumps({"cwd": str(self.worktree), "hook_event_name": "PostToolUse"})
-        done = subprocess.run(
-            [sys.executable, *shlex.split(COMMAND)[2:]], input=event.encode("utf-8"),
-            capture_output=True, timeout=60, check=False, env=self.environment())
-        self.assertEqual(0, done.returncode, done.stderr)
+        done = launch("PostToolUse", event.encode("utf-8"), self.environment(), 60)
+        # The launcher leaves 0 on every path, so its line, not its status, says the hook did not start.
+        self.assertEqual((0, b""), (done.returncode, done.stdout), done.stderr)
 
         ran = self.worktree / "cli-ran"
         deadline = time.monotonic() + 60
@@ -2563,8 +2604,8 @@ class WhatWasPatchedIsRestored(unittest.TestCase):
         import subprocess as real_subprocess
         import sys as real_sys
 
-        self.assertFalse(isinstance(real_subprocess.Popen, mock.MagicMock))
-        self.assertFalse(isinstance(real_subprocess.run, mock.MagicMock))
+        self.assertIs(ORIGINAL_POPEN, real_subprocess.Popen)
+        self.assertIs(ORIGINAL_RUN, real_subprocess.run)
         self.assertNotIsInstance(real_os.environ, dict)
         self.assertTrue(hasattr(real_sys.stdin, "fileno"))
 
