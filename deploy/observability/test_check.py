@@ -66,5 +66,56 @@ class OutboxMetricsTests(unittest.TestCase):
         self.assertTrue(any("found no service hosting OutboxDispatcher" in f for f in found), found)
 
 
+class ParseRulesTests(unittest.TestCase):
+    def rules(self, text: str) -> list[dict[str, object]]:
+        """What parse_rules reads from a rules file holding `text`."""
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        path = root / "rules.yml"
+        path.write_text(text, encoding="utf-8")
+        return check.parse_rules(path)
+
+    def test_a_block_expression_keeps_a_line_that_opens_with_a_subtraction(self) -> None:
+        found = self.rules(
+            "groups:\n"
+            "  - name: g\n"
+            "    rules:\n"
+            "      - alert: Gap\n"
+            "        expr: |\n"
+            "          sum(rate(sent_total[5m]))\n"
+            "          - sum(rate(acked_total[5m]))\n"
+            "          > 0\n"
+            "        for: 5m\n"
+            "        annotations:\n"
+            "          runbook_url: https://example.invalid/gap.md\n")
+
+        self.assertEqual(
+            found,
+            [{
+                "alert": "Gap",
+                "expr": "sum(rate(sent_total[5m])) - sum(rate(acked_total[5m])) > 0",
+                "runbook": "https://example.invalid/gap.md",
+            }])
+
+
+class DashboardTests(unittest.TestCase):
+    def test_a_panel_inside_a_collapsed_row_is_checked(self) -> None:
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "dashboards").mkdir()
+        (root / "dashboards" / "rows.json").write_text(
+            '{"panels": [{"type": "row", "collapsed": true,'
+            ' "panels": [{"targets": [{"expr": "sum(unpublished_total)"}]}]}]}',
+            encoding="utf-8")
+
+        with (
+            mock.patch.object(check, "OBSERVABILITY", root),
+            mock.patch.object(check, "failures", []) as failures,
+        ):
+            check.check_dashboards(set())
+
+        self.assertTrue(any("`unpublished_total`" in f for f in failures), failures)
+
+
 if __name__ == "__main__":
     unittest.main()
