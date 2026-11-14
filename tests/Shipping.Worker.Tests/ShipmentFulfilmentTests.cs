@@ -21,6 +21,12 @@ namespace Shipping.Worker.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLifetime
 {
+    /// <summary>
+    /// Several margins and inside the give-up age, so a check asked from the pass rather than the shipment's creation
+    /// answers differently and the row is still retried (ADR-139).
+    /// </summary>
+    private static readonly TimeSpan ShipmentAge = TimeSpan.FromDays(3);
+
     private readonly FulfilmentSteps _steps = new(fixture);
 
     public ValueTask InitializeAsync() => new(fixture.ResetAsync());
@@ -153,8 +159,10 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     {
         // Closed, so the owner had anonymised the subject before the shipment existed to read from it (ADR-139).
         Guid customer = Guid.CreateVersion7();
-        await RecordErasureAsync(customer, closedAgo: PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
-        Guid order = await ConfirmForAsync(customer);
+        Guid order = await ConfirmAgedForAsync(customer);
+        await RecordErasureAsync(
+            customer,
+            closedAgo: ShipmentAge + PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
@@ -167,8 +175,25 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     {
         // The margin is what covers the owner's, Shipping's and Privacy's clocks disagreeing (ADR-139).
         Guid customer = Guid.CreateVersion7();
-        await RecordErasureAsync(customer, closedAgo: PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
-        Guid order = await ConfirmForAsync(customer);
+        Guid order = await ConfirmAgedForAsync(customer);
+        await RecordErasureAsync(
+            customer,
+            closedAgo: ShipmentAge + PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe("personal_data_erased");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_after_the_shipment_but_past_the_margin_before_the_pass_still_ends_it()
+    {
+        // Asked from the shipment's creation, not the pass: a row retried for days still reads the address (ADR-139).
+        Guid customer = Guid.CreateVersion7();
+        Guid order = await ConfirmAgedForAsync(customer);
+        await RecordErasureAsync(customer, closedAgo: ShipmentAge - TimeSpan.FromHours(1));
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
@@ -521,6 +546,16 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         await _steps.PublishAsync(FulfilmentSteps.Confirmed(order, erasedUnder));
         await fixture.WaitUntilAttemptDueAsync(order);
+
+        return order;
+    }
+
+    /// <summary>Confirms an order and moves its shipment's <c>CreatedAt</c> back by <see cref="ShipmentAge"/>, so the
+    /// creation and the pass fall more than <see cref="PersonalDataErasure.ClockMargin"/> apart (ADR-139).</summary>
+    private async Task<Guid> ConfirmAgedForAsync(Guid customer)
+    {
+        Guid order = await ConfirmForAsync(customer);
+        await _steps.AgeAsync(order, ShipmentAge);
 
         return order;
     }
