@@ -79,7 +79,14 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
 
         NewStats().AbandonedCount(OutboxLane.Broker).ShouldBe(0);
 
-        await fixture.ExpireOutboxLeasesAsync();
+        // Lapsed, not cleared: a replica killed mid-attempt leaves its lease behind, and the count must still see it.
+        await fixture.ExecuteAsync(
+            """
+            UPDATE ordering.OutboxMessages
+            SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE MessageId = {0};
+            """,
+            last.MessageId);
 
         NewStats().AbandonedCount(OutboxLane.Broker).ShouldBe(1);
     }
