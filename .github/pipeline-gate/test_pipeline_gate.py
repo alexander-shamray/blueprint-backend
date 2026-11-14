@@ -2463,6 +2463,17 @@ class CodeTests(unittest.TestCase):
                 text = self.broken(f"{before}{self.GATE}", before)
                 self.assertIn(f"the {job} job's step", self.problems(text))
 
+    def test_an_always_step_beside_nothing_a_skipped_step_never_leaves_is_caught(self) -> None:
+        """A change no stage reads skips every gated step, and these would still run."""
+        old = "always() && hashFiles('TestResults/sightings/*.txt') != ''"
+        for new in (
+            "always()",
+            "always() || hashFiles('TestResults/sightings/*.txt') != ''",
+            "always() && steps.stage.outputs.retried != 'true'",
+        ):
+            with self.subTest(new=new):
+                self.assertIn("the integration job's step", self.problems(self.broken(old, new)))
+
     def test_a_renamed_job_fails_rather_than_passing_empty(self) -> None:
         text = self.broken("  stage-gate:\n    needs:", "  stages:\n    needs:")
         self.assertIn("found no steps", self.problems(text))

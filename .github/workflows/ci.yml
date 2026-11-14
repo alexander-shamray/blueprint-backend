@@ -709,9 +709,10 @@ jobs:
   # needs it (ADR-202).
 
   # Each step of `build`, `integration` and `stage-gate` asks `changes` whether a
-  # stage reads this change, but for those on `failure()` or `always()`, which run
-  # only behind a step that ran. The jobs carry no `if:` (`pipeline-gate code`):
-  # skipped steps pass, so the check keeps its name and `needs:` still run.
+  # stage reads this change, but for those on `failure()`, or `always()` beside a
+  # file or step output, which run only behind a step that ran. The jobs carry no
+  # `if:` (`pipeline-gate code`): skipped steps pass, so the check keeps its name
+  # and `needs:` still run.
   build:
     needs: changes
     runs-on: ubuntu-latest
