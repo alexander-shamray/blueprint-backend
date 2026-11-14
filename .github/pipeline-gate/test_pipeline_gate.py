@@ -1366,12 +1366,25 @@ class SupplyChainTests(Fixture):
                 (mismatch, "            for x in a; do\n              exit 1\n            done\n          fi"),
                 (mismatch, '            [ -n "$x" ] && { echo "no"; exit 1; }\n          fi'),
                 (mismatch, '            [ -n "$x" ] && \\\n              exit 1\n          fi'),
-                (mismatch, "            ( exit 1 )\n          fi")):
+                (mismatch, "            ( exit 1 )\n          fi"),
+                (mismatch, '            [ -n "$x" ] && {\n              echo "no"\n'
+                           "              exit 1\n            }\n          fi")):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
 
                 self.assertEqual(len(problems), 1, problems)
                 self.assertIn("does not reach `exit 1` on every run", problems[0])
+
+    def test_an_exit_after_a_finished_command_list_or_group_is_not_a_problem(self) -> None:
+        """Every run still reaches it, so refusing it would fail a step that is right."""
+        mismatch = "            exit 1\n          fi"
+        for old, new in (
+                ('*) echo "could not compare"; exit 1 ;;', '*) echo "x" || true; exit 1 ;;'),
+                (mismatch, "            docker logout || true; exit 1\n          fi"),
+                (mismatch, "            docker logout || true\n" + mismatch),
+                (mismatch, '            [ -n "$x" ] && { echo "no"; }\n' + mismatch)):
+            with self.subTest(new=new):
+                self.assertEqual(self.broken(old, new), [])
 
     def test_a_main_tag_that_asks_after_it_pushes_is_caught(self) -> None:
         guard = '          git merge-base --is-ancestor "$named" "$GITHUB_SHA" || ancestor=$?' + chr(10)
