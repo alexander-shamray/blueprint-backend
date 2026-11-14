@@ -222,6 +222,32 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Retention_ages_an_entry_from_the_first_write_after_it_not_the_latest()
+    {
+        // Only the two oldest moved back, so the first ended long ago and the second only when the third, recent,
+        // was written; a pair whose subject keeps writing must still lose its ended entries.
+        Guid subject = Guid.CreateVersion7();
+        PreferenceWrite first = await SetAsync(subject, false, null);
+        PreferenceWrite second = await SetAsync(subject, true, first.State.Version);
+        PreferenceWrite third = await SetAsync(subject, false, second.State.Version);
+        PreferenceWrite newest = await SetAsync(subject, true, third.State.Version);
+        await fixture.ExecuteAsync(
+            """
+            UPDATE notifications.ConsentEntries
+            SET WrittenAt = DATEADD(day, -2000, WrittenAt)
+            WHERE EntryId IN ({0}, {1});
+            """,
+            first.State.Version!.Value,
+            second.State.Version!.Value);
+
+        (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(1);
+        (await EntriesAsync(first.State.Version!.Value)).ShouldBe(0, "the second, written long ago, ended it");
+        (await EntriesAsync(second.State.Version!.Value)).ShouldBe(1, "the third ended it inside the window");
+        (await EntriesAsync(third.State.Version!.Value)).ShouldBe(1);
+        (await ReadAsync(subject)).Version.ShouldBe(newest.State.Version);
+    }
+
+    [Fact]
     public async Task An_entry_kept_for_a_send_never_reads_as_newest_once_the_entry_after_it_has_gone()
     {
         // ADR-120 keeps an entry while a send names the entry it ended, and no longer: here the second is kept for

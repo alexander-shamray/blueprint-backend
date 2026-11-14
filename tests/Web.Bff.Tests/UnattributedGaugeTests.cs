@@ -34,6 +34,20 @@ public sealed class UnattributedGaugeTests(BffServiceFixture fixture) : IAsyncLi
     }
 
     [Fact]
+    public async Task Two_unowned_rows_read_as_the_older_age()
+    {
+        // The older seen first and the newer a fresh payment event, so a stalled Ordering feed reads as its backlog.
+        Guid older = Guid.CreateVersion7();
+        await fixture.DeliverAsync(OrderEvents.Authorised(older, At));
+        await fixture.DeliverAsync(OrderEvents.Authorised(Guid.CreateVersion7(), At));
+        await fixture.ExecuteAsync(
+            "UPDATE bff.Orders SET FirstSeenAt = DATEADD(minute, -60, FirstSeenAt) WHERE OrderId = {0};",
+            older);
+
+        ReadGauge(DateTimeOffset.UtcNow.AddMinutes(10)).ShouldBeInRange(4170, 4230);
+    }
+
+    [Fact]
     public async Task An_owned_row_is_not_counted()
     {
         Guid order = Guid.CreateVersion7();

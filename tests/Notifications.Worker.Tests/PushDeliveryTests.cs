@@ -323,6 +323,34 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
     }
 
     [Fact]
+    public async Task Retention_keeps_a_notice_until_its_later_delivery_is_past_the_window()
+    {
+        // Two devices, so the notice ends with the later of two sends; aged from the earlier, the cascade would take
+        // the later delivery before its own window had run.
+        (Guid customer, Notification notice) = await OwedAsync("en");
+        Guid phone = await RegisterAsync(customer, FcmPushProvider.Name, "device-phone");
+        Guid tablet = await RegisterAsync(customer, ApnsPushProvider.Name, "device-tablet");
+        await FanOutAsync();
+        await PushPassAsync();
+        (await DeliveriesAsync(notice.NotificationId)).ShouldAllBe(d => d.Status == NotificationStatus.Sent);
+        await fixture.ExecuteAsync(
+            """
+            UPDATE notifications.NotificationLog
+            SET CompletedAt = DATEADD(day, -2000, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
+            notice.NotificationId);
+        await AgeDeliveryAsync(notice.NotificationId, phone);
+
+        (await fixture.PurgeNotificationsRetentionAsync()).Notifications.ShouldBe(0, "the tablet's send ended now");
+        (await DeliveriesAsync(notice.NotificationId)).Count.ShouldBe(2);
+
+        await AgeDeliveryAsync(notice.NotificationId, tablet);
+        (await fixture.PurgeNotificationsRetentionAsync()).Notifications.ShouldBe(1, "both sends are past it");
+        (await DeliveriesAsync(notice.NotificationId)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task The_longest_push_in_every_language_reaches_the_provider_under_its_payload_ceiling()
     {
         // No usable locale, so the whole set in one push, Kazakh script first: the worst case for the 4 KB ceiling.
@@ -427,6 +455,17 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
             .Where(d => d.NotificationId == notificationId)
             .ToListAsync(Ct);
     }
+
+    private Task AgeDeliveryAsync(Guid notificationId, Guid installation) =>
+        fixture.ExecuteAsync(
+            """
+            UPDATE notifications.PushDeliveries
+            SET CompletedAt = DATEADD(day, -1999, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0}
+                AND InstallationId = {1};
+            """,
+            notificationId,
+            installation);
 
     private async Task<PushDevice?> DeviceAsync(Guid installation)
     {
