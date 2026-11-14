@@ -67,16 +67,28 @@ sum by (service_name, http_route) (
 422 and `ValidationException` to 400 — the request is well-formed and the
 validator passed it, so a 400 dashboard shows a path this request never took.
 
-If 422s are up, go to the projection:
+If 422s are up, go to the projection, and look up a product a refused order
+asked for by its id. Ordering prices a line only from a row in the order's
+currency with `IsAvailable = 1`, so the refusal is one of two rows:
 
 ```sql
+SELECT ProductId, Currency, IsAvailable, UpdatedAt
+FROM ordering.ProductPrices
+WHERE ProductId = @ProductId;
+
 SELECT
     Prices     = COUNT(*),
     LastUpdate = MAX(UpdatedAt)
 FROM ordering.ProductPrices;
 ```
 
-A stale `LastUpdate` means Catalog's events stopped arriving. That is
+No row in the order's currency, or one with `IsAvailable = 0`, is the
+projection refusing that product. Ask Catalog whether it is listed and priced
+in that currency: if it is, its event has not arrived. `UpdatedAt` is the
+Catalog event's `OccurredAt`, not when the row arrived, so a quiet catalogue
+reads an old `LastUpdate` with a healthy feed, and a republish keeps its
+original stamps. An old `LastUpdate` beside a product Catalog has changed since
+it means Catalog's events stopped arriving. That is
 [`outbox-broker.md`](outbox-broker.md) on the **Catalog** side, or the
 `ordering-catalog-events` endpoint on this side — and note §13.7's recorded gap:
 broker-fed read-model staleness has **no direct signal**, so nothing else will
