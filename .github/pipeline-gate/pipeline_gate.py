@@ -1157,8 +1157,11 @@ def _list(value: str, nested: list[str]) -> list[str]:
 
 
 def read_workflow_name(workflow_text: str) -> str | None:
-    match = re.search(r"^name:\s*['\"]?(.+?)['\"]?\s*$", workflow_text, flags=re.MULTILINE)
-    return match.group(1) if match else None
+    """The top-level `name:`, bare or quoted, without a trailing comment, which would make it a name nothing runs."""
+    match = re.search(
+        r"""^name:[ \t]*(?:"([^"]*)"|'([^']*)'|(\S.*?))[ \t]*(?:[ \t]#.*)?$""", workflow_text, flags=re.MULTILINE
+    )
+    return next(group for group in match.groups() if group is not None) if match else None
 
 
 ON_FORMS = "write it as a block mapping, a list or one event"
