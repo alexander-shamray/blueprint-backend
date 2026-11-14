@@ -65,7 +65,7 @@ public class ProblemDetailsCompositionTests
     }
 
     [Fact]
-    public async Task The_problem_instance_names_the_method_and_path()
+    public async Task The_problem_instance_is_the_request_path()
     {
         using JsonDocument body = await FailingRequestAsync();
 
