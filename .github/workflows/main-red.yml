@@ -142,7 +142,8 @@ jobs:
           CONCLUSION: ${{ needs.rerun.outputs.conclusion || github.event.workflow_run.conclusion }}
           RERUN: >-
             ${{ needs.rerun.outputs.why ||
-            (needs.rerun.result != 'skipped' && 'Its failed jobs were not rerun: the rerun job did not finish.' || '') }}
+            (needs.rerun.result != 'skipped' &&
+            'The rerun job did not finish, so whether its failed jobs were rerun, and how, is unknown.' || '') }}
           WHY: >-
             ${{ needs.read-cancelled.outputs.reason ||
             (needs.read-cancelled.result != 'skipped' && 'Its jobs could not be read.' || '') }}
