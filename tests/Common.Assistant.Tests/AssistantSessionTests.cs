@@ -860,6 +860,25 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_tool_result_cut_inside_a_surrogate_pair_keeps_no_half_character()
+    {
+        ScriptedTools tools = new(("stack_status", (_, _, _) =>
+            Task.FromResult(new ToolOutcome(true, new string('x', 99) + "\U0001F600" + new string('y', 50)))));
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new ToolCall("c1", "stack_status", []), new RoundEnd(ProviderStop.Done))
+            .Round(new RoundEnd(ProviderStop.Done));
+        AssistantSession session =
+            Open(Core(provider, new AssistantLimits { MaxToolResultChars = 100 }, sources: tools));
+
+        session.TryStart(Given.Turn("status"));
+        await Given.UntilEnded(session);
+
+        string content = provider.Requests[1].History[^1].ShouldBeOfType<ToolResultsMessage>().Results.Single().Content;
+        content.ShouldStartWith(new string('x', 99) + "\n[cut to 100 characters]");
+        content.Any(char.IsSurrogate).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task The_conversation_read_holds_every_message_after_more_events_than_the_ring_holds()
     {
         ScriptedProvider provider = new ScriptedProvider()
