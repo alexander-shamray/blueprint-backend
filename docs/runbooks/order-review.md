@@ -206,10 +206,17 @@ automatic compensation: §3.2 closes Ordering's Accepts column at
 `AuthorisePayment`, so there is no refund command, and cancelling the order
 without one would leave the customer charged.
 
-1. **Find the `ConfirmOrder`.** Query `ordering.OutboxMessages` for the order
-   (the query is in [`stuck-saga.md`](stuck-saga.md)). A row still unsent is an
-   outbox fault and the outbox runbooks apply; a row dispatched but never
-   consumed points at `ordering-commands` depth or at a consumer that is down.
+1. **Find the `ConfirmOrder`.** The saga sent it, so it was staged in
+   `ordering.OutboxMessage` — MassTransit's table, singular — and never in
+   §9.4's `ordering.OutboxMessages`, which holds only what a handler stages
+   ([`stuck-saga.md`](stuck-saga.md) says which table holds which). A row
+   still there is a send that has not reached the transport. **No row is the
+   normal state once the command was sent**, so then look downstream of the
+   send: `ordering-commands` depth, a consumer that is down, or the command
+   faulted into its error queue ([`error-queue.md`](error-queue.md)). An
+   `OrderConfirmed` row in `ordering.OutboxMessages` is the one thing that
+   table settles here: it proves the command was consumed, which step 2
+   reads from the order itself.
 2. **Check the order's own status.** It should still be `AwaitingPayment`. If it
    is `Confirmed`, the command *did* commit and it is the `OrderConfirmed` that
    was lost — the saga has already finalised on the timeout, so reconcile
