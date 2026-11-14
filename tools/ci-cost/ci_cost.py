@@ -298,15 +298,19 @@ def registry(repo: str) -> Manifest:
         return tokens[package]
 
     def manifest(package: str, reference: str) -> dict:
+        renewed = False
         for attempt in range(1, TRANSIENT_TRIES + 1):
             try:
                 return ask(f"{REGISTRY}/v2/{owner}/{package}/manifests/{reference}",
                            {"Authorization": f"Bearer {token(package)}", "Accept": MANIFEST_TYPES})
             except urllib.error.HTTPError as error:
-                # A registry token lasts minutes and a walk outlasts it.
-                if error.code == 401:
+                # A registry token lasts minutes and a walk outlasts it, so one 401 asks for a fresh token at once;
+                # a 401 on a fresh token is a refusal, and waiting would not change it.
+                if error.code == 401 and not renewed:
                     tokens.pop(package, None)
-                elif error.code < 500:
+                    renewed = True
+                    continue
+                if error.code < 500:
                     raise LookupError(f"{package}@{reference}: HTTP {error.code}") from error
                 failure = error
             except (OSError, ValueError, http.client.HTTPException) as error:
