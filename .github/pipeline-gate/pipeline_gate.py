@@ -606,10 +606,12 @@ UNREAD_IMAGE_COMMAND = re.compile(
 )
 UNREAD_IMAGE_ACTIONS = ("docker/build-push-action@", "docker/bake-action@")
 MOVING_TAG_GUARD = r"\bgit merge-base --is-ancestor\b"
+# The answer kept, then a `case` on it, so `|| true` or an arm that falls through moves the tag anyway.
+MOVING_TAG_ANSWER = re.compile(r'(?:^|(?<=[\s;]))git merge-base --is-ancestor "\$named" "\$GITHUB_SHA" \|\| (\w+)=\$\?(?=[\s;]|$)')
 # The tag itself read, then compared with the signed digest, not merely named beside it.
 MOVING_TAG_READBACK = r'\b(\w+)=\$\(docker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
 MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
-MOVING_TAG_COMPARISON = r'\[\s+"\${read}"\s+!?=\s+"\$DIGEST"\s+\]'
+MOVING_TAG_COMPARISON = r'(?:^|(?<=[\s;]))if \[\s+"\${read}"\s+!=\s+"\$DIGEST"\s+\];?\s+then(?=[\s;]|$)'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
 OIDC_ISSUER = "https://token.actions.githubusercontent.com"
@@ -840,6 +842,44 @@ def _check_admission(deploy_text: str) -> list[str]:
     return list(dict.fromkeys(problems))
 
 
+def _quoted_away(text: str) -> str:
+    """Shell text with each quoted string emptied, so a message that names `exit 1` or `fi` is not one."""
+    return re.sub(r""""(?:[^"\\]|\\.)*"|'[^']*'""", lambda found: found.group(0)[0] * 2, text)
+
+
+def _shell_words(text: str, words: str) -> list[re.Match[str]]:
+    """Each of `words` standing as a command word, read across the step reader's folded lines."""
+    return list(re.finditer(rf"(?:^|(?<=[\s;]))(?:{words})(?=[\s;]|$)", text))
+
+
+def _acts_on_ancestry(commands: str) -> bool:
+    """The ancestry answer kept, then a `case` on it whose `1)` arm exits and whose `*)` arm exits 1."""
+    answer = MOVING_TAG_ANSWER.search(commands)
+    case = answer and re.search(rf'\bcase "\${answer.group(1)}" in(?=\s)', commands[answer.end():])
+    if not case:
+        return False
+    body = _quoted_away(commands[answer.end() + case.end():])
+    end = _shell_words(body, "esac")
+    arms = {}
+    for arm in body[:end[0].start()].split(";;") if end else []:
+        if found := re.match(r"\s*([^\s)]+)\)(.*)", arm, re.S):
+            arms[found.group(1)] = found.group(2)
+    return bool(_shell_words(arms.get("1", ""), "exit")) and bool(_shell_words(arms.get("*", ""), "exit 1"))
+
+
+def _exits_one(branch: str) -> bool:
+    """An `exit 1` in the `then` branch whose text follows, at its own depth rather than inside a nested `if`."""
+    depth = 0
+    for word in _shell_words(_quoted_away(branch), "if|fi|else|elif|exit 1"):
+        if word.group(0) == "if":
+            depth += 1
+        elif depth == 0:
+            return word.group(0) == "exit 1"
+        elif word.group(0) == "fi":
+            depth -= 1
+    return False
+
+
 def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
     """Every build in the `publish-images` job is pushed, signed and attested on
     main by digest, and the rollout verifies it before Helm runs (ADR-109).
@@ -914,6 +954,13 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
                 "whether the commit the tag names is an ancestor of this build's, so a build that finishes late "
                 "moves the tag back (#1112, ADR-134)"
             )
+        elif move and not _acts_on_ancestry(commands[:move.start()]):
+            problems.append(
+                f"{subject}: the step that moves the main tag asks whether the commit the tag names is an ancestor "
+                "of this build's but does not act on the answer: it keeps no `|| <name>=$?` and no `case` on it "
+                "whose `1)` arm exits and whose `*)` arm exits 1, so a late build still moves the tag back "
+                "(#1112, ADR-134)"
+            )
 
         # After the push, from the registry: the local image's digests already name the signed one.
         reads = [found for found in re.finditer(MOVING_TAG_READBACK, commands) if move and found.start() > move.end()]
@@ -924,6 +971,11 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
             problems.append(
                 f"{subject}: the step that moves the main tag does not read the tag back from the registry "
                 "after it pushes and compare it with $DIGEST, so a push that left the tag on other bytes passes"
+            )
+        elif move and compared and not _exits_one(commands[reads[0].end() + compared.end():]):
+            problems.append(
+                f"{subject}: the step that moves the main tag compares the tag read back with $DIGEST, but the "
+                "mismatch branch has no `exit 1` of its own, so a push that left the tag on other bytes passes"
             )
 
         pushed = _reference(steps[push]["run"], "docker push")

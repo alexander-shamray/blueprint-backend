@@ -169,11 +169,23 @@ SIGNING_STEPS = f"""\
         run: |
           tag="$REGISTRY/${{{{ matrix.image }}}}:main"
           docker buildx imagetools inspect "$REGISTRY/${{{{ matrix.image }}}}:main"
-          git merge-base --is-ancestor "$named" "$GITHUB_SHA"
+          ancestor=0
+          git merge-base --is-ancestor "$named" "$GITHUB_SHA" || ancestor=$?
+          case "$ancestor" in
+            0) ;;
+            1) echo "a newer build moved it"; exit 0 ;;
+            *) echo "could not compare"; exit 1 ;;
+          esac
           docker tag "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}" "$REGISTRY/${{{{ matrix.image }}}}:main"
           docker push "$REGISTRY/${{{{ matrix.image }}}}:main"
           moved=$(docker buildx imagetools inspect "$tag")
-          [ "$moved" = "$DIGEST" ]
+          if [ "$moved" != "$DIGEST" ]; then
+            if [ -n "$later" ]; then
+              exit 0
+            fi
+            echo "the tag names other bytes, not exit 1"
+            exit 1
+          fi
         env:
           DIGEST: ${{{{ steps.push.outputs.digest }}}}
 """
@@ -1318,8 +1330,36 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("is an ancestor of this build's", problems[0])
 
+    def test_a_main_tag_that_ignores_the_ancestry_answer_is_caught(self) -> None:
+        """The question is still asked, so only a read of what decides on its answer sees any of these."""
+        for old, new in (
+                ("|| ancestor=$?", "|| true"),
+                ('1) echo "a newer build moved it"; exit 0 ;;', '1) echo "a newer build moved it" ;;'),
+                ('*) echo "could not compare"; exit 1 ;;', '*) echo "could not compare, exit 1" ;;'),
+                ('            *) echo "could not compare"; exit 1 ;;\n', ""),
+                ('case "$ancestor" in', 'case "$other" in')):
+            with self.subTest(new=new):
+                problems = self.broken(old, new)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("does not act on the answer", problems[0])
+
+    def test_a_main_tag_mismatch_that_does_not_exit_is_caught(self) -> None:
+        """The comparison is still made, so only a read of its branch sees the failure go unreported."""
+        nested = '              exit 0\n            fi\n            echo "the tag names other bytes, not exit 1"\n'
+        for old, new in (
+                ("            exit 1\n          fi", "          fi"),
+                # Only inside the nested branch, or only in the branch the digests agree in.
+                (nested + "            exit 1\n", nested.replace("exit 0", "exit 1")),
+                ("            exit 1\n          fi", "          else\n            exit 1\n          fi")):
+            with self.subTest(new=new):
+                problems = self.broken(old, new)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("has no `exit 1` of its own", problems[0])
+
     def test_a_main_tag_that_asks_after_it_pushes_is_caught(self) -> None:
-        guard = '          git merge-base --is-ancestor "$named" "$GITHUB_SHA"' + chr(10)
+        guard = '          git merge-base --is-ancestor "$named" "$GITHUB_SHA" || ancestor=$?' + chr(10)
         push = '          docker push "$REGISTRY/${{ matrix.image }}:main"' + chr(10)
         self.assertIn(guard, WORKFLOW)
         self.assertIn(push, WORKFLOW)
@@ -1464,12 +1504,14 @@ class SupplyChainTests(Fixture):
         for old, new in (
             ('          moved=$(docker buildx imagetools inspect "$tag")\n', ""),
             ('docker buildx imagetools inspect "$tag")', "docker inspect --format '{{json .RepoDigests}}' \"$tag\")"),
-            ('[ "$moved" = "$DIGEST" ]', '[ -n "$moved" ]'),
+            ('[ "$moved" != "$DIGEST" ]', '[ -n "$moved" ]'),
             # The digest read rather than the tag, and the digest named rather than compared.
             ('inspect "$tag")', 'inspect "$REGISTRY/${{ matrix.image }}@$DIGEST")'),
-            ('[ "$moved" = "$DIGEST" ]', 'echo "$moved $DIGEST"'),
+            ('if [ "$moved" != "$DIGEST" ]; then', 'if echo "$moved $DIGEST"; then'),
             # A comparison of some other variable than the one the read assigned.
-            ('[ "$moved" = "$DIGEST" ]', '[ "$DIGEST" = "$DIGEST" ]'),
+            ('[ "$moved" != "$DIGEST" ]', '[ "$DIGEST" != "$DIGEST" ]'),
+            # The test turned round, so the branch that exits is the one the digests agree in.
+            ('[ "$moved" != "$DIGEST" ]', '[ "$moved" = "$DIGEST" ]'),
             # `$tag` read, but naming something other than the main tag.
             ('tag="$REGISTRY/${{ matrix.image }}:main"', 'tag="$REGISTRY/${{ matrix.image }}:${{ github.sha }}"'),
         ):
