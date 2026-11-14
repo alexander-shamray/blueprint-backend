@@ -3,12 +3,20 @@ against the C# sources, the alerts, the charts, smoke.sh and the deploy workflow
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow_paths"))
 import workflow_paths  # noqa: E402  (ADR-132 holds the workflow-filter checks there)
+
+# check.py owns the rule parser and PromQL tokeniser check 5 reads alerts with;
+# loaded by path, since `check` is too common a name to put on sys.path.
+_SPEC = importlib.util.spec_from_file_location(
+    "observability_check", Path(__file__).resolve().parents[1] / "observability" / "check.py")
+OBSERVABILITY_GATE = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(OBSERVABILITY_GATE)
 
 from analysis import EXPORTED_SERIES, METER_INSTRUMENTS, SIGNALS, _workload_series, series_read
 from csharp_sources import (
@@ -441,13 +449,19 @@ MASSTRANSIT_VERIFIED = ("8.5.3", "8.5.12")
 def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> list[str]:
     """Every series in `metrics`, against what vouches for it.
 
-    A series a loaded alert reads is matched on its instrument; any other
-    must be an exact EXPORTED_SERIES entry, of a meter Common.Web registers.
+    One a loaded alert's expression reads is matched on its whole instrument;
+    any other is an exact EXPORTED_SERIES entry of a meter Common.Web registers.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
     registration = source / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
     try:
-        alert_text = rules.read_text(encoding="utf-8")
+        # Names out of the expressions, never the file's text: a substring
+        # test vouched for a truncated name and for one in a comment.
+        alerted = {
+            _instrument_of(name)
+            for rule in OBSERVABILITY_GATE.parse_rules(rules)
+            for name in OBSERVABILITY_GATE.metrics_in(str(rule["expr"]))
+        }
         registered_text = registration.read_text(encoding="utf-8")
     except OSError as error:
         return [f"a file check 5 reads is not readable, so no metric can be vouched for: {error}"]
@@ -472,14 +486,18 @@ def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> li
                     f"AddMeter(\"{meter}\"), so nothing collects it"
                 )
             continue
-        base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
-        if base not in alert_text:
+        if _instrument_of(metric) not in alerted:
             failures.append(
                 f"a template reads {metric}, which no loaded alert reads and "
                 "which is not an exported series in EXPORTED_SERIES, so "
                 "nothing establishes that it is published"
             )
     return failures
+
+
+def _instrument_of(series: str) -> str:
+    """A series without the suffix its instrument's kind adds."""
+    return re.sub(r"_(?:count|bucket|sum|total)$", "", series)
 
 
 # The pin the series table is held to.
