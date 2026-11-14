@@ -125,10 +125,17 @@ The run logs how many products and rows it staged and exits 0. It exits 1,
 staging nothing, when `Republish__Id` names no product, and the host
 refuses a value that is not a GUID rather than republishing everything. Then:
 
-- **Wait for the lane to drain** before anything else:
-  `SELECT COUNT(*) FROM catalog.OutboxMessages WHERE ProcessedAt IS NULL`
-  falls to zero, and [`outbox-broker.md`](outbox-broker.md) is the page if it
-  does not. A second run stages everything again.
+- **Wait for the lane to drain** before anything else: the rows the
+  dispatcher can still claim fall to zero. Count only those below
+  `OutboxDispatcher.MaxAttempts`, the cap
+  [`outbox-abandoned.md`](outbox-abandoned.md)'s query spells, since the claim
+  skips a row at the cap and the purge never deletes an unprocessed one, so
+  a single abandoned row would hold an unfiltered count above zero for ever:
+  `SELECT COUNT(*) FROM catalog.OutboxMessages WHERE ProcessedAt IS NULL
+  AND Lane = 'Broker' AND Attempts < 10`.
+  [`outbox-broker.md`](outbox-broker.md) is the page if it does not fall, and
+  a row at the cap is `outbox-abandoned.md`'s, never a reason to run the
+  republish again: a second run stages everything again.
 - **Expect `DeliveryLagHigh` on Ordering while it drains.** The lag is measured
   from each event's own stamp, so a republished catalogue records lags as old
   as its products. That is the republish and not a fault.
