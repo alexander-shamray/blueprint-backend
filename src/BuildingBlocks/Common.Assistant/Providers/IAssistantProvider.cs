@@ -56,7 +56,8 @@ public sealed record Opaque(JsonNode Payload) : ProviderEvent;
 public sealed record UsageReport(Usage Usage) : ProviderEvent;
 
 /// <summary>
-/// The round is over: done (with or without tool calls), or refused, with the provider's category if any.
+/// The round is over: done (with or without tool calls), or refused, with the provider's category if any. Every round
+/// a stream finishes ends with one; a stream that ends without it is a round cut short, and the turn ends in error.
 /// </summary>
 public sealed record RoundEnd(ProviderStop Stop, string? Category = null) : ProviderEvent;
 

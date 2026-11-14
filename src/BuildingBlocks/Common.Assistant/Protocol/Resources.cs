@@ -46,8 +46,11 @@ public sealed record ConversationOpened(string Id);
 /// </summary>
 public sealed record StartTurn(string Text, JsonObject? Context, string? Locale, JsonObject? HostOptions);
 
-/// <summary><c>POST …/tool-results</c>: the result of a client tool call.</summary>
-public sealed record ClientToolResult(string CallId, bool Ok, string Content);
+/// <summary>
+/// <c>POST …/tool-results</c>: the result of a client tool call. <c>ok</c> is required; it is nullable so that a body
+/// without it binds as missing rather than as a failure, and a host refuses it.
+/// </summary>
+public sealed record ClientToolResult(string CallId, bool? Ok, string Content);
 
 /// <summary>
 /// <c>GET …/{id}</c>: the conversation as the client shows it, and the event id its stream continues from. No

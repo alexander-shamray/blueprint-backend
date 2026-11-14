@@ -10,7 +10,8 @@ public sealed record AssistantLimits
     public int MaxSteps { get; init; } = 8;
 
     /// <summary>
-    /// The output bound of one provider round. A turn's spend is bounded by <see cref="MaxSteps"/> × this and by
+    /// The output bound of one provider round. A turn's spend is bounded by (<see cref="MaxSteps"/> + 1) × this, the
+    /// round after the last tool round being streamed before the turn ends, and by
     /// <see cref="ConversationTokenBudget"/>.
     /// </summary>
     public int MaxOutputTokens { get; init; } = 4096;

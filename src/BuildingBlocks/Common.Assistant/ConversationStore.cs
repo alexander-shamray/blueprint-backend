@@ -166,22 +166,14 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
 
     private bool ForgetIdleCaller()
     {
-        // Each conversation is forgotten through TryForget, so a turn started after the read above survives, and so
-        // does its caller, though its idle conversations already forgotten stay forgotten: a narrow race, accepted.
+        // The read above is a filter; TryForgetAll decides, all of a caller's conversations or none, so a turn started
+        // after the read keeps its caller whole.
         foreach (KeyValuePair<string, Dictionary<string, AssistantSession>> caller in byCaller
                      .Where(c => c.Value.Values.All(s => !s.Running))
                      .OrderBy(c => c.Value.Values.Max(s => (DateTimeOffset?)s.LastActive))
                      .ToList())
         {
-            foreach (AssistantSession session in caller.Value.Values.ToList())
-            {
-                if (session.TryForget())
-                {
-                    caller.Value.Remove(session.Id);
-                }
-            }
-
-            if (caller.Value.Count == 0)
+            if (AssistantSession.TryForgetAll([.. caller.Value.Values]))
             {
                 byCaller.Remove(caller.Key);
 

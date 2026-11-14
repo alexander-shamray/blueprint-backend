@@ -679,9 +679,87 @@ public sealed class AssistantSessionTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         session.TryStart(Given.Turn("two")).ShouldBeFalse();
+        session.Start(Given.Turn("two")).ShouldBe(TurnStart.Running);
         session.View().Running.ShouldBeTrue();
         session.Cancel();
         await Given.UntilEnded(session);
+    }
+
+    [Fact]
+    public void A_turn_sent_to_a_conversation_forgotten_after_it_was_found_is_refused_as_closed_not_running()
+    {
+        AssistantCore core = Core(new ScriptedProvider());
+        AssistantSession session = Open(core);
+
+        core.Delete(Operator, session.Id).ShouldBeTrue();
+
+        session.Start(Given.Turn("hello")).ShouldBe(TurnStart.Closed);
+    }
+
+    [Fact]
+    public async Task A_blank_locale_on_a_turn_keeps_the_conversations_own()
+    {
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new TextDelta("One."), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta("Two."), new RoundEnd(ProviderStop.Done));
+        AssistantSession session = Open(Core(provider), "en-GB");
+
+        session.TryStart(Given.Turn("one", "   ")).ShouldBeTrue();
+        await Given.UntilEnded(session);
+        session.TryStart(Given.Turn("two")).ShouldBeTrue();
+        await Given.UntilEnded(session);
+
+        provider.Requests.Select(r => r.History.OfType<UserMessage>().Last().Content)
+            .ShouldAllBe(text => text.Contains("reply in en-GB."));
+    }
+
+    [Fact]
+    public async Task A_stream_that_ends_without_its_round_end_is_a_round_cut_short_not_a_whole_reply()
+    {
+        TaskCompletionSource<TurnSummary> learnt = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using AssistantCore core = new(
+            new ScriptedProvider().Round(new RoundStarted(), new TextDelta("Half a")),
+            [],
+            ToolPolicy.ReadOnly,
+            new PlantedRedactor(),
+            "Host rules.",
+            new AssistantLimits(),
+            TimeProvider.System,
+            learnt.SetResult);
+        AssistantSession session = Open(core);
+
+        session.TryStart(Given.Turn("hello")).ShouldBeTrue();
+        TurnSummary summary = await learnt.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        summary.Reason.ShouldBe(TurnEndReason.Error);
+        summary.Unreported.Output.ShouldBe(new AssistantLimits().MaxOutputTokens, "the round was billed unreported");
+        session.History.OfType<AssistantMessage>().Single().Text.ShouldBe("Half a");
+    }
+
+    [Fact]
+    public async Task A_caller_is_forgotten_whole_or_not_at_all_when_one_of_their_conversations_is_running()
+    {
+        TaskCompletionSource started = new();
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round((_, ct) => ScriptedProvider.Hang("…", started, ct))
+            .Round(new TextDelta("Two."), new RoundEnd(ProviderStop.Done));
+        AssistantCore core = Core(provider);
+        AssistantSession quiet = Open(core);
+        AssistantSession busy = Open(core);
+        AssistantSession idle = Open(Core(new ScriptedProvider()));
+
+        busy.TryStart(Given.Turn("one")).ShouldBeTrue();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        // The idle one listed first is judged first, and is not closed when the running one refuses the set.
+        AssistantSession.TryForgetAll([quiet, busy]).ShouldBeFalse();
+        quiet.Start(Given.Turn("two")).ShouldBe(TurnStart.Started);
+        await Given.UntilEnded(quiet);
+        AssistantSession.TryForgetAll([idle]).ShouldBeTrue();
+        idle.Start(Given.Turn("three")).ShouldBe(TurnStart.Closed);
+
+        busy.Cancel();
+        await Given.UntilEnded(busy);
     }
 
     [Fact]
