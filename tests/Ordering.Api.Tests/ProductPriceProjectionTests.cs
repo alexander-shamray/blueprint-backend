@@ -100,7 +100,7 @@ public sealed class ProductPriceProjectionTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_stale_discontinue_does_not_withdraw_a_newer_price()
     {
-        // The price MERGE's guard, on the UPDATE that withdraws the rows a discontinue finds.
+        // The UPDATE's own out-of-order guard, UpdatedAt <= @OccurredAt, on the rows a discontinue finds.
         Guid product = Guid.CreateVersion7();
         await HandleAsync(Publish(product, 19.99m, "EUR", Later));
 
