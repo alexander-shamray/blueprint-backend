@@ -641,7 +641,7 @@ class RetryTests(Fixture):
 
     def test_a_quoted_continue_on_error_is_read(self) -> None:
         """Folded into the key above, it would pass a step that may fail unnoted (#2062)."""
-        for key in ('"continue-on-error"', "'continue-on-error'"):
+        for key in ('"continue-on-error"', "'continue-on-error'", "continue-on-error "):
             with self.subTest(key=key):
                 first = SBOM_STEP.replace("        uses:", f"        id: sbom\n        {key}: true\n        uses:", 1)
 
@@ -653,7 +653,7 @@ class RetryTests(Fixture):
     def test_a_step_line_it_cannot_read_is_refused(self) -> None:
         for line in (
             "      - { name: Sign, continue-on-error: true, run: cosign sign }\n",
-            "        continue-on-error : true\n",
+            "        - continue-on-error: true\n",
             "    - run: cosign sign\n",
         ):
             with self.subTest(line=line):
@@ -1185,7 +1185,7 @@ class JobReaderTests(unittest.TestCase):
     def test_quoted_keys_are_read(self) -> None:
         """Valid YAML that Actions honours, so a reader that skips them fails open (#2062)."""
         text = (
-            self.TEXT.replace("    if:", '    "if":')
+            self.TEXT.replace("    if:", '    "if" :')
             .replace("    steps:\n      - run: one", "    'steps':\n      - 'run': one\n        \"if\": always()")
         )
         self.assertEqual(pipeline_gate.read_job_condition(text, "build"), "github.event_name == 'push'")
