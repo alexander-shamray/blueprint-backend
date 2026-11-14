@@ -112,10 +112,8 @@ public sealed class ProviderCallTests
             .ShouldBe("The logs are on the Logs screen.");
         Data(events[^1]).GetProperty("reason").GetString().ShouldBe(TurnEndReason.Done);
         ILogEntry sent = _server.LogEntries.ShouldHaveSingleItem();
-        sent.RequestMessage!.Headers!
-            .Single(h => h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)).Value
-            .ShouldHaveSingleItem().ShouldBe($"Bearer {ProviderStub.Key}");
-        JsonElement body = JsonDocument.Parse(sent.RequestMessage.Body!).RootElement;
+        Credential(sent).ShouldBe($"Bearer {ProviderStub.Key}");
+        JsonElement body = JsonDocument.Parse(sent.RequestMessage!.Body!).RootElement;
         body.GetProperty("model").GetString().ShouldBe(AnthropicSettings.DefaultModel);
         body.GetProperty("stream").GetBoolean().ShouldBeTrue();
     }
@@ -178,7 +176,13 @@ public sealed class ProviderCallTests
         AssistantStatus? status = await client.GetFromJsonAsync<AssistantStatus>("/v1/assistant", Ct);
 
         status.ShouldBe(new AssistantStatus(true, AnthropicProvider.ProviderId, AnthropicSettings.DefaultModel, null));
+        Credential(_server.LogEntries.ShouldHaveSingleItem()).ShouldBe($"Bearer {ProviderStub.Key}");
     }
+
+    private static string Credential(ILogEntry sent) =>
+        sent.RequestMessage!.Headers!
+            .Single(h => h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)).Value
+            .ShouldHaveSingleItem();
 
     private void Answer(IResponseBuilder response) =>
         _server.Given(Request.Create().WithPath(MessagesPath).UsingPost()).RespondWith(response);
