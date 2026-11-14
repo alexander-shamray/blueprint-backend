@@ -81,14 +81,19 @@ internal sealed class StreamMapper
                 throw new IOException($"The reply was cut off before it finished ({stop}).");
             }
 
+            // A refusal can cut a tool input short, and the refusal, not the broken input, is why the round ended.
+            if (stop == "refusal")
+            {
+                yield return new RoundEnd(ProviderStop.Refused, category);
+                yield break;
+            }
+
             if (malformed is not null)
             {
                 throw malformed;
             }
 
-            yield return stop == "refusal"
-                ? new RoundEnd(ProviderStop.Refused, category)
-                : new RoundEnd(ProviderStop.Done);
+            yield return new RoundEnd(ProviderStop.Done);
         }
     }
 
