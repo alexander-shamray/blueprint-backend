@@ -584,7 +584,8 @@ REPOSITORY_EXPRESSION = r"\$\{\{\s*github\.repository\s*\}\}"
 REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHUB_REPOSITORY\}})"
 # shlex reads a run of punctuation as one word, so `&&>` ends the command rather than redirecting.
 SHELL_OPERATOR = re.compile(r"[;&|<>()]+")
-REDIRECTION = re.compile(r"&?[<>]+[&|]?")
+# Bash's redirections and nothing else: `&<` is a backgrounded command and then a redirection.
+REDIRECTION = re.compile(r"&>>?|<<<?|<[>&]?|>>|>[&|]?")
 # Shell forms whose words or operators shlex reads otherwise than bash: a backtick, a `${` with an operator,
 # and `$'...'` or `$"..."` quoting; brace expansion is refused on the words, once quotes are read.
 UNFOLLOWED = re.compile(r"`|\$\{(?!\w+\}|\{)|\$['\"]")
