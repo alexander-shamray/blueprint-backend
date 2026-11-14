@@ -458,7 +458,9 @@ class QueueBacklog(unittest.TestCase):
     def test_a_message_waits_longer_than_the_lag_rules_target(self):
         from scenarios import queue_backlog as module
         rules = (harness.ROOT / "deploy/observability/alerts/platform-alerts.yaml").read_text(encoding="utf-8")
-        target = int(re.search(r"\(messaging_delivery_lag_seconds_bucket\[10m\]\)\)\s*\)\s*> (\d+)", rules).group(1))
+        # The whole number, so 2.5 is not read as 2.
+        target = float(re.search(r"\(messaging_delivery_lag_seconds_bucket\[10m\]\)\)\s*\)\s*> (\d+(?:\.\d+)?)(?![\d.])",
+                                 rules).group(1))
         self.assertGreater(module.HOLD_SECONDS, 5 * target)
 
     def test_the_queries_are_the_runbooks_and_the_rules(self):
@@ -467,7 +469,7 @@ class QueueBacklog(unittest.TestCase):
         text = squash((harness.ROOT / "docs/runbooks/queue-backlog.md").read_text(encoding="utf-8"))
         self.assertIn(squash(module.CONSUME_RATE), text)
         rules = squash((harness.ROOT / "deploy/observability/alerts/platform-alerts.yaml").read_text(encoding="utf-8"))
-        self.assertIn(squash(module.LAG_P95) + ">2", rules)
+        self.assertRegex(rules, re.escape(squash(module.LAG_P95)) + r">2(?![\d.])")
 
     def answers(self, lag="3.2", rate="0.4"):
         def query(expression):
