@@ -242,6 +242,14 @@ class Measure(unittest.TestCase):
         self.assertEqual(ci_cost.measure(api, REPO, A, current=True, workers=1, manifest=no_manifests).packages,
                          {"catalog": 3, "ordering": 2})
 
+    def test_the_repository_is_matched_whatever_its_case_and_a_listing_with_none_of_its_packages_is_a_note(self):
+        api = FakeApi([], {}, packages={"catalog": 3})
+        upper = ci_cost.measure(api, REPO.upper(), A, current=True, workers=1, manifest=no_manifests)
+        self.assertEqual(upper.packages, {"catalog": 3})
+        other = ci_cost.measure(api, "owner/other", A, current=True, workers=1, manifest=no_manifests)
+        self.assertIsNone(other.packages)
+        self.assertTrue(any(note.startswith("GHCR packages") for note in other.unavailable))
+
     def test_a_refused_read_is_reported_rather_than_fatal(self):
         usage = ci_cost.measure(FakeApi([], {}), REPO, A, current=True, workers=1)
         self.assertIsNone(usage.packages)
@@ -397,6 +405,13 @@ class Cli(unittest.TestCase):
     def test_a_malformed_window_is_refused(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             self.output("--window", "A=2026-10-14:2026-10-01")
+
+    def test_a_well_shaped_day_the_calendar_lacks_is_a_usage_error(self):
+        stderr = io.StringIO()
+        with self.assertRaises(SystemExit) as ended, contextlib.redirect_stderr(stderr):
+            self.output("--window", "A=2026-02-01:2026-02-30")
+        self.assertEqual(ended.exception.code, 2)
+        self.assertIn("calendar", stderr.getvalue())
 
 
 if __name__ == "__main__":
