@@ -67,9 +67,8 @@ def comment_on_tracker(gh: Gh, repo: str, body: str) -> None:
 
 
 def wait_for_second(gh: Gh, repo: str, run_id: str,
-                    sleep: Callable[[float], None], clock: Callable[[], float]) -> str | None:
+                    sleep: Callable[[float], None], clock: Callable[[], float], deadline: float) -> str | None:
     """The conclusion of the run's second attempt once it completes, None past the deadline."""
-    deadline = clock() + DEADLINE_MINUTES * 60
     while True:
         try:
             attempt, status, conclusion = gh(
@@ -84,6 +83,26 @@ def wait_for_second(gh: Gh, repo: str, run_id: str,
         sleep(POLL_SECONDS)
 
 
+def wait_for_newer(gh: Gh, repo: str, run_id: str, workflow_id: str,
+                   sleep: Callable[[float], None], clock: Callable[[], float], deadline: float) -> bool:
+    """Whether no newer push run of the workflow on main is still going, waited for until the deadline.
+
+    Most watched workflows cancel a running run of `main` when another joins their group, so a rerun
+    started beside a newer run would cancel the newer one, and main's head would go untested.
+    """
+    newer = (f'.workflow_runs[] | select(.id > {int(run_id)} and .status != "completed") | .id')
+    while True:
+        try:
+            if not gh("api", f"repos/{repo}/actions/workflows/{workflow_id}/runs?branch=main&event=push&per_page=20",
+                      "--jq", newer).strip():
+                return True
+        except (subprocess.CalledProcessError, ValueError):
+            pass  # A read that fails once is read again; the deadline bounds it.
+        if clock() >= deadline:
+            return False
+        sleep(POLL_SECONDS)
+
+
 def judge_second(gh: Gh, repo: str, run_id: str, conclusion: str) -> tuple[str, str]:
     """`passed`, `replaced` or `red`, and why a red one is red, read as ADR-196 reads a first attempt."""
     if conclusion in _PASSED:
@@ -92,14 +111,19 @@ def judge_second(gh: Gh, repo: str, run_id: str, conclusion: str) -> tuple[str, 
         return "red", ""
     try:
         reason = read_cancelled_run.read_run(gh, repo, run_id)
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, ValueError):
         reason = "Its jobs could not be read."
     return ("replaced", "") if not reason else ("red", reason)
 
 
 def rerun(gh: Gh, repo: str, run_id: str, env: Mapping[str, str],
           sleep: Callable[[float], None], clock: Callable[[], float]) -> dict[str, str]:
+    deadline = clock() + DEADLINE_MINUTES * 60
     failed = read_failed(gh, repo, run_id)
+    if not wait_for_newer(gh, repo, run_id, env.get("WORKFLOW_ID", ""), sleep, clock, deadline):
+        return {"second": "unfinished", "conclusion": "",
+                "why": f"A newer run of it on main was still running after {DEADLINE_MINUTES} minutes, and a "
+                       f"rerun beside it could cancel it, so its failed jobs were not rerun.\n\n{failed}"}
     try:
         gh("run", "rerun", run_id, "--failed", "-R", repo)
     except subprocess.CalledProcessError:
@@ -120,7 +144,7 @@ def rerun(gh: Gh, repo: str, run_id: str, env: Mapping[str, str],
         "Commented by main-red.yml (ADR-210).",
     )))
 
-    conclusion = wait_for_second(gh, repo, run_id, sleep, clock)
+    conclusion = wait_for_second(gh, repo, run_id, sleep, clock, deadline)
     if conclusion is None:
         return {"second": "unfinished", "conclusion": "",
                 "why": f"Its failed jobs were rerun once, and the second attempt had not finished after "

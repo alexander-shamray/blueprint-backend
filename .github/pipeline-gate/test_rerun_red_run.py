@@ -22,7 +22,7 @@ JOBS = [
     {"name": "images", "conclusion": "cancelled", "steps": []},
 ]
 TRACKER = [{"number": 9, "title": "Main is red"}, {"number": 1406, "title": "Flaky tests tracker"}]
-ENV = {"WORKFLOW": "CI", "HEAD_SHA": "abc123", "RUN_URL": "https://run/7", "CONCLUSION": "failure"}
+ENV = {"WORKFLOW_ID": "42", "WORKFLOW": "CI", "HEAD_SHA": "abc123", "RUN_URL": "https://run/7", "CONCLUSION": "failure"}
 
 
 def refused(*arguments: str) -> str:
@@ -111,6 +111,28 @@ class Rerun(unittest.TestCase):
         self.attempts = [("2", "completed", "cancelled")]
         with unittest.mock.patch.object(read_cancelled_run, "read_run", side_effect=refused):
             self.assertEqual(self.run_it()["second"], "red")
+
+    def test_a_newer_run_still_going_on_main_is_waited_for_before_the_rerun(self) -> None:
+        newer = iter(["8\n", "8\n", ""])
+        self.answers[f"repos/{REPO}/actions/workflows/42/runs?branch=main&event=push"] = lambda *a: next(newer)
+
+        self.assertEqual(self.run_it()["second"], "passed")
+
+        runs = [index for index, call in enumerate(self.calls) if "/workflows/42/runs" in " ".join(call)]
+        rerun = self.calls.index(("run", "rerun", RUN, "--failed", "-R", REPO))
+        self.assertEqual(len(runs), 3)
+        self.assertLess(runs[-1], rerun)
+        self.assertIn(f"select(.id > {RUN} and", " ".join(self.calls[runs[0]]))
+
+    def test_a_newer_run_still_going_at_the_deadline_is_filed_and_not_rerun(self) -> None:
+        self.answers["/workflows/42/runs"] = "8\n"
+
+        outputs = self.run_it()
+
+        self.assertEqual(outputs["second"], "unfinished")
+        self.assertIn("a rerun beside it could cancel it", outputs["why"])
+        self.assertFalse(any(call[:2] == ("run", "rerun") for call in self.calls))
+        self.assertEqual(self.commented(), [])
 
     def test_a_refused_rerun_is_filed_at_once_and_waits_for_nothing(self) -> None:
         self.answers["run rerun"] = refused
