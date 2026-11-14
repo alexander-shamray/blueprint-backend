@@ -7,6 +7,7 @@ refuses. Stdlib only, on the licence gate's terms.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -525,13 +526,34 @@ HELM_UPGRADE = re.compile(r"(?:^|[\s;&|(`])helm\s+upgrade\b")
 
 
 def _on_main_push(step: dict[str, str]) -> bool:
-    condition = step.get("if", "")
+    """Whether the step's `if:` is the filter, the ref and a push event, each a top-level `&&` term.
+
+    As terms, not substrings: `||` between them, or `!=` on the event, holds every piece and runs on main for a
+    leg that built nothing.
+    """
+    expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", step.get("if", "").strip())
+    terms = [_unwrapped(term) for term in _split_outside_parentheses(_unwrapped(expression), "&&")]
+    if any(len(_split_outside_parentheses(term, "||")) > 1 for term in terms):
+        return False
     return (
-        FILTER_TERM in condition
-        and MAIN_REF in condition
-        and re.search(r"[\"']push[\"']", condition) is not None
-        and "pull_request" not in condition
+        FILTER_TERM in terms
+        and MAIN_REF in terms
+        and any(_is_push_event(term) for term in terms)
     )
+
+
+def _is_push_event(term: str) -> bool:
+    """`github.event_name == 'push'`, or a `contains` list holding push and nothing a pull request starts."""
+    if term == "github.event_name == 'push'":
+        return True
+    match = re.fullmatch(r"contains\(fromJSON\('(\[[^]]*\])'\), github\.event_name\)", term)
+    if match is None:
+        return False
+    try:
+        events = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return False
+    return isinstance(events, list) and "push" in events and set(events) <= {"push", "workflow_dispatch"}
 
 
 def _located(steps: list[dict[str, str]], window: range, *, uses: str | None = None,
