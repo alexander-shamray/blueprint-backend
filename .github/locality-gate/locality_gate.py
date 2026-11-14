@@ -34,6 +34,11 @@ _REASON_OPENED = re.compile(r"`[^`]+`[ \t\n\r\f\v]+\(.*", re.DOTALL)
 
 _CLASS_ROW = re.compile(r"^\| *Class *\|(.*)$")
 _TOUCH_ROW = re.compile(r"^\| *Touch set *\|(.*)$")
+# A CommonMark fence: a backtick or tilde run of three or more, indented at most three spaces. The run is
+# greedy, so a backtick in the rest of a backtick opener is one in its info string, which makes it no opener.
+# It closes on a run of its own character at least as long, then blanks alone; an unclosed one runs to the end.
+_FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 _MAP_CLASS = re.compile(r"^([A-E]):\s*$")
 _MAP_ITEM = re.compile(r"^  - '([^']+)'\s*$")
 
@@ -90,8 +95,9 @@ def read_rows(body: str) -> tuple[list[str], list[str]]:
     Exactly one row of each. The refusal messages name the row and never its
     content, for the reason `README.md` gives.
     """
-    class_rows = [m.group(1) for m in map(_CLASS_ROW.match, body.splitlines()) if m]
-    touch_rows = [m.group(1) for m in map(_TOUCH_ROW.match, body.splitlines()) if m]
+    lines = _unfenced(body)
+    class_rows = [m.group(1) for m in map(_CLASS_ROW.match, lines) if m]
+    touch_rows = [m.group(1) for m in map(_TOUCH_ROW.match, lines) if m]
     if len(class_rows) > 1:
         raise InputRefused("the body carries more than one `| Class |` row")
     if len(touch_rows) > 1:
@@ -107,6 +113,30 @@ def read_rows(body: str) -> tuple[list[str], list[str]]:
             "the PR body to name the class and the touch set"
         )
     return _read_class(class_rows[0]), _read_touch_set(touch_rows[0])
+
+
+def _unfenced(body: str) -> list[str]:
+    """The body's lines outside fenced code blocks, where a row is an example; pr-locality.sh skips the same.
+
+    A line ends at `\\n` alone: `splitlines()` also breaks at `\\u2028` and the like, which GitHub renders
+    inside a line, and a lone `\\r` ends one for GitHub but not for the helper, so it is refused.
+    """
+    if re.search(r"\r(?!\n)", body):
+        raise InputRefused("the body carries a carriage return that is not part of a CRLF line ending")
+    lines: list[str] = []
+    fence = ""
+    for line in body.replace("\r", "").split("\n"):
+        if fence:
+            close = _FENCE_CLOSE.match(line)
+            if close and close.group(1)[0] == fence[0] and len(close.group(1)) >= len(fence):
+                fence = ""
+            continue
+        opener = _FENCE_OPEN.match(line)
+        if opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
+            fence = opener.group(1)
+            continue
+        lines.append(line)
+    return lines
 
 
 def _cell(rest: str, row: str) -> str:

@@ -12,7 +12,11 @@ for the first two; this gate is §3 enforced.
   without exactly one of each — or with a class letter outside A–E, a
   repeated member, or prose where a path list should be — is refused, not
   judged, and the refusal names the row and never prints its content,
-  because the author is not a trusted party.
+  because the author is not a trusted party. A row inside a fenced code
+  block, by CommonMark's fences, is an example rather than the declaration,
+  and is skipped as `pr-locality.sh` skips it; a line ends at a line feed
+  alone, and a body holding a carriage return outside a CRLF is refused,
+  since GitHub and the helper would fence different lines.
 - [`classes.yml`](classes.yml), the one place the class → tree-set map
   lives. The contract's table states each class in words and cites the file.
   It is read by a parser that accepts the one shape the file's header states
