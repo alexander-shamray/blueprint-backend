@@ -2007,7 +2007,8 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
             )
         for index, step in enumerate(steps):
             guard = step.get("if", "")
-            if CODE_GATE not in guard and not _behind_a_step_that_ran(guard):
+            # An `&&` term, so `|| always()` beside it, or a `!` before it, does not pass for it.
+            if CODE_GATE not in _conjuncts(guard) and not _behind_a_step_that_ran(guard):
                 name = step.get("name", step.get("uses", step.get("run", ""))).strip()[:60]
                 problems.append(
                     f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}`, so a change no "

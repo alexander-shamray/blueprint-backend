@@ -2498,6 +2498,14 @@ class CodeTests(unittest.TestCase):
                 text = self.broken(f"{before}{self.GATE}", before)
                 self.assertIn(f"the {job} job's step", self.problems(text))
 
+    def test_a_step_gate_widened_or_negated_is_caught(self) -> None:
+        """The gate is still there as text, so only a read of the `&&` terms sees either."""
+        before = "      - name: Unit stage\n"
+        for guard in (f"{pipeline_gate.CODE_GATE} || always()", f"!({pipeline_gate.CODE_GATE})"):
+            with self.subTest(guard=guard):
+                text = self.broken(f"{before}{self.GATE}", f"{before}        if: {guard}\n")
+                self.assertIn("the build job's step", self.problems(text))
+
     def test_an_always_step_beside_nothing_a_skipped_step_never_leaves_is_caught(self) -> None:
         """A change no stage reads skips every gated step, and these would still run."""
         old = "always() && hashFiles('TestResults/sightings/*.txt') != ''"
