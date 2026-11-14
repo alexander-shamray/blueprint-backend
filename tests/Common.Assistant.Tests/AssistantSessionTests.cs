@@ -879,6 +879,23 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public async Task A_label_argument_cut_inside_a_surrogate_pair_keeps_no_half_character()
+    {
+        ScriptedTools tools = new(("stack_status", (_, _, _) => Task.FromResult(new ToolOutcome(true, "all up"))));
+        JsonObject input = new() { ["service"] = new string('x', 79) + "\U0001F600" + new string('y', 10) };
+        ScriptedProvider provider = new ScriptedProvider()
+            .Round(new ToolCall("c1", "stack_status", input), new RoundEnd(ProviderStop.Done))
+            .Round(new RoundEnd(ProviderStop.Done));
+        AssistantSession session = Open(Core(provider, sources: tools));
+
+        session.TryStart(Given.Turn("status"));
+        List<AssistantEvent> events = await Given.UntilEnded(session);
+
+        events.OfType<ToolStartedEvent>().Single().Args["service"]!.GetValue<string>()
+            .ShouldBe(new string('x', 79));
+    }
+
+    [Fact]
     public async Task The_conversation_read_holds_every_message_after_more_events_than_the_ring_holds()
     {
         ScriptedProvider provider = new ScriptedProvider()
