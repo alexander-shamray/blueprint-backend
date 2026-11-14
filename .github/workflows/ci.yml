@@ -1502,6 +1502,13 @@ jobs:
           # From the registry: the local RepoDigests already hold $DIGEST from the push by sha.
           moved=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" && !found { print $2; found = 1 }')
           if [ "$moved" != "$DIGEST" ]; then
+            # Runs on main overlap (ADR-109): a newer build moving the tag since this push is the tag going forward.
+            later=$(docker buildx imagetools inspect "$tag" --format '{{json .Image}}' | jq -r '.config.Labels["org.opencontainers.image.revision"] // ""')
+            [ -z "$later" ] || git fetch --quiet origin "$later" 2>/dev/null || true
+            if [ -n "$later" ] && [ "$later" != "$GITHUB_SHA" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$later"; then
+              echo "::notice::The main tag of ${{ matrix.image }} names $later, a newer build that moved it after this push; the tag stays."
+              exit 0
+            fi
             echo "::error::The main tag of ${{ matrix.image }} was pushed but the registry has it name ${moved:-nothing}, not the signed digest $DIGEST."
             exit 1
           fi
