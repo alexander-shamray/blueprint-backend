@@ -2633,6 +2633,31 @@ class CodeTests(unittest.TestCase):
                 text = self.broken(f"{before}{self.GATE}", f"{before}        if: {guard}\n")
                 self.assertIn("the build job's step", self.problems(text))
 
+    def test_a_step_gate_narrowed_by_a_term_beside_it_is_caught(self) -> None:
+        """The gate is still an `&&` term, so only a read of every term sees the one that skips the step."""
+        before = "      - name: Unit stage\n"
+        gate = pipeline_gate.CODE_GATE
+        for guard in (f"false && {gate}", f"{gate} && github.event_name == 'push'"):
+            with self.subTest(guard=guard):
+                text = self.broken(f"{before}{self.GATE}", f"{before}        if: {guard}\n")
+                self.assertIn("the build job's step", self.problems(text))
+
+    def test_a_step_that_ran_narrowed_by_a_term_beside_it_is_caught(self) -> None:
+        for old, new in (
+                ("always() && hashFiles('TestResults/sightings/*.txt') != ''",
+                 "always() && hashFiles('TestResults/sightings/*.txt') != '' && false"),
+                ("        if: failure()\n", "        if: failure() && github.event_name == 'push'\n")):
+            with self.subTest(new=new):
+                self.assertIn("the integration job's step", self.problems(self.broken(old, new)))
+
+    def test_an_output_narrowed_by_an_and_term_is_caught(self) -> None:
+        """Beside every `||` operand, an `&&` term turns the whole into one operand, which is none of the three."""
+        output = ("github.event_name != 'pull_request' || steps.changes.outputs.code != 'false' || "
+                  "steps.changes.outputs.stage-inputs != 'false'")
+        for new in (f"({output}) && false", f"false && ({output})"):
+            with self.subTest(new=new):
+                self.assertIn("github.event_name != 'pull_request'", self.problems(self.broken(output, new)))
+
     def test_an_always_step_beside_nothing_a_skipped_step_never_leaves_is_caught(self) -> None:
         """A change no stage reads skips every gated step, and these would still run."""
         old = "always() && hashFiles('TestResults/sightings/*.txt') != ''"
