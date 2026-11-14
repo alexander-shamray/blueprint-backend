@@ -140,28 +140,55 @@ internal static class RequestBuilder
     private static readonly string[] UnsupportedBounds =
         ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minLength", "maxLength"];
 
+    // The keywords whose value is a schema, a list of schemas, or a map of names to schemas (JSON Schema 2020-12's
+    // applicators, with draft 7's `definitions` and `additionalItems`).
+    private static readonly string[] SchemaKeywords =
+    [
+        "items", "additionalItems", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames",
+        "unevaluatedItems", "unevaluatedProperties", "anyOf", "oneOf", "allOf", "prefixItems",
+    ];
+
+    private static readonly string[] SchemaMaps = ["properties", "patternProperties", "$defs", "definitions",
+        "dependentSchemas"];
+
     // Closes every object schema in the tree, the root and those under `properties`, `items`, `$defs` and the
     // combinators, without overruling one that already names `additionalProperties`, and moves each schema's
-    // unsupported bounds into its description. Only a string `type` marks a schema, so a property called `type` in a
-    // `properties` map, which holds a schema, is not mistaken for one, and nor is a property called `minimum`.
+    // unsupported bounds into its description. The walk follows the schema keywords alone, so a property called
+    // `type` or `minimum` in a `properties` map, or a `default` value, is never read as a schema. A schema is an
+    // object when its `type` names it, alone or in a list, or when it has no `type` and holds `properties`.
     private static void Close(JsonNode? node)
     {
         switch (node)
         {
             case JsonObject schema:
-                if (schema["type"] is JsonValue type && type.TryGetValue(out string? name))
+                IReadOnlyList<string> types = schema["type"] switch
                 {
-                    if (name == "object")
-                    {
-                        schema.TryAdd("additionalProperties", false);
-                    }
+                    JsonValue one when one.TryGetValue(out string? name) => [name],
+                    JsonArray list => [.. list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? n) ? n : "")],
+                    _ => [],
+                };
 
-                    MoveBoundsToDescription(schema);
+                if (types.Contains("object") || (types.Count == 0 && schema["properties"] is JsonObject))
+                {
+                    schema.TryAdd("additionalProperties", false);
                 }
 
-                foreach (KeyValuePair<string, JsonNode?> entry in schema.ToList())
+                MoveBoundsToDescription(schema);
+
+                foreach (string keyword in SchemaKeywords)
                 {
-                    Close(entry.Value);
+                    Close(schema[keyword]);
+                }
+
+                foreach (string keyword in SchemaMaps)
+                {
+                    if (schema[keyword] is JsonObject map)
+                    {
+                        foreach (KeyValuePair<string, JsonNode?> entry in map)
+                        {
+                            Close(entry.Value);
+                        }
+                    }
                 }
 
                 break;
