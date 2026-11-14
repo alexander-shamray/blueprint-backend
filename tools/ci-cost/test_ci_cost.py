@@ -362,6 +362,11 @@ class Registry(unittest.TestCase):
         self.assertEqual(body, {})
         self.assertEqual(sum("/token?" in request.full_url for request in asked), 2)
 
+    def test_a_401_on_a_fresh_token_ends_the_read_rather_than_waiting_out_every_try(self):
+        error, asked = self.read(*[self.refused(401)] * ci_cost.TRANSIENT_TRIES)
+        self.assertIsInstance(error, LookupError)
+        self.assertEqual(sum("/manifests/" in request.full_url for request in asked), 2)
+
     def test_a_cut_short_body_or_a_dropped_connection_is_retried(self):
         body, _ = self.read(http.client.IncompleteRead(b""), OSError("reset"), self.refused(502), b"{}")
         self.assertEqual(body, {})
