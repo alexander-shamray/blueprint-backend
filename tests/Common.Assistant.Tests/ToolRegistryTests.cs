@@ -116,6 +116,8 @@ public sealed class ToolRegistryTests
     [InlineData("open-screen")]
     [InlineData("_open")]
     [InlineData("")]
+    [InlineData("delete\n")]
+    [InlineData("open_screen\n")]
     public void A_name_that_is_not_snake_case_is_refused(string name) =>
         Should.Throw<ToolRefusedException>(
             () => ToolRegistry.Build([], [Given.ReadOnly(name, ToolSide.Client)], ToolPolicy.ReadOnly));
