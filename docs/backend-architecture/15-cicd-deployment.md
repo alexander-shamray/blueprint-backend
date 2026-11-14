@@ -88,7 +88,7 @@ or comments on the open one, and `pipeline-gate alerts` holds its list to those
 workflows. A red `main` is reverted before it is fixed forward
 ([ADR-155](adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md),
 which names the pull-request checks a push does not run again). A cancelled
-push run is filed too unless a newer run replaced it or it has no job, and one
+push run is red too unless a newer run replaced it or it has no job, and one
 cancelled by hand owes no revert
 ([ADR-196](adr/ADR-196-a-cancelled-push-run-on-main-is-red-unless-a-newer-run-replaced-it-1871-amending-adr-155.md)).
 A red first attempt that no newer run on `main` stands in for has its failed
