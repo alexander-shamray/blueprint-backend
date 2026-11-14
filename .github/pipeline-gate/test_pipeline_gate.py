@@ -639,6 +639,29 @@ class RetryTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("no note", problems[0])
 
+    def test_a_quoted_continue_on_error_is_read(self) -> None:
+        """Folded into the key above, it would pass a step that may fail unnoted (#2062)."""
+        for key in ('"continue-on-error"', "'continue-on-error'"):
+            with self.subTest(key=key):
+                first = SBOM_STEP.replace("        uses:", f"        id: sbom\n        {key}: true\n        uses:", 1)
+
+                problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, first))
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("no note", problems[0])
+
+    def test_a_step_line_it_cannot_read_is_refused(self) -> None:
+        for line in (
+            "      - { name: Sign, continue-on-error: true, run: cosign sign }\n",
+            "        continue-on-error : true\n",
+            "    - run: cosign sign\n",
+        ):
+            with self.subTest(line=line):
+                problems = pipeline_gate.check_retries(WORKFLOW.replace(SBOM_STEP, SBOM_STEP + line))
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(f"holds `{line.strip()}`, a step line this check cannot read", problems[0])
+
     def test_a_first_attempt_with_no_id_is_caught(self) -> None:
         """Nothing can read the outcome of a step with no id."""
         workflow = WORKFLOW.replace(SBOM_STEP, RETRIED_SBOM.replace("        id: sbom\n", ""))
@@ -1136,6 +1159,17 @@ class JobReaderTests(unittest.TestCase):
 
     def test_the_steps_are_read_past_the_comment(self) -> None:
         self.assertEqual(pipeline_gate.read_job_steps(self.TEXT, "build"), [{"run": "one"}, {"run": "two"}])
+
+    def test_quoted_keys_are_read(self) -> None:
+        """Valid YAML that Actions honours, so a reader that skips them fails open (#2062)."""
+        text = (
+            self.TEXT.replace("    if:", '    "if":')
+            .replace("    steps:\n      - run: one", "    'steps':\n      - 'run': one\n        \"if\": always()")
+        )
+        self.assertEqual(pipeline_gate.read_job_condition(text, "build"), "github.event_name == 'push'")
+        self.assertEqual(
+            pipeline_gate.read_job_steps(text, "build"), [{"run": "one", "if": "always()"}, {"run": "two"}]
+        )
 
 
 class SupplyChainTests(Fixture):
