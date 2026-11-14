@@ -1012,7 +1012,9 @@ def check_grants(root: Path = ROOT) -> list[str]:
     """No job a pull request reaches holds a write grant beside the branch's code (ADR-197).
 
     The checkout is what brings the branch in: a job with none runs only the
-    workflow's own text. It holds the shape on what lands, not on a branch's edit.
+    workflow's own text, and a job calling a reusable workflow is judged as one
+    with a checkout, since the called one may hold it. It holds the shape on
+    what lands, not on a branch's edit.
     """
     workflows = sorted(
         path for path in (root / ".github" / "workflows").glob("*")
@@ -1044,15 +1046,17 @@ def check_grants(root: Path = ROOT) -> list[str]:
                 continue
             held += 1
             body = "\n".join(lines)
-            if not reached or not (CHECKOUT.search(body) or WORKFLOW_CALL.search(body)):
+            brings = ("checks out the branch" if CHECKOUT.search(body)
+                      else "calls a reusable workflow" if WORKFLOW_CALL.search(body) else None)
+            if not reached or brings is None:
                 continue
             condition = read_job_condition(text, job) or ""
             if not _keeps_pull_requests_out(condition, ref_decides="pull_request_target" not in text):
                 problems.append(
-                    f"{path.name}'s job `{job}` holds {', '.join(grants)} and checks out the branch, and "
+                    f"{path.name}'s job `{job}` holds {', '.join(grants)} and {brings}, and "
                     "its own `if:` does not keep a pull request out, so whatever that branch runs in the "
                     "job holds the grant. Move what spends the grant to a job that runs only on main, or "
-                    "to one with no checkout (ADR-197)"
+                    "to one with no checkout and no workflow call (ADR-197)"
                 )
     if not held:
         return [
