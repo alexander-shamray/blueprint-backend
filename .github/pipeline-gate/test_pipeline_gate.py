@@ -1593,6 +1593,28 @@ class SupplyChainTests(Fixture):
         """`--set` types the value, and a digest of digits would be read as a number."""
         self.assertEqual(len(self.broken("--set-string image.digest=", "--set image.digest=", deploy=True)), 2)
 
+    def test_a_helm_upgrade_with_its_global_flags_first_is_still_read(self) -> None:
+        """Helm takes `-n prod upgrade`; a reader that wants the subcommand first misses the call."""
+        for command in ('helm -n "$NAMESPACE" upgrade', "helm --namespace=prod upgrade", "helm --debug upgrade",
+                        "helm --kube-context prod --debug upgrade"):
+            with self.subTest(command=command):
+                problems = self.broken("--atomic\n", f'--atomic\n          {command} "$WORKLOAD" x\n', deploy=True)
+
+                self.assertEqual(len(problems), 2, problems)
+                self.assertTrue(all(command in problem for problem in problems), problems)
+        self.assertIsNone(pipeline_gate.HELM_UPGRADE.search('helm -n prod get values "$WORKLOAD"'))
+        self.assertIsNone(pipeline_gate.HELM_COMMAND.search("helm --version"))
+
+    def test_a_flags_first_helm_call_before_the_verify_is_caught(self) -> None:
+        problems = self.broken(
+            "      - name: The images are the ones CI built and signed",
+            "      - name: Early\n        run: helm -n prod status x\n\n"
+            "      - name: The images are the ones CI built and signed",
+            deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("runs after the first step that runs helm", problems[0])
+
     def test_a_rollout_with_no_helm_fails_rather_than_passing_empty(self) -> None:
         problems = pipeline_gate.check_supply_chain(WORKFLOW, "env:\n  REGISTRY: ghcr.io/${{ github.repository }}\n\n"
                                                     "jobs:\n  rollout:\n    steps:\n      - name: x\n        run: cosign verify\n")

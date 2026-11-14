@@ -575,8 +575,10 @@ MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
 MOVING_TAG_COMPARISON = r'\[\s+"\${read}"\s+!?=\s+"\$DIGEST"\s+\]'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
-HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
-HELM_UPGRADE = re.compile(r"(?:^|[\s;&|(`])helm\s+upgrade\b")
+# Helm takes its global flags before the subcommand too, as `helm -n prod upgrade`, each with or without a value.
+HELM_FLAGS = r"(?:\s+-{1,2}[A-Za-z][\w-]*(?:=\S*|\s+[^\s-]\S*)?)*"
+HELM_COMMAND = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+[a-z]")
+HELM_UPGRADE = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+upgrade\b")
 
 
 def _on_main_push(step: dict[str, str]) -> bool:
