@@ -110,10 +110,8 @@ Amend that request's set
 ([ADR-136](../backend-architecture/adr/ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)).
 Name what to add and what to remove, and say why; the request records your id,
 the reason and the time for as long as it is kept. The reason outlives the
-subject's id, so it names holders and never the subject:
-
-A new amendment takes a new id, minted once and kept for its retries as the
-reissue's is:
+subject's id, so it names holders and never the subject. A new amendment takes
+a new id, minted once and kept for its retries as the reissue's is:
 
 ```bash
 AMEND_ID=$(uuidgen)
