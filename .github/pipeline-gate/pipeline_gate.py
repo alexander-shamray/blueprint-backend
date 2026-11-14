@@ -611,6 +611,8 @@ MOVING_TAG_ANSWER = re.compile(r'(?:^|(?<=[\s;]))git merge-base --is-ancestor "\
 # The tag itself read, then compared with the signed digest, not merely named beside it.
 MOVING_TAG_READBACK = r'\b(\w+)=\$\(docker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
 MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
+# An `exit` after `&&`, `||`, a pipe or a subshell's `(`, through a continuation, a group and whole commands.
+CONDITIONAL_EXIT = re.compile(r"(?:&&|\|\|?|\()\s*(?:\\\s*)?(?:[{(]\s*)?(?:[^;&|(){}]*;\s*)*$")
 MOVING_TAG_COMPARISON = r'(?:^|(?<=[\s;]))if \[\s+"\${read}"\s+!=\s+"\$DIGEST"\s+\];?\s+then(?=[\s;]|$)'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
@@ -870,7 +872,7 @@ def _acts_on_ancestry(commands: str) -> bool:
 def _first_exit(text: str) -> str | None:
     """The first `exit` every run of quoted-away text reaches at its own depth, or None where its block ends first.
 
-    One inside a nested `if`, `case` or loop, or after `&&` or `||`, is not reached on every run, so it is passed.
+    One inside a nested `if`, `case` or loop, or one CONDITIONAL_EXIT reads, is not reached on every run: passed.
     """
     depth = 0
     for word in _shell_words(text, r"if|case|for|while|until|fi|esac|done|else|elif|exit(?: \d+)?"):
@@ -879,7 +881,7 @@ def _first_exit(text: str) -> str | None:
             depth += 1
         elif depth and name in ("fi", "esac", "done"):
             depth -= 1
-        elif depth == 0 and not (name.startswith("exit") and re.search(r"(?:&&|\|\|)\s*$", text[:word.start()])):
+        elif depth == 0 and not (name.startswith("exit") and CONDITIONAL_EXIT.search(text[:word.start()])):
             return name if name.startswith("exit") else None
     return None
 
@@ -984,7 +986,8 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
         elif move and compared and not _exits_one(commands[reads[0].end() + compared.end():]):
             problems.append(
                 f"{subject}: the step that moves the main tag compares the tag read back with $DIGEST, but the "
-                "mismatch branch has no `exit 1` of its own, so a push that left the tag on other bytes passes"
+                "mismatch branch does not reach `exit 1` on every run before any other exit, so a push that left the "
+                "tag on other bytes passes"
             )
 
         pushed = _reference(steps[push]["run"], "docker push")
