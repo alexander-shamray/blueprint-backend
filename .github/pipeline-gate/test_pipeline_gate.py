@@ -1371,7 +1371,8 @@ class SupplyChainTests(Fixture):
                            "              exit 1\n            }\n          fi"),
                 # Nested deeper than one level.
                 (mismatch, '            [ -n "$x" ] && { { exit 1; }; }\n          fi'),
-                (mismatch, "            ( ( ( echo ) ); exit 1 )\n          fi")):
+                (mismatch, "            ( ( ( echo ) ); exit 1 )\n          fi"),
+                (mismatch, '            [ -n "$x" ] && { case $y in a) echo;; esac; exit 1; }\n          fi')):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
 
