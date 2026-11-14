@@ -366,7 +366,7 @@ class FilterTests(Fixture):
 
     def test_a_long_run_of_spaces_is_read_one_way(self) -> None:
         """A run the pattern could divide many ways would take exponential time on a line it then refuses."""
-        for tail in (": x", " "):
+        for tail in (": x", "\u00a0"):
             with self.subTest(tail=tail):
                 started = time.monotonic()
                 self.assertIsNone(pipeline_gate.filter_item("  - a" + " " * 26 + tail))
