@@ -956,14 +956,21 @@ counts exactly the rows the claim skips — and the abandoned-row alert:
 UPDATE {table.QualifiedName}
 SET
     LastError   = LEFT(@Error, {OutboxMessage.LastErrorMaxLength}),
-    LockedUntil = DATEADD(
-        second,
-        POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
-                      THEN {BackoffAttemptCap}
-                      ELSE Attempts - 1 END) * {BackoffBaseSeconds},
-        SYSDATETIMEOFFSET())
+    LockedUntil = CASE
+        WHEN Attempts >= {MaxAttempts} THEN NULL
+        ELSE DATEADD(
+            second,
+            POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
+                          THEN {BackoffAttemptCap}
+                          ELSE Attempts - 1 END) * {BackoffBaseSeconds},
+            SYSDATETIMEOFFSET())
+    END
 WHERE Id = @Id;
 ```
+
+At the cap the lease is cleared rather than pushed forward: the claim will
+never take the row again, and §13.6's abandoned count skips a leased row, which
+since the claim counts an attempt before its outcome may still be delivering.
 
 The truncation and the column are one decision read twice: `LEFT` writes what
 `LastError` holds, so `OutboxMessage` states the width, the statement above
