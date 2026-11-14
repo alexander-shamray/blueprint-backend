@@ -124,6 +124,27 @@ public sealed class CustomerStockToolTests : IAsyncLifetime
         outcome.Content.ShouldBe(InventoryUnavailable);
     }
 
+    // gRPC reports a cancelled call as an RpcException, which would otherwise read as Inventory being down.
+    [Fact]
+    public async Task A_call_cancelled_by_the_core_is_a_cancellation_and_not_inventory_unavailable()
+    {
+        _inventory.HoldUntil = new TaskCompletionSource().Task;
+        using CancellationTokenSource turn = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        Task<ToolOutcome> call = Tools.InvokeAsync(
+            CustomerReadTools.GetStock,
+            new JsonObject { ["product_id"] = Chair.ToString() },
+            Context,
+            turn.Token).AsTask();
+
+        for (int i = 0; i < 200 && _inventory.Calls.Count == 0; i++)
+            await Task.Delay(25, Ct);
+
+        await turn.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(call);
+    }
+
     [Fact]
     public async Task An_input_that_is_not_an_id_is_refused_before_any_call()
     {

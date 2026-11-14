@@ -43,6 +43,9 @@ public sealed class StubInventory : IAsyncLifetime
     /// <summary>Answer every product twice, which the contract forbids.</summary>
     public bool DuplicateEveryAnswer { get; set; }
 
+    /// <summary>Hold each call, once recorded, until this completes or the call is cancelled.</summary>
+    public Task? HoldUntil { get; set; }
+
     public async ValueTask InitializeAsync()
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -101,7 +104,7 @@ public sealed class StubInventory : IAsyncLifetime
 
     private sealed class StubStockService(StubInventory stub) : Stock.StockBase
     {
-        public override Task<GetAvailabilityReply> GetAvailability(
+        public override async Task<GetAvailabilityReply> GetAvailability(
             GetAvailabilityRequest request,
             ServerCallContext context)
         {
@@ -110,6 +113,9 @@ public sealed class StubInventory : IAsyncLifetime
                     [.. request.ProductId],
                     context.RequestHeaders.GetValue("authorization"),
                     context.RequestHeaders.GetValue("x-correlation-id")));
+
+            if (stub.HoldUntil is { } hold)
+                await hold.WaitAsync(context.CancellationToken);
 
             if (stub.FailNextWith.TryDequeue(out StatusCode failure))
                 throw new RpcException(new Status(failure, "stubbed failure"));
@@ -137,7 +143,7 @@ public sealed class StubInventory : IAsyncLifetime
 
             stub._replies.Enqueue(reply);
 
-            return Task.FromResult(reply);
+            return reply;
         }
     }
 }

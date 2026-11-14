@@ -108,6 +108,13 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
                 _ => Refused("unknown_tool")
             };
         }
+        catch (RpcException e) when (e.StatusCode == StatusCode.Cancelled &&
+                                     cancellationToken.IsCancellationRequested)
+        {
+            // gRPC reports a cancelled call as an RpcException, so the core's timeout and cancel branches see it as
+            // the cancellation it is, not as a hop that is down.
+            throw new OperationCanceledException(e.Message, e, cancellationToken);
+        }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             // A code, not the message the core would pass on: a database's text is no customer's to send (ADR-151).
