@@ -200,16 +200,21 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         // One instant for both rows, so only the clock a statement read varies.
         DateTimeOffset justNow = DateTimeOffset.UtcNow;
 
+        Guid inboxId = Guid.CreateVersion7();
+
         await fixture.StageInboxAsync(
-            new InboxMessage(Guid.CreateVersion7(), "notifications-inventory-events", justNow));
+            new InboxMessage(inboxId, "notifications-inventory-events", justNow));
 
         await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(Key(), justNow));
 
-        (int outbox, int inbox, int idempotency) =
+        (int outbox, int _, int idempotency) =
             await fixture.PurgeWithSkewedClockAsync(oneDay, window * 2);
 
         outbox.ShouldBe(0, "this service registers no outbox table, so the pass has none to purge (§9.5)");
-        inbox.ShouldBe(1, "the inbox cutoff is subtracted from the registered clock, which is two days ahead");
+
+        // By id, not the pass's count: the skewed cutoff also takes any row a consumer wrote since the reset.
+        (await fixture.InboxAsync(inboxId)).ShouldBeEmpty(
+            "the inbox cutoff is subtracted from the registered clock, which is two days ahead");
         idempotency.ShouldBe(
             0,
             "the marker's cutoff is DATEADD over SYSDATETIMEOFFSET(), so skewing this process's clock " +
