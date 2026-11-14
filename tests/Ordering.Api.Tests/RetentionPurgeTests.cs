@@ -305,16 +305,22 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.StageOutboxAsync(row);
         await fixture.SetOutboxProcessedAtAsync(row.MessageId, justNow);
 
+        Guid inboxId = Guid.CreateVersion7();
+
         await fixture.StageInboxAsync(
-            new InboxMessage(Guid.CreateVersion7(), "ordering-inventory-events", justNow));
+            new InboxMessage(inboxId, "ordering-inventory-events", justNow));
 
         await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(Key(), justNow));
 
-        (int outbox, int inbox, int idempotency) =
+        (int _, int _, int idempotency) =
             await fixture.PurgeWithSkewedClockAsync(oneDay, window * 2);
 
-        outbox.ShouldBe(1, "the outbox cutoff is subtracted from the registered clock, which is two days ahead");
-        inbox.ShouldBe(1, "§9.5 keeps the inbox on that same application-computed cutoff, deliberately");
+        // By id, not the pass's counts: the skewed cutoffs also take any row written since the reset.
+        (await fixture.OutboxAsync()).ShouldNotContain(
+            staged => staged.MessageId == row.MessageId,
+            "the outbox cutoff is subtracted from the registered clock, which is two days ahead");
+        (await fixture.InboxAsync(inboxId)).ShouldBeEmpty(
+            "§9.5 keeps the inbox on that same application-computed cutoff, deliberately");
         idempotency.ShouldBe(
             0,
             "the marker's cutoff is DATEADD over SYSDATETIMEOFFSET(), so skewing this process's clock " +
