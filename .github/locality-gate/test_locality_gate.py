@@ -164,6 +164,9 @@ class TouchSetGrammar(unittest.TestCase):
         ):
             with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "after a list, block quote or HTML"):
                 read_rows(lead + table + "```\n" + example + "```\n")
+        for row in (" | Class | D |", "Class | D |", "\t|Touch set| docs/x.md |"):
+            with self.subTest(row=row), self.assertRaisesRegex(InputRefused, "after a list, block quote or HTML"):
+                read_rows("- note\n\n  ```\n" + row + "\n```\n" + table)
         # A fence after a container that holds no row hides nothing a reviewer reads as the declaration.
         self.assertEqual(read_rows("- item\n\n```\ncode\n```\n" + table), (["D"], ["docs/x.md"]))
         self.assertEqual(read_rows(table + "\n- item\n\n```\ncode\n```\n"), (["D"], ["docs/x.md"]))
