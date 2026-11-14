@@ -358,6 +358,39 @@ class MinimumRequestsTests(unittest.TestCase):
         self.assertTrue(any("minimumRequests is 50" in f for f in repo_gate.check(plan)))
 
 
+class RelativeThresholdTests(unittest.TestCase):
+    """Check 2: the floors and the factor analyse() reads after the dwell are numbers, the factor positive."""
+
+    def shipped(self) -> dict:
+        return dict(descriptor_model.entries(descriptor_model.load_plan()["thresholds"]))
+
+    def test_the_shipped_plan_passes(self) -> None:
+        self.assertEqual(repo_gate._relative_thresholds_are_numbers(self.shipped()), [])
+
+    def test_a_value_that_is_not_a_number_fails(self) -> None:
+        # True compares as 1.0, a floor no error rate reaches, so its relative check would be switched off.
+        for key in ("errorRateFloor", "latencyP99FloorSeconds", "regressionFactor"):
+            for bad in (True, "0.01", None):
+                with self.subTest(key=key, value=bad):
+                    failures = repo_gate._relative_thresholds_are_numbers(self.shipped() | {key: bad})
+
+                    self.assertEqual(failures, [f"thresholds.{key} is {bad!r}, which is not a number"])
+
+    def test_a_factor_that_is_not_positive_fails(self) -> None:
+        for bad in (0, -1.5):
+            with self.subTest(factor=bad):
+                failures = repo_gate._relative_thresholds_are_numbers(self.shipped() | {"regressionFactor": bad})
+
+                self.assertEqual(len(failures), 1)
+                self.assertIn("regressionFactor", failures[0])
+
+    def test_check_runs_it(self) -> None:
+        plan = descriptor_model.load_plan()
+        plan["thresholds"] = dict(plan["thresholds"]) | {"errorRateFloor": "0.01"}
+
+        self.assertIn("thresholds.errorRateFloor is '0.01', which is not a number", repo_gate.check(plan))
+
+
 class AlertThresholdTests(unittest.TestCase):
     """Check 3: the canary's thresholds against the alerts that page. The error
     rate is split across two rules, so a retune of either alone must turn it red."""

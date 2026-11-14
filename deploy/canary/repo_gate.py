@@ -142,6 +142,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     ):
         if key not in thresholds:
             failures.append(f"thresholds.{key} is missing; analyse() reads it")
+    failures += _relative_thresholds_are_numbers(thresholds)
     failures += _minimum_requests_express_the_error_rate(thresholds)
 
     # 3. The absolute thresholds are §13.6's, and that is asserted rather than
@@ -384,6 +385,24 @@ OWED_SIGNALS = (
     ("consume", CONSUMER_REGISTRATION, "consumeExemption", "a consumer"),
     ("saga", SAGA_REGISTRATION, "sagaExemption", "a saga"),
 )
+
+
+def _relative_thresholds_are_numbers(thresholds: dict) -> list[str]:
+    """analyse() compares the floors and multiplies by the factor only once the canary has dwelt, so a string
+    raises there, read as a rollback, and a floor of true compares as 1.0 and switches its check off.
+    """
+    failures = []
+    for key in ("errorRateFloor", "latencyP99FloorSeconds", "regressionFactor"):
+        value = thresholds.get(key)
+        if key not in thresholds:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            failures.append(f"thresholds.{key} is {value!r}, which is not a number")
+        elif key == "regressionFactor" and value <= 0:
+            failures.append(
+                f"thresholds.regressionFactor is {value}, so every canary reading above its floor is a regression"
+            )
+    return failures
 
 
 def _minimum_requests_express_the_error_rate(thresholds: dict) -> list[str]:
