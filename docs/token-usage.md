@@ -698,3 +698,58 @@ span B, about seven a day, and span B's main sessions cost 29% less, about
 180M over thirteen days. At 300k span B does not pass, at 26% less, and
 at 500k it saves 15%. What a summary drops and the session then reads
 again is not in these figures, so they are the saving's upper side.
+
+## 2026-11-14 — step 2's exit under the owner's window of 500,000
+
+Measured for #1664 on the owner's machine at ec7af548, over the thirteen
+days 2026-11-01 to 2026-11-13 that the owner's decision of 2026-11-01 set,
+with `autoCompactWindow` at 500,000 in the owner's user settings, at the
+top level and for `claude-opus-5-5`. A one-off script, not in the tree,
+runs the report's own `Report` over its default transcript directories,
+the main checkout's and 288 more, with `--since 2026-11-01` and each entry
+after 2026-11-13 dropped, and replays each main session's calls as the
+2026-10-31 section's script did. No `tools/quality-sets` run fell in the
+span. 17,114 responses in 1,105 contexts came to 349M input equivalent,
+38% of it after a wake.
+
+| Who | Contexts | Calls | Mean context | Input equivalent | After a wake |
+|---|---|---|---|---|---|
+| Main, `/ship` | 122 | 6,781 | 163k | 143.2M | 54.4M |
+| Main, no command | 491 | 2,667 | 169k | 75.2M | 19.3M |
+| Main, `skill:ship` | 13 | 971 | 207k | 22.9M | 12.4M |
+| Every main row | 626 | 11,333 | 169k | 261.2M | 99.8M |
+| Every `general-purpose` row | 99 | 1,730 | 127k | 34.8M | 14.3M |
+
+**Step 2's exit, part by part.**
+
+- A `general-purpose` context cost 352k input equivalent on average, under
+  the exit's 0.5M, where the 2026-10-31 section read 211k. That half holds.
+- A main session's mean context is 169k a call, not under 150k, against
+  228k over 2026-10-07 to 2026-10-31 and 236k over that section's span B.
+  `claude-opus-5-5` answered 9,647 of the calls at 176k, and
+  `claude-sonnet-5-5` 1,481 at 120k.
+
+**What the window did.** The replay of 2026-10-31 read 192k for span B
+with compaction at 500k; this span reads 169k. A session's first call is
+68k of the mean, where it was 63k. 16.5% of the calls sent over 250k and
+0.8% over 400k, where span B's were 36% and 15%, and the largest sent 466k.
+The transcripts' own records hold 26 compactions in the main sessions: 24
+automatic, at a median 252k, from 201k to 468k, and two typed, at 292k and
+420k. None fired past 500k, where span B had four at 700k or more. The
+records still do not say what fires an automatic one below the window.
+
+**The replay with an earlier compaction**, the 2026-10-31 section's method
+and its 84k left after each:
+
+| Compact at | Mean context | Compactions |
+|---|---|---|
+| As measured | 169k | 26 recorded |
+| 500k | 169k | 0 |
+| 400k | 166k | 5 |
+| 300k | 148k | 17 |
+| 250k | 140k | 41 |
+| 200k | 123k | 78 |
+
+So 150k is reached on this span only by a window at 300k or under, which
+the owner declined; [`token-plan.md`](token-plan.md)'s step 2 reads
+the exit against these figures.
