@@ -147,13 +147,17 @@ public static class AssistantEndpoints
                     if (Spent(runtime.Spend, user) is { } spent)
                         return spent;
 
-                    return session.TryStart(request)
-                        ? TypedResults.Accepted((string?)null)
-                        : TypedResults.Problem(
+                    // A conversation deleted or swept since Find above answers as an unknown one.
+                    return session.Start(request) switch
+                    {
+                        TurnStart.Started => TypedResults.Accepted((string?)null),
+                        TurnStart.Closed => Unknown(id),
+                        _ => TypedResults.Problem(
                             statusCode: StatusCodes.Status409Conflict,
                             title: "A turn is running",
                             detail: "Wait for the running turn to end, or cancel it.",
-                            extensions: new Dictionary<string, object?> { ["code"] = TurnRunningCode });
+                            extensions: new Dictionary<string, object?> { ["code"] = TurnRunningCode }),
+                    };
                 })
             .RequireRateLimiting(StartPolicy);
 
@@ -182,11 +186,17 @@ public static class AssistantEndpoints
                 if (core.Find(CallerOf(user), id) is not { } session)
                     return Unknown(id);
 
-                if (result is null || result.CallId is null || result.Content is null)
+                if (result is null || result.CallId is null || result.Ok is null || result.Content is null)
                 {
-                    return NotValid(
-                        result is null ? "body" : result.CallId is null ? "callId" : "content",
-                        "Send callId, ok and content.");
+                    string field = result switch
+                    {
+                        null => "body",
+                        { CallId: null } => "callId",
+                        { Ok: null } => "ok",
+                        _ => "content",
+                    };
+
+                    return NotValid(field, "Send callId, ok and content.");
                 }
 
                 return session.TryAnswer(result)
@@ -288,7 +298,7 @@ public static class AssistantEndpoints
         {
             null => ("body", "The body is not a conversation to open."),
             { Client: null } => ("client", "Send client, its name and version."),
-            { Locale: null or "" } => ("locale", "Send locale, a BCP 47 tag such as en-GB."),
+            _ when string.IsNullOrWhiteSpace(request.Locale) => ("locale", "Send locale, a BCP 47 tag such as en-GB."),
             { Catalogue: null } => ("catalogue", "Send catalogue, empty when the client has none."),
             { Catalogue.Count: > MaxCatalogue } => ("catalogue", $"A catalogue holds at most {MaxCatalogue} entries."),
             { ClientTools: null } => ("clientTools", "Send clientTools, empty when the client has none."),
@@ -333,8 +343,10 @@ public static class AssistantEndpoints
     private static readonly string LocaleWhy =
         $"A locale is a tag of at most {MaxLocaleLength} characters on one line.";
 
-    // The open route and a turn both carry a locale, and a turn's replaces the conversation's for the turns after it.
-    private static bool BadLocale(string locale) => locale.Length > MaxLocaleLength || HasControl(locale);
+    // The open route and a turn both carry a locale, and a turn's replaces the conversation's for the turns after it,
+    // so a blank one is refused on both rather than kept.
+    private static bool BadLocale(string locale) =>
+        string.IsNullOrWhiteSpace(locale) || locale.Length > MaxLocaleLength || HasControl(locale);
 
     // The serialised schema escapes a line break, but the provider's model reads the string it stands for: a property's
     // description is free text, so every name and string value in the schema meets the same rule as the other fields.
