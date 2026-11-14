@@ -582,7 +582,8 @@ OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 # An `env:` value is not shell-expanded, so only a run line may also name the runner's variable.
 REPOSITORY_EXPRESSION = r"\$\{\{\s*github\.repository\s*\}\}"
 REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHUB_REPOSITORY\}})"
-SHELL_OPERATOR = re.compile(r"[;&|<>()]+")
+SHELL_OPERATOR = re.compile(r"[;&|()]+")
+REDIRECTION = re.compile(r"&?[<>]+&?")
 # Helm takes its global flags before the subcommand too, as `helm -n prod upgrade`, each with or without a value.
 HELM_FLAGS = r"(?:\s+-{1,2}[A-Za-z][\w-]*(?:=\S*|\s+[^\s-]\S*)?)*"
 HELM_COMMAND = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+[a-z]")
@@ -679,15 +680,39 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
     commands = []
     for line in joined.splitlines():
         for found in opening.finditer(line):
-            lexer = shlex.shlex(line[found.end():], posix=True, punctuation_chars=True)
-            lexer.whitespace_split = True
+            lexer = shlex.shlex(_uncommented(line[found.end():]), posix=True, punctuation_chars=True)
+            lexer.whitespace_split, lexer.commenters = True, ""
             try:
-                arguments = list(lexer)
+                words_read = list(lexer)
             except ValueError:
                 return None
-            end = next((i for i, word in enumerate(arguments) if SHELL_OPERATOR.fullmatch(word)), len(arguments))
-            commands.append(arguments[:end])
+            arguments, index = [], 0
+            # A redirection and its target leave the command running, so later words still reach it.
+            while index < len(words_read) and not SHELL_OPERATOR.fullmatch(words_read[index]):
+                if REDIRECTION.fullmatch(words_read[index]):
+                    index += 1
+                else:
+                    arguments.append(words_read[index])
+                index += 1
+            commands.append(arguments)
     return commands
+
+
+def _uncommented(text: str) -> str:
+    """The text before bash's comment: a `#` that opens a word outside quotes, not one inside a word."""
+    quote, escaped = None, False
+    for index, character in enumerate(text):
+        if escaped:
+            escaped = False
+        elif character == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            quote = None if character == quote else quote
+        elif character in "'\"":
+            quote = character
+        elif character == "#" and (index == 0 or text[index - 1].isspace()):
+            return text[:index]
+    return text
 
 
 def _flag(arguments: list[str], name: str) -> str | None:
