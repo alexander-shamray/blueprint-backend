@@ -1690,6 +1690,16 @@ class SupplyChainTests(Fixture):
 
         self.assertTrue(any("does not split into shell words" in problem for problem in problems), problems)
 
+    def test_an_operator_run_together_with_a_redirection_ends_the_command(self) -> None:
+        """shlex reads `&&>` as one word; bash ends cosign there, so the flags after it are the next command's."""
+        problems = self.broken(
+            "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
+            '--certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$EVIL" '
+            '&&>/dev/null true --certificate-identity "$CERTIFICATE_IDENTITY"\n', deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("pinned to ci.yml on main", problems[0])
+
     def test_a_substitution_among_the_verify_words_fails_rather_than_passing(self) -> None:
         """Bash runs on past the substitution's `)`, so a flag after it would reach cosign unread."""
         for words in ("--annotations=$(echo x) --certificate-identity-regexp '.*'",
