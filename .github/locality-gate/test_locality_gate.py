@@ -115,6 +115,49 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "more than one `\\| Touch set \\|` row"):
             read_rows(text)
 
+    def test_a_row_inside_a_fenced_code_block_is_an_example(self) -> None:
+        # The cases are test_pr_helpers.py's for pr-locality.sh, which skips the same lines, so a body the review
+        # round reads as one declaration is one here too.
+        table = "| Class | D |\n| Touch set | docs/x.md |\n"
+        example = "| Class | E |\n| Touch set | src/y.py |\n"
+        for name, text in (
+            ("beside the table", table + "\n```markdown\n" + example + "```\n"),
+            ("before the table", "~~~\n" + example + "~~~\n" + table),
+            ("indented three", "   ```\n" + example + "   ```\n" + table),
+            ("nested shorter fence", "````\n```\n" + example + "```\n" + example + "````\n" + table),
+            ("longer closer", "```\n" + example + "`````\n" + table),
+            ("closer with trailing blanks", "```\n" + example + "```  \t\n" + table),
+            ("other character inside", "```\n~~~\n" + example + "~~~\n```\n" + table),
+            ("closer with text is content", "```\n``` not a closer\n" + example + "```\n" + table),
+            ("a tilde opener's info string may hold a backtick", "~~~ a`b\n" + example + "~~~\n" + table),
+            ("crlf", (table + "\n```\n" + example + "```\n").replace("\n", "\r\n")),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))
+        for name, text in (
+            ("alone", "```\n" + example + "```\n"),
+            ("never closed", "```\n" + example),
+            ("table after an unclosed fence", "~~~~\n" + table + "~~~\n"),
+        ):
+            with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "no `\\| Class \\|` row"):
+                read_rows(text)
+        # Not fences, so the rows after them are read: four spaces of indent, a backtick in a backtick opener's
+        # info string, and a run of two.
+        for opener in ("    ```", "```a`b", "``", "  ~~"):
+            with self.subTest(opener=opener):
+                self.assertEqual(read_rows(opener + "\n" + table), (["D"], ["docs/x.md"]))
+        with self.assertRaisesRegex(InputRefused, "more than one `\\| Class \\|` row"):
+            read_rows("```a`b\n" + example + "```a`b\n" + table)
+        # A separator GitHub renders inside a line starts no line, so it cannot hide an opener that would fence
+        # the visible table and leave a quoted example to be read as the declaration.
+        for separator in (" ", "\x0b", "\x1c", "\x85"):
+            with self.subTest(separator=repr(separator)):
+                text = "note" + separator + "```\n" + table + "```\n" + example
+                self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))
+        # A lone carriage return ends a line for GitHub and not for pr-locality.sh, so it is refused, not read.
+        with self.assertRaisesRegex(InputRefused, "carriage return"):
+            read_rows("note\r```\n" + table + "```\n" + example)
+
     def test_a_class_letter_outside_a_to_e_is_refused(self) -> None:
         with self.assertRaisesRegex(InputRefused, "Class row is not a class"):
             read_rows(body("Z", "`docs/**`"))
