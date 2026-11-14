@@ -643,21 +643,35 @@ class ImageSourceTests(unittest.TestCase):
 
         self.assertEqual([], [f for f in failures if "MassTransit" in f], failures)
 
+    @classmethod
+    def _building(cls, plan: dict) -> Path:
+        """A tree whose one host is the assembly catalog-api names."""
+        tree = cls._tree("/healthz/live")
+        host = tree / "src" / "Services" / "Svc" / "Svc.Api"
+        host.rename(host.with_name(plan["workloads"]["catalog-api"]["serviceName"]))
+        for csproj in host.parent.glob("*/Svc.Api.csproj"):
+            csproj.rename(csproj.with_name(f"{csproj.parent.name}.csproj"))
+        return tree
+
     def test_the_installed_image_has_to_build_the_judged_assembly(self) -> None:
         """§13.2 takes service.name from each image's entry assembly, and
         the baseline is the installed image. One from before a rename emits
         the old label, so the baseline query matches nothing and a healthy
-        release rolls back at every rung."""
-        candidate = self._tree("/healthz/live")
-        installed = service_tree({"Svc.Api/Health.cs": 'app.MapHealthChecks("/x");\n'})
+        release rolls back at every rung. Only one tree builds it each time,
+        so the case shows which tree the check reads."""
+        plan = descriptor_model.load_plan()
 
-        failures = repo_gate.check(
-            descriptor_model.load_plan(), source=candidate, workload="catalog-api",
-            installed=installed)
+        for candidate, installed, refused in (
+                (self._building(plan), self._tree("/healthz/live"), True),
+                (self._tree("/healthz/live"), self._building(plan), False)):
+            with self.subTest(installed_builds_it=not refused):
+                failures = repo_gate.check(
+                    plan, source=candidate, workload="catalog-api", installed=installed)
 
-        self.assertTrue(
-            any("installed release's image does not build" in f for f in failures),
-            failures)
+                self.assertEqual(
+                    refused,
+                    any("installed release's image does not build" in f for f in failures),
+                    failures)
 
     def test_check_reads_its_charts_from_the_root(self) -> None:
         """The other half of the split. The chart is installed from the
