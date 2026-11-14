@@ -232,23 +232,24 @@ def _dispatch_options(text: str) -> set[str] | None:
     """
     text = "\n".join(line for line in text.splitlines() if line.strip()) + "\n"
     menus = []
-    for flow in re.finditer(r"(?m)^[ \t]*workload:[ \t]*(\{.*)$", text):
+    # Each key bare or quoted, as a quoted one is the same key to Actions and unread would read as no menu.
+    for flow in re.finditer(r"""(?m)^[ \t]*(["']?)workload\1[ \t]*:[ \t]*(\{.*)$""", text):
         # A quoted scalar with a colon may fake a key, so it is blanked; one without may be a key or 'choice'.
         mapping = re.sub(r"""'[^']*'|"(?:[^"\\]|\\.)*\"""", lambda q: "''" if ":" in q.group(0) else q.group(0),
-                         flow.group(1))
+                         flow.group(2))
         if re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", mapping):
             listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", mapping)
             parts = listed.group(1).split(",") if listed else []
             menus.append({item for item in (part.strip().strip("'\"") for part in parts) if item})
-    for block in re.finditer(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text):
-        child_indent = re.match(r"[ \t]+", block.group(2))
+    for block in re.finditer(r"""(?m)^([ \t]*)(["']?)workload\2[ \t]*:\n((?:\1[ \t].*\n?)*)""", text):
+        child_indent = re.match(r"[ \t]+", block.group(3))
         if not child_indent:
             continue
-        own, body = re.escape(child_indent.group(0)), block.group(2)
-        options = re.search(rf"(?m)^{own}options:(.*(?:\n{own}(?:[ \t]|-[ \t]).*)*)", body)
-        choice = re.search(rf"""(?m)^{own}type:[ \t]*(["']?)choice\1[ \t]*$""", body)
+        own, body = re.escape(child_indent.group(0)), block.group(3)
+        options = re.search(rf"""(?m)^{own}(["']?)options\1[ \t]*:(.*(?:\n{own}(?:[ \t]|-[ \t]).*)*)""", body)
+        choice = re.search(rf"""(?m)^{own}(["']?)type\1[ \t]*:[ \t]*(["']?)choice\2[ \t]*$""", body)
         if options or choice:
-            parts = re.split(r"[\[\],\n]", options.group(1) if options else "")
+            parts = re.split(r"[\[\],\n]", options.group(2) if options else "")
             items = (re.sub(r"^-[ \t]+", "", part.strip()).strip("'\"") for part in parts)
             menus.append({item for item in items if item})
     return set().union(*menus) if menus else None

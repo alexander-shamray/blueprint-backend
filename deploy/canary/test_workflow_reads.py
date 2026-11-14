@@ -105,6 +105,18 @@ class DescriptorReadTests(unittest.TestCase):
             "      workload: {type: choice, options: [catalog-api, 'no-such-release']}\n",
             workflow_reads.WORKFLOW.read_text(encoding="utf-8"), count=1))
 
+    def test_a_menu_under_quoted_keys_is_refused(self) -> None:
+        """A quoted key is the same key to Actions, so read as no menu the rolled set would pass as the described."""
+        for quote in ("'", '"'):
+            with self.subTest(quote=quote):
+                menu = self.MENU.replace("type:", f"{quote}type{quote}:").replace(
+                    "options:", f"{quote}options{quote} :")
+                text = self._replaced(workflow_reads.WORKFLOW, "      workload:\n", f"      {quote}workload{quote}:\n")
+                self._assert_menu(text.replace("        type: string\n", menu, 1))
+                self.assertEqual(
+                    workflow_reads._dispatch_options(f"      {quote}workload{quote}: {{type: choice, options: [a]}}\n"),
+                    {"a"})
+
     CALLED = "  workflow_call:\n    inputs:\n      workload:\n        type: string\n"
 
     def test_a_menu_behind_a_called_workflows_workload_input_is_refused(self) -> None:
