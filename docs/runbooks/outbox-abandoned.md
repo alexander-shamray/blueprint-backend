@@ -75,8 +75,14 @@ WHERE ProcessedAt IS NULL
 ORDER BY OccurredAt;
 ```
 
-`LastError` is the first 2000 characters of the exception from the final
-attempt, written by the dispatcher's fail statement. `CorrelationId` ties the
+`LastError` is the first 2000 characters of the exception from the last
+attempt whose failure the dispatcher's fail statement wrote. The claim counts
+each attempt before delivering it
+([ADR-211](../backend-architecture/adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)),
+so a row whose attempts ended in a replica dying mid-delivery, or in a fail
+statement that itself failed, reaches the cap with that text older than its
+last attempt, or with none: the service's logs, its `BookkeepingFailed` lines
+and its restarts, then say what happened. `CorrelationId` ties the
 row back to the request that produced it, so the original trace and logs are
 reachable ([§10.4](../backend-architecture/10-api-gateway.md), §13.4).
 
@@ -95,10 +101,10 @@ Work out which of three things happened.
 ### The message is fine and the world was broken
 
 A broker that was unreachable for longer than the backoff took to exhaust —
-ten attempts with `POWER(2, min(Attempts, 8)) * 5` seconds between them is a
-little over forty minutes to the cap. This is the commonest cause and the
-easiest: the payload is valid, the destination is now up, and a replay is
-correct.
+ten attempts with `POWER(2, min(n, 8)) * 5` seconds after a failure with `n`
+attempts before it is a little over forty minutes to the cap. This is the
+commonest cause and the easiest: the payload is valid, the destination is now
+up, and a replay is correct.
 
 ### The message is malformed
 

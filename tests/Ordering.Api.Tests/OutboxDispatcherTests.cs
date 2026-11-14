@@ -76,6 +76,41 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task A_row_whose_fail_statement_fails_still_reaches_the_attempt_cap()
+    {
+        // The claim counts the attempt (ADR-211); counted by the fail statement, this row looped below the cap.
+        OutboxMessage poison = OutboxRows.Poison(fixture);
+        await fixture.StageOutboxAsync(poison);
+        await fixture.SetOutboxAttemptsAsync(poison.MessageId, OutboxDispatcher.MaxAttempts - 1);
+
+        // A constraint, as the claim's OUTPUT refuses a table with a trigger; only the fail statement sets LastError.
+        await fixture.ExecuteAsync(
+            """
+            ALTER TABLE ordering.OutboxMessages
+            ADD CONSTRAINT CK_OutboxMessages_RefuseFail CHECK (LastError IS NULL);
+            """);
+
+        try
+        {
+            (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
+
+            // The refused fail statement left the claim's lease; cleared, the cap alone decides the second pass.
+            await fixture.ExpireOutboxLeasesAsync();
+            (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
+        }
+        finally
+        {
+            await fixture.ExecuteAsync(
+                "ALTER TABLE ordering.OutboxMessages DROP CONSTRAINT CK_OutboxMessages_RefuseFail;");
+        }
+
+        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        row.LastError.ShouldBeNull("the fail statement never wrote");
+        row.Attempts.ShouldBe(OutboxDispatcher.MaxAttempts, "the claim counted the attempt the fail statement lost");
+        row.ProcessedAt.ShouldBeNull();           // visible to the §13.6 alert
+    }
+
+    [Fact]
     public async Task A_domain_event_on_the_broker_lane_is_never_published()
     {
         // §5.5's rule at the last place able to enforce it; Stage refuses this pairing, so the row is repointed.

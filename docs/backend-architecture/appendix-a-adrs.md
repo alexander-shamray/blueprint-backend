@@ -217,6 +217,7 @@ decision looks wrong.
 | **ADR-208** | [The assistant core bounds each caller's held history by characters (AssistantLimits.CallerHistoryChars), forgetting the caller's least recently used idle conversation and otherwise ending the turn with budget, and a turn past a budget holds none of its text, giving ADR-205's 4Gi a bound to hold (#1980), amending ADR-205; Common.Assistant 0.3.0 to 0.4.0](adr/ADR-208-the-assistant-core-bounds-each-callers-held-history-by-characters-giving-adr-205s-4gi-a-bound-to-hold-1980.md) |
 | **ADR-209** | [NuGet's audit warns on every restore and fails only the scheduled audit and a change that could move a package (#2010), amending ADR-019](adr/ADR-209-nugets-audit-warns-on-every-restore-and-fails-only-the-scheduled-audit-and-a-change-that-could-move-a-package-2010.md) |
 | **ADR-210** | [A red first attempt of a push run on main is rerun once, and files only when the second attempt is red too (#2018), amending ADR-155](adr/ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md) |
+| **ADR-211** | [The outbox claim counts each attempt, so a row whose failure is never written still reaches the attempt cap (#2073)](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md) |
 
 ---
 
