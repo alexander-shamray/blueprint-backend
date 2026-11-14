@@ -303,6 +303,7 @@ def parse_rules(path: Path) -> list[dict[str, object]]:
     current: dict[str, object] | None = None
     expr_lines: list[str] = []
     in_expr = False
+    expr_indent = 0
 
     for raw in read(path).splitlines():
         line = raw.rstrip()
@@ -326,6 +327,7 @@ def parse_rules(path: Path) -> list[dict[str, object]]:
             rest = match.group(1).strip()
             if rest in ("|", ">-", ">", "|-"):
                 in_expr = True
+                expr_indent = len(line) - len(line.lstrip())
             else:
                 expr_lines.append(rest)
                 in_expr = False
@@ -337,10 +339,12 @@ def parse_rules(path: Path) -> list[dict[str, object]]:
             in_expr = False
             continue
 
-        if in_expr:
-            if re.match(r"[a-z_]+:\s", stripped) or stripped.startswith("- "):
+        # YAML's own rule: the block ends at the first line indented no deeper
+        # than its key, so a PromQL line opening `- ` is a subtraction, kept.
+        if in_expr and stripped:
+            if len(line) - len(line.lstrip()) <= expr_indent:
                 in_expr = False
-            elif stripped:
+            else:
                 expr_lines.append(stripped)
 
     if current is not None:
@@ -593,7 +597,7 @@ def check_dashboards(instruments: set[str]) -> None:
 
         expressions = [
             target["expr"]
-            for panel in document.get("panels", [])
+            for panel in panels_in(document.get("panels", []))
             for target in panel.get("targets", [])
             if "expr" in target
         ]
@@ -611,6 +615,15 @@ def check_dashboards(instruments: set[str]) -> None:
                     fail(
                         f"{path.name}: a panel reads `{metric}`, which no C# instrument "
                         f"declares and EXTERNAL_METRICS does not list")
+
+
+def panels_in(panels: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Every panel, with those a collapsed row holds under its own `panels` key."""
+    found = []
+    for panel in panels:
+        found.append(panel)
+        found.extend(panels_in(panel.get("panels", [])))
+    return found
 
 
 def has_domain_project(service: Path) -> bool:
