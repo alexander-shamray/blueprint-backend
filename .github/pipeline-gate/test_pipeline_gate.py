@@ -1337,6 +1337,10 @@ class SupplyChainTests(Fixture):
                 ('1) echo "a newer build moved it"; exit 0 ;;', '1) echo "a newer build moved it" ;;'),
                 ('*) echo "could not compare"; exit 1 ;;', '*) echo "could not compare, exit 1" ;;'),
                 ('            *) echo "could not compare"; exit 1 ;;\n', ""),
+                # An exit that only some runs reach, or another exit reached first.
+                ('1) echo "a newer build moved it"; exit 0 ;;', '1) [ -n "$x" ] && exit 0 ;;'),
+                ('*) echo "could not compare"; exit 1 ;;', '*) [ -n "$x" ] && exit 1 ;;'),
+                ('*) echo "could not compare"; exit 1 ;;', '*) exit 0; exit 1 ;;'),
                 ('case "$ancestor" in', 'case "$other" in')):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
@@ -1347,11 +1351,17 @@ class SupplyChainTests(Fixture):
     def test_a_main_tag_mismatch_that_does_not_exit_is_caught(self) -> None:
         """The comparison is still made, so only a read of its branch sees the failure go unreported."""
         nested = '              exit 0\n            fi\n            echo "the tag names other bytes, not exit 1"\n'
+        mismatch = "            exit 1\n          fi"
         for old, new in (
                 ("            exit 1\n          fi", "          fi"),
                 # Only inside the nested branch, or only in the branch the digests agree in.
                 (nested + "            exit 1\n", nested.replace("exit 0", "exit 1")),
-                ("            exit 1\n          fi", "          else\n            exit 1\n          fi")):
+                ("            exit 1\n          fi", "          else\n            exit 1\n          fi"),
+                # Another exit reached first, or one that only some runs reach.
+                (mismatch, "            exit 0\n" + mismatch),
+                (mismatch, '            [ -n "$x" ] && exit 1\n          fi'),
+                (mismatch, '            case "$x" in\n              y) exit 1 ;;\n            esac\n          fi'),
+                (mismatch, "            for x in a; do\n              exit 1\n            done\n          fi")):
             with self.subTest(new=new):
                 problems = self.broken(old, new)
 
