@@ -62,7 +62,8 @@ unchanged.
 [ADR-210](ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md)**:
 a red first attempt that no newer run on `main` stands in for has its failed
 jobs rerun once, and is filed unless the second attempt passes or a newer run
-replaced it. This record is otherwise unchanged.
+replaced it; one whose newer runs cannot be read is filed at once. This record
+is otherwise unchanged.
 
 ---
 
