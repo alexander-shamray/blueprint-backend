@@ -119,7 +119,12 @@ jobs:
           done
           echo "alert rules: $expected in platform-alerts.yaml, ${loaded:-none} loaded"
           [ "$loaded" = "$expected" ]
-          for uid in $(jq -r .uid deploy/observability/dashboards/*.json); do
+          # Assigned first: a failed jq inside a for list would leave nothing to check, green.
+          dashboards=(deploy/observability/dashboards/*.json)
+          uids=$(jq -r '.uid | strings' "${dashboards[@]}")
+          [ "$(wc -l <<< "$uids")" -eq "${#dashboards[@]}" ] ||
+            { echo "::error::${#dashboards[@]} dashboard files, uids: $uids"; exit 1; }
+          for uid in $uids; do
             curl -sf "http://localhost:3000/api/dashboards/uid/$uid" > /dev/null ||
               { echo "::error::dashboard $uid is not provisioned"; exit 1; }
             echo "dashboard $uid provisioned"
