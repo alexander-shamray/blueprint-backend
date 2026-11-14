@@ -424,7 +424,8 @@ jobs:
       # Each mode's architecture tests, which read the rendered assemblies and
       # start no container: a template change that renders a layering violation
       # compiles above and fails here. Every project must run at least one,
-      # because `dotnet test` exits zero on a filter that selected nothing.
+      # because `dotnet test` exits zero on a filter that selected nothing; the
+      # TRX's `executed`, as the stage gate reads it, since `total` counts skips.
       - name: Run the architecture tests it rendered
         run: |
           set -euo pipefail
@@ -434,7 +435,7 @@ jobs:
             dotnet test "tests/$project.Tests/$project.Tests.csproj" \
               --filter "FullyQualifiedName~ArchitectureTests" \
               --logger "trx;LogFileName=$project.trx" --results-directory TestResults/scaffold
-            if ! grep -Eq 'total="[1-9][0-9]*"' "TestResults/scaffold/$project.trx"; then
+            if ! grep -Eq 'executed="[1-9][0-9]*"' "TestResults/scaffold/$project.trx"; then
               echo "::error::$project.Tests ran no architecture test"
               exit 1
             fi
