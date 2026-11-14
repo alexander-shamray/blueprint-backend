@@ -370,7 +370,8 @@ class Latency(unittest.TestCase):
     def test_the_queries_are_the_runbooks_and_the_rules(self):
         module = self.module()
         self.assertIn(squash(module.FIRST_QUERY), squash(runbook("latency.md")))
-        self.assertIn(squash(module.SERVICE_QUERY) + ">1", squash(RULES))
+        # No digit or point may follow, so a threshold of 10 or 1.5 is not the one-second line latency.py assumes.
+        self.assertRegex(squash(RULES), re.escape(squash(module.SERVICE_QUERY)) + r">1(?![\d.])")
 
     def test_the_cache_is_left_unrun_only_while_the_runbook_names_its_one_reader(self):
         self.assertIn(squash("This branch has one reader."), squash(runbook("latency.md")))
