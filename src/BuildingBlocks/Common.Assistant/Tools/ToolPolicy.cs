@@ -61,6 +61,7 @@ public sealed partial class ToolPolicy
         return null;
     }
 
-    [GeneratedRegex("^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")]
+    // \z, not $: .NET's $ also matches before a final line break, which would pass `delete\n` past the word check.
+    [GeneratedRegex(@"\A[a-z][a-z0-9]*(?:_[a-z0-9]+)*\z")]
     private static partial Regex SnakeCase();
 }
