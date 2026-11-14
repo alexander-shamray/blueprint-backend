@@ -317,6 +317,7 @@ def check_images(root: Path = ROOT) -> list[str]:
             )
 
     problems.extend(check_sboms(text))
+    problems.extend(check_image_commands(text))
     problems.extend(check_retries(text))
     try:
         deploy_text = DEPLOY.read_text(encoding="utf-8")
@@ -518,6 +519,27 @@ def _unread_steps(job: str, unread: list[str]) -> list[str]:
     ]
 
 
+def check_image_commands(workflow_text: str) -> list[str]:
+    """Each image job builds and pushes only as `docker build` and `docker push`, the forms the checks read.
+
+    Beside one plain build, another form's image is one no SBOM, signing or attestation check sees.
+    """
+    problems: list[str] = []
+    for job in ("images", PUBLISH_JOB):
+        for index, step in enumerate(read_job_steps(workflow_text, job)):
+            uses = step.get("uses", "").strip()
+            found = UNREAD_IMAGE_COMMAND.search(step.get("run", ""))
+            if found is None and not uses.startswith(UNREAD_IMAGE_ACTIONS):
+                continue
+            form = " ".join(found.group(0).split()) if found else uses
+            problems.append(
+                f"the {job} job's step {index + 1} uses `{form}`, a build or push form no check here reads, so "
+                "its image could carry no SBOM, signature or attestation; build with `docker build` and push "
+                "with `docker push`"
+            )
+    return problems
+
+
 def check_retries(workflow_text: str) -> list[str]:
     """A step of an image job may fail only with a noted second attempt behind it.
 
@@ -571,6 +593,12 @@ SBOM_ATTESTATION_ACTION = "actions/attest-sbom@"
 MOVING_TAG_PUSH = r'\bdocker push\s+"\$REGISTRY/[^"]*:main"'
 # `docker buildx imagetools inspect` reads a tag and builds nothing.
 DOCKER_BUILD = re.compile(r"\bdocker build\b")
+# Build and push forms no reader here parses, refused so an image they make cannot go unjudged.
+UNREAD_IMAGE_COMMAND = re.compile(
+    r"\bdocker\s+(?:buildx\s+(?:build|bake|imagetools\s+create)|image\s+(?:build|push)|builder\s+build"
+    r"|compose\s+(?:build|push))\b"
+)
+UNREAD_IMAGE_ACTIONS = ("docker/build-push-action@", "docker/bake-action@")
 MOVING_TAG_GUARD = r"\bgit merge-base --is-ancestor\b"
 # The tag itself read, then compared with the signed digest, not merely named beside it.
 MOVING_TAG_READBACK = r'\b(\w+)=\$\(docker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
