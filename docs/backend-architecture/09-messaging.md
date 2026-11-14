@@ -1011,6 +1011,10 @@ catch (Exception ex) when (!ct.IsCancellationRequested)
 {
     _metrics.OutboxDelivered(lane, "failed", _clock.GetElapsedTime(start));
 
+    // Logged first, so a fail statement that throws cannot lose the
+    // delivery's own exception.
+    DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
+
     // One bad message does not affect the rest of the batch.
     //
     // The filter asks the token, not the exception type. A handler
@@ -1028,12 +1032,16 @@ catch (Exception ex) when (!ct.IsCancellationRequested)
         await connection.ExecuteAsync(
             new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
     }
+    catch (Exception write) when (!ct.IsCancellationRequested)
+    {
+        // Reported as itself, never as a failed claim; the row stays
+        // leased until the lease ends and is claimed again.
+        BookkeepingFailed(_log, "fail", write);
+    }
     finally
     {
         writes.Release();
     }
-
-    DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
 }
 ```
 
@@ -1041,7 +1049,11 @@ The loops only collect the ids they delivered. The pass runs them
 inside a `try` whose `finally` issues the completion statement above over
 them, under `CancellationToken.None`: a stop that cancels the pass part-way
 still completes every row the pass delivered, so a graceful shutdown
-redelivers nothing that per-row completion would not have.
+redelivers nothing that per-row completion would not have. A completion
+statement that throws is logged as `BookkeepingFailed` and the pass ends
+normally: its rows stay leased and are claimed again when the lease ends,
+and the exception neither reads as a failed claim nor replaces one a
+delivery raised.
 
 **Each row a pass delivers or fails is timed, by lane and outcome**, on
 §13.3's `outbox.delivery.duration`, through `TimeProvider` as §13.3 times a
