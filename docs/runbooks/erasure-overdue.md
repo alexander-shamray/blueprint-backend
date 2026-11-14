@@ -82,12 +82,17 @@ the request, so a holder that already answered answers again with the count
 its audit row kept, and Privacy keeps the larger count:
 
 ```bash
+COMMAND_ID=$(uuidgen)
+```
+
+```bash
 curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"commandId\": \"$(uuidgen)\"}" \
+  -d "{\"commandId\": \"$COMMAND_ID\"}" \
   "$GATEWAY/api/v1/privacy/erasure-requests/$REQUEST_ID/reissue"
 ```
 
-The same command id is the same reissue, so a retry broadcasts once. A closed
+The same command id is the same reissue, so a retry broadcasts once: mint the
+id once, keep it, and rerun only the `curl` after a lost reply. A closed
 request answers 422: it has let the subject go and cannot be asked again.
 
 A reissue does not change the set, which a configuration change never moves
@@ -107,9 +112,16 @@ Name what to add and what to remove, and say why; the request records your id,
 the reason and the time for as long as it is kept. The reason outlives the
 subject's id, so it names holders and never the subject:
 
+A new amendment takes a new id, minted once and kept for its retries as the
+reissue's is:
+
+```bash
+AMEND_ID=$(uuidgen)
+```
+
 ```bash
 curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"commandId\": \"$(uuidgen)\", \"add\": [\"shipping\"], \"remove\": [\"shiping\"], \"reason\": \"privacy.responders misspelt shipping\"}" \
+  -d "{\"commandId\": \"$AMEND_ID\", \"add\": [\"shipping\"], \"remove\": [\"shiping\"], \"reason\": \"privacy.responders misspelt shipping\"}" \
   "$GATEWAY/api/v1/privacy/erasure-requests/$REQUEST_ID/responders"
 ```
 
