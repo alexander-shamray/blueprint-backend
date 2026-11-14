@@ -406,7 +406,7 @@ def _step_key(found: re.Match[str]) -> tuple[str, str]:
 def _scan_job_steps(workflow_text: str, job: str) -> tuple[list[dict[str, str]], list[str]]:
     """The steps, and each line at a step's or a step key's column that opens neither, which a caller refuses.
 
-    Folded into the key above, such a line would hide its own key: a quoted `continue-on-error` or a flow step.
+    Folded into the key above, such a line would hide its own key, as a flow step hides its `continue-on-error`.
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
