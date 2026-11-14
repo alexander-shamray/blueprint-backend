@@ -950,7 +950,8 @@ A failed row keeps a statement of its own. It records the error and pushes the
 lease forward exponentially, on the attempts before the one the claim counted,
 so a failing row is retried ever more slowly until it reaches the cap —
 `OutboxDispatcher.MaxAttempts`, public because §13.6's abandoned-rows gauge
-counts exactly the rows the claim skips — and the abandoned-row alert:
+counts the rows the cap makes the claim skip, once no lease holds them — and
+the abandoned-row alert:
 
 ```sql
 UPDATE {table.QualifiedName}
