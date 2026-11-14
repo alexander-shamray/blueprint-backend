@@ -13,14 +13,15 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
     <!-- Transitive, and pinned deliberately: the package above reaches it through Microsoft.Build.Tasks.Core
          and Microsoft.CodeAnalysis.Workspaces.MSBuild at 9.0.0, which carries eight advisories, and NU1903
-         fails the restore, so this pin makes the line above restorable at all. Design is PrivateAssets and
-         never ships in an image; the restore fails anyway, and rightly, because a design-time supply chain
-         runs on a developer's machine with their credentials. -->
+         fails the restores §4.4 names, so this pin makes the line above restorable in them. Design is
+         PrivateAssets and never ships in an image; those restores fail anyway, and rightly, because a
+         design-time supply chain runs on a developer's machine with their credentials. -->
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
     <!-- Transitive and pinned for the same reason: Microsoft.Data.SqlClient
          reaches it at a 9.0 floor and MimeKit at 10.0.0, and both carry
          advisories — every 10.0 below 10.0.13 carries CVE-2026-84008 — which
-         NU1903 turns into a failed restore in every project with a database. -->
+         NU1903 reports in every project with a database and fails in the
+         restores §4.4 names. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <!-- HybridCache's L2 (§8.2): AddStackExchangeRedisCache and
@@ -196,20 +197,20 @@
     <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
     <!-- Transitive of the four Testcontainers rows above, in System.Security.Cryptography.Xml's shape: their
          4.6.0 floors this at 2024.2.0 for SSH port forwarding, and every version through 2025.1.0 carries
-         GHSA-q939-rpr3-3284, an SCP traversal out of the download directory, which NU1903 fails the restore on.
-         Nothing here downloads over SCP; the pin judges not that the advisory is reachable, only that a
-         vulnerable package resolving into the graph is not a thing to carry. -->
+         GHSA-q939-rpr3-3284, an SCP traversal, which NU1903 fails the restores §4.4 names on. Nothing here
+         downloads over SCP; the pin judges not that the advisory is reachable, only that a vulnerable package
+         resolving into the graph is not a thing to carry. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Respawn" Version="6.2.1" />
     <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
          The 1.x releases resolve Scriban.Signed 5.5.0, whose critical and high
-         advisories fail the restore through NU1904 and NU1903. The version is
+         advisories fail §4.4's restores through NU1904 and NU1903. The version is
          the simulator image's tag, which the SimulatorImageTests hold equal,
          so it moves when the Compose mirror's wiremock.net pin does. -->
     <PackageVersion Include="WireMock.Net" Version="2.20.0" />
     <!-- Transitive of the row above, in SSH.NET's shape: WireMock.Net.Shared reaches it through
          Microsoft.AspNetCore.Http 2.3.9 at 2.3.0, and every version from 2.3.0 through 2.3.13 carries
-         GHSA-6527-9fp8-r4x6, which NU1902 fails the restore on. -->
+         GHSA-6527-9fp8-r4x6, which NU1902 fails the restores §4.4 names on. -->
     <PackageVersion Include="Microsoft.AspNetCore.WebUtilities" Version="2.3.14" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
