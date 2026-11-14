@@ -1697,7 +1697,8 @@ class SupplyChainTests(Fixture):
                       "--annotations=`echo a;b` --certificate-identity-regexp '.*'",
                       "--annotations=${unset:-;} --certificate-identity-regexp '.*'",
                       "$'\\x2d-certificate-identity-regexp' '.*'",
-                      "{--certificate-identity-regexp,--annotations} '.*'"):
+                      "{--certificate-identity-regexp,--annotations} '.*'",
+                      "{\"a b\",--certificate-identity-regexp} '.*'"):
             with self.subTest(words=words):
                 problems = self.broken(
                     "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
