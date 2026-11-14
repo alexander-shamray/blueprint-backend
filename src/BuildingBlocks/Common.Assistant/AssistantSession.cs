@@ -561,8 +561,26 @@ public sealed class AssistantSession : IDisposable
         {
             return await answer.Task.WaitAsync(core.Limits.ClientToolTimeout, core.Time, cancellationToken);
         }
-        catch (TimeoutException)
+        catch (Exception e) when (e is TimeoutException or OperationCanceledException)
         {
+            bool answered;
+
+            // An answer TryAnswer took before this took the gate was told it landed: it is the outcome, not the miss.
+            lock (gate)
+            {
+                answered = !pending.Remove(call.Id);
+            }
+
+            if (answered)
+            {
+                return await answer.Task;
+            }
+
+            if (e is OperationCanceledException)
+            {
+                throw;
+            }
+
             Interlocked.Increment(ref clientTimeouts);
 
             return new ToolOutcome(
