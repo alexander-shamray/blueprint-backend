@@ -47,8 +47,11 @@ cap, which is [`outbox-abandoned.md`](outbox-abandoned.md).
 ## Is the dispatcher running, or is the broker refusing?
 
 These fail identically on the graph and need opposite responses. Read the
-service's log in Grafana's Explore, on the Loki data source, over the last ten
-minutes. The hosts log through OpenTelemetry alone
+service's log in Grafana's Explore, on the Loki data source, over the last
+thirty minutes: the dispatcher retries a failing row up to 1280 seconds apart
+and logs nothing on a success, so a running dispatcher whose rows are deep in
+that ladder can be silent for a shorter window. The hosts log through
+OpenTelemetry alone
 ([§13.4](../backend-architecture/13-observability.md)), so `kubectl logs` shows
 nothing, and that silence is not the dispatcher's.
 
