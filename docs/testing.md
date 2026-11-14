@@ -391,7 +391,7 @@ step.** Its suite and its coverage test (every runbook has a script or a
 stated reason) need no daemon; the run itself does, with the stack up:
 
 ```bash
-cd tools/game-day && py -3.12 -m unittest
+(cd tools/game-day && py -3.12 -m unittest)
 py -3.12 tools/game-day/game_day.py outbox-broker
 ```
 
