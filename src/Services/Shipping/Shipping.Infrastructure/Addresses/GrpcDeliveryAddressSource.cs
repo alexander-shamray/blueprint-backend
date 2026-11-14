@@ -40,6 +40,11 @@ internal sealed class GrpcDeliveryAddressSource(
             // Grpc.Net.Client reports GrantCheckedTokenCache's refusal as Internal; it was counted there.
             throw refused;
         }
+        catch (RpcException e) when (e.StatusCode == StatusCode.Cancelled && ct.IsCancellationRequested)
+        {
+            // The caller's own cancel, so a host stop ends the worker cancelled rather than faulting it.
+            throw new OperationCanceledException(e.Message, e, ct);
+        }
 
         // Bounded before a row is written, since a failed insert's error would quote an address.
         return new AddressLookup.Found(

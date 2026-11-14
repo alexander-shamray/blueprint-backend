@@ -200,6 +200,18 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     }
 
     [Fact]
+    public async Task A_call_its_caller_cancelled_is_thrown_as_a_cancellation_rather_than_a_status()
+    {
+        Guid order = KnownOrder();
+        using CancellationTokenSource stopping = new();
+        await stopping.CancelAsync();
+
+        // The workers' stop filters let an RpcException through, which would fault the BackgroundService.
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Source().GetAsync(new OrderId(order), stopping.Token));
+    }
+
+    [Fact]
     public async Task A_transport_fault_is_retried_inside_the_budget_and_the_call_recovers()
     {
         Guid order = KnownOrder();
