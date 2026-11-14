@@ -65,6 +65,12 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             new EventId(2, nameof(DeliveryFailed)),
             "Outbox message {MessageId} on lane {Lane} failed, attempt {Attempt} of {Max}.");
 
+    private static readonly Action<ILogger, string, Exception?> BookkeepingFailed =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(3, nameof(BookkeepingFailed)),
+            "Outbox {Statement} statement failed; its rows stay leased until the lease ends and are claimed again.");
+
     private readonly IServiceScopeFactory _scopes;
     private readonly MessagingMetrics _metrics;
     private readonly TimeProvider _clock;
@@ -204,11 +210,19 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             // Under no token, so a stopped pass still completes the rows it delivered (ADR-161).
             if (!delivered.IsEmpty)
             {
-                await connection.ExecuteAsync(
-                    new CommandDefinition(
-                        _completeSql,
-                        new { Ids = JsonSerializer.Serialize(delivered) },
-                        cancellationToken: CancellationToken.None));
+                // Caught, so a failed write is never reported as a failed claim, nor replaces a delivery's exception.
+                try
+                {
+                    await connection.ExecuteAsync(
+                        new CommandDefinition(
+                            _completeSql,
+                            new { Ids = JsonSerializer.Serialize(delivered) },
+                            cancellationToken: CancellationToken.None));
+                }
+                catch (Exception write)
+                {
+                    BookkeepingFailed(_log, "complete", write);
+                }
             }
         }
 
@@ -288,6 +302,9 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             // Timed before the fail statement, whose wait is the claim connection's queue, not this row's delivery.
             _metrics.OutboxDelivered(lane, "failed", _clock.GetElapsedTime(start));
 
+            // Logged first, so a fail statement that throws cannot lose the delivery's own exception.
+            DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
+
             // One bad message does not affect the rest; the token, not the type, decides a stop (§9.4).
             await writes.WaitAsync(ct);
 
@@ -296,12 +313,14 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 await connection.ExecuteAsync(
                     new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
             }
+            catch (Exception write) when (!ct.IsCancellationRequested)
+            {
+                BookkeepingFailed(_log, "fail", write);
+            }
             finally
             {
                 writes.Release();
             }
-
-            DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
         }
     }
 
