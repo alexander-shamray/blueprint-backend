@@ -959,10 +959,10 @@ class GrantTests(unittest.TestCase):
             "on:\n  - pull_request\n  - push\n",
             "on: [pull_request, push]\n",
             "on: pull_request\n",
-            # yamllint's truthy rule asks for the quoted key (#2027).
+            # yamllint's truthy rule asks for the quoted key.
             '"on": [pull_request, push]\n',
             "'on':\n  'pull_request':\n",
-            # The review events start from a pull request's branch too (#2027).
+            # The review events start from a pull request's branch too.
             "on:\n  pull_request_review:\n",
             "on: [pull_request_review_comment]\n",
         ):
@@ -1073,7 +1073,7 @@ class GrantTests(unittest.TestCase):
 
 
 class JobReaderTests(unittest.TestCase):
-    """A comment at a job key's indent sits inside the job, so no reader ends the job at it (#2027)."""
+    """A comment at a job key's indent sits inside the job, so no reader ends the job at it."""
 
     TEXT = (
         "jobs:\n"
@@ -1258,7 +1258,7 @@ class SupplyChainTests(Fixture):
         self.assertIn("the `docker push` does not run under the main-push condition", problems[0])
 
     def test_a_main_tag_never_read_back_from_the_registry_is_caught(self) -> None:
-        """The local image's digests name the signed one whatever the registry's tag now names (#2027)."""
+        """The local image's digests name the signed one whatever the registry's tag now names."""
         for old, new in (
             ('          moved=$(docker buildx imagetools inspect "$tag")\n', ""),
             ('docker buildx imagetools inspect "$tag")', "docker inspect --format '{{json .RepoDigests}}' \"$tag\")"),
@@ -1599,7 +1599,7 @@ class AlertTests(unittest.TestCase):
         self.assertIn("compose.yml writes `on:` as a flow mapping", problems[0])
 
     def test_a_pushed_workflow_in_another_readable_form_is_still_caught(self) -> None:
-        """Each read as no push before #2027, so the alert stopped asking for the watch."""
+        """Each once read as no push, so the alert stopped asking for the watch."""
         for on in ('"on":\n  push:\n    branches: [main]\n', "on:\n  - push\n", "on:\n  push:\n    branches: ['m*']\n"):
             with self.subTest(on=on):
                 self.write("compose.yml", "name: Compose\n" + on)
@@ -1721,12 +1721,12 @@ class AlertTests(unittest.TestCase):
             "on:\n  push:\n    tags: ['v*']\n": False,
             "on:\n  pull_request:\n    branches: [main]\n": False,
             "on:\n  workflow_dispatch:\njobs:\n  push:\n    branches: [main]\n": False,
-            # A quoted key, as yamllint's truthy rule asks, and a list of events (#2027).
+            # A quoted key, as yamllint's truthy rule asks, and a list of events.
             '"on":\n  push:\n    branches: [main]\n': True,
             "'on':\n  'push':\n": True,
             "on:\n  - pull_request\n  - push\n": True,
             "on:\n  - pull_request\n": False,
-            # Each entry a glob as GitHub matches it, a later `!` overruling (#2027).
+            # Each entry a glob as GitHub matches it, a later `!` overruling.
             "on:\n  push:\n    branches: ['ma*']\n": True,
             "on:\n  push:\n    branches: ['**']\n": True,
             "on:\n  push:\n    branches: ['mai+n']\n": True,
@@ -2244,7 +2244,7 @@ class StageTests(unittest.TestCase):
 
     def test_a_stage_whose_tests_were_all_skipped_ran_no_tests(self) -> None:
         """A skipped test is `NotExecuted`, in `total` and every `TestMethod`
-        alike, so neither may be what clears a floor or covers a project (#2027)."""
+        alike, so neither may be what clears a floor or covers a project."""
         architecture = self.stage("architecture", trx(18, "Catalog.Domain.Tests", ["arch"]))
         unit = self.stage("unit", trx(600, "Catalog.Domain.Tests", ["a"]))
         integration = self.stage(

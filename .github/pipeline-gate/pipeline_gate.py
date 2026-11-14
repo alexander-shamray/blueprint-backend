@@ -1048,11 +1048,9 @@ ON_FORMS = "write it as a block mapping, a list or one event"
 
 
 def read_events(workflow_text: str) -> dict[str, list[str]] | None:
-    """Each event `on:` names, with the lines nested under it; None for a form this cannot read.
+    """Each event `on:` names, with its nested lines; None for a form this cannot read.
 
-    Anything else is refused, a flow mapping, an anchor or a missing `on:` among
-    them: read as text it names no event, and a reader that passed it would pass
-    every check on it.
+    A form read as text names no event, so a reader that passed it would pass every check.
     """
     on = _key(workflow_text.splitlines(), "on", 0)
     if on is None:
@@ -1697,10 +1695,8 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
 def read_stage(directory: Path) -> tuple[int, set[str], set[str]]:
     """One stage's executed total, and the assemblies and identities of the tests it executed.
 
-    `dotnet test` over a solution writes one TRX per test project, so this sums
-    rather than reads a single number. A stage directory with no TRX in it is
-    not zero tests — it is a logger that did not run, and the caller treats
-    the two differently. A skipped test is `NotExecuted` and counts for neither.
+    One TRX per test project, so this sums. No TRX at all is not zero tests but a
+    logger that did not run, which the caller treats apart; a skipped test counts for neither.
     """
     total = 0
     assemblies: set[str] = set()
