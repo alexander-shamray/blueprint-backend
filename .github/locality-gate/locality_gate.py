@@ -452,11 +452,17 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--root", type=Path, default=Path.cwd(),
                         help="a directory in the checkout whose .gitignore judges the diff; the current one by default")
     args = parser.parse_args(argv[1:])
+    # FileType's encoding is never applied to its stdin default, which Windows decodes as its code page.
+    if args.payload is sys.stdin and hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
 
     try:
         payload = json.load(args.payload)
     except json.JSONDecodeError as error:
         print(f"locality-gate: the input is not JSON: {error}", file=sys.stderr)
+        return 2
+    except UnicodeDecodeError as error:
+        print(f"locality-gate: the input is not UTF-8: {error}", file=sys.stderr)
         return 2
     if not isinstance(payload, dict):
         print("locality-gate: the input is not a JSON object", file=sys.stderr)
