@@ -1,3 +1,5 @@
+using System.Buffers.Text;
+using System.Text;
 using System.Text.Json;
 using Common.Infrastructure.Identity;
 using Microsoft.AspNetCore.Http;
@@ -348,6 +350,48 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
 
         thrown.Message.ShouldContain(AuthorityKey);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"300\"")]
+    [InlineData("[]")]
+    public async Task An_expires_in_that_is_not_a_number_counts_as_absent(string expiresIn)
+    {
+        _provider.TokenSuccessBody = $$"""{"access_token":"opaque","expires_in":{{expiresIn}}}""";
+
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_jwt_exp_that_is_not_a_number_counts_as_no_exp()
+    {
+        string claims = Base64Url.EncodeToString(Encoding.UTF8.GetBytes("""{"exp":"4102444800"}"""));
+        _provider.TokenSuccessBody = $$"""{"access_token":"header.{{claims}}.signature","expires_in":300}""";
+
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_success_that_is_not_a_json_object_is_refused_as_missing_its_member(bool discovery)
+    {
+        if (discovery)
+            _provider.DiscoveryBody = "[]";
+        else
+            _provider.TokenSuccessBody = "[]";
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain(discovery ? "no usable token_endpoint" : "no usable access_token");
     }
 
     /// <summary>A callee that answers every call 401 and keeps each bearer token it was sent.</summary>
