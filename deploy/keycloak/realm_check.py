@@ -709,10 +709,8 @@ def check_flags_are_booleans(clients: list[dict]) -> list[str]:
 def check_attributes_are_objects(clients: list[dict]) -> list[str]:
     """A client's attributes that are not an object are refused rather than skipped.
 
-    `check_every_client` and `check_lifetime` read them as empty, so the
-    grant-attribute and lifetime-override obligations would pass unjudged.
-    `null` is an unstated value and reads as absent, as a flag's does.
-    """
+    `check_every_client` and `check_lifetime` read them as empty, so their
+    obligations would pass unjudged; `null` reads as absent, as a flag's does."""
     problems: list[str] = []
     for client in clients:
         if not isinstance(client, dict):
