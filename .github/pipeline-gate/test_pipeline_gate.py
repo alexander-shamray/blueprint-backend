@@ -1462,14 +1462,22 @@ ALERT = (
     "    if: >-\n"
     "      github.event.workflow_run.conclusion == 'cancelled'\n"
     "    runs-on: ubuntu-latest\n"
-    "  file:\n"
+    "  rerun:\n"
     "    needs: read-cancelled\n"
+    "    if: >-\n"
+    "      always() &&\n"
+    "      github.event.workflow_run.run_attempt == 1\n"
+    "    runs-on: ubuntu-latest\n"
+    "  file:\n"
+    "    needs: [read-cancelled, rerun]\n"
     "    if: >-\n"
     "      always() &&\n"
     "      (contains(fromJSON('[\"failure\", \"timed_out\", \"startup_failure\"]'), "
     "github.event.workflow_run.conclusion) ||\n"
     "      contains(fromJSON('[\"failure\", \"cancelled\"]'), needs.read-cancelled.result) ||\n"
-    "      needs.read-cancelled.outputs.reason != '')\n"
+    "      needs.read-cancelled.outputs.reason != '') &&\n"
+    "      (needs.rerun.result != 'success' ||\n"
+    "      !contains(fromJSON('[\"passed\", \"replaced\"]'), needs.rerun.outputs.second))\n"
     "    runs-on: ubuntu-latest\n"
 )
 
@@ -1566,6 +1574,29 @@ class AlertTests(unittest.TestCase):
 
                 self.assertEqual(len(problems), 1)
                 self.assertIn("so a job past its time limit alerts nobody", problems[0])
+
+    def test_a_rerun_that_would_rerun_its_own_reruns_is_caught(self) -> None:
+        for edit, replacement in ((" &&\n      github.event.workflow_run.run_attempt == 1\n", "\n"),
+                                  ("  rerun:\n", "  later:\n")):
+            with self.subTest(edit=edit):
+                self.assertIn(edit, ALERT)
+                self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(edit, replacement))
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("each rerun would start another", problems[0])
+
+    def test_a_filing_job_that_trusts_a_rerun_it_did_not_hear_from_is_caught(self) -> None:
+        for dropped in ("(needs.rerun.result != 'success' ||\n      ", "!"):
+            with self.subTest(dropped=dropped):
+                self.assertIn(dropped, ALERT)
+                self.write(pipeline_gate.ALERT_WORKFLOW, "".join(ALERT.rsplit(dropped, 1)))
+
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("so a second red attempt alerts nobody", problems[0])
 
     def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
         self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")

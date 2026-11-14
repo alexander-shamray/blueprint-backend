@@ -215,7 +215,9 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              a gate, so an unset credential skips it.
                              docs/secrets.md owns the credential
 .github/workflows/main-red.yml  a tracker issue when a push run on main goes
-                             red, or a comment on the open one (ADR-155).
+                             red, or a comment on the open one (ADR-155),
+                             unless one rerun of its failed jobs passes
+                             (ADR-210).
                              `workflow_run` names what it watches, so
                              `pipeline-gate alerts` holds that list to every
                              workflow a push to main runs
