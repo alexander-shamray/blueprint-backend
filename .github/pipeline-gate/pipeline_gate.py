@@ -1011,10 +1011,8 @@ def _false_on_a_pull_request(expression: str, ref_decides: bool) -> bool:
 def check_grants(root: Path = ROOT) -> list[str]:
     """No job a pull request reaches holds a write grant beside the branch's code (ADR-197).
 
-    The checkout is what brings the branch in: a job with none runs only the
-    workflow's own text, and a job calling a reusable workflow is judged as one
-    with a checkout, since the called one may hold it. It holds the shape on
-    what lands, not on a branch's edit.
+    A checkout, or a reusable workflow's call that may hold one, brings the branch in; a job with
+    neither runs only the workflow's own text. It holds the shape on what lands, not on a branch's edit.
     """
     workflows = sorted(
         path for path in (root / ".github" / "workflows").glob("*")
