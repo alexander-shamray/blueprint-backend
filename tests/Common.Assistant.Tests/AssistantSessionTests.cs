@@ -526,28 +526,40 @@ public sealed class AssistantSessionTests
     [Fact]
     public async Task A_caller_past_their_history_budget_forgets_their_least_recently_used_idle_conversation()
     {
+        // Used in an order that is neither the order they were opened in nor its reverse, so only the least recently
+        // used one is the one to forget.
+        const long Budget = 10_000;
+        FakeTimeProvider time = new();
         ScriptedProvider provider = new ScriptedProvider()
-            .Round(new TextDelta(new string('a', 2000)), new RoundEnd(ProviderStop.Done))
             .Round(new TextDelta(new string('b', 2000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('a', 2000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('c', 2000)), new RoundEnd(ProviderStop.Done))
             .Round(new TextDelta("Again."), new RoundEnd(ProviderStop.Done));
-        AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = 6000 });
+        AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = Budget }, time);
         AssistantSession first = Open(core);
         AssistantSession second = Open(core);
+        AssistantSession third = Open(core);
 
-        first.TryStart(Given.Turn("one"));
-        await Given.UntilEnded(first);
-        second.TryStart(Given.Turn("two"));
-        await Given.UntilEnded(second);
-        (first.Held + second.Held).ShouldBeGreaterThan(6000, "the two together are past the budget");
+        foreach ((AssistantSession session, string text) in new[] { (second, "two"), (first, "one"), (third, "three") })
+        {
+            time.Advance(TimeSpan.FromMinutes(1));
+            session.TryStart(Given.Turn(text));
+            await Given.UntilEnded(session);
+        }
 
-        long after = second.View().LastEventId;
-        second.TryStart(Given.Turn("three"));
-        (await Given.UntilEnded(second, after)).OfType<TurnEndedEvent>().Single().Reason
+        (first.Held + second.Held + third.Held).ShouldBeGreaterThan(Budget, "the three together are past the budget");
+        (first.Held + third.Held).ShouldBeLessThan(Budget, "the two most recently used are not");
+
+        time.Advance(TimeSpan.FromMinutes(1));
+        long after = third.View().LastEventId;
+        third.TryStart(Given.Turn("four"));
+        (await Given.UntilEnded(third, after)).OfType<TurnEndedEvent>().Single().Reason
             .ShouldBe(TurnEndReason.Done);
 
-        core.Find(Operator, first.Id).ShouldBeNull();
-        core.Find(Operator, second.Id).ShouldBeSameAs(second);
-        first.TryStart(Given.Turn("gone")).ShouldBeFalse();
+        core.Find(Operator, second.Id).ShouldBeNull();
+        core.Find(Operator, first.Id).ShouldBeSameAs(first);
+        core.Find(Operator, third.Id).ShouldBeSameAs(third);
+        second.TryStart(Given.Turn("gone")).ShouldBeFalse();
     }
 
     [Fact]
@@ -840,11 +852,14 @@ public sealed class AssistantSessionTests
         sent.ShouldContain("<redacted>");
     }
 
-    [Fact]
-    public async Task A_tool_result_is_cut_to_the_size_bound()
+    [Theory]
+    [InlineData(100, false)]
+    [InlineData(101, true)]
+    [InlineData(500, true)]
+    public async Task A_tool_result_is_cut_to_the_size_bound(int length, bool cut)
     {
         ScriptedTools tools =
-            new(("stack_status", (_, _, _) => Task.FromResult(new ToolOutcome(true, new string('x', 500)))));
+            new(("stack_status", (_, _, _) => Task.FromResult(new ToolOutcome(true, new string('x', length)))));
         ScriptedProvider provider = new ScriptedProvider()
             .Round(new ToolCall("c1", "stack_status", []), new RoundEnd(ProviderStop.Done))
             .Round(new RoundEnd(ProviderStop.Done));
@@ -855,8 +870,7 @@ public sealed class AssistantSessionTests
         await Given.UntilEnded(session);
 
         string content = provider.Requests[1].History[^1].ShouldBeOfType<ToolResultsMessage>().Results.Single().Content;
-        content.ShouldStartWith(new string('x', 100));
-        content.ShouldEndWith("[cut to 100 characters]");
+        content.ShouldBe(cut ? new string('x', 100) + "\n[cut to 100 characters]" : new string('x', 100));
     }
 
     [Fact]
