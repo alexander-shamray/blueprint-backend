@@ -131,6 +131,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     directory = ROOT / args.dir
     chosen = args.module or modules(directory)
+    if not chosen:
+        # all() over no results is True, and a run that timed nothing must not read as a suite inside its budget.
+        print(f"no test module in {directory}: nothing was timed", file=sys.stderr)
+        return 2
     results = []
     for module in chosen:
         result = run(directory, module, CEILINGS.get(module, DEFAULT_CEILING))
