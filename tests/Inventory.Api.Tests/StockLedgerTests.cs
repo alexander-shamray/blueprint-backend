@@ -31,15 +31,16 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         return result;
     }
 
-    private Task Seed(Guid product, int available, int reserved = 0) =>
+    private Task Seed(Guid product, int available, int reserved = 0, int ageMinutes = 0) =>
         fixture.ExecuteAsync(
             """
             INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
-            VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())
+            VALUES ({0}, {1}, {2}, DATEADD(minute, -{3}, SYSDATETIMEOFFSET()))
             """,
             product,
             available,
-            reserved);
+            reserved,
+            ageMinutes);
 
     private Task<int> Available(Guid product) =>
         fixture.ScalarAsync<int>("SELECT Value = Available FROM inventory.StockItems WHERE ProductId = {0}", product);
@@ -49,8 +50,10 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         var a = Guid.CreateVersion7();
         var b = Guid.CreateVersion7();
-        await Seed(a, 5);
-        await Seed(b, 1);
+        // An hour old, so a stamp that only steps past the row's own is told apart from the statement's instant.
+        await Seed(a, 5, ageMinutes: 60);
+        await Seed(b, 1, ageMinutes: 60);
+        DateTimeOffset before = await fixture.ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
 
         LedgerOutcome outcome = await InTransaction(l =>
             l.TryTakeAsync(
@@ -62,7 +65,7 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
             .Select(l => (l.ProductId, l.Available))
             .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
         outcome.Levels.ShouldAllBe(
-            l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
+            l => l.UpdatedAt >= before,
             "the instant is the statement's, stamped under the row lock");
         // Version-7 ids are not creation-ordered under Guid.CompareTo, so the ledger's own comparer is asserted.
         outcome.Levels
