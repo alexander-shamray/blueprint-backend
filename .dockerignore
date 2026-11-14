@@ -23,8 +23,8 @@ TestResults
 # ignoring a file does not keep it out of a build context, and a COPY of a
 # whole source tree would carry a local appsettings into the published image.
 **/appsettings.*.local.json
-.env
-.env.*
-!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 **/*.pfx
 **/*.p12
