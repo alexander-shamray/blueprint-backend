@@ -672,7 +672,7 @@ def _reference(run: str, command: str) -> str:
 
 
 def read_workflow_env(workflow_text: str, key: str) -> str | None:
-    """One value of the workflow-level `env:` block, or None."""
+    """One value of the workflow-level `env:` block, bare or quoted and without a trailing comment, or None."""
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
         if not re.match(r"^env:\s*$", line):
@@ -682,8 +682,10 @@ def read_workflow_env(workflow_text: str, key: str) -> str | None:
                 continue
             if not follow.startswith("  "):
                 break
-            if found := re.match(rf"^  {re.escape(key)}:\s*(.*?)\s*$", follow):
-                return found.group(1)
+            if found := re.match(
+                rf"""^  {re.escape(key)}:[ \t]*(?:"([^"]*)"|'([^']*)'|([^\s#].*?))?[ \t]*(?:[ \t]#.*)?$""", follow
+            ):
+                return next((group for group in found.groups() if group is not None), "")
         return None
     return None
 

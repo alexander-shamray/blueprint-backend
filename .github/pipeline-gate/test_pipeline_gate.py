@@ -1536,6 +1536,12 @@ class SupplyChainTests(Fixture):
 
         self.assertTrue(any("declares no workflow-level REGISTRY" in p for p in pipeline_gate.check_images(self.root)))
 
+    def test_a_quoted_or_commented_registry_is_the_same_address(self) -> None:
+        address = "ghcr.io/${{ github.repository }}"
+        for spelling in (f'"{address}"', f"'{address}'", f"{address}  # the one owner"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(self.broken(f"REGISTRY: {address}", f"REGISTRY: {spelling}", deploy=True), [])
+
     def test_a_second_copy_of_the_address_is_caught(self) -> None:
         problems = self.broken("jobs:\n  rollout:", "jobs:\n  rollout:\n    env:\n      IMAGE: ghcr.io/me/app\n", deploy=True)
 
