@@ -889,13 +889,14 @@ def _first_exit(text: str) -> str | None:
 def _conditional(before: str) -> bool:
     """An `exit` after `before` runs only sometimes: right after an operator, or inside an open `(`, or an open `{`
     an operator opened. Brackets, not `;`, since the step reader folds line breaks; a scan, so groups nest."""
-    opened: list[bool] = []
+    opened: list[tuple[str, bool]] = []
     for index, character in enumerate(before):
         if character in "{(":
-            opened.append(character == "(" or AFTER_OPERATOR.search(before[:index]) is not None)
-        elif character in "})" and opened:
+            opened.append((character, character == "(" or AFTER_OPERATOR.search(before[:index]) is not None))
+        elif opened and opened[-1][0] + character in ("{}", "()"):
+            # Only its own closer, so a case pattern's bare `)` closes no `{`.
             opened.pop()
-    return any(opened) or AFTER_OPERATOR.search(before) is not None
+    return any(conditional for _, conditional in opened) or AFTER_OPERATOR.search(before) is not None
 
 
 def _exits_one(branch: str) -> bool:
