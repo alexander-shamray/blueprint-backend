@@ -1002,6 +1002,28 @@ class GrantTests(unittest.TestCase):
                 self.assertEqual(len(problems), 1)
                 self.assertIn("job `build`", problems[0])
 
+    def test_a_quoted_scope_is_a_grant(self) -> None:
+        """The closing quote sits between the scope and its colon; still the same grant (#2072)."""
+        for permissions in (
+            "    permissions:\n      'packages': write\n",
+            '    permissions:\n      "packages": "write"\n',
+            "    permissions: { 'packages': write }\n",
+            '    permissions: { contents: read, "packages": write }\n',
+            "    permissions:\n      packages : write\n",
+        ):
+            with self.subTest(permissions=permissions):
+                self.write(GRANTED.replace("  build:\n    steps:", f"  build:\n{permissions}    steps:"))
+
+                problems = pipeline_gate.check_grants(self.root)
+
+                self.assertEqual(len(problems), 1)
+                self.assertIn("packages: write", problems[0])
+
+    def test_a_quoted_job_condition_still_keeps_a_pull_request_out(self) -> None:
+        self.write(GRANTED.replace("    if: ${{ github.event_name", '    "if": ${{ github.event_name'))
+
+        self.assertEqual(pipeline_gate.check_grants(self.root), [])
+
     def test_a_commented_grant_is_not_a_grant(self) -> None:
         self.write(GRANTED.replace(
             "  build:\n    steps:",
