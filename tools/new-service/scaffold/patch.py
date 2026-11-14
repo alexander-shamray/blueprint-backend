@@ -1175,10 +1175,23 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "",
         ),
         (
-            "        outbox.ShouldBe(1, \"the outbox cutoff is subtracted from the registered clock, which is two days ahead\");\n"
-            "        inbox.ShouldBe(1, \"§9.5 keeps the inbox on that same application-computed cutoff, deliberately\");\n",
+            "        (int _, int _, int idempotency) =\n"
+            "            await fixture.PurgeWithSkewedClockAsync(oneDay, window * 2);\n"
+            "\n"
+            "        // By id, not the pass's counts: the skewed cutoffs also take any row written since the reset.\n"
+            "        (await fixture.OutboxAsync()).ShouldNotContain(\n"
+            "            staged => staged.MessageId == row.MessageId,\n"
+            "            \"the outbox cutoff is subtracted from the registered clock, which is two days ahead\");\n"
+            "        (await fixture.InboxAsync(inboxId)).ShouldBeEmpty(\n"
+            "            \"§9.5 keeps the inbox on that same application-computed cutoff, deliberately\");\n",
+            "        (int outbox, int _, int idempotency) =\n"
+            "            await fixture.PurgeWithSkewedClockAsync(oneDay, window * 2);\n"
+            "\n"
             "        outbox.ShouldBe(0, \"this service registers no outbox table, so the pass has none to purge (§9.5)\");\n"
-            "        inbox.ShouldBe(1, \"the inbox cutoff is subtracted from the registered clock, which is two days ahead\");\n",
+            "\n"
+            "        // By id, not the pass's count: the skewed cutoff also takes any row written since the reset.\n"
+            "        (await fixture.InboxAsync(inboxId)).ShouldBeEmpty(\n"
+            "            \"the inbox cutoff is subtracted from the registered clock, which is two days ahead\");\n",
         ),
         (
             "        // §9.5 asks for one hosted service covering every table.\n"
