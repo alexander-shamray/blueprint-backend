@@ -526,39 +526,43 @@ public sealed class AssistantSessionTests
     [Fact]
     public async Task A_caller_past_their_history_budget_forgets_their_least_recently_used_idle_conversation()
     {
-        // Used in an order that is neither the order they were opened in nor its reverse, so only the least recently
-        // used one is the one to forget.
-        const long Budget = 10_000;
+        // Of the three the kept one leaves, the least recently used is neither the first opened nor the last.
+        const long Budget = 15_000;
         FakeTimeProvider time = new();
         ScriptedProvider provider = new ScriptedProvider()
             .Round(new TextDelta(new string('b', 2000)), new RoundEnd(ProviderStop.Done))
             .Round(new TextDelta(new string('a', 2000)), new RoundEnd(ProviderStop.Done))
             .Round(new TextDelta(new string('c', 2000)), new RoundEnd(ProviderStop.Done))
+            .Round(new TextDelta(new string('d', 2000)), new RoundEnd(ProviderStop.Done))
             .Round(new TextDelta("Again."), new RoundEnd(ProviderStop.Done));
         AssistantCore core = Core(provider, new AssistantLimits { CallerHistoryChars = Budget }, time);
         AssistantSession first = Open(core);
         AssistantSession second = Open(core);
         AssistantSession third = Open(core);
+        AssistantSession fourth = Open(core);
 
-        foreach ((AssistantSession session, string text) in new[] { (second, "two"), (first, "one"), (third, "three") })
+        foreach ((AssistantSession session, string text) in
+                 new[] { (second, "two"), (first, "one"), (third, "three"), (fourth, "four") })
         {
             time.Advance(TimeSpan.FromMinutes(1));
             session.TryStart(Given.Turn(text));
             await Given.UntilEnded(session);
         }
 
-        (first.Held + second.Held + third.Held).ShouldBeGreaterThan(Budget, "the three together are past the budget");
-        (first.Held + third.Held).ShouldBeLessThan(Budget, "the two most recently used are not");
+        (first.Held + second.Held + third.Held + fourth.Held)
+            .ShouldBeGreaterThan(Budget, "the four together are past the budget");
+        (first.Held + third.Held + fourth.Held).ShouldBeLessThan(Budget, "the three most recently used are not");
 
         time.Advance(TimeSpan.FromMinutes(1));
-        long after = third.View().LastEventId;
-        third.TryStart(Given.Turn("four"));
-        (await Given.UntilEnded(third, after)).OfType<TurnEndedEvent>().Single().Reason
+        long after = fourth.View().LastEventId;
+        fourth.TryStart(Given.Turn("five"));
+        (await Given.UntilEnded(fourth, after)).OfType<TurnEndedEvent>().Single().Reason
             .ShouldBe(TurnEndReason.Done);
 
         core.Find(Operator, second.Id).ShouldBeNull();
         core.Find(Operator, first.Id).ShouldBeSameAs(first);
         core.Find(Operator, third.Id).ShouldBeSameAs(third);
+        core.Find(Operator, fourth.Id).ShouldBeSameAs(fourth);
         second.TryStart(Given.Turn("gone")).ShouldBeFalse();
     }
 
