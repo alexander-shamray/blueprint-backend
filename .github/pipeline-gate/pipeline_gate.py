@@ -585,8 +585,8 @@ REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHU
 SHELL_OPERATOR = re.compile(r"[;&|()]+")
 REDIRECTION = re.compile(r"&?[<>]+&?")
 # Shell forms whose words or operators shlex reads otherwise than bash: a backtick, a `${` with an operator,
-# `$'...'` or `$"..."` quoting, and brace expansion.
-UNFOLLOWED = re.compile(r"`|\$\{(?!\w+\}|\{)|\$['\"]|\{[^}\s]*,[^}]*\}")
+# and `$'...'` or `$"..."` quoting; brace expansion is refused on the words, once quotes are read.
+UNFOLLOWED = re.compile(r"`|\$\{(?!\w+\}|\{)|\$['\"]")
 # Helm takes its global flags before the subcommand too, as `helm -n prod upgrade`, each with or without a value.
 HELM_FLAGS = r"(?:\s+-{1,2}[A-Za-z][\w-]*(?:=\S*|\s+[^\s-]\S*)?)*"
 HELM_COMMAND = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+[a-z]")
@@ -695,8 +695,8 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
             arguments, index = [], 0
             # A redirection and its target leave the command running, so later words still reach it.
             while index < len(words_read):
-                if "(" in words_read[index]:
-                    return None  # a substitution opened among the words: bash runs on past its `)`, this reader cannot
+                if "(" in words_read[index] or re.search(r"\{.*,", words_read[index]):
+                    return None  # a substitution or a brace expansion: bash reads on past it, this reader cannot
                 if SHELL_OPERATOR.fullmatch(words_read[index]):
                     break
                 if REDIRECTION.fullmatch(words_read[index]):
