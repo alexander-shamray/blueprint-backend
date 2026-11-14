@@ -582,8 +582,9 @@ OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 # An `env:` value is not shell-expanded, so only a run line may also name the runner's variable.
 REPOSITORY_EXPRESSION = r"\$\{\{\s*github\.repository\s*\}\}"
 REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHUB_REPOSITORY\}})"
-SHELL_OPERATOR = re.compile(r"[;&|()]+")
-REDIRECTION = re.compile(r"&?[<>]+&?")
+# shlex reads a run of punctuation as one word, so `&&>` ends the command rather than redirecting.
+SHELL_OPERATOR = re.compile(r"[;&|<>()]+")
+REDIRECTION = re.compile(r"&?[<>]+[&|]?")
 # Shell forms whose words or operators shlex reads otherwise than bash: a backtick, a `${` with an operator,
 # and `$'...'` or `$"..."` quoting; brace expansion is refused on the words, once quotes are read.
 UNFOLLOWED = re.compile(r"`|\$\{(?!\w+\}|\{)|\$['\"]")
@@ -696,11 +697,11 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
             # A redirection and its target leave the command running, so later words still reach it.
             while index < len(words_read):
                 if "(" in words_read[index] or re.search(r"\{.*,", words_read[index]):
-                    return None  # a substitution or a brace expansion: bash reads on past it, this reader cannot
-                if SHELL_OPERATOR.fullmatch(words_read[index]):
-                    break
+                    return None  # a parenthesis, or a brace before a comma, quoted or not: refused, not followed
                 if REDIRECTION.fullmatch(words_read[index]):
                     index += 1
+                elif SHELL_OPERATOR.fullmatch(words_read[index]):
+                    break
                 else:
                     arguments.append(words_read[index])
                 index += 1
