@@ -1973,8 +1973,8 @@ That is the right direction to fail in — `cancelled > placed` is a state the
 write model cannot reach, and a metric that reports it is worse than one that
 under-reports — but "the right direction" is not "no consequence": the drop is
 permanent and silent. What bounds it is an alert that already exists: a row
-reaches `OutboxDispatcher.MaxAttempts` only by being leased that many times
-without its delivery being completed (§9.4,
+is left unprocessed at `OutboxDispatcher.MaxAttempts` only after being leased
+that many times without its delivery being completed (§9.4,
 [ADR-211](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)),
 which the abandoned-row alert (§13.6) pages on. Those are dispatcher attempts,
 not the `RetryPolicy.RetryLimit` retries of `UseMessageRetry` (§9.8) — that
