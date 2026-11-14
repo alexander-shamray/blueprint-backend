@@ -104,16 +104,20 @@ public class NotificationIntakeTests
     {
         Guid order = Guid.CreateVersion7();
         Guid customer = Guid.CreateVersion7();
-        RecordNotificationCommand first = Placed(order, customer);
+        RecordNotificationCommand first = Placed(order, customer) with
+        {
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(-10) }
+        };
         RecordNotificationCommand later = Confirmed(order, customer) with
         {
-            Parameters = For(order) with { OccurredAt = Now.AddMinutes(5) }
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(-5) }
         };
 
         await Handler().HandleAsync(first, TestContext.Current.CancellationToken);
         await Handler().HandleAsync(later, TestContext.Current.CancellationToken);
 
-        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now, "the later event does not move it forward");
+        _orders.Added.ShouldHaveSingleItem()
+            .SourcedAt.ShouldBe(Now.AddMinutes(-10), "the later event does not move it forward");
     }
 
     [Fact]
@@ -137,13 +141,17 @@ public class NotificationIntakeTests
         Guid customer = Guid.CreateVersion7();
         RecordNotificationCommand first = Confirmed(order, customer) with
         {
-            Parameters = For(order) with { OccurredAt = Now.AddMinutes(5) }
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(-5) }
+        };
+        RecordNotificationCommand earlier = Placed(order, customer) with
+        {
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(-10) }
         };
 
         await Handler().HandleAsync(first, TestContext.Current.CancellationToken);
-        await Handler().HandleAsync(Placed(order, customer), TestContext.Current.CancellationToken);
+        await Handler().HandleAsync(earlier, TestContext.Current.CancellationToken);
 
-        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now);
+        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now.AddMinutes(-10));
     }
 
     [Fact]
