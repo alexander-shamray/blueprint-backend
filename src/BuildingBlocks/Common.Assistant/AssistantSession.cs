@@ -90,16 +90,22 @@ public sealed class AssistantSession : IDisposable
     }
 
     /// <summary>
-    /// Starts a turn; false when one is already running, or the conversation is gone. A turn past a budget holds none
-    /// of its text and ends with <c>budget</c> at once, so a conversation at its budget grows no further.
+    /// Starts a turn; false when one is already running, or the conversation is gone, which <see cref="Start"/> tells
+    /// apart.
     /// </summary>
-    public bool TryStart(StartTurn request)
+    public bool TryStart(StartTurn request) => Start(request) == TurnStart.Started;
+
+    /// <summary>
+    /// Starts a turn, or says why it did not. A turn past a budget holds none of its text and ends with <c>budget</c>
+    /// at once, so a conversation at its budget grows no further. A blank locale changes nothing.
+    /// </summary>
+    public TurnStart Start(StartTurn request)
     {
         lock (gate)
         {
-            if (turn is not null || closed)
+            if (Refused() is { } refusedNow)
             {
-                return false;
+                return refusedNow;
             }
         }
 
@@ -109,16 +115,16 @@ public sealed class AssistantSession : IDisposable
 
         lock (gate)
         {
-            if (turn is not null || closed)
+            if (Refused() is { } refusedLater)
             {
-                return false;
+                return refusedLater;
             }
 
             if (!full)
             {
                 // The host's redactor runs before anything changes, so one that throws leaves the conversation as it
                 // was rather than holding a turn with no loop behind it.
-                string turnLocale = request.Locale is { Length: > 0 } changedLocale ? changedLocale : locale;
+                string turnLocale = string.IsNullOrWhiteSpace(request.Locale) ? locale : request.Locale;
                 UserMessage message = new(
                     core.Redactor.Redact(Prompt.Turn(request.Text, request.Context, turnLocale), Caller));
 
@@ -135,9 +141,13 @@ public sealed class AssistantSession : IDisposable
             CancellationToken token = turn.Token;
             _ = Task.Run(() => RunAsync(full, token), CancellationToken.None);
 
-            return true;
+            return TurnStart.Started;
         }
     }
+
+    // Closed first: a conversation forgotten while its last turn ran has no turn to wait for.
+    private TurnStart? Refused() =>
+        closed ? TurnStart.Closed : turn is not null ? TurnStart.Running : null;
 
     /// <summary>Hands a client tool call its result; false when no call of that id is waiting.</summary>
     public bool TryAnswer(ClientToolResult result)
@@ -156,7 +166,8 @@ public sealed class AssistantSession : IDisposable
             waiting = call.Answer;
         }
 
-        return waiting.TrySetResult(new ToolOutcome(result.Ok, result.Content));
+        // A result that does not say it succeeded is a failure; a host refuses one with no ok before it gets here.
+        return waiting.TrySetResult(new ToolOutcome(result.Ok == true, result.Content));
     }
 
     /// <summary>Ends the running turn, if any; a provider stream in flight is cancelled.</summary>
@@ -217,6 +228,48 @@ public sealed class AssistantSession : IDisposable
         }
 
         log.Close();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Forgets every one of <paramref name="sessions"/> as <see cref="TryForget"/> does, or none when any is running a
+    /// turn: each lock is held until all are judged, so a turn cannot start between the check and the close.
+    /// </summary>
+    internal static bool TryForgetAll(IReadOnlyList<AssistantSession> sessions)
+    {
+        List<AssistantSession> entered = [];
+
+        try
+        {
+            foreach (AssistantSession session in sessions)
+            {
+                session.gate.Enter();
+                entered.Add(session);
+
+                if (session.turn is not null)
+                {
+                    return false;
+                }
+            }
+
+            foreach (AssistantSession session in entered)
+            {
+                session.closed = true;
+            }
+        }
+        finally
+        {
+            foreach (AssistantSession session in entered)
+            {
+                session.gate.Exit();
+            }
+        }
+
+        foreach (AssistantSession session in sessions)
+        {
+            session.log.Close();
+        }
 
         return true;
     }
@@ -407,7 +460,11 @@ public sealed class AssistantSession : IDisposable
             }
         }
 
-        round.Stop ??= ProviderStop.Done;
+        // A round with no end is not a whole reply (RoundEnd's contract): it is cut short, and billed as one.
+        if (round.Stop is null)
+        {
+            throw new IOException("The provider's stream ended before the round did.");
+        }
     }
 
     private void AppendReply(Round round, bool complete)
@@ -664,3 +721,13 @@ public sealed record TurnSummary(
     Caller Caller,
     Usage Unreported,
     string? Failure = null);
+
+/// <summary>
+/// What <see cref="AssistantSession.Start"/> did, so a host answers a running turn and a gone conversation apart.
+/// </summary>
+public enum TurnStart
+{
+    Started,
+    Running,
+    Closed,
+}
