@@ -1991,10 +1991,13 @@ def is_code(filters: dict[str, list[str]], path: str) -> bool:
 
 
 def _behind_a_step_that_ran(guard: str) -> bool:
-    """`failure()`, or `always()` beside a file or step output, each a top-level `&&` term, so `||` frees neither."""
+    """`failure()`, or `always()` beside a file or step output, each a top-level `&&` term and nothing else one.
+
+    A term `||` joins is none of them, so it frees neither; an unknown one beside them could skip the step.
+    """
     expression = re.sub(r"^\$\{\{\s*(.*?)\s*\}\}$", r"\1", guard.strip())
     terms = [_unwrapped(term) for term in _split_outside_parentheses(_unwrapped(expression), "&&")]
-    if any(len(_split_outside_parentheses(term, "||")) > 1 for term in terms):
+    if not all(term in ("failure()", "always()") or STATUS_NARROWING.fullmatch(term) for term in terms):
         return False
     if "failure()" in terms:
         return True
@@ -2130,12 +2133,13 @@ def check_code(root: Path = ROOT, workflow_text: str | None = None) -> list[str]
             )
         for index, step in enumerate(steps):
             guard = step.get("if", "")
-            # An `&&` term, so `|| always()` beside it, or a `!` before it, does not pass for it.
-            if CODE_GATE not in _conjuncts(guard) and not _behind_a_step_that_ran(guard):
+            # The whole condition, so `|| always()` beside it, a `!` before it or an `&&` term narrowing it fails.
+            if _conjuncts(guard) != [CODE_GATE] and not _behind_a_step_that_ran(guard):
                 name = step.get("name", step.get("uses", step.get("run", ""))).strip()[:60]
                 problems.append(
-                    f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}`, so a change no "
-                    "stage reads still runs it, or fails it for want of what a skipped step would have left"
+                    f"the {job} job's step {index + 1} ({name!r}) has no `if: {CODE_GATE}` standing alone, so a "
+                    "change no stage reads still runs it, or fails it for want of what a skipped step would have "
+                    "left, or a term beside it skips it for a change one does"
                 )
 
     tracked = subprocess.run(
