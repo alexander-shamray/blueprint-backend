@@ -1846,6 +1846,16 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("helm.yml writes `on:` as a flow mapping", problems[0])
 
+    def test_a_name_with_a_trailing_comment_is_read_without_it(self) -> None:
+        """Read with its comment, the name is unwatched and the watched one matches nothing: two false refusals."""
+        for line in ("name: Helm # the charts", "name: 'Helm'  # the charts", 'name: "Helm" # x'):
+            with self.subTest(line=line):
+                self.write("helm.yml", line + "\non:\n  push:\n    branches: [main]\n")
+
+                self.assertEqual(pipeline_gate.check_alerts(self.root), [])
+        self.assertEqual(pipeline_gate.read_workflow_name("name: a#b\n"), "a#b")
+        self.assertEqual(pipeline_gate.read_workflow_name("name: 'a # b'\n"), "a # b")
+
     def test_a_pushed_workflow_with_no_name_is_caught(self) -> None:
         self.write("anonymous.yml", "on:\n  push:\n    branches: [main]\n")
 
