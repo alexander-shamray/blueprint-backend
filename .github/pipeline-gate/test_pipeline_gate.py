@@ -862,7 +862,7 @@ class GrantTests(unittest.TestCase):
                 problems = pipeline_gate.check_grants(self.root)
 
                 self.assertEqual(len(problems), 1, problems)
-                self.assertIn("job `build`", problems[0])
+                self.assertIn("job `build` holds packages: write and calls a reusable workflow", problems[0])
 
     def test_a_job_key_this_check_cannot_read_is_refused(self) -> None:
         self.write(GRANTED.replace("  build:\n", "  build: &build\n"))
