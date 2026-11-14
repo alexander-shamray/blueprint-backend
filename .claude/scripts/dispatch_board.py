@@ -343,7 +343,8 @@ def _touch(a, b):
     if a == b:
         return True
     if "/" in a and "/" in b:
-        return a.startswith(b + "/") or b.startswith(a + "/")
+        # Either may be partial, named from below the root, so one matches the other at any run of whole segments.
+        return f"/{b}/" in f"/{a}/" or f"/{a}/" in f"/{b}/"
     if "/" in b:
         return b.endswith("/" + a)
     return "/" in a and a.endswith("/" + b)

@@ -325,6 +325,13 @@ executor it then runs `git worktree prune`, as best effort: a `git worktree
 add` the session made under that directory has lost its target, and would stay
 listed until something pruned it.
 
+`run` drops `ANTHROPIC_API_KEY` from the environment it hands an executor.
+A headless `claude -p` takes that key ahead of the owner's subscription
+login, so a key the dispatcher's shell happened to hold billed every
+executor to an API account. On run 20261114-081919 that account had no
+credit, and both launches of a sync failed in seconds with API 400 *Credit
+balance is too low*.
+
 On every wake it absorbs the result, verifies a merge, places what was
 filed, then asks `wake` what to launch; the outcome table is the spec's
 §6.4. A hand-back or a stop goes back into its wave marked `OWNER` and is
@@ -560,6 +567,22 @@ starting again. A crashed one's `run` refuses and `result` sends it back;
 a rate-limited one's `wait` prints `stop file: yes` and leaves it `window`,
 so the runbook sends it back with `tasks back`, or the report would list it
 as interrupted.
+
+An account the API refuses outright ends the night as well, as
+`end: account`: an `api_error` of 400 or 401, no credit or no valid key,
+before a second turn. Nothing in the group was at fault and every launch
+would meet the same refusal, so `result` counts no crash and the group keeps
+its slot rather than going back marked `OWNER`; run 20261114-081919 read it
+as a crash and spent a relaunch on it (#500). It holds every later night of
+the run until a resumed run, the owner's word that the account is fixed,
+lifts it: before it prints `relaunch`, `resume` sets the group `running`
+where the refused session was its first and `relaunch` otherwise, so no
+`wake` can read the hold while the relaunch starts, and since the refused
+session did nothing, the relaunch is what that launch was. A sync holds no
+row, so unless another group's rows keep its run open, the run closes at the
+report and the next night's step 0 takes the sync again as a new group. The
+report lists it under *Interrupted* with the API's notice and which of the
+two comes next.
 
 A night where `wake` names nothing to launch and no background task of
 this session is left to wake it is §8's nothing running, read from this

@@ -37,7 +37,23 @@ body=$(gh_read pr view "$pr" --json body --jq .body)
 body=${body//$'\r'/}
 class_row="" touch_row="" class_rows=0 touch_rows=0
 class_at='^\| *Class *\|' touch_at='^\| *Touch set *\|'
+# A row inside a fenced code block is an example, not the declaration, and is skipped as the CI gate skips it, by
+# CommonMark's fences: a backtick or tilde run of three or more, indented at most three spaces, a backtick opener's
+# info string holding no backtick, closed only by a run of the same character, at least as long, then blanks alone.
+# The run is greedy, so a backtick left in the rest is one in the info string. An unclosed fence runs to the end.
+fence="" fence_open='^ {0,3}(`{3,}|~{3,})(.*)$' fence_close='^ {0,3}(`{3,}|~{3,})[[:blank:]]*$'
 while IFS= read -r line; do
+  if [ -n "$fence" ]; then
+    if [[ "$line" =~ $fence_close ]] && [ "${BASH_REMATCH[1]:0:1}" = "${fence:0:1}" ] &&
+      [ "${#BASH_REMATCH[1]}" -ge "${#fence}" ]; then fence=""; fi
+    continue
+  fi
+  if [[ "$line" =~ $fence_open ]]; then
+    case "${BASH_REMATCH[1]:0:1}${BASH_REMATCH[2]}" in
+      '`'*'`'*) ;;
+      *) fence=${BASH_REMATCH[1]}; continue ;;
+    esac
+  fi
   if [[ "$line" =~ $class_at ]]; then class_row=$line; class_rows=$((class_rows + 1)); fi
   if [[ "$line" =~ $touch_at ]]; then touch_row=$line; touch_rows=$((touch_rows + 1)); fi
 done < <(printf '%s\n' "$body")

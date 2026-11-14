@@ -651,7 +651,8 @@ class Wake(InRoot):
             with self.subTest(status=status):
                 record_sync(status=status, resets_at="2020-01-01T00:00:00+00:00")
                 lines = self.wake()
-                self.assertEqual("launch: none", lines[-1])
+                # A refused account ends the night, which launches nothing either.
+                self.assertEqual("end: account" if status == "account" else "launch: none", lines[-1])
                 self.assertIn(f"running: {GID}", lines)
         record_sync(status="closed", closed_from="verified")
         self.assertEqual("launch: S1 S3", self.wake()[-1])

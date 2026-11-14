@@ -436,6 +436,15 @@ class PathTests(unittest.TestCase):
         self.assertTrue(self.over(inside, directory))
         self.assertFalse(self.over(directory, self.claim({"src/services/catalogue/a.cs"})))
 
+    def test_a_partial_path_overlaps_a_root_relative_path_through_it(self):
+        # A body names the subtree from below src, and a held branch's git diff names the file from the root.
+        partial, rooted = self.claim({"services/ordering"}), self.claim({"src/services/ordering/api.cs"})
+        self.assertTrue(self.over(partial, rooted))
+        self.assertTrue(self.over(rooted, partial))
+        self.assertTrue(self.over(self.claim({"ordering/api.cs"}), rooted))
+        self.assertFalse(self.over(partial, self.claim({"src/services/orderingx/api.cs"})))
+        self.assertFalse(self.over(self.claim({"rvices/ordering"}), rooted))
+
     def test_a_conflicts_cell_naming_a_group_makes_the_two_exclusive(self):
         groups = db.groups(db.parse_tasks(FIXTURE))
         m1 = next(g for g in groups if g.id == "M1")

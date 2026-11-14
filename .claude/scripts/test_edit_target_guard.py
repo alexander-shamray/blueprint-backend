@@ -670,7 +670,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             os.path.join(self.HOME, ".gitconfig"),
         ):
             with self.subTest(target=target):
-                self.assertIn("no checkout below the home holds", self.assertRefused(target))
+                self.assertIn("what runs at login", self.assertRefused(target))
 
     def test_a_link_into_the_keys_is_held(self):
         for linker in linkers():
@@ -716,7 +716,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         # under it, and containing a target is not owning it.
         for project in (self.HOME, os.path.dirname(self.HOME)):
             with self.subTest(project=project):
-                self.assertIn("no checkout below the home holds", self.assertRefused(
+                self.assertIn("what runs at login", self.assertRefused(
                     os.path.join(self.HOME, ".ssh", "authorized_keys"),
                     project=project))
                 self.assertIn("control surface", self.assertRefused(
@@ -734,7 +734,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
                     "env": {"HOME": home, "USERPROFILE": home}}
         for name in ((".ssh", "authorized_keys"), (".bashrc",)):
             with self.subTest(name=name):
-                self.assertIn("no checkout below the home holds", self.assertRefused(
+                self.assertIn("what runs at login", self.assertRefused(
                     os.path.join(home, *name), **dotfiles))
         self.assertAdmitted(os.path.join(home, "notes", "todo.md"), **dotfiles)
         # A checkout at `~/.claude` beside it owns nothing the home anchor
@@ -743,6 +743,28 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         os.makedirs(os.path.join(control, ".git"))
         self.assertIn("control surface", self.assertRefused(
             os.path.join(control, "settings.json"), project=control, **dotfiles))
+
+    def test_an_anchor_inside_a_home_place_excuses_nothing_there(self):
+        # No anchor here holds the home, so only the place's own anchor
+        # contains the target; containing it is not owning it, and its deny
+        # rules, anchored one level down, name nothing the home protects.
+        home = os.path.join(self.outside, "home")
+        control = os.path.join(home, ".claude")
+        keys = os.path.join(home, ".ssh")
+        os.makedirs(os.path.join(control, ".git"))
+        os.makedirs(os.path.join(control, "notes"))
+        os.makedirs(keys)
+        env = {"HOME": home, "USERPROFILE": home}
+        for cwd in (self.root, os.path.join(control, "notes")):
+            with self.subTest(cwd=cwd):
+                for name in (("settings.json",), ("hooks", "anything.py")):
+                    self.assertIn("control surface", self.assertRefused(
+                        os.path.join(control, *name), project=control,
+                        cwd=cwd, env=env))
+                self.assertAdmitted(os.path.join(control, "notes", "todo.md"),
+                                    project=control, cwd=cwd, env=env)
+        self.assertIn("what runs at login", self.assertRefused(
+            os.path.join(keys, "authorized_keys"), project=keys, env=env))
 
     def test_names_that_cannot_be_read_refuse_the_home_and_nothing_else(self):
         # They live in `guard-git-argv.py`, so a guard copied without it fails

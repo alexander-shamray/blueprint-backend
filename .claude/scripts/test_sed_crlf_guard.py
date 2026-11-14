@@ -172,6 +172,30 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
             with self.subTest(command=command):
                 self.assertRefused(command, "crlf.txt")
 
+    def test_a_sed_behind_a_prefix_word_s_options_is_judged(self):
+        # A prefix word's own option was read as the command word, so the sed behind it went unjudged.
+        for command in (
+            "time -p sed -i 's/one/uno/' crlf.txt",
+            "command -p sed -i 's/one/uno/' crlf.txt",
+            "exec -a name sed -i 's/one/uno/' crlf.txt",
+            "exec -cl sed -i 's/one/uno/' crlf.txt",
+            "nohup -- sed -i 's/one/uno/' crlf.txt",
+            "time -p command -p sed -i 's/one/uno/' crlf.txt",
+            # A cluster whose last letter takes a value takes the next word with it.
+            "exec -ca name sed -i 's/one/uno/' crlf.txt",
+            "exec -cla name sed -i 's/one/uno/' crlf.txt",
+            "env -iu LANG sed -i 's/one/uno/' crlf.txt",
+            # GNU time, reached as a program, takes its format and output file as separate words.
+            "env time -o log sed -i 's/one/uno/' crlf.txt",
+            "command time -f %e sed -i 's/one/uno/' crlf.txt",
+            # A long option's unique prefix is that option, as getopt_long reads it.
+            "env --un LANG sed -i 's/one/uno/' crlf.txt",
+            "env time --out log sed -i 's/one/uno/' crlf.txt",
+            "env -- sed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, "crlf.txt")
+
     def test_a_line_fed_to_a_shell_is_judged(self):
         # Review R3, round 2: a heredoc, a here-string or an echo piped into a shell is a command line it runs.
         for command in (

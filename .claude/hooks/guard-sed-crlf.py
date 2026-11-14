@@ -25,15 +25,21 @@ SAFE_FORMS = (
 # `>` and a separator between commands otherwise. A newline is one of them, so `shlex` is told it is not whitespace.
 PUNCTUATION = ";&|()<>\n"
 
-# Words that run the command after them, so `sed` behind one is still the command: the prefix commands, and the
-# reserved words that open a group or a clause, as in `if …; then sed -i …; fi`.
+# Words that run the command after them, so `sed` behind one is still the command: the reserved words that open a
+# group or a clause, as in `if …; then sed -i …; fi`. They take no options.
 PREFIXES = {
-    "command", "exec", "time", "builtin", "nohup",
     "{", "!", "if", "then", "elif", "else", "while", "until", "do",
 }
 
-# Programs that run the command after their own options, each with the options that take a separate argument.
+# Programs and prefix commands that run the command after their own options, each with the options that take a
+# separate argument; `time -p` or `command -p` before `sed` leaves `sed` the command.
 WRAPPERS = {
+    "command": set(),
+    "exec": {"-a"},
+    # bash's `time` keyword takes `-p` alone; GNU time, run as a program, a format and an output file.
+    "time": {"-f", "--format", "-o", "--output"},
+    "builtin": set(),
+    "nohup": set(),
     "env": {"-u", "--unset", "-C", "--chdir"},
     "nice": {"-n", "--adjustment"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
@@ -219,6 +225,21 @@ def segments(command):
     return [segment for segment in found if segment.words]
 
 
+def option_width(option, valued):
+    """The words a wrapper's option spans: two where it, or the last letter of its short cluster, takes a value."""
+    if option in valued:
+        return 2
+    if option.startswith("--"):
+        # getopt_long takes a prefix only one long name has as that name; `--name=value` is one word.
+        return 2 if len(option) > 2 and "=" not in option and any(
+            name.startswith(option) for name in valued if name.startswith("--")) else 1
+    for position, letter in enumerate(option[1:], 1):
+        if f"-{letter}" in valued:
+            # A value letter before the cluster's end takes the rest of the word as its value.
+            return 2 if position == len(option) - 1 else 1
+    return 1
+
+
 def command_word(words):
     """The index of the word this simple command runs, past assignments, prefix words and wrappers' options."""
     index = 0
@@ -230,7 +251,7 @@ def command_word(words):
             index += 1
             while index < len(words) and words[index].startswith("-") and words[index] != "-":
                 option = words[index]
-                index += 2 if option in WRAPPERS[word] else 1
+                index += option_width(option, WRAPPERS[word])
                 if option == "--":
                     break
             # `timeout` takes its duration before the command.
