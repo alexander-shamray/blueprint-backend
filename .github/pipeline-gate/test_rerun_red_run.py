@@ -120,16 +120,14 @@ class Rerun(unittest.TestCase):
         self.assertLess(runs, self.calls.index(("run", "rerun", RUN, "--failed", "-R", REPO)))
 
     def test_a_newer_run_on_main_is_the_one_heard_so_this_one_is_neither_rerun_nor_filed(self) -> None:
-        for status in ("completed", "in_progress"):
-            with self.subTest(status=status):
-                # The read selects by id alone, so a newer run that already finished stands this one down too.
-                self.calls, self.answers = [], {"/workflows/42/runs": "8\n"}
+        # The read selects by id alone, so a newer run that already finished stands this one down too.
+        self.answers["/workflows/42/runs"] = "8\n"
 
-                outputs = self.run_it()
+        outputs = self.run_it()
 
-                self.assertEqual(outputs, {"second": "superseded", "conclusion": "", "why": ""})
-                self.assertFalse(any(call[:2] == ("run", "rerun") for call in self.calls))
-                self.assertEqual(self.commented(), [])
+        self.assertEqual(outputs, {"second": "superseded", "conclusion": "", "why": ""})
+        self.assertFalse(any(call[:2] == ("run", "rerun") for call in self.calls))
+        self.assertEqual(self.commented(), [])
 
     def test_newer_runs_that_cannot_be_read_file_at_once_and_rerun_nothing(self) -> None:
         self.answers["/workflows/42/runs"] = refused
