@@ -2050,9 +2050,11 @@ fi
 # ...and the other direction, which an overlay can break: a chart whose
 # workload name is dialled from src/ must render a Service, or a healthy
 # release answers every routed request with a failure.
+: >"$OUT/owned.txt"
 for chart in $SERVICE_CHARTS; do
     name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \
         "$CHARTS_DIR/$chart/values.yaml")"
+    echo "$name" >>"$OUT/owned.txt"
     if grep -qx "$name" "$OUT/pairs.txt" 2>/dev/null || cut -d' ' -f1 "$OUT/pairs.txt" | grep -qx "$name"; then
         check "$chart is dialled as $name, so it must keep its Service" \
             grep -qE '^  enabled: true' <(awk '/^service:/ { s = 1; next } s && /^[a-z]/ { s = 0 } s' "$CHARTS_DIR/$chart/values.yaml")
@@ -2082,11 +2084,13 @@ while read -r host port; do
     if grep -qx "$host" "$OUT/services.txt"; then
         check "$host answers on Service port $port" \
             service_port "$OUT/platform.yaml" "$host" "$port"
+    elif grep -qx "$host" "$OUT/owned.txt"; then
+        # A chart owns the host and rendered no Service for it.
+        fail "$host:$port is dialled by src/ and its chart renders no Service"
     else
-        # Not a silent cap: §10.2's route file deliberately names a
-        # destination ahead of the service that will answer it, so a host with
-        # no chart is expected — and saying which one keeps that expectation
-        # from quietly absorbing a chart somebody forgot to add.
+        # Not a silent cap: §10.2's route file names a destination ahead of
+        # the service that will answer it, so a host no chart owns is expected,
+        # and saying which one keeps that from absorbing a forgotten chart.
         pass "$host:$port dialled by src/, no chart yet — not asserted"
     fi
 done <"$OUT/pairs.txt"
