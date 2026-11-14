@@ -293,7 +293,8 @@ which must be on `main`: on another branch it verifies with that branch's copy,
 so the run reports and ends unmerged. It uses the target's own `sync_pr.py` on
 `<oid>` from `list`, and `--head <oid>` makes the listing and the fetch each
 exactly that oid. In the worktree, `git rev-parse HEAD` must equal `<oid>` and
-`git status --short` must be empty before anything there runs: the commit is not
+`git status --short --untracked-files=all` must be empty before anything there
+runs, whatever status.showUntrackedFiles says: the commit is not
 the files, and a worktree that already existed on the right commit can hold a
 modified `sync_pr.py` or suite that step 2 would run before any later dirty
 read. Both together are what make the worktree's managed copy of `sync_pr.py`

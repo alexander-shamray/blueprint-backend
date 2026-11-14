@@ -355,7 +355,8 @@ only an `.exe` or a `.com` counts, never `PATHEXT`'s `.bat` or `.cmd`: those
 run through `cmd.exe` in the checkout, which looks there first for every
 command the script names, so a shim found safely would reopen the search this
 closes. pip writes the console script as an `.exe`. The worker runs that
-script, then the module through its own interpreter: `py -3.12 -m pip` is a
+script, then, on Python 3.11 or later, the module through its own interpreter,
+where `-P` keeps the checkout off the import path: `py -3.12 -m pip` is a
 supported install that leaves the script in a directory that need not be on
 `PATH`, so both `cbx` wrappers fall back the same way, and a pipx install has
 no module this interpreter can import, so the script is not dropped for it.
@@ -1679,14 +1680,15 @@ where the old grant was `/ship`'s alone, so what bounds the subcommand is its
 own proof: it runs `verify <n> --head <oid>` and refuses a failure, so a test
 file committed on a local branch, with that branch's `HEAD` as the pin, runs
 nothing. It then refuses a `HEAD` other than the oid or a tree `git status
---short` says is not clean, the comparison the sync section requires and which
-`dispatch_board.py sync-launch` and `run` compare before a `--dispatched` run
-starts in it, and runs each path `local-suites` derives from
-`.harness/config.json` and `git ls-files` as `py -3.12 -m unittest discover -s
-<dir> -p <file>`. A target's *Ship checks* that runs the whole `.claude/scripts`
-suite runs `shard-harness-suite.py`, granted with no `:*` so that its `--ids
-<file>` and `--queue <file>`, its workers' own, stay out; its `--selective`
-is granted as a second whole command for the same reason. Residual: those suites
+--short --untracked-files=all` says is not clean, the comparison the sync
+section requires and which `dispatch_board.py sync-launch` and `run` compare
+before a `--dispatched` run starts in it, and runs each path `local-suites`
+derives from `.harness/config.json` and `git ls-files` as `py -3.12 -m
+unittest discover -s <dir> -p <file>`. A target's *Ship checks* that runs the
+whole `.claude/scripts` suite runs `shard-harness-suite.py`, granted with no
+`:*` so that its `--ids <file>` and `--queue <file>`, its workers' own, stay
+out; its `--selective` is granted as a second whole command for the same
+reason. Residual: those suites
 run with the session's credentials, and what they run is an open sync's head,
 which its pull request shows; a session can still run any test file by a command
 no grant names, which asks in the default mode and under `auto` is the
@@ -1881,6 +1883,13 @@ verdicts for part of the diff.
 **Its grammar refuses rather than guesses.** A body carrying neither row
 prints nothing, and the caller skips its touch-set check and says so; one
 row without the other is refused, because each caller reads the pair. A
+row inside a fenced code block is an example and is not read, the fence
+being CommonMark's as the CI gate reads it: a backtick or tilde run of three
+or more, indented at most three spaces, a backtick opener's info string
+holding no backtick, closed by a run of the same character at least as long
+with only blanks after it, or by the end of the body. Read otherwise, a
+quoted example beside the table is a second row and the round refuses a
+body the gate passes. A
 class cell is one letter A–E, two distinct letters joined by `+`, or
 `A+D+E`; a touch-set cell is a comma-separated list of path tokens, bare or
 in balanced backticks, a backticked one optionally followed by a space and its
@@ -2170,7 +2179,7 @@ and its gate stays green.
 **That guard holds no copy of any deny list, and refusing to write one is
 the whole of why it is safe to run on every write this repository makes.**
 A path deny is *correct* when the spelling is true of the file, so inside a
-checkout the session stands in, one holding the home aside, the hook judges
+checkout the session stands in, the home's own names aside, the hook judges
 only the disagreement and leaves every list — `.claude/settings.json`'s and
 both commands' frontmatter — to say what may be edited; where no rule
 reaches it reads that list rather than copying it, as the next paragraph
@@ -2195,10 +2204,13 @@ one only if git's backlink agrees, so a `.git` file alone makes none, and a
 checkout of another repository is not one, because this target's denies say
 nothing about what it protects.
 
-**Outside every checkout, and inside one holding the home, the guard refuses
-by name and admits the rest.** A checkout holding the home, a dotfiles one at
-`~` or a project directory set there or above, still refuses a link that
-disagrees, as any checkout does, but excuses none of these names.
+**Under the home, whatever checkout holds the target, the guard refuses by
+name and admits the rest.** A checkout holding the home, a dotfiles one at
+`~` or a project directory set there or above, or one inside a place below,
+a checkout at `~/.claude` or `~/.ssh` (#504), still refuses a link that
+disagrees, as any checkout does, but excuses none of these names: containing
+a target is not owning it, and the denies of one inside a place are anchored
+at its own root and name none of them.
 `~/.ssh`, the shell profiles and `~/.gitconfig` run at login under every
 session, and `~/.claude`'s credentials, settings, hooks, commands, agents,
 plugins, scripts, skills and sandbox apply to every project, judged on the
@@ -2520,8 +2532,10 @@ reads the file a `sed -i` names, because nothing in the command's text says
 what line endings that file holds. It reads the command's lines as bash
 does, continuations joined and comments and heredoc bodies dropped, splits
 them into simple commands with `shlex`, follows a plain `cd <dir>` within
-its subshell, finds `sed` behind the prefix words and the `env`, `nice`,
-`timeout` and `stdbuf` wrappers, judges what a shell runs — its `-c` line,
+its subshell, finds `sed` behind the prefix words, past the options of
+`command`, `exec`, `time`, `builtin` and `nohup`, and behind the `env`,
+`nice`, `timeout` and `stdbuf` wrappers, judges what a shell runs — its
+`-c` line,
 or a heredoc, a here-string, or an `echo` or a `cat` piped into one reading
 its input —
 as a command of its own, and reads sed's options as `getopt_long` does:
@@ -2814,6 +2828,7 @@ decision accepts, and Linux still judges them on every pull request.
 - name: Decide whether this leg tests
   id: reach
   if: runner.os != 'Linux'
+  shell: bash
   run: python .claude/scripts/harness-legs.py >> "$GITHUB_OUTPUT"
 - name: Test the harness
   if: runner.os == 'Linux' || steps.reach.outputs.test != 'false'

@@ -2489,6 +2489,12 @@ def unchecked_push_pipeline(tokens):
             current = []
         else:
             current.append(token)
+    # `|&` is a pipe too, as `pipeline_groups` reads it. A grouping token ends no
+    # pipeline's status: `(git push | tail) && x` chains on `tail`'s exit. The
+    # lexer glues punctuation (`)&&`, `|(`), so both are read inside a token.
+    def piped(separator):
+        return "|" in separator and "||" not in separator and set(separator) <= set("|&(){}")
+
     pipefail = piped_push = False
     for run, separator in runs:
         if run and program_name(run[0]) == "set":
@@ -2496,11 +2502,11 @@ def unchecked_push_pipeline(tokens):
         elif run and program_name(run[0]) not in DATA_ONLY_COMMANDS and any(
                 program_name(token) == "git" and _is_push(run[index + 1:])
                 for index, token in enumerate(run)):
-            piped_push = not pipefail and separator == "|"
+            piped_push = not pipefail and piped(separator)
             continue
-        if piped_push and separator in ("&&", "||"):
+        if piped_push and ("&&" in separator or "||" in separator):
             return True
-        if separator != "|":
+        if not piped(separator) and not set(separator) <= set("(){}"):
             piped_push = False
     return False
 

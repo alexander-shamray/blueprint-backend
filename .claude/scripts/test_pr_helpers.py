@@ -532,6 +532,47 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
                 self.assertEqual("", r.stdout)
                 self.assertNotIn("ignore", r.stderr)
 
+    def test_a_row_inside_a_fenced_code_block_is_an_example(self):
+        # The CI gate reads rows only outside fences, as CommonMark reads one: a backtick or tilde run of three or
+        # more, indented at most three spaces, a backtick opener's info string holding no backtick, and closed only by
+        # a run of the same character, at least as long, with nothing after it but blanks. A quoted example beside
+        # the table was two declarations here, and a quoted example alone was the declaration.
+        table = "| Class | D |\n| Touch set | docs/x.md |\n"
+        example = "| Class | E |\n| Touch set | src/y.py |\n"
+        for name, body in (
+            ("beside the table", table + "\n```markdown\n" + example + "```\n"),
+            ("before the table", "~~~\n" + example + "~~~\n" + table),
+            ("indented three", "   ```\n" + example + "   ```\n" + table),
+            ("nested shorter fence", "````\n```\n" + example + "```\n" + example + "````\n" + table),
+            ("longer closer", "```\n" + example + "`````\n" + table),
+            ("closer with trailing spaces", "```\n" + example + "```  \n" + table),
+            ("other character inside", "```\n~~~\n" + example + "~~~\n```\n" + table),
+            ("closer with text is content", "```\n``` not a closer\n" + example + "```\n" + table),
+        ):
+            with self.subTest(name=name):
+                r = self._run_locality_with_gh(self._gh_printing(body))
+                self.assertEqual(0, r.returncode, r.stderr)
+                self.assertEqual(["class D", "inside docs/x.md"], r.stdout.splitlines())
+        for name, body in (
+            ("alone", "```\n" + example + "```\n"),
+            ("never closed", "```\n" + example),
+            ("table after an unclosed fence", "~~~~\n" + table + "~~~\n"),
+        ):
+            with self.subTest(name=name):
+                r = self._run_locality_with_gh(self._gh_printing(body))
+                self.assertEqual((0, "", ""), (r.returncode, r.stdout, r.stderr))
+        # Not fences, so the rows they precede are read: four spaces of indent, a backtick in a backtick opener's
+        # info string, and a run of two.
+        for opener in ("    ```", "```a`b", "``", "  ~~"):
+            with self.subTest(opener=opener):
+                r = self._run_locality_with_gh(self._gh_printing(opener + "\n" + table))
+                self.assertEqual(0, r.returncode, r.stderr)
+                self.assertEqual(["class D", "inside docs/x.md"], r.stdout.splitlines())
+        # A tilde opener's info string may hold a backtick, so the rows after it are fenced.
+        r = self._run_locality_with_gh(self._gh_printing("~~~ a`b\n" + example + "~~~\n" + table))
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(["class D", "inside docs/x.md"], r.stdout.splitlines())
+
     def test_one_row_without_the_other_is_refused(self):
         # A class alone gives /ship's review no set, and a set alone gives it
         # no class to judge the set by, so the pair is required, or neither.
@@ -539,6 +580,16 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
             with self.subTest(body=body):
                 r = self._run_locality_with_gh(self._gh_printing(body))
                 self.assertEqual(3, r.returncode, r.stderr)
+                self.assertEqual("", r.stdout)
+
+    def test_a_row_with_no_closing_pipe_is_not_one_cell(self):
+        # The CI gate's `_cell` refuses a row whose cell is not closed by a `|`, so the local verdict must too.
+        for body in ("| Class | D\n| Touch set | docs/x.md |\n", "| Class | D |\n| Touch set | docs/x.md\n",
+                     "| Class | D\n| Touch set | docs/x.md\n"):
+            with self.subTest(body=body):
+                r = self._run_locality_with_gh(self._gh_printing(body))
+                self.assertEqual(3, r.returncode, r.stderr)
+                self.assertIn("is not one cell", r.stderr)
                 self.assertEqual("", r.stdout)
 
     def test_a_class_is_one_letter_two_distinct_ones_or_a_d_e(self):

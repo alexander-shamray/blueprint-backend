@@ -162,6 +162,16 @@ class PrCreateHelper(unittest.TestCase):
         git(self.repo, "checkout", "-q", "--detach")
         self.assert_refused(self.run_helper(TITLE, BODY), 3, "detached HEAD")
 
+    def test_main_is_refused_however_it_is_spelled(self):
+        # On a case-insensitive filesystem `Main` is `main`'s ref; `symbolic-ref` takes every spelling on every one.
+        git(self.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x")
+        tip = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        for spelling in ("main", "Main", "MAIN", "heads/main", "refs/heads/main", "origin/main", "refs/remotes/origin/main"):
+            with self.subTest(spelling=spelling):
+                git(self.repo, "update-ref", f"refs/heads/{spelling}", tip)
+                git(self.repo, "symbolic-ref", "HEAD", f"refs/heads/{spelling}")
+                self.assert_refused(self.run_helper(TITLE, BODY), 3, "from main into main")
+
     def test_a_valid_create_reaches_gh_with_every_flag_pinned_and_removes_its_inputs(self):
         (self.repo / "sub").mkdir()
         out = self.run_helper("../" + TITLE, "../" + BODY, cwd=self.repo / "sub")

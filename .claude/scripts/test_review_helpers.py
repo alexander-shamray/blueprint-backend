@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from review_helpers import (  # noqa: F401
-    GIT, QUIET_GIT, copy_template, fixture_template, no_maintenance, run_bash, setUpModule)
+    GIT, copy_template, fixture_template, no_maintenance, run_bash, setUpModule)
 
 QUIET = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
 
@@ -70,9 +70,6 @@ class NoMaintenance(unittest.TestCase):
         self.assertEqual(["false"], seen)
         self.assertEqual(before, dict(os.environ))
 
-    def test_a_template_config_carries_maintenance_off_for_its_copies(self):
-        self.assertIn("[maintenance]\n\tauto = false\n", QUIET_GIT)
-
 
 class CopyTemplate(unittest.TestCase):
 
@@ -91,6 +88,14 @@ class CopyTemplate(unittest.TestCase):
 
     def test_a_lock_file_in_a_work_tree_directory_named_objects_is_copied(self):
         self.assertTrue((self.root / "work" / "objects" / "kept.lock").is_file())
+
+    def test_the_template_and_its_copy_carry_maintenance_off_in_their_own_config(self):
+        template = fixture_template(build_with_locks, key="review-helpers-locks")
+        for work in (Path(template, "work"), self.root / "work"):
+            with self.subTest(work=work):
+                result = subprocess.run([GIT, "-C", str(work), "config", "--local", "--get", "maintenance.auto"],
+                                        capture_output=True, text=True, encoding="utf-8", env={**os.environ, **QUIET})
+                self.assertEqual("false", result.stdout.strip())
 
     def test_the_copy_is_a_working_repository(self):
         result = subprocess.run([GIT, "-C", str(self.root / "work"), "log", "--format=%s"], capture_output=True,

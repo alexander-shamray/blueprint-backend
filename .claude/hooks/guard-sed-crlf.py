@@ -25,15 +25,21 @@ SAFE_FORMS = (
 # `>` and a separator between commands otherwise. A newline is one of them, so `shlex` is told it is not whitespace.
 PUNCTUATION = ";&|()<>\n"
 
-# Words that run the command after them, so `sed` behind one is still the command: the prefix commands, and the
-# reserved words that open a group or a clause, as in `if …; then sed -i …; fi`.
+# Words that run the command after them, so `sed` behind one is still the command: the reserved words that open a
+# group or a clause, as in `if …; then sed -i …; fi`. They take no options.
 PREFIXES = {
-    "command", "exec", "time", "builtin", "nohup",
     "{", "!", "if", "then", "elif", "else", "while", "until", "do",
 }
 
-# Programs that run the command after their own options, each with the options that take a separate argument.
+# Programs and prefix commands that run the command after their own options, each with the options that take a
+# separate argument; `time -p` or `command -p` before `sed` leaves `sed` the command.
 WRAPPERS = {
+    "command": set(),
+    "exec": {"-a"},
+    # bash's `time` keyword takes `-p` alone; GNU time, run as a program, a format and an output file.
+    "time": {"-f", "--format", "-o", "--output"},
+    "builtin": set(),
+    "nohup": set(),
     "env": {"-u", "--unset", "-C", "--chdir"},
     "nice": {"-n", "--adjustment"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
@@ -45,7 +51,11 @@ WRAPPERS = {
 SHELLS = {"bash", "sh", "bash.exe", "sh.exe"}
 # Stands for a heredoc body in the line `prepared` returns: a NUL, which no bash command line can carry.
 BODY = "\x00"
-SHELL_COMMAND = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
+# Bash's long options, which it reads before any cluster with one dash or two, and those that take the next word as
+# their value; a short option's value is the next word for each `o` and `O` in its cluster.
+SHELL_LONG = {"debug", "debugger", "dump-po-strings", "dump-strings", "help", "login", "noediting", "noprofile", "norc",
+              "posix", "pretty-print", "protected", "restricted", "verbose", "version", "wordexp"}
+SHELL_VALUED = {"rcfile", "init-file"}
 MAX_DEPTH = 3
 
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
@@ -219,6 +229,21 @@ def segments(command):
     return [segment for segment in found if segment.words]
 
 
+def option_width(option, valued):
+    """The words a wrapper's option spans: two where it, or the last letter of its short cluster, takes a value."""
+    if option in valued:
+        return 2
+    if option.startswith("--"):
+        # getopt_long takes a prefix only one long name has as that name; `--name=value` is one word.
+        return 2 if len(option) > 2 and "=" not in option and any(
+            name.startswith(option) for name in valued if name.startswith("--")) else 1
+    for position, letter in enumerate(option[1:], 1):
+        if f"-{letter}" in valued:
+            # A value letter before the cluster's end takes the rest of the word as its value.
+            return 2 if position == len(option) - 1 else 1
+    return 1
+
+
 def command_word(words):
     """The index of the word this simple command runs, past assignments, prefix words and wrappers' options."""
     index = 0
@@ -230,7 +255,7 @@ def command_word(words):
             index += 1
             while index < len(words) and words[index].startswith("-") and words[index] != "-":
                 option = words[index]
-                index += 2 if option in WRAPPERS[word] else 1
+                index += option_width(option, WRAPPERS[word])
                 if option == "--":
                     break
             # `timeout` takes its duration before the command.
@@ -260,22 +285,33 @@ def echoed(segment):
 
 
 def shell_line(arguments, stdin):
-    """The command line a shell with these arguments runs: its `-c` line, or its input where it reads that."""
+    """The command line a shell with these arguments runs: its `-c` line, or its input where it reads that.
+
+    As bash reads them: the long options, `-login` or `--login`, then the clusters, each `o` or `O` taking a word; the
+    first operand after them is the `-c` line, or a script, which reads its input as data unless `-s` was given."""
     index = 0
-    reads_input = False
+    while index < len(arguments) and arguments[index].startswith("-"):
+        name = arguments[index][2 if arguments[index].startswith("--") else 1:]
+        if name not in SHELL_LONG and name not in SHELL_VALUED:
+            break
+        index += 2 if name in SHELL_VALUED else 1
+    command = reads_input = False
     while index < len(arguments):
         argument = arguments[index]
-        if SHELL_COMMAND.fullmatch(argument):
-            return arguments[index + 1] if index + 1 < len(arguments) else None
-        if argument in ("-o", "+o"):
-            index += 2
-            continue
-        if argument == "--" or not argument.startswith(("-", "+")):
-            # An operand is a script, which reads its input as data, unless `-s` said to read commands from it.
-            return stdin if reads_input else None
-        reads_input = reads_input or (not argument.startswith("--") and "s" in argument)
+        if argument in ("--", "-"):
+            index += 1
+            break
+        if not argument.startswith(("-", "+")):
+            break
         index += 1
-    return stdin
+        if not argument.startswith("--"):
+            letters = argument[1:]
+            command = command or "c" in letters
+            reads_input = reads_input or "s" in letters
+            index += letters.count("o") + letters.count("O")
+    if index < len(arguments):
+        return arguments[index] if command else (stdin if reads_input else None)
+    return None if command else stdin
 
 
 def long_option(name):

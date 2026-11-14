@@ -347,6 +347,16 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
         git(self.repo, "checkout", "main")
         self.assert_refused(self.run_helper("7", self.OID), "not on a PR branch")
 
+    def test_main_is_not_a_pull_request_branch_however_it_is_spelled(self):
+        # On a case-insensitive filesystem `Main` is `main`'s ref; `symbolic-ref` takes every spelling on every one.
+        tip = git(self.repo, "rev-parse", "HEAD").strip()
+        for spelling in ("main", "Main", "MAIN", "heads/main", "refs/heads/main", "origin/main", "refs/remotes/origin/main"):
+            with self.subTest(spelling=spelling):
+                git(self.repo, "update-ref", f"refs/heads/{spelling}", tip)
+                git(self.repo, "symbolic-ref", "HEAD", f"refs/heads/{spelling}")
+                self.assert_refused(self.run_helper("7", self.OID, view=self.view(branch=spelling)),
+                                    "not on a PR branch")
+
     def test_an_unresolvable_repository_stops_the_helper(self):
         self.assert_refused(self.run_helper("7", self.OID, owner=""), "resolved to nothing")
         self.assert_refused(self.run_helper("7", self.OID, owner_exit="1"), "cannot resolve this checkout")
@@ -361,6 +371,13 @@ class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
 
     def test_the_tip_read_is_there(self):
         self.assertIn(TIP_READ, [ln.split("#")[0].strip() for ln in fenced_lines(SHIP)])
+
+    def test_every_clean_tree_read_names_untracked_files(self):
+        # status.showUntrackedFiles=no makes a bare `git status --short` read untracked work as a clean tree, at
+        # step 0's finished predicate and step 6's workspace gate alike.
+        clean = [ln.split("#")[0].strip() for ln in fenced_lines(SHIP)
+                 if ln.startswith("git status") and ln.partition("#")[2].strip().startswith("empty")]
+        self.assertEqual(["git status --short --untracked-files=all"] * 2, clean)
 
     def test_the_row_read_is_there_and_names_the_head(self):
         fenced = fenced_lines(SHIP)

@@ -77,8 +77,8 @@ class TheSyncRow(unittest.TestCase):
     def test_the_tree_must_be_the_proved_one_and_clean_before_anything_in_it_runs(self):
         # A pre-existing worktree with HEAD equal can hold a modified sync_pr.py or suite: the commit is not the files.
         lead = flat(section().split("\n- **", 1)[0])
-        rule = ("Before anything in the tree runs, git rev-parse HEAD must equal <oid> and git status --short must be "
-                "empty, which is what makes its own sync_pr.py and suites the proved ones")
+        rule = ("Before anything in the tree runs, git rev-parse HEAD must equal <oid> and git status --short "
+                "--untracked-files=all must be empty, which is what makes its own sync_pr.py and suites the proved ones")
         self.assertIn(rule, lead)
         self.assertIn("a tree that differs is reported, with what it holds, and ends unmerged", lead)
         self.assertLess(lead.index(HELPER), lead.index(rule))

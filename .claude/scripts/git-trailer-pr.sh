@@ -30,7 +30,8 @@ case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
   main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
     echo "refusing to rewrite main, spelled $branch: not on a PR branch" >&2; exit 3 ;;
 esac
-dirty=$(git status --porcelain)
+# Every untracked file is named, whatever status.showUntrackedFiles says: `no` would read untracked work as clean.
+dirty=$(git status --porcelain --untracked-files=all)
 [ -z "$dirty" ] || { echo "the tree is not clean: commit or stash first" >&2; exit 3; }
 
 # The number is the caller's, so it is bound to this branch: a trailer naming another pull request is the one a

@@ -259,6 +259,19 @@ class TableRow(unittest.TestCase):
         body = "| Closes | #88\r\n\r\nCloses #99\r\n| a | b |\r\n"
         self.assertEqual(declared_in_table(body), {88})
 
+    def test_another_repositorys_issue_in_the_row_is_not_a_local_one(self):
+        # A linked local issue beside a row naming another repository's issue of that number is no agreement.
+        for cell in ("other/repo#5", "https://github.com/other/repo/issues/5", "#7, other/repo#5"):
+            with self.subTest(cell=cell):
+                problems = check(payload(body=f"| Closes | {cell} |\n\nCloses #5\nCloses #7\n", linked=(5, 7)))
+                self.assertTrue(any("outside" in p and "other/repo" in p for p in problems), problems)
+                self.assertTrue(any("#5" in p and "does not say so" in p for p in problems), problems)
+
+    def test_this_repositorys_own_prefix_or_url_in_the_row_is_local(self):
+        for cell in (f"{REPO}#5", f"https://github.com/{REPO}/issues/5", f"{REPO.upper()}#5"):
+            with self.subTest(cell=cell):
+                self.assertEqual([], check(payload(body=f"| Closes | {cell} |\n\nCloses #5\n", linked=(5,))))
+
 
 class Repository(unittest.TestCase):
     def test_the_repository_comes_from_the_pull_request_url(self):

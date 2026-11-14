@@ -2182,6 +2182,26 @@ class Refreshing(Base):
             [arguments[0] for arguments, _ in self.ran])
 
 
+    def test_an_interpreter_without_the_safe_path_flag_is_not_handed_it(self):
+        """`-P` is Python 3.11's; an older `python3` exits at once on it, with stderr discarded, so nothing would
+        refresh. The worker drops it there; the module route, which without it would import a checkout's own
+        `codebase_index.py`, is not started at all, and the console script still is. From 3.11 both keep it."""
+        script = str(self.tmp / "bin" / "codebase-index")
+        root = self.checkout("main")
+        for version, flags in (((3, 9, 6), []), ((3, 10, 12), []), ((3, 11, 0), ["-P"]), ((3, 12, 10), ["-P"])):
+            module = [[self.mod.sys.executable, *flags, "-m", "codebase_index", "update"]] if flags else []
+            with self.subTest(version=version), mock.patch.object(self.mod.sys, "version_info", version):
+                for found, started in ((None, module), (script, [[script, "update"]])):
+                    with mock.patch.object(self.mod, "console_script", lambda _root, found=found: found):
+                        self.ran.clear()
+                        self.mod.refresh(root)
+                        self.assertEqual(started, [arguments[0] for arguments, _ in self.ran])
+                self.spawned.clear()
+                self.run_event({"cwd": str(root)})
+                self.assertEqual(1, len(self.spawned))
+                self.assertEqual([self.mod.sys.executable, *flags], self.spawned[0][0][0][:-3])
+
+
 class TheWorkerIsDetached(Base):
     """The worker has to outlive the hook, whose own session or console ends
     with the call, and has to run: the hook discards every stream and always

@@ -277,9 +277,9 @@ def protected_in_worktree(path, root):
 
 
 def home_offence(spelled, lexical, resolved):
-    """The reason to refuse a target no checkout below the home holds, or `None`.
+    """The reason to refuse a target the home protects, or `None`.
 
-    Spelling and resolution are both judged, so a link into `~/.ssh` is held.
+    Asked whatever checkout holds it; spelling and resolution are both judged.
     Only `~/.claude`'s first component is control. Unreadable names refuse.
     """
     home = os.path.abspath(os.path.expanduser("~"))
@@ -304,9 +304,9 @@ def home_offence(spelled, lexical, resolved):
             if place == "login":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
-                    "which no checkout below the home holds and is a key, a shell "
-                    "profile or git's own configuration: what runs at login, "
-                    "under every session (docs/harness-boundaries.md)."
+                    "a key, a shell profile or git's own configuration below "
+                    "the home: what runs at login, under every session, which "
+                    "no checkout's rules own (docs/harness-boundaries.md)."
                 )
             if place == "control":
                 return (
@@ -316,13 +316,6 @@ def home_offence(spelled, lexical, resolved):
                     "owner's to run (docs/harness-boundaries.md)."
                 )
     return None
-
-
-def holds_home(spelled_root, real_root, traits):
-    """Whether an anchor is the home directory or one of its ancestors."""
-    home = os.path.abspath(os.path.expanduser("~"))
-    return (under(home, spelled_root, traits)
-            or under(os.path.realpath(home), real_root, traits))
 
 
 def anchors(event):
@@ -455,11 +448,9 @@ def offence(event):
 
     # Every anchor containing the target must agree, so an extra anchor cannot
     # excuse what another refuses — the property `anchors` rests its trust in
-    # `CLAUDE_PROJECT_DIR` on. An anchor holding the home directory, a dotfiles
-    # checkout at `~` or a project directory set to it or above, judges its
-    # links but leaves `home_offence` to run.
+    # `CLAUDE_PROJECT_DIR` on. An anchor judges its links and leaves
+    # `home_offence` to run: containing a target is not owning it.
     judged = False
-    held = False
     for spelled_root, real_root, traits in checkouts:
         if under(lexical, spelled_root, traits):
             base = spelled_root
@@ -468,7 +459,6 @@ def offence(event):
         else:
             continue
         judged = True
-        held = held or holds_home(spelled_root, real_root, traits)
 
         expected = os.path.normpath(
             os.path.join(real_root, os.path.relpath(lexical, base)))
@@ -525,9 +515,7 @@ def offence(event):
                 )
 
     # Reached when every anchor containing the target agreed.
-    if held or not judged:
-        return home_offence(spelled, lexical, resolved)
-    return None
+    return home_offence(spelled, lexical, resolved)
 
 
 def main():

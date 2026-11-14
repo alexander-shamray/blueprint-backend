@@ -37,7 +37,23 @@ body=$(gh_read pr view "$pr" --json body --jq .body)
 body=${body//$'\r'/}
 class_row="" touch_row="" class_rows=0 touch_rows=0
 class_at='^\| *Class *\|' touch_at='^\| *Touch set *\|'
+# A row inside a fenced code block is an example, not the declaration, and is skipped as the CI gate skips it, by
+# CommonMark's fences: a backtick or tilde run of three or more, indented at most three spaces, a backtick opener's
+# info string holding no backtick, closed only by a run of the same character, at least as long, then blanks alone.
+# The run is greedy, so a backtick left in the rest is one in the info string. An unclosed fence runs to the end.
+fence="" fence_open='^ {0,3}(`{3,}|~{3,})(.*)$' fence_close='^ {0,3}(`{3,}|~{3,})[[:blank:]]*$'
 while IFS= read -r line; do
+  if [ -n "$fence" ]; then
+    if [[ "$line" =~ $fence_close ]] && [ "${BASH_REMATCH[1]:0:1}" = "${fence:0:1}" ] &&
+      [ "${#BASH_REMATCH[1]}" -ge "${#fence}" ]; then fence=""; fi
+    continue
+  fi
+  if [[ "$line" =~ $fence_open ]]; then
+    case "${BASH_REMATCH[1]:0:1}${BASH_REMATCH[2]}" in
+      '`'*'`'*) ;;
+      *) fence=${BASH_REMATCH[1]}; continue ;;
+    esac
+  fi
   if [[ "$line" =~ $class_at ]]; then class_row=$line; class_rows=$((class_rows + 1)); fi
   if [[ "$line" =~ $touch_at ]]; then touch_row=$line; touch_rows=$((touch_rows + 1)); fi
 done < <(printf '%s\n' "$body")
@@ -48,11 +64,13 @@ done < <(printf '%s\n' "$body")
 [ "$touch_rows" -le 1 ] || refuse "more than one Touch set row"
 if [ -z "$class_row" ] && [ -z "$touch_row" ]; then exit 0; fi
 [ -n "$class_row" ] && [ -n "$touch_row" ] || refuse "one row without the other"
-# Cut `cell`, a row labelled `$1`, to the text after its label's `|`, less a closing `|` and the spaces around both.
+# Cut `cell`, a row labelled `$1`, to the text after its label's `|`, less its closing `|` and the spaces around both.
+# A row with no closing `|` is not one cell, as the CI gate's `_cell` refuses it.
 cell_of() {
   local head="^\\| *$1 *\\| *" tail=' *\| *$'
   if [[ "$cell" =~ $head ]]; then cell=${cell:${#BASH_REMATCH[0]}}; fi
-  if [[ "$cell" =~ $tail ]]; then cell=${cell:0:${#cell}-${#BASH_REMATCH[0]}}; fi
+  [[ "$cell" =~ $tail ]] || refuse "the $1 row is not one cell"
+  cell=${cell:0:${#cell}-${#BASH_REMATCH[0]}}
 }
 cell=$class_row
 cell_of Class

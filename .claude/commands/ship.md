@@ -169,7 +169,8 @@ the run reports and ends unmerged. Step 1 then runs `bash
 .claude/scripts/git-worktree-sync.sh .claude/worktrees/sync-<sha7> <head>` in
 place of `/branch` and enters it, or, where `.claude/worktrees/sync-<sha7>`
 already exists on that branch, enters that. Before anything in the tree runs,
-`git rev-parse HEAD` must equal `<oid>` and `git status --short` must be empty,
+`git rev-parse HEAD` must equal `<oid>` and `git status --short
+--untracked-files=all` must be empty,
 which is what makes its own `sync_pr.py` and suites the proved ones; a tree that
 differs is reported, with what it holds, and ends unmerged. Every later `verify`
 and `review-diff` passes `--head <oid>`. Under `--dispatched` the dispatcher
@@ -258,7 +259,7 @@ target*)
 
    ```bash
    git fetch origin main                      # or the teardown's base is stale
-   git status --short                         # empty: nothing uncommitted
+   git status --short --untracked-files=all   # empty: nothing uncommitted
    git rev-parse HEAD                         # the tip, for the row below
    bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED
                                                    # and baseRefName main
@@ -571,7 +572,7 @@ target*)
    bash .claude/scripts/pr-state.sh <n>
    gh pr checks <n> --watch --fail-fast --interval 60
    bash .claude/scripts/main-red-open.sh
-   git status --short              # empty
+   git status --short --untracked-files=all   # empty
    git log <headRefOid>..HEAD      # empty: this workspace holds nothing extra
    ```
 

@@ -209,6 +209,22 @@ def _files(rel: str) -> list[str]:
             if p.is_file() and "__pycache__" not in p.parts] if path.is_dir() else []
 
 
+class TheSampleStepRunsUnderBashTests(unittest.TestCase):
+    """The sample a target copies runs on Windows and macOS legs alone, and with no `shell` a Windows step runs under
+    pwsh, where the `"$GITHUB_OUTPUT"` redirect has an empty target and the step fails."""
+
+    def test_every_step_writing_the_output_names_bash(self):
+        text = (ROOT / "docs" / "harness-boundaries.md").read_text(encoding="utf-8")
+        section = text.split("## The harness legs decision", 1)[1].split("\n## ", 1)[0]
+        sample = re.search(r"```yaml\n(.*?)```", section, re.DOTALL).group(1)
+        steps = [step for step in re.split(r"^- ", sample, flags=re.MULTILINE) if step.strip()]
+        writing = [step for step in steps if "GITHUB_OUTPUT" in step]
+        self.assertTrue(writing, "the sample no longer writes the step output, so this case reads nothing")
+        for step in writing:
+            with self.subTest(step=step.splitlines()[0]):
+                self.assertRegex(step, r"(?m)^  shell: bash$")
+
+
 class WhatTheDecisionLooksAtTests(unittest.TestCase):
     def setUp(self) -> None:
         self.reach = LEGS.reach(ROOT)

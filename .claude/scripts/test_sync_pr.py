@@ -932,6 +932,17 @@ class RunLocalSuitesTests(SyncCase):
         self.assertIn("not clean", out)
         self.assertNotIn("boom", out)
 
+    def test_an_untracked_module_is_not_clean_whatever_status_shows(self):
+        # status.showUntrackedFiles=no would hide a module `unittest discover` imports beside the proved suite.
+        head = self.take({"tools/test_bad.py": self.FAILS})
+        git(self.root, "config", "status.showUntrackedFiles", "no")
+        self.write({"tools/helper.py": "pass\n"})
+        self.assertEqual("", git(self.root, "status", "--porcelain").strip())
+        code, out, _ = self.cli("run-local-suites", "7", "--head", head)
+        self.assertEqual(1, code)
+        self.assertIn("not clean", out)
+        self.assertNotIn("boom", out)
+
     def test_it_takes_no_path_so_a_file_outside_the_tree_cannot_be_named(self):
         for argv in (["run-local-suites"], ["run-local-suites", "7"], ["run-local-suites", "7", "--head", "x"],
                      ["run-local-suites", "--head", "0" * 40],

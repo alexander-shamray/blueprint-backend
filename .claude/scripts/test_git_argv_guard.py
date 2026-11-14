@@ -3243,6 +3243,14 @@ class TheGitArgvGuard(unittest.TestCase):
         for command in (
             "git push origin feat/x 2>&1 | tail -1 && gh pr comment 1 -b done",
             "git push origin feat/x | tee push.log | tail -1 || echo failed",
+            # `|&` is a pipe, and a subshell's exit is its pipeline's last command's.
+            "git push origin feat/x |& tail -1 && gh pr comment 1 -b done",
+            "(git push origin feat/x | tail -1) && echo pushed",
+            "(git push origin feat/x 2>&1 | tail -1)&& echo pushed",
+            "(git push origin feat/x |& tail -1) || echo failed",
+            # The lexer glues a pipe to a grouping token.
+            "git push origin feat/x |(tail -1) && echo pushed",
+            "(git push origin feat/x | tail -1)| cat && echo ok",
         ):
             with self.subTest(command=command):
                 reason = self.assertRefused(command)
@@ -3256,6 +3264,9 @@ class TheGitArgvGuard(unittest.TestCase):
             "git push origin feat/x 2>&1 | tail -1",
             "git push origin feat/x && gh pr comment 1 -b done",
             "git log --oneline | head -1 && echo ok",
+            "(set -o pipefail; git push origin feat/x | tail -1) && echo pushed",
+            "(git push origin feat/x | tail -1); echo done && echo ok",
+            "git push origin feat/x |& tail -1",
         ):
             with self.subTest(command=command):
                 self.assertAdmitted(command)

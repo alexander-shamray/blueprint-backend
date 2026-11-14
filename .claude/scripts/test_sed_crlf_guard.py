@@ -172,6 +172,30 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
             with self.subTest(command=command):
                 self.assertRefused(command, "crlf.txt")
 
+    def test_a_sed_behind_a_prefix_word_s_options_is_judged(self):
+        # A prefix word's own option was read as the command word, so the sed behind it went unjudged.
+        for command in (
+            "time -p sed -i 's/one/uno/' crlf.txt",
+            "command -p sed -i 's/one/uno/' crlf.txt",
+            "exec -a name sed -i 's/one/uno/' crlf.txt",
+            "exec -cl sed -i 's/one/uno/' crlf.txt",
+            "nohup -- sed -i 's/one/uno/' crlf.txt",
+            "time -p command -p sed -i 's/one/uno/' crlf.txt",
+            # A cluster whose last letter takes a value takes the next word with it.
+            "exec -ca name sed -i 's/one/uno/' crlf.txt",
+            "exec -cla name sed -i 's/one/uno/' crlf.txt",
+            "env -iu LANG sed -i 's/one/uno/' crlf.txt",
+            # GNU time, reached as a program, takes its format and output file as separate words.
+            "env time -o log sed -i 's/one/uno/' crlf.txt",
+            "command time -f %e sed -i 's/one/uno/' crlf.txt",
+            # A long option's unique prefix is that option, as getopt_long reads it.
+            "env --un LANG sed -i 's/one/uno/' crlf.txt",
+            "env time --out log sed -i 's/one/uno/' crlf.txt",
+            "env -- sed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, "crlf.txt")
+
     def test_a_line_fed_to_a_shell_is_judged(self):
         # Review R3, round 2: a heredoc, a here-string or an echo piped into a shell is a command line it runs.
         for command in (
@@ -186,6 +210,29 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
         ):
             with self.subTest(command=command):
                 self.assertRefused(command, ".txt")
+
+    def test_a_shell_option_s_value_is_not_its_operand(self):
+        # Issue 528: only `-o` and `+o` took a value, so `-O extglob` read as a script and the line went unjudged.
+        for command in (
+            "bash -O extglob -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash +O extglob -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -O extglob <<'EOF'\nsed -i 's/one/uno/' crlf.txt\nEOF\n",
+            # Each `o` or `O` in a cluster takes a word, and the `-c` line is the first operand after them all.
+            "bash -eo pipefail -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -oO pipefail extglob -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -co pipefail \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -c -O extglob \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash +c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash --rcfile rc -c \"sed -i 's/one/uno/' crlf.txt\"",
+            # Bash reads its long options first, with one dash or two, so the `o` in `-login` takes no word.
+            "bash -login -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -noprofile -norc -O extglob -c \"sed -i 's/one/uno/' crlf.txt\"",
+            "bash -rcfile rc -c \"sed -i 's/one/uno/' crlf.txt\"",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, "crlf.txt")
+        # A script after the value still reads its input as data.
+        self.assertAdmitted("bash -O extglob run.sh <<EOF\nsed -i 's/one/uno/' crlf.txt\nEOF\n")
 
     def test_a_cd_moves_the_files_after_it(self):
         self.assertRefused("cd sub && sed -i 's/one/uno/' inner.txt", "inner.txt")

@@ -193,6 +193,14 @@ class SyncLaunch(Bound):
         (self.tree / "planted.py").write_text("pass\n", encoding="utf-8")
         self.refused(f"{WORKTREE} is not clean: ?? planted.py")
 
+    def test_an_untracked_file_is_not_clean_whatever_status_shows(self):
+        # status.showUntrackedFiles=no, from any config level, would read the planted module as a clean tree.
+        git_in(self.tree, "config", "status.showUntrackedFiles", "no")
+        (self.tree / "deep").mkdir()
+        (self.tree / "deep" / "planted.py").write_text("pass\n", encoding="utf-8")
+        self.assertEqual("", git_in(self.tree, "status", "--porcelain"))
+        self.refused(f"{WORKTREE} is not clean: ?? deep/planted.py")
+
     def test_a_tree_that_is_not_a_worktree_on_the_head_launches_nothing(self):
         self.refused(f"{WORKTREE} is not a worktree on chore/harness-sync-1234567",
                      branch="chore/harness-sync-1234567")
@@ -457,6 +465,13 @@ class AMergeWithNoResult(Bound):
         (self.tree / "dirty").write_text("x\n", encoding="utf-8")
         self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
 
+    def test_an_untracked_file_is_dirty_whatever_status_shows(self):
+        self.github()
+        git_in(self.tree, "config", "status.showUntrackedFiles", "no")
+        (self.tree / "dirty").write_text("x\n", encoding="utf-8")
+        self.assertEqual("", git_in(self.tree, "status", "--porcelain"))
+        self.assertEqual("S1: relaunch - no result; exit 0", self.ended())
+
     def test_a_read_that_fails_or_answers_out_of_shape_is_still_the_crash(self):
         self.github()
         for script, body in (("pr-for-branch.sh", "exit 1\n"), ("pr-for-branch.sh", "echo not-json\n"),
@@ -651,7 +666,8 @@ class Wake(InRoot):
             with self.subTest(status=status):
                 record_sync(status=status, resets_at="2020-01-01T00:00:00+00:00")
                 lines = self.wake()
-                self.assertEqual("launch: none", lines[-1])
+                # A refused account ends the night, which launches nothing either.
+                self.assertEqual("end: account" if status == "account" else "launch: none", lines[-1])
                 self.assertIn(f"running: {GID}", lines)
         record_sync(status="closed", closed_from="verified")
         self.assertEqual("launch: S1 S3", self.wake()[-1])

@@ -506,7 +506,9 @@ def run_local_suites(number, pin):
     if here != pin:
         print(f"HEAD is {here}, not {pin}, so no suite ran")
         return 1
-    if read(["git", "status", "--short"]).strip():
+    # Every untracked file is named, whatever status.showUntrackedFiles says: an untracked module beside a suite is
+    # one `unittest discover` can import.
+    if read(["git", "status", "--short", "--untracked-files=all"]).strip():
         print("the tree is not clean, so no suite ran")
         return 1
     failed = []

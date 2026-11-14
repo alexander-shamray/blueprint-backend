@@ -58,7 +58,13 @@ TABLE_ROW = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-ISSUE_NUMBER = re.compile(r"(?:#|(?<![^\W_])gh-)(\d+)\b", re.IGNORECASE)
+# A reference in the row's cell, with the repository it names when it names one: an `owner/repo` prefix or an issue
+# URL names another repository's issue unless the repository is this one, never this repository's of that number.
+CELL_REFERENCE = re.compile(
+    r"(?:(?P<repo>[\w.-]+/[\w.-]+)?#|(?<![^\W_])gh-)(?P<number>\d+)\b"
+    r"|https?://github\.com/(?P<url_repo>[\w.-]+/[\w.-]+)/issues/(?P<url_number>\d+)\b",
+    re.IGNORECASE,
+)
 
 # Dependabot copies the upstream release notes into its description, inside
 # `<details>`, and a note there can carry a closing keyword about the upstream
@@ -176,13 +182,23 @@ def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]
     return numbers, unreadable
 
 
-def declared_in_table(body: str) -> set[int]:
-    """Issue numbers named by the body's `| Closes |` metadata row."""
-    return {
-        int(number)
-        for row in TABLE_ROW.finditer(body)
-        for number in ISSUE_NUMBER.findall(row.group("cell"))
-    }
+def table_references(body: str, repository: str = "") -> tuple[set[int], list[str]]:
+    """This repository's issue numbers the `| Closes |` row names, and each reference it makes to another's."""
+    numbers: set[int] = set()
+    foreign: list[str] = []
+    for row in TABLE_ROW.finditer(body):
+        for reference in CELL_REFERENCE.finditer(row.group("cell")):
+            named = reference.group("repo") or reference.group("url_repo")
+            if named is not None and named.lower() != repository.lower():
+                foreign.append(reference.group(0))
+                continue
+            numbers.add(int(reference.group("number") or reference.group("url_number")))
+    return numbers, foreign
+
+
+def declared_in_table(body: str, repository: str = "") -> set[int]:
+    """Issue numbers named by the body's `| Closes |` metadata row, in this repository."""
+    return table_references(body, repository)[0]
 
 
 def check(payload: dict) -> list[str]:
@@ -258,7 +274,13 @@ def check(payload: dict) -> list[str]:
             f"{repository} — this gate compares only this repository's issues, "
             f"so unlink it in the sidebar or its number may hide a local one"
         )
-    declared = declared_in_table(payload["body"] or "")
+    declared, table_foreign = table_references(payload["body"] or "", repository)
+    for reference in table_foreign:
+        problems.append(
+            f"the `| Closes |` row names `{reference}`, which is outside "
+            f"{repository} — this gate compares only this repository's issues, "
+            f"and its number may hide a local one, so take it out of the row"
+        )
 
     from_commits: dict[int, list[str]] = {}
     for commit in commits:

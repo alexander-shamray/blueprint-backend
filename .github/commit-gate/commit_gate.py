@@ -18,8 +18,9 @@ SUBJECT = re.compile(
 )
 
 # A revert git wrote itself: `git revert --no-edit` titles it `Revert "<the
-# reverted subject>"`, so the form is judged on the subject inside the quotes.
-REVERT = re.compile(r'^Revert "(?P<inner>.+)"$')
+# reverted subject>"`, and a revert of that revert `Reapply "<subject>"` or
+# `Revert "Revert "<subject>""`, so the form is judged on the innermost subject.
+REVERT = re.compile(r'^(?:Revert|Reapply) "(?P<inner>.+)"$')
 
 LEFTOVER = re.compile(r"^(?:fixup!|squash!|amend!|wip(?![a-z]))", re.IGNORECASE)
 
@@ -28,8 +29,9 @@ TRAILER_KEY = "PR"
 
 def subject_problem(subject: str) -> str | None:
     """Why the subject is outside the form, or None when it is inside it."""
-    revert = REVERT.match(subject)
-    inner = revert.group("inner") if revert else subject
+    inner = subject
+    while revert := REVERT.match(inner):
+        inner = revert.group("inner")
     if LEFTOVER.match(subject) or LEFTOVER.match(inner):
         return "is a fixup!/squash!/amend!/wip leftover"
     if not SUBJECT.match(inner):

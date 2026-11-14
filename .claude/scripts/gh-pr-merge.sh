@@ -29,8 +29,13 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 # request must be the one for the branch checked out here, from this
 # repository rather than a fork, into `main`, with that head.
 branch=$(git branch --show-current)
-[ -n "$branch" ] && [ "$branch" != main ] ||
+[ -n "$branch" ] ||
   { echo "not on a PR branch: nothing to bind pull request #$pr to" >&2; exit 3; }
+# Folded and spelled out as git-trailer-pr.sh does: on a case-insensitive filesystem `Main` is `main`'s ref.
+case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
+  main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
+    echo "not on a PR branch: nothing to bind pull request #$pr to, on main spelled $branch" >&2; exit 3 ;;
+esac
 head=$(gh pr view "$pr" --repo "$repo" \
   --json headRefName,headRefOid,isCrossRepository,baseRefName \
   --jq '[.headRefName, .headRefOid, (.isCrossRepository|tostring), .baseRefName] | @tsv') ||

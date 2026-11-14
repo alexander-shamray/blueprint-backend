@@ -63,11 +63,20 @@ LIMIT_429 = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "
              "result": "Claude usage limit reached. Your limit resets at 2026-11-02T03:00:00Z."}
 LIMIT_KIND = {**SUCCESS, "subtype": "error_during_execution", "is_error": True, "api_error_status": None,
               "error": {"type": "rate_limit"}, "result": "API Error"}
+# sync-497's envelope from run 20261114-081919, trimmed of fields nothing reads: the API refused the account
+# before any turn ran, so every group launched that night would meet the same refusal.
+NO_CREDIT = {"type": "result", "subtype": "success", "is_error": True, "api_error_status": 400,
+             "api_error_type": "invalid_request_error", "api_error_origin": "first_party", "stop_reason": "stop_sequence",
+             "terminal_reason": "api_error", "num_turns": 1, "duration_api_ms": 0, "total_cost_usd": 0,
+             "session_id": "f57e1234-5bc1-4c50-bfac-e5c527967b57", "modelUsage": {}, "permission_denials": [],
+             "usage": {"input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+                       "output_tokens": 0},
+             "result": "Credit balance is too low"}
 FAKE_CLAUDE = """import json, os, sys
 here = os.path.dirname(os.path.abspath(__file__))
 seen = {"argv": sys.argv[1:], "cwd": os.getcwd(), "stdin": sys.stdin.buffer.read().decode("utf-8"),
         "temp": {name: os.environ.get(name) for name in ("TMP", "TEMP", "TMPDIR")},
-        "dispatched": os.environ.get("HARNESS_DISPATCHED")}
+        "dispatched": os.environ.get("HARNESS_DISPATCHED"), "api_key": os.environ.get("ANTHROPIC_API_KEY")}
 with open(os.path.join(here, "seen.json"), "w", encoding="utf-8") as handle:
     json.dump(seen, handle)
 with open(os.path.join(here, "reply.bin"), "rb") as handle:
@@ -542,6 +551,8 @@ class LaunchTests(InRoot):
                          "resume from there, and end the turn only on the result) --dispatched "
                          f"artifacts/dispatch/{RUN}", seen["stdin"])
         self.assertIn(("rev-list", "--count", "origin/main..HEAD"), reads)
+        # status.showUntrackedFiles=no would otherwise read untracked work as nothing left.
+        self.assertIn(("status", "--porcelain", "--untracked-files=all"), reads)
 
     def test_a_first_launch_reads_nothing_it_left(self):
         record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
@@ -603,6 +614,14 @@ class LaunchTests(InRoot):
         run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"))
         seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
         self.assertEqual("1", seen["dispatched"])
+
+    def test_run_keeps_the_dispatchers_api_key_from_the_executor(self):
+        # Inherited, the key outranked the owner's subscription login, and a drained API balance crashed every launch.
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE)
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-dispatcher"}):
+            run_fake_claude(stdout=json.dumps(SUCCESS).encode("utf-8"))
+        seen = json.loads(Path("fake/seen.json").read_text(encoding="utf-8"))
+        self.assertIsNone(seen["api_key"])
 
     def test_run_removes_the_executors_temp_directory_once_it_exits(self):
         # Each launch's mkdtemp directory outlived its executor and piled up under the system temp root.
@@ -789,6 +808,32 @@ class ClassifyTests(InRoot):
         got = dr.session_end({"exit": 1, "stdout": "", "stderr": text, "ended": NOW.isoformat()})
         self.assertEqual(datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc), got.resets_at)
         self.assertEqual("week", dr.classify(got, None, 0, NOW))
+
+    def test_an_account_the_api_refused_before_any_work_ends_the_night_and_is_no_crash(self):
+        # Run 20261114-081919 read this as `relaunch`, then `crash-hand-back`, and sent sync-497 back for it.
+        for status in (400, 401):
+            with self.subTest(status=status):
+                got = dr.session_end({"exit": 1, "stdout": json.dumps({**NO_CREDIT, "api_error_status": status}),
+                                      "stderr": "", "ended": NOW.isoformat()})
+                self.assertEqual(f"{status} invalid_request_error: Credit balance is too low", got.account_refused)
+                for crashes in (0, 1):
+                    self.assertEqual("account", dr.classify(got, None, crashes, NOW))
+        self.assertEqual("the API refused the account: 400 invalid_request_error: Credit balance is too low",
+                         dr._reason("account", dr.session_end({"exit": 1, "stdout": json.dumps(NO_CREDIT)}), None))
+
+    def test_an_api_error_that_did_work_or_is_not_the_accounts_is_still_a_crash(self):
+        for changed in ({"num_turns": 2}, {"num_turns": True}, {"num_turns": None}, {"api_error_status": 500},
+                        {"api_error_status": "400"}, {"terminal_reason": "error"}, {"api_error_status": 429}):
+            with self.subTest(changed=changed):
+                got = dr.session_end({"exit": 1, "stdout": json.dumps({**NO_CREDIT, **changed}), "stderr": ""})
+                self.assertIsNone(got.account_refused)
+                self.assertIn(dr.classify(got, None, 0, NOW), ("relaunch", "window", "week"))
+        # A session that says it did not fail and exited 0 is no refusal, whatever else its envelope carries.
+        got = dr.session_end({"exit": 0, "stdout": json.dumps({**NO_CREDIT, "is_error": False}), "stderr": ""})
+        self.assertIsNone(got.account_refused)
+        # A result the session wrote is its outcome, whatever the envelope says.
+        got = dr.session_end({"exit": 1, "stdout": json.dumps(NO_CREDIT), "stderr": ""})
+        self.assertEqual("handed-back", dr.classify(got, self.result(HANDED_S1), 0, NOW))
 
     def test_a_crash_relaunches_once_and_a_second_hands_back(self):
         crashed = dr.session_end({"exit": 3221225786, "stdout": "", "stderr": "Error: socket hang up"})
@@ -1574,7 +1619,7 @@ class WakeTests(InRoot):
     def test_the_runbook_names_every_ending_wake_prints(self):
         # Read from the source, so an ending added later fails here until the night loop says what it means.
         endings = set(re.findall(r'"(end: [a-z-]+)"', Path(dr.__file__).read_text(encoding="utf-8")))
-        self.assertEqual({"end: drained", "end: held", "end: week", "end: stop-file"}, endings)
+        self.assertEqual({"end: drained", "end: held", "end: week", "end: account", "end: stop-file"}, endings)
         runbook = " ".join((Path(dr.__file__).parent.parent / "commands" / "dispatch.md").read_text(
             encoding="utf-8").split())
         loop = runbook[runbook.index("2. **The night loop.**"):runbook.index("**Launch a group**")]
@@ -1610,6 +1655,69 @@ class WakeTests(InRoot):
             self.assertEqual("", run_cli(["run", RUN, "S9"]))
         self.assertTrue((state_dir() / "S9.session.json").is_file())
         self.assertIn("S9: relaunch - no result; exit 0", run_cli(["result", RUN, "S9"]))
+
+    def test_an_account_the_api_refused_ends_the_night_until_the_group_is_relaunched(self):
+        # Each group launched after the refusal burned a relaunch on it; the night ends on the first instead.
+        record(RUN, "S9", status="running")
+        (state_dir() / "S9.session.json").write_text(json.dumps(
+            {"exit": 1, "started": NOW.isoformat(), "ended": NOW.isoformat(), "stdout": json.dumps(NO_CREDIT),
+             "stderr": ""}), encoding="utf-8")
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            self.assertIn("S9: account - the API refused the account: 400 invalid_request_error: Credit balance is "
+                          "too low", run_cli(["result", RUN, "S9"]))
+        self.assertEqual(0, group_state(RUN, "S9")["crashes"], "a refused account is no crash of the group's")
+        lines = self.wake()
+        self.assertIn("running: S9", lines)
+        self.assertEqual("end: account", lines[-1])
+        self.assertEqual("end: account", self.wake()[-1], "a later wake of the night still ends it")
+        report = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-01"],
+                         body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+        self.assertIn("S9 account: the API refused the account: 400 invalid_request_error: Credit balance is too "
+                      f"low; fix the account, then run /dispatch again, which resumes run {RUN} and relaunches it",
+                      report)
+        # A resumed run lifts the hold before its relaunch starts, so a wake racing that launch launches again.
+        self.assertIn("relaunch S9", run_cli(["resume", RUN]))
+        self.assertTrue((state_dir() / "S9.session.json").is_file())
+        self.assertEqual(["running: S9", "launch: S1"], [self.wake()[i] for i in (1, -1)])
+        self.assertIn("relaunch S9", run_cli(["resume", RUN]))
+
+    def test_a_merge_with_no_round_after_a_refused_account_is_a_first_sessions(self):
+        # The refused session ran no turn past the first, so it cannot have reviewed what the relaunch merged.
+        merged = dr.validate_result({**MERGED_S1, "rounds": []}, "S1", [1682, 1683])
+        entry = {"absorbed": NOW.isoformat(), "status": "account", "crashes": 0}
+        self.assertTrue(dr._unreviewed(entry, merged, 0))
+        self.assertFalse(dr._unreviewed({**entry, "status": "week"}, merged, 0))
+        self.assertTrue(dr._unreviewed({**entry, "status": "running"}, merged, 0), "as resume leaves it")
+
+    def test_a_refused_sync_is_taken_again_by_the_next_night(self):
+        # A sync holds no row, so nothing keeps its run open for `resume`: its report line says what comes next.
+        record(RUN, "S7", status="account", kind="sync", keys=[], reason="the API refused the account: 400")
+        self.assertEqual("end: account", self.wake()[-1])
+        report = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-01"],
+                         body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+        self.assertIn("S7 account: the API refused the account: 400; fix the account, then run /dispatch "
+                      "again, which takes the sync again", report)
+        self.assertNotIn("resume: run /dispatch again", report)
+        # Another group's rows keep the run open, so `resume` relaunches the sync instead, and the line says so.
+        with mock.patch.object(dr, "_holds_rows", return_value=(True, None)):
+            report = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-01"],
+                             body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+        self.assertIn(f"S7 account: the API refused the account: 400; fix the account, then run /dispatch again, "
+                      f"which resumes run {RUN} and relaunches it", report)
+
+    def test_a_refused_relaunch_is_lifted_back_to_a_relaunch(self):
+        # A group relaunched from a window or a crash, then refused: its earlier session may have left work and a
+        # review, so the lifted hold keeps it a relaunch, which reads what that session left and may merge unrounded.
+        for launched_as, lifted in (("running", "running"), ("relaunch", "relaunch"), ("window", "relaunch")):
+            with self.subTest(launched_as=launched_as):
+                record(RUN, "S9", status=launched_as, absorbed=None)
+                (state_dir() / "S9.session.json").write_text(json.dumps(
+                    {"exit": 1, "started": NOW.isoformat(), "ended": NOW.isoformat(),
+                     "stdout": json.dumps(NO_CREDIT), "stderr": ""}), encoding="utf-8")
+                with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+                    self.assertIn("S9: account", run_cli(["result", RUN, "S9"]))
+                self.assertIn("relaunch S9", run_cli(["resume", RUN]))
+                self.assertEqual(lifted, group_state(RUN, "S9")["status"])
 
     def test_an_unreadable_week_reset_holds_under_a_moving_clock(self):
         ticks = iter(NOW + timedelta(seconds=n) for n in range(100))

@@ -360,23 +360,27 @@ case "$mode" in
       { echo "on $current, not $branch: this helper only ever touches the current branch" >&2; exit 4; }
     # Assigned rather than read inside `[`, where a command substitution
     # discards the exit status and a git that failed reads as a clean tree.
-    dirty=$(git status --porcelain)
+    # Every untracked file is named, whatever status.showUntrackedFiles says:
+    # `no` would read untracked work as a clean tree.
+    dirty=$(git status --porcelain --untracked-files=all)
     [ -z "$dirty" ] ||
       { echo "the tree is dirty; a rebase would carry or refuse it, and neither is this helper's call" >&2; exit 5; }
-    # A skip-worktree file reads clean in `git status` and is still local state
-    # the replay's checkout will not overwrite, so the replay would stop with
-    # git's "local changes would be overwritten" and name no file. It is
-    # refused here, by name, under the dirty tree's own exit. A sparse checkout
-    # sets the same flag on purpose, so one that says so is not read as a lift.
+    # Skip-worktree and assume-unchanged (tag h) files read clean in `git status`:
+    # the replay stops on the first, naming no file, and overwrites the second.
+    # Both are refused here, by name, under the dirty tree's own exit. A sparse
+    # checkout sets skip-worktree on purpose, so one that says so lifts that
+    # flag alone; nothing sparse sets assume-unchanged.
     sparse=$(git config --type=bool core.sparseCheckout || :)
     if [ "$sparse" != "true" ]; then
-      flagged=$(git ls-files -v | sed -n 's/^[Ss] //p')
-      [ -z "$flagged" ] ||
-        { echo "these tracked files carry skip-worktree, which git status does not show and a replay will not overwrite:" >&2
-          printf '%s\n' "$flagged" >&2
-          echo "clear the flag with 'git update-index --no-skip-worktree <file>', or restore the file, then start again" >&2
-          exit 5; }
+      flagged=$(git ls-files -v | sed -n 's/^[Ssh] //p')
+    else
+      flagged=$(git ls-files -v | sed -n 's/^[sh] //p')
     fi
+    [ -z "$flagged" ] ||
+      { echo "these tracked files carry skip-worktree or assume-unchanged, which git status does not show and a replay stops on or overwrites:" >&2
+        printf '%s\n' "$flagged" >&2
+        echo "clear the flag with 'git update-index --no-skip-worktree <file>' or 'git update-index --no-assume-unchanged <file>', or restore the file, then start again" >&2
+        exit 5; }
 
     # Ahead of the fetch, so a redirect reads nothing from where it points and the
     # branch is not replayed; `publish` asks again, since `continue` comes later.

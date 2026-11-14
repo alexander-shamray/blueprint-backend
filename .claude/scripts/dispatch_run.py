@@ -38,8 +38,9 @@ RESULT_KEYS = ("group", "issues", "outcome", "pr", "title", "merge_oid", "rounds
 RESULT_CAP = 1 << 20
 OID = re.compile(r"[0-9a-f]{40}")
 SESSION_ID = re.compile(r"[A-Za-z0-9-]{1,80}")
-# A group holds an executor slot while it runs or waits to run again; a week's limit ends the night until it resets.
-ACTIVE = ("running", "relaunch", "window", "week")
+# A group holds an executor slot while it runs or waits to run again; a week's limit ends the night until it resets,
+# and an account the API refused ends it until `resume`, the owner's word that the account is fixed, lifts it.
+ACTIVE = ("running", "relaunch", "window", "week", "account")
 # A `run` that started no executor: no slot is held, and the group goes back rather than being launched again.
 PRE_LAUNCH = "crashed-before-launch"
 # Each ends in `tasks back`, its worktree left for the owner, and the report's Needs a human.
@@ -54,6 +55,8 @@ RESET_PATTERN = re.compile(
     rf"\breset(?:s)?\s+(?:at\s+|on\s+)?(?:(?P<iso>{ISO_STAMP})|(?P<hour>\d{{1,2}})(?![\d-])(?::(?P<minute>\d{{2}}))?"
     r"\s*(?P<half>[ap]\.?m\b\.?)?(?:\s*\((?P<zone>[A-Za-z_]+(?:/[A-Za-z_+-]+)+)\))?)", re.IGNORECASE)
 RESET_KEYS = ("resetsAt", "resets_at", "resetAt", "reset_at")
+# What the API answers an account it will not serve at all, no credit or no valid key: every launch meets it too.
+ACCOUNT_STATUSES = (400, 401)
 STILL_ACTIVE = 259
 ERROR_ACCESS_DENIED = 5
 # The executor's command, resolved from PATH when None; a suite points it at a fake, never through the environment.
@@ -314,6 +317,11 @@ def _prompt_for(directory, gid, entry, run, flag=False, left=""):
     return prompt(_entry_group(gid, entry), _task_text(directory, gid) + left, run, flag)
 
 
+# What a tree holds that is not committed, every untracked file named: status.showUntrackedFiles=no would read
+# untracked work as a clean tree.
+HELD = ("status", "--porcelain", "--untracked-files=all")
+
+
 def _plural(count, noun):
     return f"{count} {noun}{'' if count == 1 else 's'}"
 
@@ -340,7 +348,7 @@ def _left_behind(root, entry):
     except (Refusal, ValueError):
         pass
     try:
-        if git(tree, "status", "--porcelain").strip():
+        if git(tree, *HELD).strip():
             parts.append("uncommitted work in its tree")
     except Refusal:
         pass
@@ -391,7 +399,7 @@ def _bound_to(root, worktree, oid):
     head = git(tree, "rev-parse", "HEAD").strip()
     if head != oid:
         raise Moved(f"{worktree} is at {head}, not the proved {oid}")
-    held = git(tree, "status", "--porcelain").strip()
+    held = git(tree, *HELD).strip()
     if held:
         raise Refusal(f"{worktree} is not clean: {one_line(held, 200)}")
 
@@ -578,7 +586,9 @@ def _launch(root, directory, run, gid, entry, flag=False):
     scratch = executor_temp(root, run, gid)
     # Parallel executors sharing the system temp directory ran each other's scratch scripts. The marker makes the
     # task-list helper refuse the executor's writes: the dispatcher is the list's one writer while it runs.
-    env = {**os.environ, "TMP": str(scratch), "TEMP": str(scratch), "TMPDIR": str(scratch), DISPATCHED: "1"}
+    # An inherited ANTHROPIC_API_KEY outranks the owner's subscription login in a headless claude, so it is dropped.
+    env = {name: value for name, value in os.environ.items() if name != "ANTHROPIC_API_KEY"}
+    env.update({"TMP": str(scratch), "TEMP": str(scratch), "TMPDIR": str(scratch), DISPATCHED: "1"})
     started = now()
     # The permission mode is the settings' own, never a flag here (spec section 6.2); the prompt goes on stdin.
     try:
@@ -753,6 +763,7 @@ class SessionEnd:
     usage_source: str | None = None
     usage_models: dict[str, dict[str, int]] = field(default_factory=dict)
     cost_usd: float | None = None
+    account_refused: str | None = None
 
 
 def _envelope(stdout):
@@ -903,7 +914,22 @@ def session_end(raw):
     session = envelope.get("session_id") if envelope else None
     session = session if isinstance(session, str) and SESSION_ID.fullmatch(session) else None
     cost = _cost((envelope or {}).get("total_cost_usd"))
-    return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session, source, models, cost)
+    return SessionEnd(code, bool(is_error), limited, resets, usage, denials, session, source, models, cost,
+                      _account_refused(envelope) if is_error else None)
+
+
+def _account_refused(envelope):
+    """The API's refusal of the account, on one line, or None: an `api_error` of 400 or 401 before a second turn.
+
+    With no turn past the first nothing was done, so the result is the CLI's notice, as a rate limit's is."""
+    if not envelope or envelope.get("terminal_reason") != "api_error":
+        return None
+    status, turns = envelope.get("api_error_status"), envelope.get("num_turns")
+    if type(status) is not int or status not in ACCOUNT_STATUSES or type(turns) is not int or turns > 1:
+        return None
+    kind, notice = envelope.get("api_error_type"), envelope.get("result")
+    said = [text for text in (kind, notice) if isinstance(text, str) and text.strip()]
+    return one_line(f"{status} " + ": ".join(said) if said else str(status), 200)
 
 
 def classify(end, result, crashes, now):
@@ -911,6 +937,9 @@ def classify(end, result, crashes, now):
         return {"merged": "merged-claimed", "handed-back": "handed-back", "stopped": "stopped"}[result.outcome]
     if end.rate_limited and end.resets_at is not None:
         return "window" if end.resets_at - now <= WINDOW else "week"
+    # Nothing in the group was at fault, and every launch tonight would meet the same refusal, so no crash is counted.
+    if end.account_refused is not None:
+        return "account"
     # 2026-11-01-dispatch-spike.md, Prompts: a call the auto classifier refused is a hand-back; a relaunch would
     # meet it again.
     if end.denials:
@@ -1060,6 +1089,8 @@ def _reason(decision, end, result):
         return one_line(result.reason) if result.reason and decision != "merged-claimed" else None
     if decision in ("window", "week"):
         return f"resets {end.resets_at.isoformat()}"
+    if decision == "account":
+        return f"the API refused the account: {end.account_refused}"
     if decision == "handed-back":
         return f"the session was refused {', '.join(sorted(set(end.denials)))} and wrote no result"
     crash = f"{'no result' if result is None else 'invalid result: ' + one_line(result.why, 200)}; exit {end.exit_code}"
@@ -1068,7 +1099,7 @@ def _reason(decision, end, result):
 
 UNREVIEWED = "merged with no review round"
 # A relaunch: a status only a read session leaves, while the group still waits on an executor.
-RELAUNCHED = ("relaunch", "window", "week")
+RELAUNCHED = ("relaunch", "window", "week", "account")
 
 
 def _unreviewed(entry, result, crashes):
@@ -1079,7 +1110,8 @@ def _unreviewed(entry, result, crashes):
     if not (isinstance(result, Result) and result.outcome == "merged" and not result.rounds):
         return False
     earlier = entry.get("absorbed") is not None
-    return not (earlier and (crashes >= 1 or entry.get("status") in RELAUNCHED))
+    # A refused account's session ran no turn past the first, so it reviewed nothing either.
+    return not (earlier and (crashes >= 1 or entry.get("status") in RELAUNCHED and entry.get("status") != "account"))
 
 
 def _unrecorded(directory, state, gid, entry, line):
@@ -1115,7 +1147,7 @@ def _merged_unreported(root, gid, entry, worktree, issues):
         return None
     tree = Path(root) / worktree
     try:
-        if git(tree, "status", "--porcelain").strip():
+        if git(tree, *HELD).strip():
             return None
         tip = git(tree, "rev-parse", "HEAD").strip()
         # A sync's proof binds one head: a tree elsewhere stays `run`'s refusal, which the report's Syncs line names.
@@ -1207,6 +1239,9 @@ def absorb(root, run, gid, run_refused=None):
     costs = [cost for cost in (_cost(entry.get("cost_usd")), end.cost_usd) if cost is not None]
     # A session with none of modelUsage, usage and total_cost_usd spent an unknown amount, so the row says so.
     uncounted = _uncounted(entry) + (not end.usage_source and not end.usage_models and end.cost_usd is None)
+    # Whether a session ran before the refused one, which `resume` reads when it lifts the hold.
+    if decision == "account":
+        entry["account_from"] = entry.get("status")
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
                  usage=_add_counts(spent, end.usage), usage_sources=sources, usage_models=models,
                  cost_usd=sum(costs) if costs else None, usage_uncounted=uncounted, denials=end.denials,
@@ -1482,6 +1517,8 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
         return out + ["end: week"]
     if any(entry.get("status") == "week" and not _week_passed(entry, current) for entry in entries.values()):
         return out + ["end: week"]
+    if any(entry.get("status") == "account" for entry in entries.values()):
+        return out + ["end: account"]
     # A group launched beside a sync would run under the settings the sync is about to replace.
     if any(entries[gid].get("kind") == "sync" for gid in active):
         return out + ["launch: none"]
@@ -1524,7 +1561,9 @@ def resume(root, run):
     """What each of this run's unfinished groups needs next; worktrees the run never recorded are not its own."""
     directory = run_dir(root, run)
     out, current = [], now()
-    for gid, entry in load_state(directory).get("groups", {}).items():
+    state = load_state(directory)
+    lifted = False
+    for gid, entry in state.get("groups", {}).items():
         if not isinstance(entry, dict):
             raise Refusal(f"{gid}'s record in state.json is not an object")
         status = entry.get("status")
@@ -1560,6 +1599,12 @@ def resume(root, run):
                 stamp = _parse_stamp(entry.get("resets_at"))
                 out.append(f"wait {gid}: the week resets {stamp.isoformat() if stamp else 'unknown'}")
             else:
+                if status == "account":
+                    # A resumed run is the owner's word that the account is fixed, so the hold goes before any wake
+                    # can read it. The refused session did nothing, so the group is what it was when it launched:
+                    # a first session's, or a relaunch's whose earlier session may have left work and a review.
+                    entry["status"] = "running" if entry.get("account_from") == "running" else "relaunch"
+                    lifted = True
                 out.append(f"relaunch {gid}")
         elif status is None:
             out.append(f"launch {gid}: moved, never launched")
@@ -1570,6 +1615,8 @@ def resume(root, run):
                        else f"done {gid}: verified, its rows are still In progress")
         elif status in HANDED:
             out.append(f"{'sync-close' if sync else 'back'} {gid}: {status}")
+    if lifted:
+        save_state(directory, state)
     return out
 
 
@@ -1702,6 +1749,8 @@ def report(root, run, tasks_path, today, body_source, open_source, owned_source)
     filed = list(dict.fromkeys(filed))
     tasks = parse_tasks(_read(tasks_path))
     listed = {row.key for row in tasks.in_progress}
+    # The same test `start` reopens by, so the line appears exactly when the next /dispatch resumes this run.
+    held = _holds_rows(directory, lambda: (listed, None))[0]
     for gid, entry in entries.items():
         status = entry.get("status")
         ended = entry.get("closed_from") if status in ("done", "returned") else status
@@ -1748,11 +1797,16 @@ def report(root, run, tasks_path, today, body_source, open_source, owned_source)
                     if listed & set(map(str, keys)) else "its rows are no longer In progress")
             needs.append(f"{gid} {status}: its worktree {entry.get('worktree')} is gone" + ("" if sync else f"; {rows}")
                          + _decisions_text(entry.get("decisions")))
+        elif status == "account":
+            # A sync holds no row, so unless another group's rows hold the run, the next night's step 0 takes it again.
+            again = ("takes the sync again" if entry.get("kind") == "sync" and not held
+                     else f"resumes run {run} and relaunches it")
+            interrupted.append(f"{gid} account: {one_line(entry.get('reason') or 'no reason recorded', 200)}; "
+                               f"fix the account, then run /dispatch again, which {again}")
         else:
             interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
         usage += _usage_lines(gid, entry)
-    if _holds_rows(directory, lambda: (listed, None))[0]:
-        # The same test `start` reopens by, so the line appears exactly when the next /dispatch resumes this run.
+    if held:
         interrupted.append(f"resume: run /dispatch again in the main checkout; it resumes run {run}")
     bodies = _bodies(tasks, directory, body_source)
     open_set = set(open_source())
