@@ -140,12 +140,12 @@ red test; make it compile first, then watch it fail.
 
 > **Test names are sentences, and that costs exactly one analyser rule.** CA1707
 > forbids underscores in member names and [ADR-019](adr/ADR-019-warnings-are-errors-and-the-editorconfig-is-a-build-input.md)
-> makes every warning an error, so the name above fails the build until the rule
-> is turned off. `Directory.Build.props` turns it off for projects whose name
-> ends `Tests` and nowhere else. The convention wins because a test name is read
-> in a failure report by somebody who is not looking at the code, and
-> `CannotCancelAnOrderThatHasShipped` is worse at that job than the underscores
-> are at anything.
+> makes an analyser warning an error, so the name above fails the build until
+> the rule is turned off. `Directory.Build.props` turns it off for projects
+> whose name ends `Tests` and nowhere else. The convention wins because a test
+> name is read in a failure report by somebody who is not looking at the code,
+> and `CannotCancelAnOrderThatHasShipped` is worse at that job than the
+> underscores are at anything.
 
 **Green** — the minimum change that passes:
 
