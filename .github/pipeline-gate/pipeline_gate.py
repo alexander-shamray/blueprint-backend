@@ -1717,12 +1717,18 @@ def read_tested_paths(root: Path, code: list[str]) -> list[tuple[str, str]]:
             continue
         text = source.read_text(encoding="utf-8", errors="replace")
         where = source.relative_to(root).as_posix()
-        for found in combined.finditer(text):
+        siblings: set[int] = set()
+        at = 0
+        while found := combined.search(text, at):
+            at = found.end()
             before = text[max(0, found.start() - 200):found.start()].rstrip()
             # `"compose", "README.md"` is a file in that directory, not one at the root.
             if found.group(1) not in trees:
-                if not (before.endswith(",") and before[:-1].rstrip().endswith('"')):
+                if found.start() in siblings or not (before.endswith(",") and before[:-1].rstrip().endswith('"')):
                     named.append((where, found.group(1)))
+                # A root name holds nothing, so each literal after it is one of a list and is judged in its own right.
+                siblings.update(found.start(2) + m.start() for m in re.finditer('"', found.group(2)))
+                at = found.end(1) + 1
                 continue
             parts = re.findall(r'"([^"]+)"', found.group(2))
             named.append((where, _as_read("/".join([found.group(1), *(parts or ["?"])]))))
