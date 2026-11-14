@@ -37,7 +37,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
     /// <summary>A claim's lease: longer than a slow batch, short enough for a killed replica.</summary>
     public const int LeaseSeconds = 60;
 
-    /// <summary>The backoff: <c>2^min(Attempts, BackoffAttemptCap) × BackoffBaseSeconds</c> seconds.</summary>
+    /// <summary>The backoff after a failure with <c>n</c> attempts before it: <c>2^min(n, BackoffAttemptCap) ×
+    /// BackoffBaseSeconds</c> seconds.</summary>
     /// <remarks>The cap keeps <see cref="MaxAttempts"/> near enough for §13.6's alert to act on.</remarks>
     public const int BackoffBaseSeconds = 5;
 
@@ -100,8 +101,9 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
 
         string buckets = string.Join(", ", Enumerable.Range(0, OutboxMessage.ClaimBuckets).Select(b => $"({b})"));
 
-        // Selects and leases in one statement, so two replicas cannot take the same row. Each bucket offers its
-        // oldest rows and the claim keeps the oldest of those, so the batch is the table's oldest (ADR-180).
+        // Selects, leases and counts the attempt in one statement, so two replicas cannot take the same row and a
+        // row whose fail statement never ran still nears the cap (ADR-211). Each bucket offers its oldest rows and
+        // the claim keeps the oldest of those, so the batch is the table's oldest (ADR-180).
         _claimSql =
             $"""
             WITH claimable AS (
@@ -119,7 +121,9 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 ORDER BY oldest.OccurredAt
             )
             UPDATE outbox
-            SET LockedUntil = DATEADD(second, {LeaseSeconds}, SYSDATETIMEOFFSET())
+            SET
+                LockedUntil = DATEADD(second, {LeaseSeconds}, SYSDATETIMEOFFSET()),
+                Attempts    = outbox.Attempts + 1
             OUTPUT
                 inserted.Id,
                 inserted.MessageId,
@@ -146,18 +150,18 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 ON delivered.Id = outbox.Id;
             """;
 
-        // Backs off by pushing the lease forward, which makes the cap reachable.
+        // Backs off by pushing the lease forward. The claim already counted this attempt (ADR-211), so the ladder
+        // reads the attempts before it.
         _failSql =
             $"""
             UPDATE {table.QualifiedName}
             SET
-                Attempts    = Attempts + 1,
                 LastError   = LEFT(@Error, {OutboxMessage.LastErrorMaxLength}),
                 LockedUntil = DATEADD(
                     second,
-                    POWER(2, CASE WHEN Attempts > {BackoffAttemptCap}
+                    POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
                                   THEN {BackoffAttemptCap}
-                                  ELSE Attempts END) * {BackoffBaseSeconds},
+                                  ELSE Attempts - 1 END) * {BackoffBaseSeconds},
                     SYSDATETIMEOFFSET())
             WHERE Id = @Id;
             """;
@@ -303,7 +307,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             _metrics.OutboxDelivered(lane, "failed", _clock.GetElapsedTime(start));
 
             // Logged first, so a fail statement that throws cannot lose the delivery's own exception.
-            DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
+            DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts, MaxAttempts, ex);
 
             // One bad message does not affect the rest; the token, not the type, decides a stop (§9.4).
             await writes.WaitAsync(ct);

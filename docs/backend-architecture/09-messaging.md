@@ -454,7 +454,7 @@ sequenceDiagram
     end
 
     loop every PollInterval, or at once after a full claim that delivered (ADR-163)
-        Note over D,DB: Claim: CTE + UPDATE ... OUTPUT, sets LockedUntil
+        Note over D,DB: Claim: CTE + UPDATE ... OUTPUT, sets LockedUntil, Attempts += 1 (ADR-211)
         D->>DB: lease up to ClaimBatchSize rows (UPDLOCK, READPAST)
 
         Note over D,MQ: Then each row independently, both lanes side by side (ADR-163, ADR-181)
@@ -465,7 +465,7 @@ sequenceDiagram
         end
 
         opt threw
-            D->>DB: Attempts += 1, LastError, back off LockedUntil
+            D->>DB: LastError, back off LockedUntil
         end
 
         Note over D,DB: Then every delivered row, in one statement (ADR-161)
@@ -887,7 +887,11 @@ to `OutboxMessage`: the width `LastError` is truncated to, which the fail
 statement names, and `ClaimBuckets`, which the claim's bucket list is built
 from. So this section can cite each by name and stay true when
 one is tuned. The claim selects and leases in one statement, so two replicas
-cannot take the same row, and `READPAST` skips rows another replica holds.
+cannot take the same row, and `READPAST` skips rows another replica holds. It
+counts the attempt too: a row is charged against `MaxAttempts` when it is
+leased, not when its failure is written, so a delivery that kills its replica
+and a fail statement that itself fails still bring the row to the cap
+([ADR-211](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)).
 Each of `OutboxMessage.ClaimBuckets` buckets offers its oldest rows from the
 index above, and the claim keeps the oldest of those, so a batch is still
 the table's oldest
@@ -909,7 +913,9 @@ WITH claimable AS (
     ORDER BY oldest.OccurredAt
 )
 UPDATE outbox
-SET LockedUntil = DATEADD(second, {LeaseSeconds}, SYSDATETIMEOFFSET())
+SET
+    LockedUntil = DATEADD(second, {LeaseSeconds}, SYSDATETIMEOFFSET()),
+    Attempts    = outbox.Attempts + 1
 OUTPUT
     inserted.Id,
     inserted.MessageId,
@@ -940,22 +946,21 @@ INNER JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered
     ON delivered.Id = outbox.Id;
 ```
 
-A failed row keeps a statement of its own. Its attempt counter is incremented
-and its lease pushed forward exponentially, which is what makes the cap —
+A failed row keeps a statement of its own. It records the error and pushes the
+lease forward exponentially, on the attempts before the one the claim counted,
+so a failing row is retried ever more slowly until it reaches the cap —
 `OutboxDispatcher.MaxAttempts`, public because §13.6's abandoned-rows gauge
-counts exactly the rows the claim skips — and the abandoned-row alert
-reachable:
+counts exactly the rows the claim skips — and the abandoned-row alert:
 
 ```sql
 UPDATE {table.QualifiedName}
 SET
-    Attempts    = Attempts + 1,
     LastError   = LEFT(@Error, {OutboxMessage.LastErrorMaxLength}),
     LockedUntil = DATEADD(
         second,
-        POWER(2, CASE WHEN Attempts > {BackoffAttemptCap}
+        POWER(2, CASE WHEN Attempts - 1 > {BackoffAttemptCap}
                       THEN {BackoffAttemptCap}
-                      ELSE Attempts END) * {BackoffBaseSeconds},
+                      ELSE Attempts - 1 END) * {BackoffBaseSeconds},
         SYSDATETIMEOFFSET())
 WHERE Id = @Id;
 ```
@@ -1013,14 +1018,14 @@ catch (Exception ex) when (!ct.IsCancellationRequested)
 
     // Logged first, so a fail statement that throws cannot lose the
     // delivery's own exception.
-    DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
+    DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts, MaxAttempts, ex);
 
     // One bad message does not affect the rest of the batch.
     //
     // The filter asks the token, not the exception type. A handler
     // enforcing its own deadline throws OperationCanceledException
     // while ct is still live, and a type test would let that row
-    // escape with no attempt recorded and every row behind it left
+    // escape with no failure recorded and every row behind it left
     // leased — a delivery failure disguised as a shutdown.
     //
     // The rows share the claim's connection, which runs one command
@@ -1168,9 +1173,10 @@ Consequences of the per-row design worth stating explicitly:
 
 - **A message that keeps failing reaches `MaxAttempts` and stops being
   claimed.** It stays in the table with `ProcessedAt` still `NULL` and its
-  `LastError` populated, which is exactly what the abandoned-row alert (§13.6)
-  detects and what `outbox-abandoned.md` tells the operator to read. Replaying
-  it is a matter of resetting `Attempts` to zero.
+  `LastError` populated, or still `NULL` where no attempt lived to write one
+  (ADR-211), which is exactly what the abandoned-row alert (§13.6) detects and
+  what `outbox-abandoned.md` tells the operator to read. Replaying it is a
+  matter of resetting `Attempts` to zero.
 - **The retention purge must delete only rows with `ProcessedAt IS NOT NULL`.**
   Purging on age alone would silently destroy the abandoned rows that the alert
   exists to surface.
@@ -1197,8 +1203,9 @@ Consequences of the per-row design worth stating explicitly:
   write over a lease it no longer holds. Every outcome is a **duplicate
   delivery**, which is exactly what at-least-once already promises and what
   §9.5's inbox and §6.6's idempotent projections already absorb — so nothing
-  here is unsound, and the cost is a redelivery rather than a lost or
-  double-applied message.
+  here is unsound, and the cost is a redelivery, and one more attempt counted
+  on each reclaimed row (ADR-211), rather than a lost or double-applied
+  message.
 
   Closing it properly means a claim token: the claim returns the
   `LockedUntil` it set, and completion carries `AND LockedUntil = @Claimed` so

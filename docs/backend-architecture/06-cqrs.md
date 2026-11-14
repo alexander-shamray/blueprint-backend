@@ -1973,14 +1973,15 @@ That is the right direction to fail in — `cancelled > placed` is a state the
 write model cannot reach, and a metric that reports it is worse than one that
 under-reports — but "the right direction" is not "no consequence": the drop is
 permanent and silent. What bounds it is an alert that already exists: a row
-reaches `OutboxDispatcher.MaxAttempts` only by failing that many times (§9.4),
-across as many leases with a growing gap between them, which the abandoned-row
-alert (§13.6) pages on. Those are dispatcher attempts, not the
-`RetryPolicy.RetryLimit` retries of `UseMessageRetry` (§9.8) — that limit
-governs a consumer redelivering a message it already received, and a row that
-never left the outbox has not reached one. **The metric's correctness therefore
-depends on that alert being answered**, which is a dependency worth stating out
-loud rather than a property of the pattern.
+reaches `OutboxDispatcher.MaxAttempts` only by being leased that many times
+without its delivery being completed (§9.4,
+[ADR-211](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md)),
+which the abandoned-row alert (§13.6) pages on. Those are dispatcher attempts,
+not the `RetryPolicy.RetryLimit` retries of `UseMessageRetry` (§9.8) — that
+limit governs a consumer redelivering a message it already received, and a row
+that never left the outbox has not reached one. **The metric's correctness
+therefore depends on that alert being answered**, which is a dependency worth
+stating out loud rather than a property of the pattern.
 
 Replaying an abandoned row after the fix is what closes it, and the claims make
 that safe: replay flips `PlacedCounted`, the next write claims the cancellation
