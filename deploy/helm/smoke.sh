@@ -591,7 +591,7 @@ docs_of() {
 # The workload's policy, which ADR-065 owns; the migrator's is a hook.
 policy_of() { docs_of "$1" NetworkPolicy plain; }
 workload_of() {
-    awk '/^workload:/ { w = 1; next } /^[a-z]/ { w = 0 } w && /^  name:/ { print $2; exit }' \
+    awk '/^workload:/ { w = 1; next } /^[a-z]/ { w = 0 } w && /^  name:/ { gsub(/^["'\'']|["'\'']$/, "", $2); print $2; exit }' \
         "$CHARTS_DIR/$1/values.yaml"
 }
 cidr_of() { printf '%s\n' $NETPOL_PEERS | sed -n "s/^$1=//p"; }
@@ -2057,8 +2057,12 @@ fi
 # release answers every routed request with a failure.
 : >"$OUT/owned.txt"
 for chart in $SERVICE_CHARTS; do
-    name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \
-        "$CHARTS_DIR/$chart/values.yaml")"
+    name="$(workload_of "$chart")"
+    if [ -z "$name" ]; then
+        # An empty read would match no dialled host and pass the chart as unrouted.
+        fail "$chart's values.yaml gives no workload.name this script can read"
+        continue
+    fi
     echo "$name" >>"$OUT/owned.txt"
     if grep -qx "$name" "$OUT/pairs.txt" 2>/dev/null || cut -d' ' -f1 "$OUT/pairs.txt" | grep -qx "$name"; then
         check "$chart is dialled as $name, so it must keep its Service" \
