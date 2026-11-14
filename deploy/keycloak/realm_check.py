@@ -1227,13 +1227,18 @@ def check_scope_documents(realm: dict) -> list[str]:
     return problems
 
 
-def held_scopes(client: dict) -> list:
+def listed_scopes(client: dict) -> list:
     """Both scope lists, in order, ignoring what `check_service_account_client` refuses."""
     held: list = []
     for key in ("defaultClientScopes", "optionalClientScopes"):
         listed = client.get(key)
         held += listed if isinstance(listed, list) else []
     return held
+
+
+def held_scopes(client: dict) -> list[str]:
+    """The scope names a client holds; an entry that is no name is `check_token_writers`' finding."""
+    return [scope for scope in listed_scopes(client) if isinstance(scope, str)]
 
 
 def defined_scopes(realm: dict) -> dict:
@@ -1251,6 +1256,11 @@ def check_token_writers(realm: dict, client: dict, name: str) -> list[str]:
     problems: list[str] = []
     scopes = defined_scopes(realm)
     sources = [("the client itself", client.get("protocolMappers"))]
+    for entry in listed_scopes(client):
+        if not isinstance(entry, str):
+            problems.append(
+                f"client {name!r} lists {entry!r} among its client scopes, which is not "
+                "a scope name, so what it would map and write into the token cannot be judged")
     for scope in held_scopes(client):
         if scope not in scopes:
             # An absent scope list is `check_scope_documents`' one finding, not one per scope.
