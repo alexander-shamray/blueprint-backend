@@ -411,7 +411,8 @@ app
     .MapGroup("/v1")
     .AddEndpointFilter(async (ctx, next) =>
     {
-        ctx.HttpContext.Response.Headers["Deprecation"] = "true";
+        // RFC 9745's structured-field date, Unix seconds after an @: 1 July 2026, 00:00 UTC.
+        ctx.HttpContext.Response.Headers["Deprecation"] = "@1782864000";
         ctx.HttpContext.Response.Headers["Sunset"] = "Thu, 31 Dec 2026 23:59:59 GMT";
         ctx.HttpContext.Response.Headers["Link"] =
             "</api/v2/orders>; rel=\"successor-version\"";

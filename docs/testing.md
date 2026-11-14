@@ -244,9 +244,10 @@ coverage report over them; `ci.yml`'s `integration` job argues why the
 shards' filters partition the stage. Run here, the stage is one invocation:
 
 ```bash
+rm -rf ./TestResults
 dotnet test Platform.slnx --filter "FullyQualifiedName~ArchitectureTests" \
     --logger trx --results-directory ./TestResults/architecture
-dotnet test Platform.slnx --filter "FullyQualifiedName!~ArchitectureTests&Category!=Integration" \
+dotnet test Platform.slnx --filter 'FullyQualifiedName!~ArchitectureTests&Category!=Integration' \
     --logger trx --results-directory ./TestResults/unit
 dotnet test Platform.slnx --filter "Category=Integration" \
     --logger trx --results-directory ./TestResults/integration
@@ -258,7 +259,11 @@ py -3.12 .github/pipeline-gate/pipeline_gate.py stages \
 **The logger and the directories are not decoration.** The gate counts from
 TRX and looks for those three directory names, so a bare `dotnet test` runs
 the stages and leaves it nothing to read. What it asserts over them is
-[its README](../.github/pipeline-gate/README.md)'s.
+[its README](../.github/pipeline-gate/README.md)'s. **Nor is the `rm`**: the
+gate and the coverage reporter read every file under those directories, and a
+run that writes no results leaves an earlier run's to be counted, where CI
+starts clean. The single quotes keep an interactive shell's history expansion
+off the filter's `!~`.
 
 **The domain-name gate needs nothing in front of it**, and its suite reads
 this checkout's chapters as well as a fixture tree:
@@ -425,7 +430,8 @@ reads. What this section carries is the invocation and what the figure is
 measured over.
 
 ```bash
-dotnet test Platform.slnx --filter "FullyQualifiedName!~ArchitectureTests&Category!=Integration" \
+rm -rf ./TestResults
+dotnet test Platform.slnx --filter 'FullyQualifiedName!~ArchitectureTests&Category!=Integration' \
     --collect:"Code Coverage" --settings coverage.runsettings \
     --results-directory ./TestResults/unit
 dotnet test Platform.slnx --filter "Category=Integration" \
