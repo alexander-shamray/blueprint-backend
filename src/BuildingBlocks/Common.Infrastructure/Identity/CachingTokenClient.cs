@@ -115,7 +115,8 @@ public sealed partial class CachingTokenClient(
         JsonElement root = document.RootElement;
 
         // Blank counts as missing, as for §11.3's authority: a blank token would be cached and sent.
-        if (!root.TryGetProperty("access_token", out JsonElement accessToken) ||
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("access_token", out JsonElement accessToken) ||
             accessToken.ValueKind != JsonValueKind.String ||
             string.IsNullOrWhiteSpace(accessToken.GetString()))
         {
@@ -127,6 +128,7 @@ public sealed partial class CachingTokenClient(
 
         // expires_in is optional (RFC 6749 §5.1); absent, the token counts as expired, the safe direction.
         int declared = root.TryGetProperty("expires_in", out JsonElement expiresIn) &&
+            expiresIn.ValueKind == JsonValueKind.Number &&
             expiresIn.TryGetInt32(out int seconds)
             ? seconds
             : 0;
@@ -160,6 +162,7 @@ public sealed partial class CachingTokenClient(
 
             return claims.RootElement.ValueKind == JsonValueKind.Object &&
                 claims.RootElement.TryGetProperty("exp", out JsonElement exp) &&
+                exp.ValueKind == JsonValueKind.Number &&
                 exp.TryGetInt64(out long epoch)
                 ? DateTimeOffset.FromUnixTimeSeconds(epoch)
                 : null;
@@ -239,7 +242,8 @@ public sealed partial class CachingTokenClient(
 
         using JsonDocument document = Parse(await response.Content.ReadAsStringAsync(ct), "discovery document");
 
-        if (!document.RootElement.TryGetProperty("token_endpoint", out JsonElement endpoint) ||
+        if (document.RootElement.ValueKind != JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("token_endpoint", out JsonElement endpoint) ||
             endpoint.ValueKind != JsonValueKind.String ||
             !Uri.TryCreate(endpoint.GetString(), UriKind.Absolute, out Uri? parsed))
         {
