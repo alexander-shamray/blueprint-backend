@@ -135,6 +135,12 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
         (await fixture.ScalarAsync<int>(
             "SELECT Value = Count FROM privacy.ErasureCompletions WHERE RequestId = {0}",
             request)).ShouldBe(5, "a reissue that finds nothing left must not overwrite what the first pass removed");
+
+        await SendAsync(Completion(request, "ordering", 8));
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = Count FROM privacy.ErasureCompletions WHERE RequestId = {0}",
+            request)).ShouldBe(8, "the larger count, whichever answer carried it, so keeping the first is not enough");
     }
 
     [Fact]
