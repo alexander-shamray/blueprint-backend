@@ -1670,6 +1670,7 @@ class SupplyChainTests(Fixture):
     def test_words_after_a_hash_inside_a_word_or_a_redirection_still_reach_cosign(self) -> None:
         """Bash opens a comment only at a word's start, and runs on past a redirection's target."""
         for words in ("--annotations=a#b --certificate-identity-regexp '.*'",
+                      "--annotations=a\\ #b --certificate-identity-regexp '.*'",
                       "> out.json --certificate-identity-regexp '.*'",
                       "2>&1 --certificate-identity-regexp '.*'"):
             with self.subTest(words=words):
@@ -1688,6 +1689,18 @@ class SupplyChainTests(Fixture):
         problems = self.broken('cosign verify "$REGISTRY/$1:$TAG"', 'cosign verify "$REGISTRY/$1:$TAG', deploy=True)
 
         self.assertTrue(any("does not split into shell words" in problem for problem in problems), problems)
+
+    def test_a_substitution_among_the_verify_words_fails_rather_than_passing(self) -> None:
+        """Bash runs on past the substitution's `)`, so a flag after it would reach cosign unread."""
+        for words in ("--annotations=$(echo x) --certificate-identity-regexp '.*'",
+                      "--attachment-tag-prefix <(true) --certificate-identity-regexp '.*'"):
+            with self.subTest(words=words):
+                problems = self.broken(
+                    "--certificate-oidc-issuer https://token.actions.githubusercontent.com\n",
+                    f"--certificate-oidc-issuer https://token.actions.githubusercontent.com {words}\n", deploy=True)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("does not split into shell words", problems[0])
 
     def test_a_helm_upgrade_with_no_digest_is_caught(self) -> None:
         problems = self.broken('--set-string image.digest="$API_DIGEST" \\\n', "\\\n", deploy=True)

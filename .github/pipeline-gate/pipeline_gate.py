@@ -688,7 +688,11 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
                 return None
             arguments, index = [], 0
             # A redirection and its target leave the command running, so later words still reach it.
-            while index < len(words_read) and not SHELL_OPERATOR.fullmatch(words_read[index]):
+            while index < len(words_read):
+                if "(" in words_read[index]:
+                    return None  # a substitution opened among the words: bash runs on past its `)`, this reader cannot
+                if SHELL_OPERATOR.fullmatch(words_read[index]):
+                    break
                 if REDIRECTION.fullmatch(words_read[index]):
                     index += 1
                 else:
@@ -700,18 +704,21 @@ def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[l
 
 def _uncommented(text: str) -> str:
     """The text before bash's comment: a `#` that opens a word outside quotes, not one inside a word."""
-    quote, escaped = None, False
+    quote, escaped, boundary = None, False, True
     for index, character in enumerate(text):
         if escaped:
-            escaped = False
+            escaped = boundary = False
         elif character == "\\" and quote != "'":
             escaped = True
         elif quote:
             quote = None if character == quote else quote
-        elif character in "'\"":
-            quote = character
-        elif character == "#" and (index == 0 or text[index - 1].isspace()):
+        elif character == "#" and boundary:
             return text[:index]
+        else:
+            quote = character if character in "'\"" else None
+            boundary = character.isspace()
+            continue
+        boundary = False
     return text
 
 
@@ -757,7 +764,7 @@ def _check_admission(deploy_text: str) -> list[str]:
     attestations = read_command_arguments(deploy_text, ("gh", "attestation", "verify"))
     if verifies is None or attestations is None:
         return ["deploy.yml has a `cosign verify` or `gh attestation verify` line that does not split into shell "
-                "words, so its flags cannot be read"]
+                "words, an unbalanced quote or a substitution among them, so its flags cannot be read"]
     subject = "deploy.yml's `cosign verify` step is not"
     problems = []
     if not verifies:
