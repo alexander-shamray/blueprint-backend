@@ -611,8 +611,11 @@ MOVING_TAG_ANSWER = re.compile(r'(?:^|(?<=[\s;]))git merge-base --is-ancestor "\
 # The tag itself read, then compared with the signed digest, not merely named beside it.
 MOVING_TAG_READBACK = r'\b(\w+)=\$\(docker buildx imagetools inspect\s+"(?:\$tag|\$REGISTRY/[^"]*:main)"'
 MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
-# An `exit` after `&&`, `||`, a pipe or a subshell's `(`, through a continuation, a group and whole commands.
-CONDITIONAL_EXIT = re.compile(r"(?:&&|\|\|?|\()\s*(?:\\\s*)?(?:[{(]\s*)?(?:[^;&|(){}]*;\s*)*$")
+# An `exit` right after `&&`, `||` or a pipe, or inside a `{` group one opens or any `(` still open. By the
+# brackets rather than `;`, since the step reader folds a run block's line breaks into spaces.
+CONDITIONAL_EXIT = re.compile(
+    r"(?:(?:&&|\|\|?)\s*(?:\\\s*)?(?:\{(?:[^{}]|\{[^{}]*\})*)?|\((?:[^()]|\([^()]*\))*)$"
+)
 MOVING_TAG_COMPARISON = r'(?:^|(?<=[\s;]))if \[\s+"\${read}"\s+!=\s+"\$DIGEST"\s+\];?\s+then(?=[\s;]|$)'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
