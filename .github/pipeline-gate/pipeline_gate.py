@@ -354,6 +354,10 @@ def _check_publish_job(workflow_text: str) -> list[str]:
     return problems
 
 
+# The next job's key; a comment at that indent sits inside a job body, not after it.
+NEXT_JOB = re.compile(r"^\s{2}[^\s#]")
+
+
 def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     """One job's steps, in order, as {key: value} over the keys a step holds.
 
@@ -371,7 +375,7 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     inside = False
     key: str | None = None
     for line in lines[index + 1:]:
-        if re.match(r"^\s{2}\S", line):          # the next job
+        if NEXT_JOB.match(line):
             break
         if re.match(r"^\s{4}steps:\s*$", line):
             inside = True
@@ -1173,7 +1177,7 @@ def read_job_condition(workflow_text: str, job: str) -> str | None:
 
     condition: list[str] = []
     for line in lines[index + 1:]:
-        if re.match(r"^\s{2}\S", line):          # the next job
+        if NEXT_JOB.match(line):
             break
         if condition:
             if line.startswith(" " * 6):
@@ -1204,7 +1208,7 @@ def read_job_outputs(workflow_text: str, job: str) -> set[str]:
     found: set[str] = set()
     inside = False
     for line in lines[index + 1:]:
-        if re.match(r"^\s{2}\S", line):          # the next job
+        if NEXT_JOB.match(line):
             break
         if re.match(r"^\s{4}outputs:\s*$", line):
             inside = True
@@ -1212,7 +1216,7 @@ def read_job_outputs(workflow_text: str, job: str) -> set[str]:
         if inside:
             if name := re.match(r"^\s{6}([a-z][a-z0-9-]*):\s*\S", line):
                 found.add(name.group(1))
-            elif line.strip() and not line.startswith(" " * 6):
+            elif line.strip() and not line.lstrip().startswith("#") and not line.startswith(" " * 6):
                 inside = False
     return found
 
@@ -1302,7 +1306,7 @@ def _integration_job(workflow_text: str) -> list[str]:
 
     body: list[str] = []
     for line in lines[index + 1:]:
-        if re.match(r"^\s{2}[^\s#]", line):      # the next job; a comment is not one
+        if NEXT_JOB.match(line):
             break
         body.append(line)
     return body

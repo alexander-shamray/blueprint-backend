@@ -1048,6 +1048,39 @@ class GrantTests(unittest.TestCase):
         self.assertEqual(pipeline_gate.check_grants(), [])
 
 
+class JobReaderTests(unittest.TestCase):
+    """A comment at a job key's indent sits inside the job, so no reader ends the job at it (#2027)."""
+
+    TEXT = (
+        "jobs:\n"
+        "  build:\n"
+        "  # A comment at the job key's indent, before the condition.\n"
+        "    if: github.event_name == 'push'\n"
+        "    outputs:\n"
+        "      first: x\n"
+        "  # And inside the outputs.\n"
+        "      second: y\n"
+        "    steps:\n"
+        "      - run: one\n"
+        "  # And between two steps.\n"
+        "      - run: two\n"
+        "  next:\n"
+        "    outputs:\n"
+        "      third: z\n"
+        "    steps:\n"
+        "      - run: three\n"
+    )
+
+    def test_the_condition_is_read_past_the_comment(self) -> None:
+        self.assertEqual(pipeline_gate.read_job_condition(self.TEXT, "build"), "github.event_name == 'push'")
+
+    def test_the_outputs_are_read_past_the_comment(self) -> None:
+        self.assertEqual(pipeline_gate.read_job_outputs(self.TEXT, "build"), {"first", "second"})
+
+    def test_the_steps_are_read_past_the_comment(self) -> None:
+        self.assertEqual(pipeline_gate.read_job_steps(self.TEXT, "build"), [{"run": "one"}, {"run": "two"}])
+
+
 class SupplyChainTests(Fixture):
     """ADR-109's coverage: every build is pushed, signed and attested by digest on
     main, and the rollout verifies before it touches Helm."""
