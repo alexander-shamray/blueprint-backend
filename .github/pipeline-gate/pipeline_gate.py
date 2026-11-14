@@ -505,6 +505,7 @@ MOVING_TAG_PUSH = r'\bdocker push\s+"\$REGISTRY/[^"]*:main"'
 # `docker buildx imagetools inspect` reads a tag and builds nothing.
 DOCKER_BUILD = re.compile(r"\bdocker build\b")
 MOVING_TAG_GUARD = r"\bgit merge-base --is-ancestor\b"
+MOVING_TAG_READBACK = r"\bdocker buildx imagetools inspect\b"
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
 HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
@@ -645,6 +646,14 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
                 f"{subject}: the step that moves the main tag does not ask, before it pushes, "
                 "whether the commit the tag names is an ancestor of this build's, so a build that finishes late "
                 "moves the tag back (#1112, ADR-134)"
+            )
+
+        # After the push, from the registry: the local image's digests already name the signed one.
+        reads = [found for found in re.finditer(MOVING_TAG_READBACK, commands) if move and found.start() > move.end()]
+        if move and (not reads or "$DIGEST" not in commands[reads[0].end():]):
+            problems.append(
+                f"{subject}: the step that moves the main tag does not read the tag back from the registry "
+                "after it pushes and compare it with $DIGEST, so a push that left the tag on other bytes passes"
             )
 
         pushed = _reference(steps[push]["run"], "docker push")

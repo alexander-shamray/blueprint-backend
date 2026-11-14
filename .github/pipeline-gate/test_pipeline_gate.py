@@ -170,6 +170,10 @@ SIGNING_STEPS = f"""\
           git merge-base --is-ancestor "$named" "$GITHUB_SHA"
           docker tag "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}" "$REGISTRY/${{{{ matrix.image }}}}:main"
           docker push "$REGISTRY/${{{{ matrix.image }}}}:main"
+          moved=$(docker buildx imagetools inspect "$tag")
+          [ "$moved" = "$DIGEST" ]
+        env:
+          DIGEST: ${{{{ steps.push.outputs.digest }}}}
 """
 
 WORKFLOW = WORKFLOW_HEAD + SBOM_STEP + SIGNING_STEPS
@@ -1236,15 +1240,35 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("main-push condition", problems[0])
 
-    def test_a_step_on_a_pull_request_event_is_caught_even_with_the_ref_test(self) -> None:
-        problems = self.broken(
-            "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name)",
-            "github.event_name == 'pull_request'")
+    # The push step's condition alone: the job's own `if:` says the same, and
+    # breaking both would pass on the job's problem whatever the step check reads.
+    PUSH_STEP = f"id: push\n        if: {MAIN_PUSH}\n"
 
-        self.assertTrue(any("main-push condition" in problem for problem in problems), problems)
+    def test_a_step_on_a_pull_request_event_is_caught_even_with_the_ref_test(self) -> None:
+        """A quoted `push` beside a pull request event is still a pull request."""
+        problems = self.broken(self.PUSH_STEP, self.PUSH_STEP.replace('"workflow_dispatch"', '"pull_request"'))
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("the `docker push` does not run under the main-push condition", problems[0])
 
     def test_a_step_missing_the_ref_test_is_caught(self) -> None:
-        self.assertTrue(self.broken(" && github.ref == 'refs/heads/main' }}", " }}"))
+        problems = self.broken(self.PUSH_STEP, self.PUSH_STEP.replace(" && github.ref == 'refs/heads/main'", ""))
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("the `docker push` does not run under the main-push condition", problems[0])
+
+    def test_a_main_tag_never_read_back_from_the_registry_is_caught(self) -> None:
+        """The local image's digests name the signed one whatever the registry's tag now names (#2027)."""
+        for old, new in (
+            ('          moved=$(docker buildx imagetools inspect "$tag")\n', ""),
+            ('docker buildx imagetools inspect "$tag")', "docker inspect --format '{{json .RepoDigests}}' \"$tag\")"),
+            ('[ "$moved" = "$DIGEST" ]', '[ -n "$moved" ]'),
+        ):
+            with self.subTest(old=old):
+                problems = self.broken(old, new)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("does not read the tag back from the registry", problems[0])
 
     def test_a_push_of_a_reference_the_build_never_tagged_is_caught(self) -> None:
         problems = self.broken('docker push "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"',
