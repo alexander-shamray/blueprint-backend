@@ -273,6 +273,26 @@ class VerifiedVersionTests(unittest.TestCase):
         self.assertIn("Directory.Packages.props", repo_gate.SOURCE_INPUTS)
 
 
+class LadderTests(unittest.TestCase):
+    """Check 1 reports a malformed step as a failure, never as a traceback."""
+
+    def test_a_step_without_an_integer_weight_is_a_failure_not_a_type_error(self) -> None:
+        for bad in ({"dwellMinutes": 10}, {"weight": "5", "dwellMinutes": 10},
+                    {"weight": True, "dwellMinutes": 10}, 5):
+            with self.subTest(step=bad):
+                plan = descriptor_model.load_plan()
+                plan["steps"] = [bad, *plan["steps"][1:]]
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any("integer weight" in f for f in failures), failures)
+
+    def test_the_shipped_ladder_passes_check_1(self) -> None:
+        failures = repo_gate.check(descriptor_model.load_plan())
+
+        self.assertFalse(any("weight" in f for f in failures), failures)
+
+
 class MinimumRequestsTests(unittest.TestCase):
     """canary.json states minimumRequests as 1/errorRate; the gate holds it to that."""
 

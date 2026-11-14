@@ -97,8 +97,15 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     if not steps:
         failures.append("steps is empty: a rollout with no steps promotes nothing")
     else:
+        steps = [step if isinstance(step, dict) else {} for step in steps]
         weights = [step.get("weight") for step in steps]
-        if weights != sorted(weights) or len(set(weights)) != len(weights):
+        # Sorting a None or a string beside an int raises, and this check
+        # promises a list of failures, never a traceback.
+        if any(not isinstance(w, int) or isinstance(w, bool) for w in weights):
+            failures.append(
+                f"every step needs an integer weight; got {weights}"
+            )
+        elif weights != sorted(weights) or len(set(weights)) != len(weights):
             failures.append(
                 f"steps must have strictly increasing weights; got {weights}"
             )
