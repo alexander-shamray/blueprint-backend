@@ -1561,17 +1561,18 @@ def _holds_operands(operands: frozenset[str]) -> Callable[[str], bool]:
     return lambda term: operands <= set(_disjuncts(term))
 
 
-def _mentions(subject: str) -> Callable[[str], bool]:
-    return lambda term: subject in term
+def _hears_every_conclusion(term: str) -> bool:
+    conclusions = _listed_beside(_disjuncts(term), ALERT_CONCLUSION)
+    return all(f'"{conclusion}"' in conclusions for conclusion in ALERT_CONCLUSIONS)
 
 
-# Every `&&` term each job may carry, each claiming one: one nobody reads could be a `false` that files nothing.
-# A group is claimed by what it is about, so one written wrong is its own check's refusal, not a second one here.
+# Every `&&` term each job may carry, each claiming one by what its check asks of it: one nobody claims could be
+# a `false` that files nothing. A group written wrong is refused here too, beside its own check's refusal.
 ALERT_TERMS: dict[str, tuple[Callable[[str], bool], ...]] = {
-    "read-cancelled": (PUSH_RUN.__eq__, _mentions(ALERT_CONCLUSION)),
-    "rerun": ("always()".__eq__, PUSH_RUN.__eq__, _mentions("run_attempt"), _mentions(ALERT_CONCLUSION)),
-    "file": ("always()".__eq__, PUSH_RUN.__eq__, _mentions(ALERT_CONCLUSION), _mentions("needs.rerun."),
-             _mentions("run_attempt")),
+    "read-cancelled": (PUSH_RUN.__eq__, f"{ALERT_CONCLUSION} == 'cancelled'".__eq__),
+    "rerun": ("always()".__eq__, PUSH_RUN.__eq__, FIRST_ATTEMPT.__eq__, _hears_every_conclusion),
+    "file": ("always()".__eq__, PUSH_RUN.__eq__, _hears_every_conclusion, _holds_operands(UNHEARD_RERUN),
+             _holds_operands(NOT_ITS_OWN_RERUN)),
 }
 
 

@@ -2144,9 +2144,13 @@ class AlertTests(unittest.TestCase):
                 self.assertIn(listed, ALERT)
                 self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace(listed, kept))
 
-                self.assertEqual(pipeline_gate.check_alerts(self.root), [
-                    f"{pipeline_gate.ALERT_WORKFLOW}'s `file` job does not file on `{conclusion}`, "
-                    "so a run ending so alerts nobody"])
+                problems = pipeline_gate.check_alerts(self.root)
+
+                self.assertEqual(problems[0], f"{pipeline_gate.ALERT_WORKFLOW}'s `file` job does not file on "
+                                 f"`{conclusion}`, so a run ending so alerts nobody")
+                # The group no longer claims its place, in `rerun` as in `file`, so each is an unread term too.
+                self.assertEqual(len(problems), 3, problems)
+                self.assertTrue(all("an `&&` term no check here reads" in found for found in problems[1:]))
 
     def test_a_cancelled_run_nothing_reads_is_caught(self) -> None:
         for dropped in (" &&\n      github.event.workflow_run.conclusion == 'cancelled'",
@@ -2185,8 +2189,9 @@ class AlertTests(unittest.TestCase):
 
                 problems = pipeline_gate.check_alerts(self.root)
 
-                self.assertEqual(len(problems), 1, problems)
+                self.assertEqual(len(problems), 2, problems)
                 self.assertIn("so a second red attempt alerts nobody", problems[0])
+                self.assertIn("an `&&` term no check here reads", problems[1])
 
     def test_a_condition_holding_every_term_joined_otherwise_is_caught(self) -> None:
         """Each edit keeps every term as text, so only a read of the operands hears it."""
@@ -2199,7 +2204,7 @@ class AlertTests(unittest.TestCase):
                  "so a second red attempt alerts nobody")):
             with self.subTest(new=new):
                 self.assertIn(old, ALERT)
-                # The last occurrence: the `rerun` job's own group comes first, and these read `file`'s.
+                # The last occurrence, which for a text both jobs carry is `file`'s.
                 self.write(pipeline_gate.ALERT_WORKFLOW, new.join(ALERT.rsplit(old, 1)))
 
                 self.assertTrue(any(problem in found for found in pipeline_gate.check_alerts(self.root)))
@@ -2213,6 +2218,11 @@ class AlertTests(unittest.TestCase):
             ("file", "  file:\n    needs: [read-cancelled, rerun]\n    if: >-\n", "false"),
             # A second list of conclusions after the one read, which a red run must be on too.
             ("file", last, "contains(fromJSON('[\"neutral\"]'), github.event.workflow_run.conclusion)"),
+            # No check reads `rerun`'s list of conclusions, so only its claim hears a narrower one.
+            ("rerun", "  rerun:\n    needs: read-cancelled\n    if: >-\n",
+             "contains(fromJSON('[\"neutral\"]'), github.event.workflow_run.conclusion)"),
+            # It names what the rerun group does, so only a claim by what that group holds refuses it.
+            ("file", "  file:\n    needs: [read-cancelled, rerun]\n    if: >-\n", "needs.rerun.result == 'never'"),
         )
         for job, anchor, term in terms:
             with self.subTest(job=job, term=term):
@@ -2244,7 +2254,8 @@ class AlertTests(unittest.TestCase):
         """The subject is the real file: a term the readers refuse there is a false refusal, not a finding."""
         alert = pipeline_gate.ROOT / ".github" / "workflows" / pipeline_gate.ALERT_WORKFLOW
         text = alert.read_text(encoding="utf-8")
-        self.assertEqual(pipeline_gate.check_alert_conclusions(text) + pipeline_gate.check_alert_rerun(text), [])
+        self.assertEqual(pipeline_gate.check_alert_conclusions(text) + pipeline_gate.check_alert_rerun(text)
+                         + pipeline_gate.check_alert_terms(text), [])
 
     def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
         self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")
