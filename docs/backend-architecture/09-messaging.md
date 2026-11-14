@@ -1050,10 +1050,10 @@ inside a `try` whose `finally` issues the completion statement above over
 them, under `CancellationToken.None`: a stop that cancels the pass part-way
 still completes every row the pass delivered, so a graceful shutdown
 redelivers nothing that per-row completion would not have. A completion
-statement that throws is logged as `BookkeepingFailed` and the pass ends
-normally: its rows stay leased and are claimed again when the lease ends,
-and the exception neither reads as a failed claim nor replaces one a
-delivery raised.
+statement that throws is logged as `BookkeepingFailed` and the pass ends as
+it would have without it, normally or on the exception a delivery raised:
+its rows stay leased and are claimed again when the lease ends, and the
+failed write never reads as a failed claim.
 
 **Each row a pass delivers or fails is timed, by lane and outcome**, on
 §13.3's `outbox.delivery.duration`, through `TimeProvider` as §13.3 times a
