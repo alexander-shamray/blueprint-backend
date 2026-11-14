@@ -238,9 +238,9 @@ sum(increase(notifications_contact_refused_total[30m]))
 
 `max` and not `sum`, because every replica reads the same table and reports
 the same rows. The three counters of a row that backs off take
-[`contact-refused.md`](contact-refused.md)'s 30-minute window, since a row at
-the top of the ladder is retried once every 1280 seconds and a shorter window
-reads zero between its retries; a push refusal ends its delivery, so its rate
+[`contact-refused.md`](contact-refused.md)'s window, the alert's, which
+outlasts the backoff ladder's longest step; a shorter window reads zero
+between a capped row's retries. A push refusal ends its delivery, so its rate
 keeps the shorter one. **Waiting has an end**: a row `Pending` past
 `DeliveryOptions.GiveUpAge` becomes `Undeliverable: gave_up`, so a waiting set
 that falls without the dependency recovering is notifications given up rather
