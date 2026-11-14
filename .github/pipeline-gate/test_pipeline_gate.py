@@ -1037,6 +1037,7 @@ class GrantTests(unittest.TestCase):
             "    permissions: { 'packages': write }\n",
             '    permissions: { contents: read, "packages": write }\n',
             "    permissions:\n      packages : write\n",
+            "    permissions :\n      packages: write\n",
         ):
             with self.subTest(permissions=permissions):
                 self.write(GRANTED.replace("  build:\n    steps:", f"  build:\n{permissions}    steps:"))
@@ -1070,6 +1071,8 @@ class GrantTests(unittest.TestCase):
             # The review events start from a pull request's branch too.
             "on:\n  pull_request_review:\n",
             "on: [pull_request_review_comment]\n",
+            # A space before the key's colon is still the key.
+            "on :\n  pull_request:\n",
         ):
             with self.subTest(trigger=trigger):
                 self.write(GRANTED.replace(
@@ -1084,7 +1087,7 @@ class GrantTests(unittest.TestCase):
         for trigger in (
             "on: {pull_request: {}}\n", "on:\n  pull_request: {types: [opened]}\n", "on:\n- pull_request\n",
             "on: [pull_request,\n  push]\n", "on: &events [pull_request]\n", "on:\n  pull_request: *types\n",
-            "on :\n  pull_request:\n", "",
+            "",
         ):
             with self.subTest(trigger=trigger):
                 self.write(GRANTED.replace("on:\n  pull_request:\n  push:\n    branches: [main]\n", trigger))

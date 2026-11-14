@@ -1121,7 +1121,7 @@ ALERT_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
 
 def _key(lines: list[str], key: str, indent: int) -> tuple[str, list[str]] | None:
     """A key at one indentation, bare or quoted: its inline value and the lines nested under it."""
-    pattern = re.compile(rf"^ {{{indent}}}(?:{re.escape(key)}|'{re.escape(key)}'|\"{re.escape(key)}\"):(.*)$")
+    pattern = re.compile(rf"^ {{{indent}}}(?:{re.escape(key)}|'{re.escape(key)}'|\"{re.escape(key)}\")[ \t]*:(.*)$")
     for index, line in enumerate(lines):
         match = pattern.match(line)
         if not match:
