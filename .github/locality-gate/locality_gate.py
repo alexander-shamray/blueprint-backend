@@ -43,6 +43,8 @@ _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 # and hides a fence line inside a comment, which a line reader cannot follow; so a row in a fence after one is
 # refused rather than skipped, since GitHub may show it as the table.
 _CONTAINER = re.compile(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)|^ {0,3}[<>]")
+# Any spelling GitHub could render as either row once such a fence ends early: indented, or without its pipe.
+_ROWISH = re.compile(r"^[ \t]*\|?[ \t]*(?:Class|Touch set)[ \t]*\|")
 _MAP_CLASS = re.compile(r"^([A-E]):\s*$")
 _MAP_ITEM = re.compile(r"^  - '([^']+)'\s*$")
 
@@ -132,7 +134,7 @@ def _unfenced(body: str) -> list[str]:
     contained = after_container = False
     for line in body.replace("\r", "").split("\n"):
         if fence:
-            if contained and (_CLASS_ROW.match(line) or _TOUCH_ROW.match(line)):
+            if contained and _ROWISH.match(line):
                 raise InputRefused(
                     "a `| Class |` or `| Touch set |` row sits in a fenced block after a list, block quote or "
                     "HTML block, where GitHub can end the fence sooner than this gate reads it")
