@@ -1648,6 +1648,25 @@ class SupplyChainTests(Fixture):
                 self.assertEqual(len(problems), 1, problems)
                 self.assertIn(why, problems[0])
 
+    def test_a_verify_step_with_no_cosign_verify_command_fails_rather_than_passing(self) -> None:
+        """`cosign verify-attestation` locates the step, so a reader that finds no command must say so."""
+        problems = self.broken(
+            'cosign verify "$REGISTRY/$1:$TAG" \\\n            --certificate-identity "$CERTIFICATE_IDENTITY"',
+            "cosign verify-attestation \"$REGISTRY/$1:$TAG\" \\\n            --certificate-identity-regexp '.*'",
+            deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("no `cosign verify` command", problems[0])
+
+    def test_a_path_qualified_cosign_is_read(self) -> None:
+        problems = self.broken('cosign verify "$REGISTRY/$1:$TAG" \\\n            --certificate-identity "$CERT',
+                               '/usr/local/bin/cosign verify "$REGISTRY/$1:$TAG" \\\n'
+                               "            --certificate-identity-regexp '.*' --certificate-identity \"$CERT",
+                               deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("-regexp", problems[0])
+
     def test_a_verify_line_that_will_not_split_fails_rather_than_passing(self) -> None:
         problems = self.broken('cosign verify "$REGISTRY/$1:$TAG"', 'cosign verify "$REGISTRY/$1:$TAG', deploy=True)
 
