@@ -196,7 +196,8 @@ jobs:
             --certificate-identity "$CERTIFICATE_IDENTITY" \\
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/v.json"
-          gh attestation verify "oci://x" --source-ref refs/heads/main
+          gh attestation verify "oci://x" --repo "$GITHUB_REPOSITORY" \\
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --source-ref refs/heads/main
           docker buildx imagetools create --tag "$REGISTRY/$1:$RECORD" "$REGISTRY/$1@$VERIFIED"
         env:
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
@@ -1577,6 +1578,81 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("pinning the provenance to main", problems[0])
 
+    def test_a_verify_that_takes_an_identity_pattern_is_caught(self) -> None:
+        """The flag is a prefix of its `-regexp` form, so a substring admits any identity."""
+        for old, new in (
+            ('--certificate-identity "$CERTIFICATE_IDENTITY"', "--certificate-identity-regexp '.*'"),
+            ('--certificate-identity "$CERTIFICATE_IDENTITY"',
+             '--certificate-identity "$CERTIFICATE_IDENTITY" --certificate-identity-regexp=.+'),
+        ):
+            with self.subTest(new=new):
+                problems = self.broken(old, new, deploy=True)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("pinned to ci.yml on main", problems[0])
+                self.assertIn("-regexp", problems[0])
+
+    def test_a_verify_that_takes_an_issuer_pattern_is_caught(self) -> None:
+        problems = self.broken("--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+                               "--certificate-oidc-issuer-regexp 'https://.*'", deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("given an issuer", problems[0])
+
+    def test_a_verify_for_another_repository_is_caught(self) -> None:
+        problems = self.broken("https://github.com/${{ github.repository }}/", "https://github.com/someone/else/",
+                               deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("pinned to ci.yml on main", problems[0])
+
+    def test_an_identity_the_flag_does_not_read_is_caught(self) -> None:
+        """The pinned value left in `env:` proves nothing once the flag reads something else."""
+        for old, new in (
+            ('--certificate-identity "$CERTIFICATE_IDENTITY"', '--certificate-identity "$OTHER_IDENTITY"'),
+            ('cosign verify "$REGISTRY',
+             'CERTIFICATE_IDENTITY=https://github.com/a/b/.github/workflows/ci.yml@refs/heads/main\n'
+             '          cosign verify "$REGISTRY'),
+        ):
+            with self.subTest(new=new):
+                problems = self.broken(old, new, deploy=True)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("pinned to ci.yml on main", problems[0])
+
+    def test_an_identity_written_in_the_run_is_admitted(self) -> None:
+        self.assertEqual(self.broken(
+            '"$CERTIFICATE_IDENTITY"', '"https://github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main"',
+            deploy=True), [])
+
+    def test_every_verify_is_pinned_not_only_the_first(self) -> None:
+        problems = self.broken(
+            "          python deploy/canary/canary.py verified-digest",
+            "          cosign verify \"$REGISTRY/$1:$RECORD\" --certificate-identity-regexp '.*' \\\n"
+            "            --certificate-oidc-issuer https://token.actions.githubusercontent.com\n"
+            "          python deploy/canary/canary.py verified-digest", deploy=True)
+
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("-regexp", problems[0])
+
+    def test_a_provenance_check_for_another_repository_is_caught(self) -> None:
+        for old, new, why in (
+            ('--repo "$GITHUB_REPOSITORY"', "--repo someone/else", "to this repository:"),
+            ('--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml"',
+             '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/any.yml"', "this repository's ci.yml"),
+            ('--repo "$GITHUB_REPOSITORY"', '--owner "$GITHUB_REPOSITORY_OWNER"', "to this repository:"),
+        ):
+            with self.subTest(new=new):
+                problems = self.broken(old, new, deploy=True)
+
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(why, problems[0])
+
+    def test_a_verify_line_that_will_not_split_fails_rather_than_passing(self) -> None:
+        problems = self.broken('cosign verify "$REGISTRY/$1:$TAG"', 'cosign verify "$REGISTRY/$1:$TAG', deploy=True)
+
+        self.assertTrue(any("does not split into shell words" in problem for problem in problems), problems)
+
     def test_a_helm_upgrade_with_no_digest_is_caught(self) -> None:
         problems = self.broken('--set-string image.digest="$API_DIGEST" \\\n', "\\\n", deploy=True)
 
@@ -1657,8 +1733,12 @@ class SupplyChainTests(Fixture):
         rollout = pipeline_gate.read_job_steps(
             (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8"), "rollout")
         self.assertTrue(any("cosign verify" in step.get("run", "") for step in rollout))
-        self.assertGreaterEqual(len(pipeline_gate.read_helm_upgrades(
-            (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8"))), 2)
+        deploy = (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+        self.assertGreaterEqual(len(pipeline_gate.read_helm_upgrades(deploy)), 2)
+        verifies = pipeline_gate.read_command_arguments(deploy, ("cosign", "verify"))
+        self.assertGreaterEqual(len(verifies), 2)
+        self.assertTrue(all("--certificate-identity" in arguments for arguments in verifies))
+        self.assertTrue(pipeline_gate.read_command_arguments(deploy, ("gh", "attestation", "verify")))
 
 
 class ActionTests(unittest.TestCase):

@@ -9,9 +9,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 import xml.etree.ElementTree as ElementTree
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -576,6 +578,11 @@ MOVING_TAG_NAME = r'\btag="\$REGISTRY/[^"]*:main"'
 MOVING_TAG_COMPARISON = r'\[\s+"\${read}"\s+!?=\s+"\$DIGEST"\s+\]'
 REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
+OIDC_ISSUER = "https://token.actions.githubusercontent.com"
+# An `env:` value is not shell-expanded, so only a run line may also name the runner's variable.
+REPOSITORY_EXPRESSION = r"\$\{\{\s*github\.repository\s*\}\}"
+REPOSITORY_IN_RUN = rf"(?:{REPOSITORY_EXPRESSION}|\$GITHUB_REPOSITORY|\$\{{GITHUB_REPOSITORY\}})"
+SHELL_OPERATOR = re.compile(r"[;&|<>()]+")
 # Helm takes its global flags before the subcommand too, as `helm -n prod upgrade`, each with or without a value.
 HELM_FLAGS = r"(?:\s+-{1,2}[A-Za-z][\w-]*(?:=\S*|\s+[^\s-]\S*)?)*"
 HELM_COMMAND = re.compile(rf"(?:^|[\s;&|(`])helm{HELM_FLAGS}\s+[a-z]")
@@ -662,6 +669,95 @@ def read_helm_upgrades(workflow_text: str) -> list[str]:
             commands.append(command)
         index += 1
     return commands
+
+
+def read_command_arguments(workflow_text: str, words: tuple[str, ...]) -> list[list[str]] | None:
+    """The shell words after every `words` command a workflow runs, up to its operator; None if one will not split."""
+    lines = [line for line in workflow_text.splitlines() if not line.lstrip().startswith("#")]
+    joined = re.sub(r"\\\n[ \t]*", " ", "\n".join(lines))
+    opening = re.compile(r"(?:^|(?<=[\s;&|(`]))" + r"\s+".join(map(re.escape, words)) + r"(?![\w-])")
+    commands = []
+    for line in joined.splitlines():
+        for found in opening.finditer(line):
+            lexer = shlex.shlex(line[found.end():], posix=True, punctuation_chars=True)
+            lexer.whitespace_split = True
+            try:
+                arguments = list(lexer)
+            except ValueError:
+                return None
+            end = next((i for i, word in enumerate(arguments) if SHELL_OPERATOR.fullmatch(word)), len(arguments))
+            commands.append(arguments[:end])
+    return commands
+
+
+def _flag(arguments: list[str], name: str) -> str | None:
+    """The value given last as `--name value` or `--name=value`, the one cobra keeps."""
+    value = None
+    for index, word in enumerate(arguments):
+        if word == f"--{name}" and index + 1 < len(arguments):
+            value = arguments[index + 1]
+        elif word.startswith(f"--{name}="):
+            value = word.partition("=")[2]
+    return value
+
+
+def _pinned(value: str | None, workflow_text: str, expected: Callable[[str], str]) -> bool:
+    """Whether a flag's value is `expected` as written, or a variable every `env:` line naming it sets so.
+
+    A variable the run reassigns, or a runner variable an `env:` line overrides, pins nothing.
+    """
+    if value is None:
+        return False
+    commands = "\n".join(line for line in workflow_text.splitlines() if not line.lstrip().startswith("#"))
+    names = re.findall(r"\$\{?(\w+)", value)
+    if any(re.search(rf"(?<![\w$]){name}=", commands) for name in names):
+        return False
+    declared = {name: re.findall(rf"^[ \t]+{name}:[ \t]*(.*?)[ \t]*$", commands, re.MULTILINE) for name in names}
+    if re.fullmatch(expected(REPOSITORY_IN_RUN), value):
+        return not any(declared.values())
+    variable = re.fullmatch(r"\$(?:(\w+)|\{(\w+)\})", value)
+    settings = declared.get(variable.group(1) or variable.group(2), []) if variable else []
+    return bool(settings) and all(
+        re.fullmatch(expected(REPOSITORY_EXPRESSION), re.sub(r"\s+#.*$", "", setting).strip("'\""))
+        for setting in settings)
+
+
+def _check_admission(deploy_text: str) -> list[str]:
+    """Every `cosign verify` and `gh attestation verify` in deploy.yml pins this repository's ci.yml on main.
+
+    Flags as shell words, not substrings: `--certificate-identity` is a prefix of its `-regexp` form, and
+    an identity in `env:` pins nothing unless the flag reads it.
+    """
+    verifies = read_command_arguments(deploy_text, ("cosign", "verify"))
+    attestations = read_command_arguments(deploy_text, ("gh", "attestation", "verify"))
+    if verifies is None or attestations is None:
+        return ["deploy.yml has a `cosign verify` or `gh attestation verify` line that does not split into shell "
+                "words, so its flags cannot be read"]
+    subject = "deploy.yml's `cosign verify` step is not"
+    problems = []
+    for arguments in verifies:
+        for flag, expected, value, why in (
+            ("certificate-identity", lambda repository: rf"https://github\.com/{repository}{re.escape(CI_IDENTITY)}",
+             f"https://github.com/${{{{ github.repository }}}}{CI_IDENTITY}", "pinned to ci.yml on main"),
+            ("certificate-oidc-issuer", lambda _: re.escape(OIDC_ISSUER), OIDC_ISSUER, "given an issuer"),
+        ):
+            if any(word.startswith(f"--{flag}-regexp") for word in arguments):
+                problems.append(f"{subject} {why}: --{flag}-regexp admits whatever its pattern matches")
+            elif not _pinned(_flag(arguments, flag), deploy_text, expected):
+                problems.append(f"{subject} {why}: no --{flag} reads {value}")
+    if not attestations:
+        problems.append(f"{subject} pinning the provenance to main: it runs no `gh attestation verify`")
+    for arguments in attestations:
+        for flag, expected, why in (
+            ("repo", lambda repository: repository, "this repository"),
+            ("signer-workflow", lambda repository: rf"{repository}/\.github/workflows/ci\.yml",
+             "this repository's ci.yml"),
+            ("source-ref", lambda _: re.escape("refs/heads/main"), "main"),
+        ):
+            if not _pinned(_flag(arguments, flag), deploy_text, expected):
+                problems.append(f"{subject} pinning the provenance to {why}: a `gh attestation verify` has no "
+                                f"--{flag} naming it")
+    return list(dict.fromkeys(problems))
 
 
 def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
@@ -843,15 +939,12 @@ def _check_rollout(workflow_text: str, deploy_text: str) -> list[str]:
     else:
         text = " ".join(rollout[verify].values())
         for needle, why in (
-            (CI_IDENTITY, "pinned to ci.yml on main"),
-            ("--certificate-identity", "given an identity"),
-            ("--certificate-oidc-issuer", "given an issuer"),
             ("verified-digest", "reading the digest it verified"),
             ("imagetools create", "recording that digest under a tag the prune keeps (ADR-201)"),
-            ("--source-ref refs/heads/main", "pinning the provenance to main"),
         ):
             if needle not in text:
                 problems.append(f"deploy.yml's `cosign verify` step is not {why} ({needle!r} is missing)")
+        problems.extend(_check_admission(deploy_text))
         if helm is not None and verify > helm:
             problems.append(
                 "deploy.yml's `cosign verify` runs after the first step that runs helm, so the "
