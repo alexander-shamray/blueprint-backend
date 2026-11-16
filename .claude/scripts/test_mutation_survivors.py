@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 
 import mutation_survivors as ms
-from review_helpers import SCRIPTS, setUpModule, run_bash
+from review_helpers import SCRIPTS, setUpModule, run_bash, temp_root
 
 RUN = SCRIPTS / "mutation-run.sh"
 DETACH = SCRIPTS / "git-worktree-detach.sh"
@@ -100,8 +100,7 @@ class AReport(unittest.TestCase):
 
     def test_a_line_outside_cp1252_reaches_a_pipe(self):
         # Under -I a piped stdout on Windows keeps the locale's code page, which has no arrow.
-        root = tempfile.mkdtemp(prefix="mutation-root-")
-        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        root = temp_root(self)
         made = run_bash('cd "$R" && git init -q . && mkdir -p src/A.Domain tests/A.Domain.Tests'
                         ' && echo x > src/A.Domain/A.Domain.csproj'
                         ' && echo x > tests/A.Domain.Tests/A.Domain.Tests.csproj'
