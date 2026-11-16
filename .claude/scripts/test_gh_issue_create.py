@@ -387,8 +387,10 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
     def test_the_entry_points_do_not_file_the_request_trailer_nothing_files_under(self):
         for name, words, _ in self.ENTRY_POINTS:
             with self.subTest(entry=name):
-                kind = ("enhancement",) if len(words) == 3 else ()
-                self.assert_refused_before_gh(self.run_entry(name, *kind, *words[-2:], body=self.REQUEST_STDIN))
+                # A kind the route admits, so the refusal is the trailer's and not the kind and route pairing's.
+                result = self.run_entry(name, *words, body=self.REQUEST_STDIN)
+                self.assert_refused_before_gh(result)
+                self.assertIn("does not end with the trailer line", result.stderr)
 
     def test_a_body_without_the_trailer_is_refused(self):
         # The detector for an early heredoc close: a body cut short by a

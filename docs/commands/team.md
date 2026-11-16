@@ -65,7 +65,12 @@ converged, or at the round ceiling, reported as unconverged the way
 `/ship` step 5 reports its review. A refused claim does not hold a round
 open: it never reached the board, so repeating it changes nothing. Nor
 does restating an accepted one: a claim already on the board, whitespace
-and case aside, is refused as a restatement.
+and case aside, is refused as a restatement. The one exception is a board
+still empty: a round that refused a claim or a status change and left
+the board with none has not converged, since a claim refused for a
+citation that does not parse is one not yet backed, and ending there
+would report an empty board as the peers agreeing. The round ceiling
+still bounds it.
 
 A reply out of shape is spawned once more with the same brief; a second is
 the round not having run. The owner never writes a peer's reply, because a

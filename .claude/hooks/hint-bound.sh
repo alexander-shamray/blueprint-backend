@@ -12,8 +12,14 @@ export HINT_HOOK="${2:?hook}"
 # A file, not a substitution: a launcher's orphaned child would hold a pipe open and keep this waiting.
 out="$(mktemp)"
 trap 'rm -f "$out"' EXIT
+# The first interpreter run-guard.sh's probes reach: `py` is the Windows launcher, which macOS and Linux lack, and
+# a hard `py` there exits 127 on every hint. An interpreter older than `-P` (3.11) fails into the line below.
+if command -v py >/dev/null 2>&1; then python=(py -3.12)
+elif command -v python3 >/dev/null 2>&1; then python=(python3)
+else python=(python)
+fi
 rc=0
-bounded "$HINT_BOUND_SECONDS" py -3.12 -P -c \
+bounded "$HINT_BOUND_SECONDS" "${python[@]}" -P -c \
   "import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/' + os.environ['HINT_HOOK'], run_name='__main__')" \
   >"$out" || rc=$?
 if [ "$rc" -eq 0 ]; then

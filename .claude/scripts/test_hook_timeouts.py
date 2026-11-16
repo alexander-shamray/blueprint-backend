@@ -9,12 +9,15 @@ import unittest
 
 from review_helpers import SETTINGS, setUpModule
 
-# A hint runs under hint-bound.sh and a guard under run-guard.sh, each of which launches `py`, so both share the floor.
+# A hint runs under hint-bound.sh, the root check and the refresh under index-hook.sh and a guard under run-guard.sh,
+# each of which may launch `py`, so all three share the floor, and so does any hook still started as `py` itself.
 LAUNCHERS = ("py ", 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh"',
-             'sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh"')
+             'sh "${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.sh"',
+             'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/index-hook.sh"')
 
-# The base's hooks by launcher: three `py`, the two hints and six guard commands, guard-git-argv's Bash and PowerShell.
-COUNTS = {"py ": 3, LAUNCHERS[1]: 2, LAUNCHERS[2]: 6}
+# The base's hooks by launcher: the two hints, six guard commands, guard-git-argv's Bash and PowerShell, and the root
+# check and the two refreshes.
+COUNTS = {LAUNCHERS[1]: 2, LAUNCHERS[2]: 6, LAUNCHERS[3]: 3}
 
 # The slowest `py` start measured was 2.9 s; a hook needs that and its own work, with room to spare.
 FLOOR_SECONDS = 15

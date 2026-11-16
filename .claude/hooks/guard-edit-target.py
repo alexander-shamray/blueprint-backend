@@ -142,6 +142,17 @@ def under(child, parent, traits):
     return child.startswith(parent)
 
 
+def below(child, parent):
+    """The part of `child` beneath `parent`, in `child`'s own spelling.
+
+    Counted rather than compared, where `under` holds: `os.path.relpath`
+    folds case on Windows alone, and elsewhere climbs out of a cased root.
+    """
+    parts = [part for part in os.path.normpath(child).split(os.sep) if part]
+    depth = len([part for part in os.path.normpath(parent).split(os.sep) if part])
+    return os.path.join(*parts[depth:]) if parts[depth:] else os.curdir
+
+
 def checkout_root(path):
     """The nearest ancestor of `path` holding a `.git`, or `None`.
 
@@ -277,9 +288,9 @@ def protected_in_worktree(path, root):
 
 
 def home_offence(spelled, lexical, resolved):
-    """The reason to refuse a target no checkout below the home holds, or `None`.
+    """The reason to refuse a target the home protects, or `None`.
 
-    Spelling and resolution are both judged, so a link into `~/.ssh` is held.
+    Asked whatever checkout holds it; spelling and resolution are both judged.
     Only `~/.claude`'s first component is control. Unreadable names refuse.
     """
     home = os.path.abspath(os.path.expanduser("~"))
@@ -304,9 +315,9 @@ def home_offence(spelled, lexical, resolved):
             if place == "login":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
-                    "which no checkout below the home holds and is a key, a shell "
-                    "profile or git's own configuration: what runs at login, "
-                    "under every session (docs/harness-boundaries.md)."
+                    "a key, a shell profile or git's own configuration below "
+                    "the home: what runs at login, under every session, which "
+                    "no checkout's rules own (docs/harness-boundaries.md)."
                 )
             if place == "control":
                 return (
@@ -316,13 +327,6 @@ def home_offence(spelled, lexical, resolved):
                     "owner's to run (docs/harness-boundaries.md)."
                 )
     return None
-
-
-def holds_home(spelled_root, real_root, traits):
-    """Whether an anchor is the home directory or one of its ancestors."""
-    home = os.path.abspath(os.path.expanduser("~"))
-    return (under(home, spelled_root, traits)
-            or under(os.path.realpath(home), real_root, traits))
 
 
 def anchors(event):
@@ -373,20 +377,29 @@ def offence(event):
     # path: either way this file cannot see where the write lands. The loop
     # variable is `name`, not `key`, which is a function in this module.
     tool_input = event.get("tool_input")
-    spelled = None
+    spellings = []
     if isinstance(tool_input, dict):
         for name in PATH_KEYS:
             value = tool_input.get(name)
             if isinstance(value, str) and value:
-                spelled = value
-                break
-    if spelled is None:
+                spellings.append(value)
+    if not spellings:
         return (
             f"guard-edit-target: {tool} carries no file path this guard can "
             "read, so nothing has been established about where it writes. "
             "Refusing rather than waving it through."
         )
+    # Every key carried is judged, since the one read first need not be the
+    # one the tool writes through.
+    for spelled in spellings:
+        reason = target_offence(event, spelled)
+        if reason is not None:
+            return reason
+    return None
 
+
+def target_offence(event, spelled):
+    """The reason to refuse a write to `spelled`, or `None`."""
     cwd = event.get("cwd")
     if not isinstance(cwd, str) or not cwd:
         cwd = os.getcwd()
@@ -455,11 +468,9 @@ def offence(event):
 
     # Every anchor containing the target must agree, so an extra anchor cannot
     # excuse what another refuses — the property `anchors` rests its trust in
-    # `CLAUDE_PROJECT_DIR` on. An anchor holding the home directory, a dotfiles
-    # checkout at `~` or a project directory set to it or above, judges its
-    # links but leaves `home_offence` to run.
+    # `CLAUDE_PROJECT_DIR` on. An anchor judges its links and leaves
+    # `home_offence` to run: containing a target is not owning it.
     judged = False
-    held = False
     for spelled_root, real_root, traits in checkouts:
         if under(lexical, spelled_root, traits):
             base = spelled_root
@@ -468,10 +479,9 @@ def offence(event):
         else:
             continue
         judged = True
-        held = held or holds_home(spelled_root, real_root, traits)
 
         expected = os.path.normpath(
-            os.path.join(real_root, os.path.relpath(lexical, base)))
+            os.path.join(real_root, below(lexical, base)))
 
         # The traits are measured at the root and a child can disagree: Windows
         # sets case sensitivity per directory (`fsutil file
@@ -525,9 +535,7 @@ def offence(event):
                 )
 
     # Reached when every anchor containing the target agreed.
-    if held or not judged:
-        return home_offence(spelled, lexical, resolved)
-    return None
+    return home_offence(spelled, lexical, resolved)
 
 
 def main():
@@ -542,6 +550,8 @@ def main():
               file=sys.stderr)
         return 0
 
+    # The same exception: JSON that is not an object names no tool and no
+    # path, so it is as unreadable as text that is not JSON at all.
     if not isinstance(event, dict):
         print("guard-edit-target: hook event is not an object; not judging",
               file=sys.stderr)

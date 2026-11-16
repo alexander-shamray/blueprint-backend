@@ -22,6 +22,8 @@ REWRITTEN = ("gh-issue-create.sh", "gh-issue-harness.sh", "gh-issue-list.sh", "g
              "gh-label-ensure.sh", "gh-pr-merge.sh", "git-branch-drop.sh", "git-rebase-onto-main.sh",
              "git-trailer-pr.sh", "git-worktree-detach.sh", "git-worktree-fork.sh", "git-worktree-remove.sh",
              "main-red-open.sh", "pr-for-branch.sh", "pr-locality.sh", "sweep-slices.sh")
+# A skill's bash, which no `.sh` glob under scripts or hooks reaches: `cbx` by its shebang, `gate.sh` by its name.
+SKILL_SCRIPTS = ("cbx", "gate.sh")
 # `<<<` outside a comment; `<<` and `<<-` are heredocs, which bash writes to a file once they pass a pipe's size.
 HERE_STRING = re.compile(r"^(?!\s*#).*<<<")
 # The byte count of the list `gh-issue-list.sh` read the night it hung.
@@ -29,8 +31,17 @@ HUNG_AT = 65_541
 LIMIT = 60
 
 
+def is_bash(path):
+    if path.suffix == ".sh":
+        return True
+    with path.open("rb") as handle:
+        first = handle.readline()
+    return first.startswith(b"#!") and b"sh" in first.split(b"/")[-1]
+
+
 def shell_scripts():
-    return sorted(path for root in (SCRIPTS, HOOKS) for path in root.glob("*.sh"))
+    skills = (path for path in SCRIPTS.parent.glob("skills/*/scripts/*") if path.is_file() and is_bash(path))
+    return sorted([*(path for root in (SCRIPTS, HOOKS) for path in root.glob("*.sh")), *skills])
 
 
 def here_strings(text):
@@ -51,7 +62,7 @@ class NoHereString(unittest.TestCase):
 
     def test_the_walk_reaches_every_rewritten_script(self):
         reached = {path.name for path in shell_scripts()}
-        self.assertEqual(set(), set(REWRITTEN) - reached)
+        self.assertEqual(set(), set(REWRITTEN + SKILL_SCRIPTS) - reached)
 
     def test_the_pattern_catches_a_here_string_and_passes_a_heredoc(self):
         self.assertEqual([2, 3], here_strings('x=1\njq length <<<"$list"\ndone <<< "$rows"\n'))

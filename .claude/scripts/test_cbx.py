@@ -22,10 +22,10 @@ CBX_PS1 = CBX.with_suffix(".ps1")
 SKILL = SCRIPTS.parent / "skills" / "codebase-index"
 
 # The bare console script `codebase-index <subcommand>`, which no wrapper pins to the interpreter or holds to the
-# allow list. At the start of a line, or after a backtick or whitespace, so the path `skills/codebase-index/` and the
-# package name in prose do not match.
+# allow list. Anywhere but after a word character, `/`, `.` or `-`, so a quote, a parenthesis or `$(` before it still
+# matches, and the path `skills/codebase-index/` and a hyphenated name do not.
 UNPINNED_CLI = re.compile(
-    r"(?:^|[`\s])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
+    r"(?<![\w/.-])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
     r"|stats|doctor|update|index|graph|mcp|clean|init|watch)\b", re.M)
 
 
@@ -53,6 +53,17 @@ def _ps_invoke(script, *args, env=None, cwd=None):
          "-File", str(script), *args],
         capture_output=True, text=True, encoding="utf-8", env=env, cwd=cwd,
     )
+
+
+def _keeping_git(case, path):
+    """`path` with a `git` on it: dropping the directory that holds `python3`, as Linux's `/usr/bin` does, drops
+    git too, and gate-index refuses a git that cannot say which checkout it is in."""
+    if shutil.which("git", path=path) is not None:
+        return path
+    holder = tempfile.mkdtemp(prefix="cbx-git-")
+    case.addCleanup(shutil.rmtree, holder)
+    os.symlink(shutil.which("git"), os.path.join(holder, "git"))
+    return holder + os.pathsep + path
 
 
 def _path_without_launchers(*names):
@@ -242,10 +253,11 @@ class CbxWrapper(unittest.TestCase):
         self.assertIn("python3 -P -m", bash)
         self.assertIn("python -P -c", bash)
         self.assertIn("python -P -m", bash)
-        self.assertIn("-3.12 -P -c", ps1)
-        self.assertIn("-3.12 -P -m", ps1)
-        self.assertIn("-P -c", ps1)
-        self.assertIn("-P -m", ps1)
+        # Each spelled with its launcher, so the plain python fallback cannot ride on the py launcher's text.
+        self.assertIn("$pyLauncher.Source -3.12 -P -c", ps1)
+        self.assertIn("$pyLauncher.Source -3.12 -P -m", ps1)
+        self.assertIn("$py.Source -P -c", ps1)
+        self.assertIn("$py.Source -P -m", ps1)
 
     def test_powershell_restores_the_variables_in_a_finally_with_one_exit_after_it(self):
         """The text of the structure the behavioural case above runs: an
@@ -475,11 +487,13 @@ class CbxWrapper(unittest.TestCase):
         # The scan's subject is the scan: a pattern that matched nothing would pass every file above.
         for text in ("codebase-index verify --json", "Run `codebase-index search X`", "| `codebase-index impact X` |",
                      "x codebase-index  graph", "$ codebase-index doctor", "codebase-index mcp",
-                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch"):
+                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch",
+                     '"codebase-index search X"', "'codebase-index verify'", "(codebase-index refs X)",
+                     "$(codebase-index impact X)"):
             with self.subTest(text=text):
                 self.assertIsNotNone(UNPINNED_CLI.search(text))
         for text in ("the `codebase-index` package", "pip install codebase-index", "skills/codebase-index/scripts/cbx",
-                     "codebase-index is a package"):
+                     "codebase-index is a package", "x-codebase-index search", "skills/codebase-index search"):
             with self.subTest(text=text):
                 self.assertIsNone(UNPINNED_CLI.search(text))
 
@@ -610,12 +624,15 @@ class CbxWrapper(unittest.TestCase):
             py_dir = str(Path(sys.executable).resolve().parent)
             env = {
                 **os.environ,
-                "PATH": py_dir + os.pathsep + _path_without_launchers(
-                    "codebase-index", "py", "python3"),
+                "PATH": _keeping_git(self, py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3")),
             }
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
                 capture_output=True, text=True, encoding="utf-8", env=env, cwd=fake)
+            # Past the gate, or the negatives below hold of a run that never reached an import: 4 is no
+            # interpreter, 3 a refused index. The CLI itself may be absent, as on CI, so its own exit is not read.
+            self.assertNotIn(out.returncode, (3, 4), out.stderr)
             self.assertFalse(
                 (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
             self.assertNotIn("CHECKOUT", out.stdout)
@@ -627,10 +644,13 @@ class CbxWrapper(unittest.TestCase):
             py_dir = str(Path(sys.executable).resolve().parent)
             env = {
                 **os.environ,
-                "PATH": py_dir + os.pathsep + _path_without_launchers(
-                    "codebase-index", "py", "python3"),
+                "PATH": _keeping_git(self, py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3")),
             }
             out = _ps_invoke(CBX_PS1, "search", "X", env=env, cwd=fake)
+            # Past the gate, or the negatives below hold of a run that never reached an import: 4 is no
+            # interpreter, 3 a refused index. The CLI itself may be absent, as on CI, so its own exit is not read.
+            self.assertNotIn(out.returncode, (3, 4), out.stderr)
             self.assertFalse(
                 (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
             self.assertNotIn("CHECKOUT", out.stdout)
