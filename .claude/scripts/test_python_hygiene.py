@@ -15,7 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TREES = (".claude", ".github")
 SUBPROCESS_CALLS = {"run", "Popen", "check_output", "check_call", "call"}
-SKIPPED_PARTS = {"__pycache__", "worktrees"}
+SKIPPED_PARTS = {"__pycache__"}
+# The forked checkouts, each with a copy of the harness at its own base; a `worktrees` elsewhere is read.
+FORKED = (".claude", "worktrees")
 SWALLOWING_CLEANUPS = {"rmtree": "ignore_errors", "TemporaryDirectory": "ignore_cleanup_errors"}
 BUILDS_A_REPOSITORY = re.compile(r"\bgit\b.*\b(?:init|clone|worktree add)\b")
 MKTEMP_DIRECTORY = re.compile(r"\bmktemp -d\b")
@@ -45,7 +47,8 @@ def python_files(root: Path) -> list[Path]:
     for tree in TREES:
         for path in sorted((root / tree).rglob("*.py")):
             rel = path.relative_to(root).as_posix()
-            if SKIPPED_PARTS.intersection(path.relative_to(root).parts[:-1]) or _is_local(rel, globs):
+            parts = path.relative_to(root).parts
+            if SKIPPED_PARTS.intersection(parts[:-1]) or parts[:2] == FORKED or _is_local(rel, globs):
                 continue
             found.append(path)
     return found
@@ -233,6 +236,18 @@ class PythonHygiene(unittest.TestCase):
         self.assertEqual(mktemp_fixture("run_bash('mktemp" + " -d')\n"), [1])
         self.assertEqual(mktemp_fixture("run_bash('mktemp x.XXXXXX')\n# mktemp" + " -d in a comment\n"), [])
         self.assertEqual(mktemp_fixture('"""Not by `mktemp' + ' -d`."""\n'), [])
+
+    def test_only_the_forked_checkouts_directory_is_skipped(self) -> None:
+        # `.claude/worktrees/` holds forked checkouts; a `worktrees` directory anywhere else is the harness's own.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in (".claude/worktrees/x/.claude/scripts/forked.py", ".claude/scripts/worktrees/own.py",
+                        ".github/worktrees/gate.py"):
+                planted = root / rel
+                planted.parent.mkdir(parents=True, exist_ok=True)
+                planted.write_text("import subprocess\nsubprocess.run(['git'], text=True)\n", encoding="utf-8")
+            self.assertEqual(offences(root, text_without_encoding),
+                             [".claude/scripts/worktrees/own.py:2", ".github/worktrees/gate.py:2"])
 
     def test_local_path_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

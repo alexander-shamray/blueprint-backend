@@ -29,6 +29,10 @@ FIELD = re.compile(r"^  - type: (\S+)\s*$")
 FIELD_ID = re.compile(r"^    id: (\S+)\s*$")
 OPTIONS = re.compile(r"^      options:\s*$")
 OPTION = re.compile(r"^        - (.*?)\s*$")
+# A `type`, `id` or `options` key where the shape puts one, however it is spelled: one the three above do not read,
+# quoted or in flow style, would take its dropdown past every check.
+FIELD_KEY = re.compile(r"""^(?:  - |    |      )["']?(type|id|options)["']?\s*:""")
+QUOTED = re.compile(r"""^["']""")
 LABEL_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 BLANK_OFF = re.compile(r"^blank_issues_enabled:\s*false\s*$", re.MULTILINE)
 # A top-level `labels:` attaches its labels to every issue the form opens, whatever was answered.
@@ -74,6 +78,11 @@ def dropdowns(form: Path) -> dict[str, list[str]]:
             if line.startswith("        "):
                 raise InputRefused(f"{form.name} line {number} is inside an options list but is not an option")
             collecting = False
+        if key := FIELD_KEY.match(line):
+            read = FIELD.match(line) or FIELD_ID.match(line) or OPTIONS.match(line)
+            if read is None or (read.groups() and QUOTED.match(read.group(1))):
+                raise InputRefused(
+                    f"{form.name} line {number}: {key.group(1)} is not in the one shape this gate reads")
         if match := FIELD.match(line):
             close()
             field_type, field_id, options = match.group(1), None, []
@@ -120,6 +129,14 @@ def vocabulary_areas(rules: Path) -> list[str]:
     if match is None or not WORD.findall(match.group(1)):
         raise InputRefused(f"{rules.name}'s vocabulary bullet has no `area is ...` sentence naming a label")
     return list(dict.fromkeys(WORD.findall(match.group(1))))
+
+
+def read_stdin() -> str:
+    """stdin as `gh`'s UTF-8, not the locale's encoding, which on Windows is not."""
+    try:
+        return sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise InputRefused(f"stdin is not UTF-8: {error}") from error
 
 
 def label_names(stdin: str) -> set[str]:
@@ -204,7 +221,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        labels = label_names(sys.stdin.read() if stdin is None else stdin)
+        labels = label_names(read_stdin() if stdin is None else stdin)
         problems = check(args.templates, args.helper, args.rules, labels)
     except InputRefused as error:
         problems = [str(error)]

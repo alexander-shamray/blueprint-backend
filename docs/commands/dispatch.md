@@ -325,6 +325,13 @@ executor it then runs `git worktree prune`, as best effort: a `git worktree
 add` the session made under that directory has lost its target, and would stay
 listed until something pruned it.
 
+`run` drops `ANTHROPIC_API_KEY` from the environment it hands an executor.
+A headless `claude -p` takes that key ahead of the owner's subscription
+login, so a key the dispatcher's shell happened to hold billed every
+executor to an API account. On run 20261114-081919 that account had no
+credit, and both launches of a sync failed in seconds with API 400 *Credit
+balance is too low*.
+
 On every wake it absorbs the result, verifies a merge, places what was
 filed, then asks `wake` what to launch; the outcome table is the spec's
 §6.4. A hand-back or a stop goes back into its wave marked `OWNER` and is
@@ -357,12 +364,32 @@ on a group whose
 status is a relaunch's, reads the worktree — commits ahead of
 `origin/main`, an uncommitted tree, and an `OPEN` row from
 `pr-for-branch.sh` — and adds what it found to the task as one clause
-saying to resume from there and to end the turn only on the result. Each
+saying to resume from there and to end the turn only on the result. Where
+it found something and the PR read lists no PR at all, the clause says no
+PR is open, so the relaunch resumes at the push and `/pr` rather than
+reading for a review (blueprint-harness#549); a `CLOSED` or `MERGED` row
+adds nothing, since `/ship`'s own read stops or hands back on it. Each
 read is best effort: one that fails drops its part, and `/ship`'s own state
 read still decides what is owed, so a missing clause costs only the hint.
 A sync's relaunch carries none, since its tree is held to its proved head
 and never committed to, and the clause is built from the branch name, a
 commit count and a PR number, never issue text.
+
+A session that wrote no result, met a denial, and was refused neither by a
+limit nor by the API's account check is a hand-back, since a relaunch would
+meet the deny again — unless every denial it met is the index hint's.
+`index-search-hint.py` refuses a session's first search for a named symbol
+once, and the same call rerun passes, so that refusal ended
+nothing: on blueprint-frontend's night 20261114-130647, A11 met it, ended
+its turn on `/commit`'s report for another reason, and was handed back with
+two commits unpushed (blueprint-harness#549). `result` matches each denial's
+`tool_use_id`, from the envelope the CLI writes, to the refused result the
+transcript the envelope's session id names holds for that id, a hook's
+refusal ending on the hint's own last sentence; where every denial matches,
+the session is a crash, relaunched once and handed back on a second, and its
+reason says the refusal was advisory. A denial with no id, a transcript
+that cannot be read or is not named, or one unmatched denial leaves the
+hand-back as it was.
 
 A `Model` cell `launch` would refuse holds its group at `board` and `wake`,
 since `launch` comes after the fork and `tasks move`, and a refusal there
@@ -393,7 +420,11 @@ the group would again hold its slot all night. `run` names both refusals
 on its exit line, which the runbook hands to `result` as `--refused` after
 every exit 2; `result` reads it only when it finds no marker from this
 launch and no session record it has not already read. `run` removes an
-earlier pid file before its launch checks: with none, `result` records
+earlier pid file before its launch checks and writes its own pid there
+until the executor's replaces it, so a `resume` in between reads the group
+as running rather than relaunching beside it; a refusal removes it again,
+and a pid file that cannot be read is refused rather than read as none.
+With no pid file, `result` records
 `crashed-before-launch`; with one whose process has ended,
 `crash-hand-back`, since the executor ran and may have merged and only its
 worktree says so; with one still alive, it refuses. A refusal before that
@@ -560,6 +591,22 @@ starting again. A crashed one's `run` refuses and `result` sends it back;
 a rate-limited one's `wait` prints `stop file: yes` and leaves it `window`,
 so the runbook sends it back with `tasks back`, or the report would list it
 as interrupted.
+
+An account the API refuses outright ends the night as well, as
+`end: account`: an `api_error` of 400 or 401, no credit or no valid key,
+before a second turn. Nothing in the group was at fault and every launch
+would meet the same refusal, so `result` counts no crash and the group keeps
+its slot rather than going back marked `OWNER`; run 20261114-081919 read it
+as a crash and spent a relaunch on it (#500). It holds every later night of
+the run until a resumed run, the owner's word that the account is fixed,
+lifts it: before it prints `relaunch`, `resume` sets the group `running`
+where the refused session was its first and `relaunch` otherwise, so no
+`wake` can read the hold while the relaunch starts, and since the refused
+session did nothing, the relaunch is what that launch was. A sync holds no
+row, so unless another group's rows keep its run open, the run closes at the
+report and the next night's step 0 takes the sync again as a new group. The
+report lists it under *Interrupted* with the API's notice and which of the
+two comes next.
 
 A night where `wake` names nothing to launch and no background task of
 this session is left to wake it is §8's nothing running, read from this

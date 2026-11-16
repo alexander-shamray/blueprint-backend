@@ -2,7 +2,7 @@
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, run the local review until a round has nothing open, then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does | sync #<n>] [--sleep] [--dispatched <run-dir>] [--berserk] — omit and each step derives its own"
 allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), Agent(check-auditor), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(bash .claude/scripts/gh-pr-create.sh:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-hand.sh:*), Bash(bash .claude/scripts/system-sleep.sh), Bash(py -3.12 .claude/scripts/sync_pr.py:*), Bash(bash .claude/scripts/git-worktree-sync.sh:*), Bash(bash .claude/scripts/gh-issue-harness.sh:*), Bash(py -3.12 .claude/scripts/shard-harness-suite.py), Bash(py -3.12 .claude/scripts/shard-harness-suite.py --selective), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-suppresses.sh:*), Bash(bash .claude/scripts/git-branch-drop.sh:*), Bash(bash .claude/scripts/main-red-open.sh), Bash(git merge-base origin/main HEAD), Bash(bash .claude/skills/codebase-index/scripts/cbx search:*), Bash(bash .claude/skills/codebase-index/scripts/cbx refs:*), Bash(bash .claude/skills/codebase-index/scripts/cbx impact:*), Bash(bash .claude/skills/codebase-index/scripts/cbx diff-impact:*), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks start:*), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks state:*), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks done:*), Bash(py -3.12 .claude/scripts/dispatch_board.py tasks back:*)
-disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(bug-auditor), Agent(security-auditor), Agent(team-peer), Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
+disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(bug-auditor), Agent(security-auditor), Agent(team-peer), Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**), Edit(~/.claude/CLAUDE.md)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -169,7 +169,8 @@ the run reports and ends unmerged. Step 1 then runs `bash
 .claude/scripts/git-worktree-sync.sh .claude/worktrees/sync-<sha7> <head>` in
 place of `/branch` and enters it, or, where `.claude/worktrees/sync-<sha7>`
 already exists on that branch, enters that. Before anything in the tree runs,
-`git rev-parse HEAD` must equal `<oid>` and `git status --short` must be empty,
+`git rev-parse HEAD` must equal `<oid>` and `git status --short
+--untracked-files=all` must be empty,
 which is what makes its own `sync_pr.py` and suites the proved ones; a tree that
 differs is reported, with what it holds, and ends unmerged. Every later `verify`
 and `review-diff` passes `--head <oid>`. Under `--dispatched` the dispatcher
@@ -258,7 +259,7 @@ target*)
 
    ```bash
    git fetch origin main                      # or the teardown's base is stale
-   git status --short                         # empty: nothing uncommitted
+   git status --short --untracked-files=all   # empty: nothing uncommitted
    git rev-parse HEAD                         # the tip, for the row below
    bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED
                                                    # and baseRefName main
@@ -571,7 +572,7 @@ target*)
    bash .claude/scripts/pr-state.sh <n>
    gh pr checks <n> --watch --fail-fast --interval 60
    bash .claude/scripts/main-red-open.sh
-   git status --short              # empty
+   git status --short --untracked-files=all   # empty
    git log <headRefOid>..HEAD      # empty: this workspace holds nothing extra
    ```
 

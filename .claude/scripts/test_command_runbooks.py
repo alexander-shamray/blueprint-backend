@@ -15,12 +15,12 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 # each at most about a tenth over its landed size: a runbook past it has regrown its argument.
 # The payload's split commands; a target declares its own in `CEILINGS` in its `local_commands.py`.
 CEILINGS = {
-    "ship.md": 49800,
+    "ship.md": 49900,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
     "branch.md": 9300,
     "team.md": 6300,
-    "dispatch.md": 19450,
+    "dispatch.md": 19500,
 }
 
 ROOT = COMMANDS.parent.parent
@@ -29,13 +29,15 @@ ROOT = COMMANDS.parent.parent
 # exit counts these beside ship.md and branch.md, and none was split. A target's
 # own `CLAUDE.md` is resident too, and its ceiling is that target's.
 RESIDENT = {
-    ".claude/commands/pr.md": 10900,
+    ".claude/commands/pr.md": 11000,
     ".claude/commands/commit.md": 5200,
 }
 
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
 # A `(why:` that opens on a docs/commands argument, the one form CITATION parses; others cite the boundaries.
 OPENING = re.compile(r"\(why: `?docs/commands/")
+# An opening and the citation it opens, as one match, so a stray citation elsewhere cannot stand in for a broken one.
+CITED_OPENING = re.compile(OPENING.pattern + CITATION.pattern.removeprefix("docs/commands/"))
 INDEX_ROW = re.compile(r"^\| (?P<name>[^|]+?) \| ")
 
 
@@ -82,7 +84,7 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
             with self.subTest(command=name):
                 text = collapsed(COMMANDS / name)
                 openings = len(OPENING.findall(text))
-                parsed = len(CITATION.findall(text))
+                parsed = len(CITED_OPENING.findall(text))
                 self.assertGreater(openings, 0, f"{name} cites no docs/commands section")
                 self.assertEqual(openings, parsed, f"{name} has {openings} openings but {parsed} parse as citations")
 

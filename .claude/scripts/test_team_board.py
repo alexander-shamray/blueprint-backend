@@ -11,6 +11,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import team_board as tb
 
@@ -180,10 +181,18 @@ class ARoundConvergesWhenNothingIsNewAndNothingMoved(Checkout):
         result = self.merge(2)
         self.assertEqual((0, 0, True), (result["added"], result["changed"], result["converged"]))
 
-    def test_a_round_whose_every_claim_is_refused_converges(self):
+    def test_a_round_whose_every_claim_is_refused_converges_once_the_board_holds_one(self):
         # A refused claim is not on the board, so it cannot keep a run open by being repeated.
-        self.reply(1, "p1", claims=[{"text": "unbacked", "evidence": []}])
-        self.assertTrue(self.merge(1)["converged"])
+        self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+        self.merge(1)
+        self.reply(2, "p1", claims=[{"text": "unbacked", "evidence": []}])
+        self.assertEqual((1, True), (self.merge(2)["refused"], self.board()["rounds"][-1]["converged"]))
+
+    def test_a_round_that_refused_every_claim_over_an_empty_board_has_not_converged(self):
+        # A malformed citation is a claim not yet backed; ending on it would report an empty board as agreement.
+        self.reply(1, "p1", claims=[{"text": "three", "evidence": ["src/a.cs:2-3"]}])
+        result = self.merge(1)
+        self.assertEqual((0, 1, False), (result["added"], result["refused"], result["converged"]))
 
     def test_requests_are_carried_to_the_board_and_do_not_hold_a_round_open(self):
         self.reply(1, "p1", requests=["EXPLAIN the outbox DELETE"])
@@ -209,6 +218,45 @@ class ARoundThatCannotBeReadDidNotHappen(Checkout):
     def test_a_reply_that_is_not_json_is_refused(self):
         self.reply(1, "p1", raw="Here are my findings:")
         self.assert_refused(1, "p1.json is not JSON")
+
+    def test_a_reply_that_is_not_utf8_is_refused_and_no_peer_record_is_left(self):
+        self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+        (self.run_path / "round-01" / "p2.json").write_bytes(b'{"agent": "p2", "claims": ["\xff"]}')
+        self.assert_refused(1, "p2.json is not JSON")
+        self.assertEqual([], list((self.run_path / "round-01").glob("*.md")), "a refused round left a record")
+
+    def test_a_board_cut_short_is_a_refusal_naming_it(self):
+        (self.run_path / "board.json").write_text('{"peers": ["p1", "p2"], "cla', encoding="utf-8")
+        self.reply(1, "p1")
+        for call in (lambda: self.merge(1), lambda: tb.init(self.root, "r1", 2)):
+            with self.assertRaises(tb.Refusal) as caught:
+                call()
+            self.assertIn("board.json cannot be read as a board", str(caught.exception))
+
+    def test_a_write_that_fails_leaves_the_last_board_whole(self):
+        before = (self.run_path / "board.json").read_text(encoding="utf-8")
+        self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+        with mock.patch.object(tb.os, "replace", side_effect=OSError("held open")), \
+                self.assertRaises(tb.Refusal) as caught:
+            self.merge(1)
+        self.assertIn("could not write", str(caught.exception))
+        self.assertEqual(before, (self.run_path / "board.json").read_text(encoding="utf-8"))
+        self.assertEqual([], list(self.run_path.glob("*.tmp")), "a temporary file was left behind")
+
+    def test_a_render_that_cannot_be_written_leaves_the_round_unrecorded(self):
+        # Exit 2 is a round that did not happen, so a rerun of the same round must still be the next one.
+        real = os.replace
+        self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+
+        def refuse_the_render(source, target):
+            if Path(target).name == "board.md":
+                raise OSError("held open by a viewer")
+            real(source, target)
+
+        with mock.patch.object(tb.os, "replace", side_effect=refuse_the_render), self.assertRaises(tb.Refusal):
+            self.merge(1)
+        self.assertEqual([], self.board()["rounds"], "a refused merge recorded its round")
+        self.assertEqual(1, self.merge(1)["round"])
 
     def test_a_reply_naming_another_agent_is_refused(self):
         self.reply(1, "p1", raw=json.dumps({"agent": "p2", "claims": []}))

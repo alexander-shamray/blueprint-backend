@@ -337,9 +337,20 @@ class ThePatterns(unittest.TestCase):
                                  1)
                 self.assertEqual(judged("A.cs", f'x("{sample}");\n'), [])
 
+    def test_a_number_named_without_its_hash_fails(self):
+        for sample in ["Issue 528: only -o took a value", "see issues 12",
+                       "pull request 576", "PR 7", "fixed in pr 9"]:
+            with self.subTest(sample=sample):
+                self.assertEqual(
+                    [message for _, _, message
+                     in judged("A.cs", f"x(); // {sample}\n")],
+                    ["a comment names an issue or pull request number"])
+
     def test_innocent_neighbours_pass(self):
         for sample in ["refused to", "C# 14", "§13.2", "a*b*c",
-                       "the key is used for signing"]:
+                       "the key is used for signing", "an issue with 2 heads",
+                       "the pull request's 3 checks", "PRs open", "tissue 4",
+                       "sprite 12"]:
             with self.subTest(sample=sample):
                 self.assertEqual(judged("A.cs", f"// {sample}\n"), [])
 
@@ -601,6 +612,13 @@ class TheDiff(unittest.TestCase):
                     gate.added_lines(f"{header}\n@@ -0,0 +1 @@\n+x\n")
 
 
+class LineNumbersCountLineFeeds(unittest.TestCase):
+    def test_a_lone_carriage_return_does_not_start_a_line(self):
+        # git numbers a diff's lines by LF alone, so a CR inside a line must not move every number after it.
+        lines = gate.scan("A.cs", 'var s = "a\rb";\n// said\n')
+        self.assertEqual([(1, False), (2, True)], [(line.number, line.comment) for line in lines])
+
+
 def git(repo, *args):
     subprocess.run(["git", "-C", repo, "-c", "user.name=t",
                     "-c", "user.email=t@t", "-c", "core.autocrlf=false",
@@ -679,6 +697,25 @@ class TheGateOnARepository(unittest.TestCase):
                       result.stdout)
         self.assertIn("docs/my notes.md:1: a prose line runs 82 columns",
                       result.stdout)
+
+    def test_a_link_turned_into_a_file_has_its_added_lines_judged(self):
+        # Index plumbing rather than the filesystem, so the link is recorded
+        # as one where the checkout cannot make it: git then calls the change
+        # a typechange, `T`, rather than a modification.
+        def plumb(*args, text=None):
+            return subprocess.run(
+                ["git", "-C", self.repo, *args], input=text, check=True,
+                capture_output=True, text=True, encoding="utf-8").stdout.strip()
+        link = plumb("hash-object", "-w", "--stdin", text="Old.cs")
+        plumb("update-index", "--add", "--cacheinfo", f"120000,{link},Link.cs")
+        git(self.repo, "commit", "-q", "-m", "link")
+        body = plumb("hash-object", "-w", "--stdin", text="x(); // see #3\n")
+        plumb("update-index", "--cacheinfo", f"100644,{body},Link.cs")
+        git(self.repo, "commit", "-q", "-m", "file")
+        self.assertEqual("T\tLink.cs", plumb("diff", "--name-status", "HEAD~1", "HEAD"))
+        result = self.run_gate(base="HEAD~1")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Link.cs:1: a comment names an issue", result.stdout)
 
     def test_a_line_added_inside_an_old_block_fails_it(self):
         text = Path(self.repo, "Old.cs").read_text().replace(

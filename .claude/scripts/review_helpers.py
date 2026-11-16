@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import NamedTuple
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 NEWLINE = chr(10)  # spelled this way so patch scripts cannot mangle it
@@ -138,6 +139,23 @@ def no_maintenance(base):
             f"GIT_CONFIG_VALUE_{count}": "false"}
 
 
+
+def unsigned(base):
+    """The variables that make a git started with `base` in its environment sign no commit and no tag.
+
+    A caller whose global config signs through a program the host lacks fails every commit a case makes. A count
+    `base` holds is extended, as `no_maintenance` extends it.
+    """
+    count = int(base.get("GIT_CONFIG_COUNT") or 0)
+    return {"GIT_CONFIG_COUNT": str(count + 2),
+            f"GIT_CONFIG_KEY_{count}": "commit.gpgsign", f"GIT_CONFIG_VALUE_{count}": "false",
+            f"GIT_CONFIG_KEY_{count + 1}": "tag.gpgsign", f"GIT_CONFIG_VALUE_{count + 1}": "false"}
+
+
+def sign_nothing(case):
+    """For the rest of `case`, every git it starts signs nothing, whatever the caller's config says."""
+    case.enterContext(mock.patch.dict(os.environ, unsigned(os.environ)))
+
 def repository_configs(root):
     """Every repository config under `root`: a checkout's `.git/config` and a bare repository's own."""
     return [config for config in Path(root).rglob("config")
@@ -208,8 +226,8 @@ def copy_template(case, template, root=None):
 def python_as_py(env, directory):
     """`env` with a `py` first on PATH that runs this interpreter and drops the launcher's version argument.
 
-    hint-bound.sh starts its hook as `py -3.12`; a runner without the Windows launcher has none, and the wrapper
-    would report every hook as not run.
+    hint-bound.sh and index-hook.sh start their hook as `py -3.12` wherever a `py` is on PATH, so the shim makes that
+    this interpreter, whatever else the runner has.
     """
     shim = Path(directory) / "py"
     shim.write_text('#!/usr/bin/env bash\nexec "' + Path(sys.executable).as_posix() + '" "${@:2}"\n', encoding="utf-8")
@@ -231,9 +249,11 @@ def code_lines(text):
 
 # What can introduce a command, beyond the `VAR=value` run: a shell keyword or
 # a negation. Stripped in a loop, because they stack, as in
-# `if ! GIT_DIR=x git push …`.
+# `if ! GIT_DIR=x git push …`. An assignment's value may be quoted and hold a
+# space, as in `FOO="a b" git push`.
 COMMAND_LEAD = re.compile(
-    r"^(?:\w+=\S*|then|else|elif|do|done|if|while|until|!|exec|time|eval|env|nohup|builtin)\s+")
+    r"""^(?:\w+=(?:"[^"]*"|'[^']*'|[^\s"'])*|then|else|elif|do|done|if|while|until|!|exec|time|eval|env|nohup"""
+    r"|builtin)\s+")
 
 # A wrapper that takes a command as its argument, with the options and the
 # one numeric argument they may carry (`timeout -k 5 60`, `xargs -n 1`).

@@ -49,7 +49,8 @@ licence gate's terms: a gate that needs a `pip install` gets skipped.
 ## What it judges
 
 **The patterns, on each added line's comment text**, markers stripped: an
-issue or pull-request number (`#12`), a delivery-plan row (`PR-7`), a
+issue or pull-request number, with its hash or without it (`#12`, `issue
+12`, `PR 12`, `pull request 12`), a delivery-plan row (`PR-7`), a
 reviewer (`Copilot`, `Grok`, `CodeQL`, `found in review`), history (`used
 to`, `went stale`, `this comment said`) and emphasis (`**…**`, `<b>`). The
 list is the gate's `PATTERNS`, which is its one copy. Under `.claude/` a

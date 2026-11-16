@@ -53,6 +53,14 @@ class Judgement(unittest.TestCase):
     def test_a_wrong_trailer_beside_the_right_one_fails(self) -> None:
         self.assertEqual(len(check(7, [commit(trailers=(("PR", "#7"), ("PR", "#8")))])), 1)
 
+    def test_the_right_trailer_twice_fails(self) -> None:
+        # git-revert-pr.sh and git-trailer-pr.sh compare every parsed PR: line, joined, with one, so a doubled
+        # trailer is left out of a revert of this pull request; git appends one on its own when another
+        # trailer sits between the two.
+        problems = check(7, [commit(trailers=(("PR", "#7"), ("Co-Authored-By", "Claude"), ("PR", "#7")))])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("twice", problems[0])
+
     def test_a_trailer_of_another_key_is_not_the_trailer(self) -> None:
         self.assertEqual(len(check(7, [commit(trailers=(("Reverts", "#7"),))])), 1)
 
@@ -111,6 +119,17 @@ class Subjects(unittest.TestCase):
         self.assertIsNone(subject_problem('Revert "docs: a"'))
         self.assertIsNotNone(subject_problem('Revert "update: a"'))
         self.assertIn("leftover", subject_problem('Revert "wip: a"') or "")
+
+    def test_a_revert_of_a_revert_is_judged_by_its_innermost_subject(self) -> None:
+        # git titles a revert of a revert `Reapply "<subject>"`, an older git `Revert "Revert "<subject>""`; either is
+        # what git-revert-pr.sh writes when a reverted pull request is landed again.
+        for subject in ('Reapply "docs: a"', 'Revert "Revert "docs: a""', 'Revert "Reapply "fix(x): a""',
+                        'Reapply "Revert "docs: a""'):
+            with self.subTest(subject=subject):
+                self.assertIsNone(subject_problem(subject))
+        self.assertIsNotNone(subject_problem('Reapply "update: a"'))
+        self.assertIsNotNone(subject_problem('Revert "Revert "update: a""'))
+        self.assertIn("leftover", subject_problem('Reapply "Revert "wip: a""') or "")
 
 
 def git(root: Path, *args: str, stdin: str | None = None) -> str:

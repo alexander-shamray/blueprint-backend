@@ -57,8 +57,9 @@ labels_matching() {
     { echo "cannot count the listing for $label in $repo" >&2; exit 3; }
   [ "$rows" -lt "$LABEL_LIMIT" ] ||
     { echo "the listing for $label in $repo holds $LABEL_LIMIT rows, so it may be truncated" >&2; exit 3; }
-  # A listing written with CRLF would otherwise never equal the bare label.
-  printf '%s' "${out//$'\r'/}"
+  # A listing written with CRLF would otherwise never equal the bare label. Folded, since GitHub's label names are
+  # unique case-insensitively and every name this helper creates is lower case: `Bug` refuses a create of `bug`.
+  printf '%s' "${out//$'\r'/}" | tr '[:upper:]' '[:lower:]'
 }
 existing=$(labels_matching) ||
   { echo "cannot list $repo's labels" >&2; exit 3; }
