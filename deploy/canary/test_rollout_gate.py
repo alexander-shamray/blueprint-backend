@@ -509,6 +509,20 @@ class EmptyUntilTests(unittest.TestCase):
                 self.assertIn(message, failures[0])
                 self.assertIn("(ADR-126)", failures[0])
 
+    def test_a_second_write_of_either_values_file_is_refused_by_both_checks(self) -> None:
+        """The checks judge one write, so a later one, which the upgrade would read, is refused rather than missed."""
+        for written in ('> "$RUNNER_TEMP/overrides.yaml"', '> "$RUNNER_TEMP/candidate.json"'):
+            line = next(line for line in self.shipped.splitlines() if written in line)
+            again = self.shipped.replace(line, f"{line}\n          helm get values --all \"$WORKLOAD\" {written}")
+            for check, adr in ((rollout_gate._rollout_holds_shared_values, "ADR-125"),
+                               (rollout_gate._rollout_keeps_values_empty, "ADR-126")):
+                with self.subTest(written=written, check=check.__name__):
+                    failures = check(self.workloads, self._workflow(again))
+
+                    self.assertEqual(1, len(failures), failures)
+                    self.assertIn("more than once", failures[0])
+                    self.assertIn(adr, failures[0])
+
     def test_a_step_moved_above_the_candidate_values_is_refused(self) -> None:
         lines = self.shipped.splitlines()
         asked = next(i for i, line in enumerate(lines) if "canary.py values-empty" in line)
@@ -722,6 +736,20 @@ class RolloutBindingTests(unittest.TestCase):
         self.assertTrue(any("no `git archive` writes" in f for f in failures),
                         failures)
 
+    def test_a_later_export_of_the_checkout_fails(self) -> None:
+        """The runner applies the last write to GITHUB_ENV, so a second export is the one the rollout reads."""
+        for variable, tree in (("IMAGE_SOURCE", "image-source"), ("INSTALLED_SOURCE", "installed-source")):
+            with self.subTest(variable=variable):
+                export = f'echo "{variable}=$RUNNER_TEMP/{tree}" >> "$GITHUB_ENV"'
+                self.assertIn(export, self.shipped)
+                again = self.shipped.replace(
+                    export, f'{export}\n          echo "{variable}=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"')
+
+                failures = rollout_gate._rollout_reads_the_image_source(self._workflow(again))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f"{variable} is exported as $GITHUB_WORKSPACE", failures[0])
+
     def test_a_tree_archived_from_another_revision_fails(self) -> None:
         """The other half: the path is the archive's and the archive is of
         something else, so the export is correct about the wrong tree.
@@ -878,6 +906,20 @@ class OffLadderTests(unittest.TestCase):
 
         self.assertEqual(1, len(failures), failures)
         self.assertIn("climbs the ladder without", failures[0])
+
+    def test_a_climbing_step_opened_by_another_key_is_its_own_step(self) -> None:
+        """Read as part of the step above, it would inherit that step's condition and pass without its own."""
+        climb = f"      - name: Climb the ladder\n        {rollout_gate.LADDER_ON}\n"
+        self.assertIn(climb, self.shipped)
+        for opener in ("- id: climb\n        name: Climb the ladder\n",
+                       "- if: always()\n        name: Climb the ladder\n"):
+            with self.subTest(opener=opener.split("\n")[0]):
+                reopened = self.shipped.replace(climb, f"      {opener}")
+
+                failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(reopened))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("climbs the ladder without", failures[0])
 
     def test_a_required_that_names_no_workload_is_refused(self) -> None:
         without = self.shipped.replace('required --step 0 --workload "$WORKLOAD"', "required --step 0")
