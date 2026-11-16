@@ -340,7 +340,7 @@ class LadderTests(unittest.TestCase):
         self.assertIn("states no timeout-minutes", failures[0])
 
     def test_the_timeout_reader_is_linear_over_blank_indented_lines(self) -> None:
-        """CodeQL's case: a pattern with two ways to read `    \\n` backtracks exponentially before it fails."""
+        """A pattern with two ways to read `    \\n` backtracks exponentially before it fails."""
         path = Path(tempfile.mkdtemp()) / "deploy.yml"
         path.write_text("jobs:\n  rollout:\n" + "    \n" * 5000 + "  other:\n", encoding="utf-8")
 
