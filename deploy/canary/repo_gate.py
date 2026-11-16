@@ -648,6 +648,11 @@ STRATEGY = re.compile(r"(?m)^strategy:[ \t]*(\S+)[ \t]*(?:#.*)?$")
 TELEMETRY_NAME = re.compile(r"  telemetryName:[ \t]*(\S+)")
 
 
+def _unquoted(value: str) -> str:
+    """A scalar read as Helm reads it: one matching pair of quotes is no part of the value."""
+    return value[1:-1] if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'" else value
+
+
 def _chart_telemetry_name(values: str) -> str | None:
     """`observability.telemetryName` in a values file, read a line at a time: a block ends at its next top-level key."""
     inside = False
@@ -655,7 +660,7 @@ def _chart_telemetry_name(values: str) -> str | None:
         if line[:1] not in ("", " ", "\t", "#"):
             inside = line.rstrip() == "observability:"
         elif inside and (found := TELEMETRY_NAME.match(line)):
-            return found.group(1).strip("\"'")
+            return _unquoted(found.group(1))
     return None
 
 
@@ -678,7 +683,7 @@ def _ladder_reads(name: str, entry: dict, root: Path) -> list[str]:
     if values is None:
         return failures
     stated = STRATEGY.search(values)
-    recreate = stated is not None and stated.group(1) == "Recreate"
+    recreate = stated is not None and _unquoted(stated.group(1)) == "Recreate"
     if recreate and "offLadder" not in entry:
         failures.append(
             f"workloads.{name}'s chart rolls under Recreate and its descriptor is on the ladder, whose canary "

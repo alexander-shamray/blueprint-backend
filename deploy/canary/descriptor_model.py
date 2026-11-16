@@ -75,14 +75,18 @@ def workload_images(workload: str, plan_document: dict, root: Path = ROOT) -> di
         text = path.read_text(encoding="utf-8")
     except OSError as error:
         raise PlanError(f"{path} is not readable: {error}") from error
-    block = re.search(r"(?m)^image:[ \t]*\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n)*)", text)
+    # A column-0 comment inside the block does not end it, as it does not for YAML.
+    block = re.search(r"(?m)^image:[ \t]*(?:#.*)?\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n|#.*\r?\n?)*)", text)
     if block is None:
         raise PlanError(f"{path} has no `image:` block, so the images {workload!r} pulls are unknown")
     images = {}
+    name = "[A-Za-z0-9][A-Za-z0-9._-]*"
     for role in ("api", "migrator"):
-        found = re.search(rf"(?m)^[ \t]+{role}:[ \t]*([A-Za-z0-9][A-Za-z0-9._-]*)[ \t]*\r?$", block.group(1))
+        # Bare, single- or double-quoted, with or without a trailing comment: each is the same value to Helm.
+        found = re.search(
+            rf"""(?m)^[ \t]+{role}:[ \t]*(?:"({name})"|'({name})'|({name}))[ \t]*(?:#.*)?\r?$""", block.group(1))
         if found:
-            images[role] = found.group(1)
+            images[role] = next(group for group in found.groups() if group)
     if "api" not in images:
         raise PlanError(f"{path} names no image.api, so the image {workload!r} pulls is unknown")
     return images

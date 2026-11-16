@@ -279,6 +279,22 @@ class WorkloadImageTests(unittest.TestCase):
             {"api": "x-api"},
             descriptor_model.workload_images("x", {"workloads": {"x": {"chart": "x"}}}, root))
 
+    def test_a_quoted_or_commented_migrator_and_a_comment_inside_the_block_keep_the_role(self) -> None:
+        for block in (
+            "image:\n  api: x-api\n  migrator: \"x-migrator\"\n",
+            "image:\n  api: x-api\n  migrator: 'x-migrator'\n",
+            "image:\n  api: x-api\n  migrator: x-migrator  # the Job's\n",
+            "image:\n  api: x-api\n# the Job's image\n  migrator: x-migrator\n",
+        ):
+            with self.subTest(block=block):
+                root = Path(tempfile.mkdtemp())
+                (root / "deploy" / "helm" / "x").mkdir(parents=True)
+                (root / "deploy" / "helm" / "x" / "values.yaml").write_text(block, encoding="utf-8")
+
+                self.assertEqual(
+                    {"api": "x-api", "migrator": "x-migrator"},
+                    descriptor_model.workload_images("x", {"workloads": {"x": {"chart": "x"}}}, root))
+
 
 if __name__ == "__main__":
     unittest.main()
