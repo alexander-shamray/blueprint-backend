@@ -114,7 +114,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 f"every step needs an integer weight; got {weights}"
             )
         elif any(not 0 < w <= 100 for w in weights):
-            # A zero weight divides by zero in `required_stable`, which never reaches `plan`'s own refusal.
+            # `canary.py required` would refuse it at the first rung; refused here, it never reaches a dispatch.
             failures.append(
                 f"every step's weight is a percentage from 1 to 100; got {weights}"
             )
@@ -153,19 +153,19 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     ):
         if key not in thresholds:
             failures.append(f"thresholds.{key} is missing; analyse() reads it")
-    # And the tolerance `required` and `plan` index, which divide by each step's weight plus it.
+    # And the tolerance `required` and `plan` index, whose arithmetic needs each step's weight plus it above zero.
     tolerance = plan_document.get("tolerance")
     overshoot = tolerance.get("weightOvershootPoints") if isinstance(tolerance, dict) else None
     if not isinstance(overshoot, int) or isinstance(overshoot, bool):
         failures.append(
             f"tolerance.weightOvershootPoints is {overshoot!r}, not an integer; required and plan read it")
     else:
-        for step in steps:
+        for step in steps if isinstance(steps, list) else []:
             weight = step.get("weight") if isinstance(step, dict) else None
             if isinstance(weight, int) and not isinstance(weight, bool) and weight + overshoot <= 0:
                 failures.append(
                     f"the {weight}% step plus tolerance.weightOvershootPoints {overshoot} is not above zero, "
-                    "so required divides by it")
+                    "so `canary.py required` refuses that rung mid-rollout")
     failures += _relative_thresholds_are_numbers(thresholds)
     failures += _minimum_requests_express_the_error_rate(thresholds)
 

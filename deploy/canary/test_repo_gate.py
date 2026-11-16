@@ -339,6 +339,23 @@ class LadderTests(unittest.TestCase):
         self.assertEqual(1, len(failures), failures)
         self.assertIn("states no timeout-minutes", failures[0])
 
+    def test_the_timeout_reader_is_linear_over_blank_indented_lines(self) -> None:
+        """CodeQL's case: a pattern with two ways to read `    \\n` backtracks exponentially before it fails."""
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text("jobs:\n  rollout:\n" + "    \n" * 5000 + "  other:\n", encoding="utf-8")
+
+        failures = repo_gate._rollout_outlasts_the_dwells(30, path)
+
+        self.assertIn("states no timeout-minutes", failures[0])
+
+    def test_null_steps_are_a_failure_not_a_type_error(self) -> None:
+        plan = descriptor_model.load_plan()
+        plan["steps"] = None
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("steps is empty" in f for f in failures), failures)
+
     def test_a_missing_or_zeroing_overshoot_is_a_failure(self) -> None:
         for tolerance, needle in (
             (None, "not an integer"),
