@@ -105,9 +105,13 @@ because a branch driven by the file it judges asserts nothing. Every value
 
 `canary.py check`'s checks, in order; the sixth is about itself:
 
-1. The ladder climbs, ends at 100%, and every rung but the last has a dwell.
+1. The ladder climbs through weights from 1 to 100%, ends at 100%, and every
+   rung but the last dwells a positive whole number of minutes, the dwells
+   together inside the rollout job's `timeout-minutes`.
 2. Every threshold `analyse` reads is present — it indexes them, so a missing
-   key would be a `KeyError` with a canary already serving traffic.
+   key would be a `KeyError` with a canary already serving traffic — and so
+   is an integer `tolerance.weightOvershootPoints` that leaves every weight
+   plus it above zero, which `required` and `plan` divide by.
 3. The absolute thresholds **are** §13.6's alert thresholds, read out of
    `platform-alerts.yaml` rather than restated. A canary tuned looser than the
    alert promotes a release and then pages about it.

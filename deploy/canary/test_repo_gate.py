@@ -291,7 +291,69 @@ class LadderTests(unittest.TestCase):
     def test_the_shipped_ladder_passes_check_1(self) -> None:
         failures = repo_gate.check(descriptor_model.load_plan())
 
-        self.assertFalse(any("weight" in f for f in failures), failures)
+        self.assertFalse(any("weight" in f or "dwell" in f for f in failures), failures)
+
+    def test_a_weight_outside_1_to_100_is_a_failure(self) -> None:
+        for weight in (0, -5, 101):
+            with self.subTest(weight=weight):
+                plan = descriptor_model.load_plan()
+                plan["steps"] = [{"weight": weight, "dwellMinutes": 10}, *plan["steps"][1:]]
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any("percentage from 1 to 100" in f for f in failures), failures)
+
+    def test_required_refuses_a_zero_weight_rather_than_dividing_by_it(self) -> None:
+        with self.assertRaises(descriptor_model.PlanError):
+            analysis.required_stable(0, 0)
+        with self.assertRaises(descriptor_model.PlanError):
+            analysis.required_stable(5, -5)
+
+    def test_a_dwell_that_is_not_a_positive_whole_number_is_a_failure(self) -> None:
+        for dwell in (0, 0.5, -10, "10", True, None):
+            with self.subTest(dwell=dwell):
+                plan = descriptor_model.load_plan()
+                plan["steps"] = [{"weight": 5, "dwellMinutes": dwell}, *plan["steps"][1:]]
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any("positive whole number of minutes" in f for f in failures), failures)
+
+    def test_dwells_the_rollout_job_cannot_outlast_are_a_failure(self) -> None:
+        plan = descriptor_model.load_plan()
+        plan["steps"] = [{"weight": 5, "dwellMinutes": 100}, {"weight": 50, "dwellMinutes": 50},
+                         {"weight": 100, "dwellMinutes": 0}]
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("dwells 150 minutes" in f and "cancelled at 150" in f for f in failures), failures)
+
+    def test_the_rollout_job_s_timeout_is_read_and_its_absence_refused(self) -> None:
+        """The gate's own subject: a pattern that found nothing would bound nothing."""
+        self.assertEqual([], repo_gate._rollout_outlasts_the_dwells(30))
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text("jobs:\n  rollout:\n    runs-on: x\n  other:\n    timeout-minutes: 500\n", encoding="utf-8")
+
+        failures = repo_gate._rollout_outlasts_the_dwells(30, path)
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("states no timeout-minutes", failures[0])
+
+    def test_a_missing_or_zeroing_overshoot_is_a_failure(self) -> None:
+        for tolerance, needle in (
+            (None, "not an integer"),
+            ({}, "not an integer"),
+            ({"weightOvershootPoints": "0"}, "not an integer"),
+            ({"weightOvershootPoints": False}, "not an integer"),
+            ({"weightOvershootPoints": -5}, "the 5% step plus"),
+        ):
+            with self.subTest(tolerance=tolerance):
+                plan = descriptor_model.load_plan()
+                plan["tolerance"] = tolerance
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any(needle in f for f in failures), failures)
 
 
 class DescriptorTypeTests(unittest.TestCase):

@@ -28,7 +28,7 @@ from descriptor_model import ROOT, SHARED_KEY, entries, telemetry_name
 from release_inputs import IMAGE_REVISION, RELEASE_NAME
 from rollout_gate import (
     _rollout_follows_the_migrator, _rollout_holds_shared_values, _rollout_keeps_values_empty,
-    _rollout_reads_the_image_source, _rollout_rolls_off_ladder_in_place,
+    _rollout_outlasts_the_dwells, _rollout_reads_the_image_source, _rollout_rolls_off_ladder_in_place,
 )
 from workflow_reads import HOST_NAME, WORKFLOW, WORKFLOW_PATH, _descriptors_agree, _smoke_reads
 
@@ -113,6 +113,11 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             failures.append(
                 f"every step needs an integer weight; got {weights}"
             )
+        elif any(not 0 < w <= 100 for w in weights):
+            # A zero weight divides by zero in `required_stable`, which never reaches `plan`'s own refusal.
+            failures.append(
+                f"every step's weight is a percentage from 1 to 100; got {weights}"
+            )
         elif weights != sorted(weights) or len(set(weights)) != len(weights):
             failures.append(
                 f"steps must have strictly increasing weights; got {weights}"
@@ -122,13 +127,18 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 f"the last step is {weights[-1]}%, not 100%: a ladder that stops "
                 "short leaves the old version serving traffic for ever"
             )
-        for step in steps[:-1]:
-            if not step.get("dwellMinutes"):
+        dwells = [step.get("dwellMinutes") for step in steps[:-1]]
+        for step, dwell in zip(steps, dwells):
+            # deploy.yml sleeps on it with the canary installed, and a failed sleep leaves that release behind.
+            if not isinstance(dwell, int) or isinstance(dwell, bool) or dwell <= 0:
                 failures.append(
-                    f"the {step.get('weight')}% step has no dwell: §15.5 watches "
-                    "each weight for ten minutes, and a step with no window is a "
-                    "step whose query has nothing to average over"
+                    f"the {step.get('weight')}% step's dwell is {dwell!r}, not a "
+                    "positive whole number of minutes: §15.5 watches each weight "
+                    "for ten, and a step with no window is a step whose query has "
+                    "nothing to average over"
                 )
+        if all(isinstance(d, int) and not isinstance(d, bool) and d > 0 for d in dwells):
+            failures += _rollout_outlasts_the_dwells(sum(dwells))
 
     # 2. Every threshold the verdict reads exists. `analyse` indexes these
     #    rather than `.get`-ing them, so a missing key is a KeyError mid-rollout
@@ -143,6 +153,19 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     ):
         if key not in thresholds:
             failures.append(f"thresholds.{key} is missing; analyse() reads it")
+    # And the tolerance `required` and `plan` index, which divide by each step's weight plus it.
+    tolerance = plan_document.get("tolerance")
+    overshoot = tolerance.get("weightOvershootPoints") if isinstance(tolerance, dict) else None
+    if not isinstance(overshoot, int) or isinstance(overshoot, bool):
+        failures.append(
+            f"tolerance.weightOvershootPoints is {overshoot!r}, not an integer; required and plan read it")
+    else:
+        for step in steps:
+            weight = step.get("weight") if isinstance(step, dict) else None
+            if isinstance(weight, int) and not isinstance(weight, bool) and weight + overshoot <= 0:
+                failures.append(
+                    f"the {weight}% step plus tolerance.weightOvershootPoints {overshoot} is not above zero, "
+                    "so required divides by it")
     failures += _relative_thresholds_are_numbers(thresholds)
     failures += _minimum_requests_express_the_error_rate(thresholds)
 

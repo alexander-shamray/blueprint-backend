@@ -346,10 +346,14 @@ def main(argv: list[str]) -> int:
         except IndexError:
             print(f"canary: no step {args.step} in the plan", file=sys.stderr)
             return 1
-        print(required_stable(
-            step["weight"],
-            document["tolerance"]["weightOvershootPoints"],
-        ))
+        try:
+            print(required_stable(
+                step["weight"],
+                document["tolerance"]["weightOvershootPoints"],
+            ))
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
         return 0
 
     if args.command == "plan":
