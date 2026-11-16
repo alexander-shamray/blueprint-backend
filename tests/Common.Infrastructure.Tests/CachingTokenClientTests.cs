@@ -379,6 +379,20 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         _provider.TokenRequests.Count.ShouldBe(2);
     }
 
+    [Fact]
+    public async Task A_jwt_exp_at_the_start_of_time_is_replaced_rather_than_thrown_on()
+    {
+        long dawn = DateTimeOffset.MinValue.ToUnixTimeSeconds() + 10;
+        string claims = Base64Url.EncodeToString(Encoding.UTF8.GetBytes($$"""{"exp":{{dawn}}}"""));
+        _provider.TokenSuccessBody =
+            JsonSerializer.Serialize(new { access_token = $"header.{claims}.signature", expires_in = 300 });
+
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
     [Theory]
     [InlineData(true, "token_endpoint")]
     [InlineData(false, "access_token")]
