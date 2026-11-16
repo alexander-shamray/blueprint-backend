@@ -260,8 +260,12 @@ public sealed class PushChannelTests : IClassFixture<PushSimulator>, IDisposable
         await channel.SendAsync(PushSettings.To(FcmPushProvider.Name, "device-5"), Ct);
         Exchanges().ShouldBe(1);
 
-        // The simulator answers an hour, so the renewal falls due the margin before it.
-        clock.Advance(TimeSpan.FromHours(1) - FcmAccessTokens.RenewalMargin);
+        // The simulator answers an hour, so the renewal falls due the margin before it, and not a second sooner.
+        clock.Advance(TimeSpan.FromHours(1) - FcmAccessTokens.RenewalMargin - TimeSpan.FromSeconds(1));
+        await channel.SendAsync(PushSettings.To(FcmPushProvider.Name, "device-5"), Ct);
+        Exchanges().ShouldBe(1);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
         await channel.SendAsync(PushSettings.To(FcmPushProvider.Name, "device-5"), Ct);
         Exchanges().ShouldBe(2);
     }
