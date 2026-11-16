@@ -7,6 +7,9 @@
 set -euo pipefail
 export CBX_NO_SKILL_AUTO_UPDATE=1
 export PYTHONSAFEPATH=1
+# Windows runs a bare `git` from the working directory before PATH, and the CLI
+# calls git from the checkout a branch may have planted one in.
+export NoDefaultCurrentDirectoryInExePath=1
 
 ALLOWED="search explain architecture symbol refs impact diff-impact path describe verify stats doctor update index"
 

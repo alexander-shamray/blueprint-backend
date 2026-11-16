@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import sys
+import types
 import unicodedata
 
 # The tools that write a file. `MultiEdit` is listed although this repository's
@@ -22,6 +23,20 @@ EDITING_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
 # carrying neither is refused rather than waved through — a write whose target
 # this file cannot see is one it has established nothing about.
 PATH_KEYS = ("file_path", "notebook_path")
+
+
+def path_grammar():
+    """`path_grammar.py` beside this file, which names a path on another machine; compiled, so no bytecode is left."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "path_grammar.py")
+    module = types.ModuleType("path_grammar")
+    module.__file__ = path
+    with open(path, encoding="utf-8") as handle:
+        exec(compile(handle.read(), path, "exec"), module.__dict__)
+    return module
+
+
+GRAMMAR = path_grammar()
+
 
 GIT_GUARD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "guard-git-argv.py")
@@ -42,7 +57,7 @@ GIT_GUARD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # ordinary path.
 def alternate_alphabet(path):
     """Whether `path` is spelled in Windows' non-drive path grammar."""
-    return os.name == "nt" and path[:2].replace("/", "\\") == "\\\\"
+    return GRAMMAR.other_grammar(path)
 
 
 def case_insensitive(path):
@@ -142,6 +157,17 @@ def under(child, parent, traits):
     return child.startswith(parent)
 
 
+def below(child, parent):
+    """The part of `child` beneath `parent`, in `child`'s own spelling.
+
+    Counted rather than compared, where `under` holds: `os.path.relpath`
+    folds case on Windows alone, and elsewhere climbs out of a cased root.
+    """
+    parts = [part for part in os.path.normpath(child).split(os.sep) if part]
+    depth = len([part for part in os.path.normpath(parent).split(os.sep) if part])
+    return os.path.join(*parts[depth:]) if parts[depth:] else os.curdir
+
+
 def checkout_root(path):
     """The nearest ancestor of `path` holding a `.git`, or `None`.
 
@@ -179,11 +205,19 @@ def verified_gitdir(root):
             text = handle.read().strip()
         if not text.startswith("gitdir:"):
             return None
-        gitdir = os.path.realpath(
-            os.path.join(root, text.split(":", 1)[1].strip()))
+        spelled = text.split(":", 1)[1].strip()
+        pointer = os.path.join(root, spelled)
+        if any(GRAMMAR.foreign(place, root, os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+               for place in (spelled, pointer)):
+            return None
+        gitdir = os.path.realpath(pointer)
         with open(os.path.join(gitdir, "gitdir"), encoding="utf-8") as handle:
-            backlink = os.path.join(gitdir, handle.read().strip())
+            named = handle.read().strip()
+        backlink = os.path.join(gitdir, named)
     except (OSError, ValueError):
+        return None
+    if any(GRAMMAR.foreign(place, root, os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+           for place in (named, backlink)):
         return None
     if os.path.normcase(os.path.realpath(backlink)) != os.path.normcase(
             os.path.realpath(marker)):
@@ -228,7 +262,12 @@ def common_git_dir(root):
         return None
     try:
         with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as handle:
-            common = os.path.realpath(os.path.join(gitdir, handle.read().strip()))
+            spelled = handle.read().strip()
+        pointer = os.path.join(gitdir, spelled)
+        if any(GRAMMAR.foreign(place, gitdir, os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+               for place in (spelled, pointer)):
+            return None
+        common = os.path.realpath(pointer)
     except (OSError, ValueError):
         return None
     return common if os.path.isdir(common) else None
@@ -276,10 +315,10 @@ def protected_in_worktree(path, root):
         return "this target's deny list, which cannot be read"
 
 
-def home_offence(spelled, lexical, resolved):
-    """The reason to refuse a target no checkout below the home holds, or `None`.
+def home_offence(spelled, lexical, resolved, cwd=None):
+    """The reason to refuse a target the home protects, or `None`.
 
-    Spelling and resolution are both judged, so a link into `~/.ssh` is held.
+    Asked whatever checkout holds it; spelling and resolution are both judged.
     Only `~/.claude`'s first component is control. Unreadable names refuse.
     """
     home = os.path.abspath(os.path.expanduser("~"))
@@ -304,25 +343,37 @@ def home_offence(spelled, lexical, resolved):
             if place == "login":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
-                    "which no checkout below the home holds and is a key, a shell "
-                    "profile or git's own configuration: what runs at login, "
-                    "under every session (docs/harness-boundaries.md)."
+                    "a key, a shell profile or git's own configuration below "
+                    "the home: what runs at login, under every session, which "
+                    "no checkout's rules own (docs/harness-boundaries.md)."
                 )
             if place == "control":
                 return (
                     f"guard-edit-target: {spelled} resolves to {resolved}, "
-                    f"inside the harness's own control surface: `{parts[1]}` "
+                    f"inside the harness's own control surface: `{parts[1] if len(parts) > 1 else parts[0]}` "
                     "applies to every project, and a change to it is the "
                     "owner's to run (docs/harness-boundaries.md)."
                 )
+    try:
+        xdg = any(git_guard().xdg_git_config(path, cwd) for path in (lexical, resolved))
+    except (OSError, ValueError, TypeError, AttributeError):
+        if not os.environ.get("XDG_CONFIG_HOME") or not any(
+                os.path.normcase(path).replace("\\", "/").lower().endswith("/git/config")
+                for path in (lexical, resolved)):
+            return None
+        return (
+            f"guard-edit-target: {spelled} may be git's configuration at "
+            "`$XDG_CONFIG_HOME/git/config`, and the names that guard it "
+            f"cannot be read from {GIT_GUARD} (docs/harness-boundaries.md)."
+        )
+    if xdg:
+        return (
+            f"guard-edit-target: {spelled} resolves to {resolved}, git's own "
+            "configuration at `$XDG_CONFIG_HOME/git/config`: what runs at "
+            "login, under every session, which no checkout's rules own "
+            "(docs/harness-boundaries.md)."
+        )
     return None
-
-
-def holds_home(spelled_root, real_root, traits):
-    """Whether an anchor is the home directory or one of its ancestors."""
-    home = os.path.abspath(os.path.expanduser("~"))
-    return (under(home, spelled_root, traits)
-            or under(os.path.realpath(home), real_root, traits))
 
 
 def anchors(event):
@@ -373,20 +424,29 @@ def offence(event):
     # path: either way this file cannot see where the write lands. The loop
     # variable is `name`, not `key`, which is a function in this module.
     tool_input = event.get("tool_input")
-    spelled = None
+    spellings = []
     if isinstance(tool_input, dict):
         for name in PATH_KEYS:
             value = tool_input.get(name)
             if isinstance(value, str) and value:
-                spelled = value
-                break
-    if spelled is None:
+                spellings.append(value)
+    if not spellings:
         return (
             f"guard-edit-target: {tool} carries no file path this guard can "
             "read, so nothing has been established about where it writes. "
             "Refusing rather than waving it through."
         )
+    # Every key carried is judged, since the one read first need not be the
+    # one the tool writes through.
+    for spelled in spellings:
+        reason = target_offence(event, spelled)
+        if reason is not None:
+            return reason
+    return None
 
+
+def target_offence(event, spelled):
+    """The reason to refuse a write to `spelled`, or `None`."""
     cwd = event.get("cwd")
     if not isinstance(cwd, str) or not cwd:
         cwd = os.getcwd()
@@ -455,11 +515,9 @@ def offence(event):
 
     # Every anchor containing the target must agree, so an extra anchor cannot
     # excuse what another refuses — the property `anchors` rests its trust in
-    # `CLAUDE_PROJECT_DIR` on. An anchor holding the home directory, a dotfiles
-    # checkout at `~` or a project directory set to it or above, judges its
-    # links but leaves `home_offence` to run.
+    # `CLAUDE_PROJECT_DIR` on. An anchor judges its links and leaves
+    # `home_offence` to run: containing a target is not owning it.
     judged = False
-    held = False
     for spelled_root, real_root, traits in checkouts:
         if under(lexical, spelled_root, traits):
             base = spelled_root
@@ -468,10 +526,9 @@ def offence(event):
         else:
             continue
         judged = True
-        held = held or holds_home(spelled_root, real_root, traits)
 
         expected = os.path.normpath(
-            os.path.join(real_root, os.path.relpath(lexical, base)))
+            os.path.join(real_root, below(lexical, base)))
 
         # The traits are measured at the root and a child can disagree: Windows
         # sets case sensitivity per directory (`fsutil file
@@ -525,9 +582,7 @@ def offence(event):
                 )
 
     # Reached when every anchor containing the target agreed.
-    if held or not judged:
-        return home_offence(spelled, lexical, resolved)
-    return None
+    return home_offence(spelled, lexical, resolved, cwd)
 
 
 def main():
@@ -542,6 +597,8 @@ def main():
               file=sys.stderr)
         return 0
 
+    # The same exception: JSON that is not an object names no tool and no
+    # path, so it is as unreadable as text that is not JSON at all.
     if not isinstance(event, dict):
         print("guard-edit-target: hook event is not an object; not judging",
               file=sys.stderr)

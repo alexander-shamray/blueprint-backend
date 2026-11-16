@@ -12,7 +12,21 @@ import re
 import shlex
 import sys
 import tempfile
+import types
 from pathlib import Path
+
+
+def path_grammar():
+    """`path_grammar.py` beside this file, which names a path on another machine; compiled, so no bytecode is left."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "path_grammar.py")
+    module = types.ModuleType("path_grammar")
+    module.__file__ = path
+    with open(path, encoding="utf-8") as handle:
+        exec(compile(handle.read(), path, "exec"), module.__dict__)
+    return module
+
+
+GRAMMAR = path_grammar()
 
 CBX = "bash .claude/skills/codebase-index/scripts/cbx"
 MCP = "mcp__codebase-index__"
@@ -195,7 +209,17 @@ def located(cwd: str, path: str) -> Path:
     drive = re.match(r"^/([A-Za-z])(?=/|$)", text)
     if sys.platform == "win32" and drive:
         text = f"{drive.group(1)}:/{text[3:]}"
-    return Path(cwd or ".", text)
+    # Unjoined: a join puts the cwd drive before `\??\`, and no join moves a share to another host.
+    return Path(text) if GRAMMAR.other_grammar(text) else Path(cwd or ".", text)
+
+
+def remote(paths: list[str], base: str, cwd: str) -> bool:
+    """True when a path the search names, or where it runs, is on a share
+    the session does not stand on, which no check here may open."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    # As spelled too: a join puts the cwd drive before `\??\`, which Windows then reads as the share.
+    return any(GRAMMAR.foreign(place, cwd, project) for path in paths or ["."]
+               for place in (path.strip("'\""), str(located(base, path))))
 
 
 def files_only(paths: list[str], cwd: str) -> bool:
@@ -307,7 +331,8 @@ def shell_search(command: str, cwd: str, escape: str = "\\") -> str | None:
         # A `-` operand with no path reads standard input, as a pipe does.
         if stdin and not paths:
             tree = recursive = False
-        if (tree or recursive) and pattern and not prose_only(shown(paths, base, cwd), filters) \
+        if (tree or recursive) and pattern and not remote(paths, base, cwd) \
+                and not prose_only(shown(paths, base, cwd), filters) \
                 and not files_only(paths, base) and not elsewhere(paths, base, cwd):
             return pattern
     return None
@@ -321,7 +346,8 @@ def search(name: str, given: dict, cwd: str) -> str | None:
             return None
         paths = [given["path"]] if isinstance(given.get("path"), str) else []
         filters = [given[key] for key in ("glob", "type") if isinstance(given.get(key), str)]
-        if prose_only(shown(paths, cwd, cwd), filters) or files_only(paths, cwd) or elsewhere(paths, cwd, cwd):
+        if remote(paths, cwd, cwd) or prose_only(shown(paths, cwd, cwd), filters) or files_only(paths, cwd) \
+                or elsewhere(paths, cwd, cwd):
             return None
         return pattern
     if name in SHELLS and isinstance(given.get("command"), str):
@@ -424,7 +450,12 @@ def in_worktree(cwd: str) -> bool:
                 text = marker.read_text(encoding="utf-8").strip()
                 if not text.startswith("gitdir:"):
                     return False
-                git_dir = (candidate / text[len("gitdir:"):].strip()).resolve()
+                spelled = text[len("gitdir:"):].strip()
+                pointer = candidate / spelled
+                if any(GRAMMAR.foreign(place, cwd, os.environ.get("CLAUDE_PROJECT_DIR"))
+                       for place in (spelled, str(pointer))):
+                    return False
+                git_dir = pointer.resolve()
                 return (git_dir / "commondir").is_file()
     except (OSError, ValueError):
         return False

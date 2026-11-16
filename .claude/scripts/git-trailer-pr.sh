@@ -30,7 +30,8 @@ case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
   main|heads/main|refs/heads/main|origin/main|refs/remotes/origin/main)
     echo "refusing to rewrite main, spelled $branch: not on a PR branch" >&2; exit 3 ;;
 esac
-dirty=$(git status --porcelain)
+# Every untracked file is named, whatever status.showUntrackedFiles says: `no` would read untracked work as clean.
+dirty=$(git status --porcelain --untracked-files=all)
 [ -z "$dirty" ] || { echo "the tree is not clean: commit or stash first" >&2; exit 3; }
 
 # The number is the caller's, so it is bound to this branch: a trailer naming another pull request is the one a
@@ -48,8 +49,9 @@ IFS=$'\t' read -r state head_branch base cross < <(printf '%s\n' "${row%$'\r'}")
 origin_pushes_where_added || exit 8
 
 # Rewriting is only safe over what origin already holds: an unpushed commit would be published by the lease, and an
-# unseen one discarded by it.
-git fetch --quiet origin main "$branch"
+# unseen one discarded by it. Both refspecs are spelled out, as git-push-force.sh's is, since a narrowed
+# remote.origin.fetch updates neither tracking ref read below.
+git fetch --quiet origin "+refs/heads/main:refs/remotes/origin/main" "+refs/heads/$branch:refs/remotes/origin/$branch"
 remote=$(git rev-parse "refs/remotes/origin/$branch")
 tip=$(git rev-parse HEAD)
 # A rewrite whose push failed leaves the same trees, commit for commit, under new messages, so origin's tip is

@@ -22,16 +22,20 @@ if ($allowed -notcontains $Subcommand) {
     exit 2
 }
 
-# A script runs in its caller's process, so both variables are put back in the
+# A script runs in its caller's process, so the variables are put back in the
 # `finally`, and the one exit after it is the only way out: an exit inside the
 # `try` would leave them set for every later `python` the caller starts.
+# NoDefaultCurrentDirectoryInExePath keeps what the CLI starts, git first, from
+# running a planted executable in the checkout ahead of PATH.
 $savedSafePath = $env:PYTHONSAFEPATH
 $savedAutoUpdate = $env:CBX_NO_SKILL_AUTO_UPDATE
+$savedNoCwdSearch = $env:NoDefaultCurrentDirectoryInExePath
 $saved = $ErrorActionPreference
 $code = $null
 try {
     $env:CBX_NO_SKILL_AUTO_UPDATE = "1"
     $env:PYTHONSAFEPATH = "1"
+    $env:NoDefaultCurrentDirectoryInExePath = "1"
     $ErrorActionPreference = "Continue"
     $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
     $py = Get-Command python -ErrorAction SilentlyContinue
@@ -79,6 +83,7 @@ try {
 } finally {
     $env:PYTHONSAFEPATH = $savedSafePath
     $env:CBX_NO_SKILL_AUTO_UPDATE = $savedAutoUpdate
+    $env:NoDefaultCurrentDirectoryInExePath = $savedNoCwdSearch
     $ErrorActionPreference = $saved
 }
 if ($null -eq $code) {

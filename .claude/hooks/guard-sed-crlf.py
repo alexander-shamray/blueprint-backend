@@ -12,7 +12,21 @@ import re
 import shlex
 import subprocess
 import sys
+import types
 from pathlib import Path
+
+
+def path_grammar():
+    """`path_grammar.py` beside this file, which names a path on another machine; compiled, so no bytecode is left."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "path_grammar.py")
+    module = types.ModuleType("path_grammar")
+    module.__file__ = path
+    with open(path, encoding="utf-8") as handle:
+        exec(compile(handle.read(), path, "exec"), module.__dict__)
+    return module
+
+
+GRAMMAR = path_grammar()
 
 # What a refusal names as the forms that keep the file's endings. `--binary` is admitted: measured under Git Bash's
 # GNU sed 4.9, `sed --binary -i` writes the CR back where a plain `-i` drops it.
@@ -25,15 +39,21 @@ SAFE_FORMS = (
 # `>` and a separator between commands otherwise. A newline is one of them, so `shlex` is told it is not whitespace.
 PUNCTUATION = ";&|()<>\n"
 
-# Words that run the command after them, so `sed` behind one is still the command: the prefix commands, and the
-# reserved words that open a group or a clause, as in `if …; then sed -i …; fi`.
+# Words that run the command after them, so `sed` behind one is still the command: the reserved words that open a
+# group or a clause, as in `if …; then sed -i …; fi`. They take no options.
 PREFIXES = {
-    "command", "exec", "time", "builtin", "nohup",
     "{", "!", "if", "then", "elif", "else", "while", "until", "do",
 }
 
-# Programs that run the command after their own options, each with the options that take a separate argument.
+# Programs and prefix commands that run the command after their own options, each with the options that take a
+# separate argument; `time -p` or `command -p` before `sed` leaves `sed` the command.
 WRAPPERS = {
+    "command": set(),
+    "exec": {"-a"},
+    # bash's `time` keyword takes `-p` alone; GNU time, run as a program, a format and an output file.
+    "time": {"-f", "--format", "-o", "--output"},
+    "builtin": set(),
+    "nohup": set(),
     "env": {"-u", "--unset", "-C", "--chdir"},
     "nice": {"-n", "--adjustment"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
@@ -45,7 +65,11 @@ WRAPPERS = {
 SHELLS = {"bash", "sh", "bash.exe", "sh.exe"}
 # Stands for a heredoc body in the line `prepared` returns: a NUL, which no bash command line can carry.
 BODY = "\x00"
-SHELL_COMMAND = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
+# Bash's long options, which it reads before any cluster with one dash or two, and those that take the next word as
+# their value; a short option's value is the next word for each `o` and `O` in its cluster.
+SHELL_LONG = {"debug", "debugger", "dump-po-strings", "dump-strings", "help", "login", "noediting", "noprofile", "norc",
+              "posix", "pretty-print", "protected", "restricted", "verbose", "version", "wordexp"}
+SHELL_VALUED = {"rcfile", "init-file"}
 MAX_DEPTH = 3
 
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
@@ -219,6 +243,21 @@ def segments(command):
     return [segment for segment in found if segment.words]
 
 
+def option_width(option, valued):
+    """The words a wrapper's option spans: two where it, or the last letter of its short cluster, takes a value."""
+    if option in valued:
+        return 2
+    if option.startswith("--"):
+        # getopt_long takes a prefix only one long name has as that name; `--name=value` is one word.
+        return 2 if len(option) > 2 and "=" not in option and any(
+            name.startswith(option) for name in valued if name.startswith("--")) else 1
+    for position, letter in enumerate(option[1:], 1):
+        if f"-{letter}" in valued:
+            # A value letter before the cluster's end takes the rest of the word as its value.
+            return 2 if position == len(option) - 1 else 1
+    return 1
+
+
 def command_word(words):
     """The index of the word this simple command runs, past assignments, prefix words and wrappers' options."""
     index = 0
@@ -230,7 +269,7 @@ def command_word(words):
             index += 1
             while index < len(words) and words[index].startswith("-") and words[index] != "-":
                 option = words[index]
-                index += 2 if option in WRAPPERS[word] else 1
+                index += option_width(option, WRAPPERS[word])
                 if option == "--":
                     break
             # `timeout` takes its duration before the command.
@@ -260,22 +299,33 @@ def echoed(segment):
 
 
 def shell_line(arguments, stdin):
-    """The command line a shell with these arguments runs: its `-c` line, or its input where it reads that."""
+    """The command line a shell with these arguments runs: its `-c` line, or its input where it reads that.
+
+    As bash reads them: the long options, `-login` or `--login`, then the clusters, each `o` or `O` taking a word; the
+    first operand after them is the `-c` line, or a script, which reads its input as data unless `-s` was given."""
     index = 0
-    reads_input = False
+    while index < len(arguments) and arguments[index].startswith("-"):
+        name = arguments[index][2 if arguments[index].startswith("--") else 1:]
+        if name not in SHELL_LONG and name not in SHELL_VALUED:
+            break
+        index += 2 if name in SHELL_VALUED else 1
+    command = reads_input = False
     while index < len(arguments):
         argument = arguments[index]
-        if SHELL_COMMAND.fullmatch(argument):
-            return arguments[index + 1] if index + 1 < len(arguments) else None
-        if argument in ("-o", "+o"):
-            index += 2
-            continue
-        if argument == "--" or not argument.startswith(("-", "+")):
-            # An operand is a script, which reads its input as data, unless `-s` said to read commands from it.
-            return stdin if reads_input else None
-        reads_input = reads_input or (not argument.startswith("--") and "s" in argument)
+        if argument in ("--", "-"):
+            index += 1
+            break
+        if not argument.startswith(("-", "+")):
+            break
         index += 1
-    return stdin
+        if not argument.startswith("--"):
+            letters = argument[1:]
+            command = command or "c" in letters
+            reads_input = reads_input or "s" in letters
+            index += letters.count("o") + letters.count("O")
+    if index < len(arguments):
+        return arguments[index] if command else (stdin if reads_input else None)
+    return None if command else stdin
 
 
 def long_option(name):
@@ -326,6 +376,36 @@ def in_place_files(arguments):
     if not in_place or binary:
         return []
     return operands if script_given else operands[1:]
+
+
+# The event's `cwd`, an own place beside the hook's and the project; `offence` sets it.
+SESSION_CWD = None
+
+
+def elsewhere(path):
+    """Whether `path` is on a share the session does not stand on, which this hook must not open."""
+    return GRAMMAR.foreign(path, SESSION_CWD, os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+
+
+def pointed_elsewhere(directory):
+    """Whether the checkout holding `directory` names its git directory on such a share, which git would open."""
+    current = directory
+    while not os.path.isdir(os.path.join(current, ".git")):
+        marker = os.path.join(current, ".git")
+        if os.path.isfile(marker):
+            try:
+                with open(marker, encoding="utf-8") as handle:
+                    text = handle.read().strip()
+            except (OSError, ValueError):
+                return True
+            pointer = text[len("gitdir:"):].strip()
+            # As spelled too: a join puts the cwd drive before `\??\`, and git reads it unjoined.
+            return text.startswith("gitdir:") and (elsewhere(pointer) or elsewhere(os.path.join(current, pointer)))
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
+    return False
 
 
 def native(path):
@@ -439,6 +519,8 @@ def candidates(operand, cwd):
     walked = 0
     for word in words:
         path = native(word)
+        if elsewhere(path):
+            continue
         if not os.path.isabs(path):
             if cwd is None:
                 continue
@@ -502,6 +584,8 @@ def tracked(path, git):
     names, and the path is the session's to choose; `GIT_OPTIONAL_LOCKS=0` keeps the read from refreshing the index.
     """
     directory, name = os.path.split(os.path.abspath(path))
+    if pointed_elsewhere(directory):
+        return False
     try:
         result = subprocess.run(
             # `--literal-pathspecs`, or an untracked `x[ab].txt` would match a tracked `xa.txt`.
@@ -527,8 +611,10 @@ def offence(event, strips_cr=os.name == "nt"):
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if not isinstance(command, str) or "sed" not in command:
         return None
+    global SESSION_CWD
     cwd = event.get("cwd")
     cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
+    SESSION_CWD = cwd
     return judge(command, cwd, git_on_path(cwd), [0], 0)
 
 
@@ -540,6 +626,8 @@ def judge(command, cwd, git, checked, depth):
     # The directory each subshell stands in. One opened here starts where its parent stands when it is first seen,
     # which is where bash forks it, since the commands are read in order.
     directories = {(): cwd}
+    # Each subshell's `pushd` stack, inherited as its directory is.
+    stacks = {(): []}
     for position, segment in enumerate(found):
         previous = found[position - 1] if position else None
         scope = segment.scope
@@ -547,6 +635,7 @@ def judge(command, cwd, git, checked, depth):
             parent = next(scope[:length] for length in range(len(scope) - 1, -1, -1)
                           if scope[:length] in directories)
             directories[scope] = directories[parent]
+            stacks[scope] = None if stacks[parent] is None else list(stacks[parent])
         cwd = directories[scope]
         words = segment.words
         start = command_word(words)
@@ -554,17 +643,37 @@ def judge(command, cwd, git, checked, depth):
             continue
         name = words[start]
         arguments = words[start + 1:]
-        if name == "cd":
-            # A pipeline stage's `cd` moves nothing after it. Only a plain `cd <dir>` can be followed; any other form
-            # leaves the files after it unplaceable.
+        if name in ("cd", "pushd", "popd"):
+            # A pipeline stage's `cd` moves nothing after it. Only a plain `cd <dir>` or `pushd <dir>`, and a bare
+            # `popd` back to a placed entry, can be followed; any other form leaves the files after it unplaceable.
             if segment.piped:
                 continue
-            if len(arguments) != 1 or "$" in arguments[0] or arguments[0] == "-":
-                directories[scope] = None
-            else:
+            if name == "popd":
+                stack = stacks[scope]
+                directories[scope] = stack.pop() if not arguments and stack else None
+                if arguments:
+                    stacks[scope] = None
+                continue
+            plain = not (len(arguments) != 1 or "$" in arguments[0] or arguments[0] == "-" or (
+                name == "pushd" and arguments[0][:1] in ("+", "-")))
+            if plain:
                 target = native(arguments[0])
-                directories[scope] = (target if os.path.isabs(target)
-                                      else (os.path.join(cwd, target) if cwd else None))
+                if not (os.path.isabs(target) or elsewhere(target)):
+                    target = os.path.join(cwd, target) if cwd else None
+                # Bash refuses a directory that is not there and stays put, and a failed `pushd` pushes nothing; one an
+                # earlier command on the line makes is not there yet either. Either way the move is not followed.
+                if target is not None and (elsewhere(target) or not os.path.isdir(target)):
+                    plain, target = False, None
+            else:
+                target = None
+            if name == "pushd":
+                # Any other `pushd` form, `-n <dir>` among them, changes the stack in ways not followed here, so every
+                # `popd` after it is unplaceable too.
+                if plain and stacks[scope] is not None:
+                    stacks[scope].append(cwd)
+                else:
+                    stacks[scope] = None
+            directories[scope] = target
             continue
         program = os.path.basename(native(name)).lower()
         if program in SHELLS:

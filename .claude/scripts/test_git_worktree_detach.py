@@ -5,6 +5,7 @@ The shared harness and the reason it shells out rather than
 re-implementing are `review_helpers.py`'s.
 """
 
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -93,17 +94,14 @@ class SweepWorktreeShape(unittest.TestCase):
         )
         self.assertEqual(2, two_args.returncode)
 
-    def sweep_dirs(self):
-        listing = run_bash('ls -d "$ROOT"/secsweep-* 2>/dev/null || true', ROOT=self.tmproot)
-        return set(listing.stdout.split())
-
     def test_a_bad_commit_creates_no_directory(self):
         # The argument is checked before anything is made, so a refused call
-        # leaves no litter behind for the next run to trip over.
-        before = self.sweep_dirs()
-        result = run_bash('bash "$DETACH" not-a-sha', DETACH=str(DETACH))
+        # leaves no litter behind for the next run to trip over. A temp root
+        # of its own, so a real sweep starting meanwhile is not read as litter.
+        root = temp_root(self)
+        result = run_bash('bash "$DETACH" not-a-sha', DETACH=str(DETACH), TMPDIR=root)
         self.assertEqual(2, result.returncode)
-        self.assertEqual(before, self.sweep_dirs())
+        self.assertEqual([], os.listdir(root))
 
     def test_the_helper_returns_only_the_path_on_stdout(self):
         # `git worktree add` writes "HEAD is now at <sha> <subject>" to stdout,
@@ -112,13 +110,24 @@ class SweepWorktreeShape(unittest.TestCase):
         # the source, because any command leaking a line does the same:
         # detach at a real commit, capture stdout as `security-sweep.md` does,
         # and assert it is one line and a directory.
-        repo = str(SCRIPTS.parent.parent)
+
+        # Its own repository and temp root, as StaleSweepWorktrees has: each
+        # detach also drops the day-old sweep worktrees where it runs.
+        top = temp_root(self)
+        built = run_bash(
+            'mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q .'
+            ' && git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m t',
+            top=top,
+        )
+        self.assertEqual(0, built.returncode, built.stderr)
+        repo, root = f"{top}/repo", f"{top}/root"
+        tmproot = run_bash('cd "$R" && pwd -P', R=root).stdout.strip()
         pinned = run_bash('cd "$REPO" && git rev-parse HEAD', REPO=repo).stdout.strip()
         self.assertRegex(pinned, r"^[0-9a-f]{40}$")
 
         made = run_bash(
             'cd "$REPO" && bash "$DETACH" "$SHA" 2>/dev/null',
-            REPO=repo, DETACH=str(DETACH), SHA=pinned,
+            REPO=repo, DETACH=str(DETACH), SHA=pinned, TMPDIR=root,
         )
         path = made.stdout.strip()
         # Registered before anything is asserted, so a failing assertion below
@@ -126,7 +135,7 @@ class SweepWorktreeShape(unittest.TestCase):
         self.addCleanup(
             lambda: run_bash(
                 'cd "$REPO" && bash "$DROP" "$TARGET" >/dev/null 2>&1 || true',
-                REPO=repo, DROP=str(DROP), TARGET=path,
+                REPO=repo, DROP=str(DROP), TARGET=path, TMPDIR=root,
             )
         )
         self.assertEqual(0, made.returncode, made.stderr)
@@ -142,7 +151,7 @@ class SweepWorktreeShape(unittest.TestCase):
         )
         # And it is the shape the drop helper will later require, which is the
         # agreement between the two ends of a sweep's lifetime.
-        self.assertEqual(self.tmproot, run_bash('dirname "$P"', P=path).stdout.strip())
+        self.assertEqual(tmproot, run_bash('dirname "$P"', P=path).stdout.strip())
         self.assertRegex(run_bash('basename "$P"', P=path).stdout.strip(), r"^secsweep-.{6}$")
 
 

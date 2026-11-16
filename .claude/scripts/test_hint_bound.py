@@ -69,6 +69,25 @@ class HintBound(unittest.TestCase):
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual(payload, r.stdout)
 
+    def test_a_host_without_the_windows_launcher_runs_python3(self):
+        # macOS and Linux have no `py`; a PATH holding only the shell's own tools and a `python3` stands for one.
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        python3 = Path(d) / "python3"
+        python3.write_text("#!/usr/bin/env bash\ncat\n", encoding="utf-8")
+        python3.chmod(0o755)
+        # macOS splits these between /bin and /usr/bin, so each one `cat`'s directory lacks adds its own.
+        tools = os.path.dirname(shutil.which("cat"))
+        for tool in ("dirname", "mktemp", "rm", "sleep"):
+            if shutil.which(tool, path=tools) is None:
+                tools += os.pathsep + os.path.dirname(shutil.which(tool))
+        self.assertIsNone(shutil.which("py", path=tools), "the shell's tools directories hold a `py`")
+        env = dict(os.environ, PATH=d + os.pathsep + tools, CLAUDE_PROJECT_DIR=str(SCRIPTS.parent.parent))
+        payload = '{"prompt":"where is the saga"}\n'
+        r = subprocess.run([BASH, str(WRAPPER), "UserPromptSubmit", "index-query-hint.py"], input=payload,
+                           capture_output=True, text=True, encoding="utf-8", env=env)
+        self.assertEqual((0, payload), (r.returncode, r.stdout), r.stderr)
+
     def test_a_hook_that_answers_with_nothing_leaves_nothing(self):
         r, _ = self.run_wrapper("PreToolUse", "index-search-hint.py", "exit 0\n")
         self.assertEqual((0, ""), (r.returncode, r.stdout))
