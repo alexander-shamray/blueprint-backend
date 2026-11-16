@@ -37,6 +37,10 @@ def required_stable(weight_percent: int, overshoot_points: int) -> int:
     """
     if weight_percent >= 100:
         return 1
+    # Refused rather than divided by: `required` reaches here without `plan`'s own check of the weight.
+    if weight_percent <= 0 or weight_percent + overshoot_points <= 0:
+        raise PlanError(
+            f"weight {weight_percent} must be in (0, 100] and above zero with overshoot {overshoot_points} added")
     # 100 / (stable + 1) <= weight + overshoot, in integers.
     return max(1, _ceil_div(100, weight_percent + overshoot_points) - 1)
 

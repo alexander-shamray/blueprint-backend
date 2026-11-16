@@ -362,6 +362,30 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     return []
 
 
+# The rollout job's own cap, the bound check 1 holds the ladder's dwells under.
+ROLLOUT_TIMEOUT = re.compile(r"(?m)^  rollout:[ \t]*\r?\n(?:(?:    .*|[ \t]*)\r?\n)*?    timeout-minutes:[ \t]*(\d+)")
+
+
+def _rollout_outlasts_the_dwells(total: int, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 1's bound: the ladder's dwells fit inside the rollout job's `timeout-minutes`.
+
+    A job cancelled mid-dwell runs no later step, so the canary it installed is left serving.
+    """
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so the ladder's dwells are unbounded: {error}"]
+    found = ROLLOUT_TIMEOUT.search(text)
+    if found is None:
+        return [f"{WORKFLOW_PATH}'s rollout job states no timeout-minutes, so the ladder's dwells are unbounded"]
+    if total >= int(found.group(1)):
+        return [
+            f"the ladder dwells {total} minutes and {WORKFLOW_PATH}'s rollout job is cancelled at "
+            f"{found.group(1)}, so a full climb ends mid-dwell with the canary still installed"
+        ]
+    return []
+
+
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     """The rollout hands each image's tree to everything that reads `src/`.
 
