@@ -91,15 +91,11 @@ def _archived(live: list[str]) -> dict[str, tuple[str, bool]]:
     return found
 
 
-def _exported(live: list[str], variable: str) -> str | None:
-    """The path a step writes into GITHUB_ENV under `variable`."""
+def _exports(live: list[str], variable: str) -> list[str]:
+    """Every path a step writes into GITHUB_ENV under `variable`: the runner keeps the last, so each is judged."""
     pattern = re.compile(
         rf'(?<![A-Za-z0-9_]){variable}=(?P<into>[^"\s]+)"?\s*>>\s*"?\$GITHUB_ENV')
-    for line in live:
-        match = pattern.search(line)
-        if match:
-            return match.group("into")
-    return None
+    return [match.group("into") for line in live if (match := pattern.search(line))]
 
 
 def _invocations(lines: list[str], command: str) -> list[str]:
@@ -239,6 +235,13 @@ def _candidate_values_failures(live: list[str], adr: str) -> list[str]:
 
     Asked by each check that reads the file, so neither leans on the other being active.
     """
+    # Once each: the reads below judge one write, and a later one is what the runtime would use.
+    for name in ("overrides.yaml", "candidate.json"):
+        if sum(f'> "$RUNNER_TEMP/{name}"' in line for line in live) > 1:
+            return [
+                f'{WORKFLOW_PATH} writes "$RUNNER_TEMP/{name}" more than once, so the write judged here is '
+                f"not the only one the upgrade could read ({adr})"
+            ]
     # Overrides alone, as the upgrade applies them: `--all` would carry the old chart's defaults over the new.
     overrides = _invocations(live, "helm get values")
     if not any(
@@ -387,23 +390,23 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
         # The name is matched whole. `IMAGE_SOURCE=` is also inside
         # `OLD_IMAGE_SOURCE=`, so a consistent rename would satisfy a
         # substring test while exporting a different tree.
-        exported = _exported(live, variable)
-        if exported is None:
+        exports = _exports(live, variable)
+        if not exports:
             failures.append(
                 f"no step exports {variable} into GITHUB_ENV, so the rollout has "
                 "no tree to read it from and ADR-050's binding is not in force"
             )
-            continue
-        # And it has to be the tree an archive wrote. Exporting the
-        # checkout satisfies every name and argument check below while the
-        # rollout reads exactly what the binding exists to stop it reading.
-        if exported not in archived:
-            failures.append(
-                f"{variable} is exported as {exported}, which no `git archive` "
-                "writes, so the rollout reads a tree nothing took from the "
-                "image's revision (ADR-050)"
-            )
-        else:
+        for exported in exports:
+            # And it has to be the tree an archive wrote. Exporting the
+            # checkout satisfies every name and argument check below while the
+            # rollout reads exactly what the binding exists to stop it reading.
+            if exported not in archived:
+                failures.append(
+                    f"{variable} is exported as {exported}, which no `git archive` "
+                    "writes, so the rollout reads a tree nothing took from the "
+                    "image's revision (ADR-050)"
+                )
+                continue
             revision, resolved = archived[exported]
             if revision != RESOLVED_REVISION:
                 failures.append(
@@ -473,12 +476,30 @@ LADDER_OFF = "if: steps.ladder.outputs.ladder == 'off'"
 
 STEP_START = re.compile(r"^[ \t]*- (?:name|uses):")
 
+STEPS_KEY = re.compile(r"steps:[ \t]*(?:#.*)?$")
+
 
 def _steps(live: list[str]) -> list[list[str]]:
-    """The workflow's live lines cut at each `- name:` or `- uses:`, so a condition is read with its own run."""
+    """The workflow's live lines cut at each step, so a condition is read with its own run.
+
+    A step is any list item at the indent of a `steps:` block's first, whatever key opens it: one opening on `id:`
+    or `run:` read as part of the step above would inherit that step's `if:`. Outside a block, `- name:` and
+    `- uses:` still cut.
+    """
     steps: list[list[str]] = []
+    key = item = None
     for line in live:
-        if STEP_START.match(line) or not steps:
+        body = line.lstrip()
+        indent = len(line) - len(body)
+        opens = False
+        if STEPS_KEY.match(body):
+            key, item = indent, None
+        elif key is not None and body and (indent < key or (indent == key and not body.startswith("- "))):
+            key = item = None
+        elif key is not None and body.startswith("- "):
+            item = indent if item is None else item
+            opens = indent == item
+        if opens or (key is None and STEP_START.match(line)) or not steps:
             steps.append([])
         steps[-1].append(line)
     return steps
