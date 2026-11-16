@@ -65,8 +65,9 @@ public sealed partial class CachingTokenClient(
 
     private bool TryRead(string scope, out string accessToken)
     {
+        // The guard added to now, not taken from the expiry: an exp near DateTimeOffset.MinValue would underflow.
         if (_tokens.TryGetValue(scope, out CachedToken? token) &&
-            token.ExpiresAt - ExpiryGuard > clock.GetUtcNow())
+            token.ExpiresAt > clock.GetUtcNow() + ExpiryGuard)
         {
             accessToken = token.AccessToken;
 
