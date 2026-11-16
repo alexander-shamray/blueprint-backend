@@ -22,6 +22,14 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(1, len(bars), out)
         self.assertEqual(2, ws.cell_width("✅"))
 
+    def test_a_wrapped_cell_of_wide_characters_keeps_its_columns(self):
+        # Wrapped by display columns: `textwrap` counts characters, so a line of two-column ones overruns the cell.
+        wide = " ".join(["漢字漢字漢字"] * 30)
+        with mock.patch.object(ws, "WIDTH", 60):
+            out = ws.render_table(["| Step | Note |", "|---|---|", f"| push | {wide} |"])
+        self.assertGreater(len(out), 6, out)
+        self.assertEqual(1, len({ws.cell_width(line) for line in out}), out)
+
     def test_a_bash_call_shows_its_description_else_its_command_without_the_cd(self):
         self.assertEqual("Show working tree status",
                          ws.tool_summary("Bash", {"command": "git status", "description": "Show working tree status"}))

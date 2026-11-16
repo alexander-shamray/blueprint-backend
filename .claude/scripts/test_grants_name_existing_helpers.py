@@ -18,8 +18,9 @@ BASE = SCRIPTS.parent.parent / ".harness" / "settings.base.json"
 
 # `Bash(bash .claude/scripts/x.sh:*)`, `Bash(bash .claude/scripts/x.sh)` and the `py -3.12` form of a Python helper,
 # each also with arguments after the name, as `Bash(py -3.12 .claude/scripts/x.py tasks start:*)` carries them.
-# `-m unittest discover` and the other grants that name no file under `.claude/scripts/` do not match.
-HELPER = re.compile(r"Bash\((?:bash|py -3\.12) \.claude/scripts/([^:)\s/]+)(?:[ :].*)?\)")
+# `-m unittest discover` and the other grants that name no file under `.claude/scripts/` do not match; one in a
+# subdirectory does, as `sub/x.sh`.
+HELPER = re.compile(r"Bash\((?:bash|py -3\.12) \.claude/scripts/([^:)\s]+)(?:[ :].*)?\)")
 
 
 def granted_helpers(tools):
@@ -60,7 +61,7 @@ class TheScanSeesWhatItLooksFor(unittest.TestCase):
         tools = ["Read", "Bash(bash .claude/scripts/a.sh:*)", "Bash(bash .claude/scripts/b.sh)",
                  "Bash(py -3.12 .claude/scripts/c.py:*)", "Bash(py -3.12 -m unittest discover:*)",
                  "Bash(git status:*)", "Bash(bash .claude/scripts/sub/d.sh:*)", "Agent(branch-reviewer)"]
-        self.assertEqual(["a.sh", "b.sh", "c.py"], granted_helpers(tools))
+        self.assertEqual(["a.sh", "b.sh", "c.py", "sub/d.sh"], granted_helpers(tools))
 
     def test_a_grant_that_carries_arguments_is_read(self):
         tools = ["Bash(py -3.12 .claude/scripts/dispatch_board.py tasks start:*)",
@@ -68,7 +69,7 @@ class TheScanSeesWhatItLooksFor(unittest.TestCase):
                  "Bash(py -3.12 .claude/scripts/shard.py --selective)",
                  "Bash(bash .claude/scripts/e.sh <n> start:*)",
                  "Bash(bash .claude/scripts/sub/f.sh tasks:*)", "Bash(bash .claude/scripts/g.shx)"]
-        self.assertEqual(["dispatch_board.py", "dispatch_board.py", "shard.py", "e.sh", "g.shx"],
+        self.assertEqual(["dispatch_board.py", "dispatch_board.py", "shard.py", "e.sh", "sub/f.sh", "g.shx"],
                          granted_helpers(tools))
 
     def test_a_grant_with_arguments_for_a_file_that_is_gone_is_found(self):
@@ -82,6 +83,11 @@ class TheScanSeesWhatItLooksFor(unittest.TestCase):
             tools = ["Bash(bash .claude/scripts/here.sh:*)", "Bash(bash .claude/scripts/gone.sh:*)",
                      "Bash(py -3.12 .claude/scripts/also-gone.py)"]
             self.assertEqual(["also-gone.py", "gone.sh"], missing(tools, Path(holder)))
+
+    def test_a_gone_helper_in_a_subdirectory_is_found(self):
+        # A grant approves whatever lands at its path, a subdirectory's as much as the scripts directory's own.
+        with tempfile.TemporaryDirectory() as holder:
+            self.assertEqual(["sub/gone.sh"], missing(["Bash(bash .claude/scripts/sub/gone.sh:*)"], Path(holder)))
 
     def test_a_directory_at_the_path_is_not_a_helper(self):
         with tempfile.TemporaryDirectory() as holder:

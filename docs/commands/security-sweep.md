@@ -280,7 +280,13 @@ helper rather than taking it in passing.
 finding files, and say in the summary that the lookup failed rather than that
 the issue was somebody else's. It resolves the owner from the checkout, takes an
 issue number and nothing else, and prints which condition matched, so a
-suppression is auditable rather than asserted.
+suppression is auditable rather than asserted. It reads the issue's state
+beside its author, and answers 1 for a closed one, the owner's included,
+however it was closed, so a closed `wontfix` does not suppress either: only an
+open record meets the test above, and where a fix closed it, the fixed-issue
+exception blocks only while the fix is present, while a finding that reaches
+this gate reproduces, so the fix is not. That is decided in code rather than
+left to the parent's reading of the closure.
 
 **`author` is deliberately absent from that field set, and the absence is the
 control.** A rule a reader follows is not one anything applies, and a field

@@ -12,9 +12,14 @@ A commit in `base..head` that:
 - is a merge commit;
 - has a subject outside `/commit`'s form, or one starting `fixup!`,
   `squash!`, `amend!` or `wip` — a subject git wrote for a revert,
-  `Revert "<subject>"`, is judged by the subject inside the quotes;
-- carries no `PR: #<this pull request>` trailer, or carries one naming
-  another pull request.
+  `Revert "<subject>"`, or for a revert of one, `Reapply "<subject>"` or
+  `Revert "Revert "<subject>""`, is judged by the innermost subject;
+- carries no `PR: #<this pull request>` trailer, carries one naming
+  another pull request, or carries it more than once —
+  `git-revert-pr.sh` compares every parsed `PR:` line, joined, with the
+  one line `PR: #<n>`, so it would leave a doubled one out of a revert, and
+  git appends a second on its own
+  when another trailer sits between the two.
 
 A range of no commits is refused rather than passed.
 

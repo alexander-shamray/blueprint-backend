@@ -13,12 +13,18 @@ from pathlib import Path
 
 INDEX_GUARD = Path(__file__).with_name("guard-index-argv.py")
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
-# Words that run the command after them, and the wrappers' options that take a separate argument; as `guard-sed-crlf.py`.
+# Words that run the command after them, and the wrappers' and prefix commands' options that take a separate
+# argument; as `guard-sed-crlf.py`.
 PREFIXES = frozenset({
-    "command", "exec", "time", "builtin", "nohup",
     "!", "if", "then", "elif", "else", "while", "until", "do",
 })
 WRAPPERS = {
+    "command": set(),
+    "exec": {"-a"},
+    # bash's `time` keyword takes `-p` alone; GNU time, run as a program, a format and an output file.
+    "time": {"-f", "--format", "-o", "--output"},
+    "builtin": set(),
+    "nohup": set(),
     "env": {"-u", "--unset", "-C", "--chdir"},
     "nice": {"-n", "--adjustment"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
@@ -40,6 +46,21 @@ def _index_guard():
     return module
 
 
+def _option_width(option, valued):
+    """The words a wrapper's option spans: two where it, or the last letter of its short cluster, takes a value."""
+    if option in valued:
+        return 2
+    if option.startswith("--"):
+        # getopt_long takes a prefix only one long name has as that name; `--name=value` is one word.
+        return 2 if len(option) > 2 and "=" not in option and any(
+            name.startswith(option) for name in valued if name.startswith("--")) else 1
+    for position, letter in enumerate(option[1:], 1):
+        if f"-{letter}" in valued:
+            # A value letter before the cluster's end takes the rest of the word as its value.
+            return 2 if position == len(option) - 1 else 1
+    return 1
+
+
 def _command_word(run):
     """The words from the one this simple command runs: past assignments, prefix words and wrappers' options."""
     index = 0
@@ -51,7 +72,7 @@ def _command_word(run):
             index += 1
             while index < len(run) and run[index].startswith("-") and run[index] != "-":
                 option = run[index]
-                index += 2 if option in WRAPPERS[word] else 1
+                index += _option_width(option, WRAPPERS[word])
                 if option == "--":
                     break
             # `timeout` takes its duration before the command.

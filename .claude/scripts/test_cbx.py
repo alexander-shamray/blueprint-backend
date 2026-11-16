@@ -20,12 +20,19 @@ SCRIPTS = Path(__file__).resolve().parent
 CBX = SCRIPTS.parent / "skills" / "codebase-index" / "scripts" / "cbx"
 CBX_PS1 = CBX.with_suffix(".ps1")
 SKILL = SCRIPTS.parent / "skills" / "codebase-index"
+NO_CWD_SEARCH = "NoDefaultCurrentDirectoryInExePath"
+# The variables a wrapper sets for what it starts; Windows spells an environment name in any case.
+WRAPPER_VARS = {"PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE", NO_CWD_SEARCH.upper()}
+
+
+def _without_wrapper_vars():
+    return {name: value for name, value in os.environ.items() if name.upper() not in WRAPPER_VARS}
 
 # The bare console script `codebase-index <subcommand>`, which no wrapper pins to the interpreter or holds to the
-# allow list. At the start of a line, or after a backtick or whitespace, so the path `skills/codebase-index/` and the
-# package name in prose do not match.
+# allow list. Anywhere but after a word character, `/`, `.` or `-`, so a quote, a parenthesis or `$(` before it still
+# matches, and the path `skills/codebase-index/` and a hyphenated name do not.
 UNPINNED_CLI = re.compile(
-    r"(?:^|[`\s])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
+    r"(?<![\w/.-])codebase-index\s+(search|explain|architecture|symbol|refs|impact|diff-impact|path|describe|verify"
     r"|stats|doctor|update|index|graph|mcp|clean|init|watch)\b", re.M)
 
 
@@ -53,6 +60,17 @@ def _ps_invoke(script, *args, env=None, cwd=None):
          "-File", str(script), *args],
         capture_output=True, text=True, encoding="utf-8", env=env, cwd=cwd,
     )
+
+
+def _keeping_git(case, path):
+    """`path` with a `git` on it: dropping the directory that holds `python3`, as Linux's `/usr/bin` does, drops
+    git too, and gate-index refuses a git that cannot say which checkout it is in."""
+    if shutil.which("git", path=path) is not None:
+        return path
+    holder = tempfile.mkdtemp(prefix="cbx-git-")
+    case.addCleanup(shutil.rmtree, holder)
+    os.symlink(shutil.which("git"), os.path.join(holder, "git"))
+    return holder + os.pathsep + path
 
 
 def _path_without_launchers(*names):
@@ -85,7 +103,7 @@ def _ps_in_the_callers_process(subcommand, env):
     script = str(CBX_PS1).replace("'", "''")
     command = (f"& '{script}' {subcommand} X; "
                'Write-Output "code=$LASTEXITCODE safe=[$env:PYTHONSAFEPATH] '
-               'auto=[$env:CBX_NO_SKILL_AUTO_UPDATE]"')
+               'auto=[$env:CBX_NO_SKILL_AUTO_UPDATE] nocwd=[$env:NoDefaultCurrentDirectoryInExePath]"')
     return subprocess.run(
         [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
         capture_output=True, text=True, encoding="utf-8", env=env)
@@ -242,10 +260,11 @@ class CbxWrapper(unittest.TestCase):
         self.assertIn("python3 -P -m", bash)
         self.assertIn("python -P -c", bash)
         self.assertIn("python -P -m", bash)
-        self.assertIn("-3.12 -P -c", ps1)
-        self.assertIn("-3.12 -P -m", ps1)
-        self.assertIn("-P -c", ps1)
-        self.assertIn("-P -m", ps1)
+        # Each spelled with its launcher, so the plain python fallback cannot ride on the py launcher's text.
+        self.assertIn("$pyLauncher.Source -3.12 -P -c", ps1)
+        self.assertIn("$pyLauncher.Source -3.12 -P -m", ps1)
+        self.assertIn("$py.Source -P -c", ps1)
+        self.assertIn("$py.Source -P -m", ps1)
 
     def test_powershell_restores_the_variables_in_a_finally_with_one_exit_after_it(self):
         """The text of the structure the behavioural case above runs: an
@@ -475,11 +494,13 @@ class CbxWrapper(unittest.TestCase):
         # The scan's subject is the scan: a pattern that matched nothing would pass every file above.
         for text in ("codebase-index verify --json", "Run `codebase-index search X`", "| `codebase-index impact X` |",
                      "x codebase-index  graph", "$ codebase-index doctor", "codebase-index mcp",
-                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch"):
+                     "`codebase-index clean`", "codebase-index init .", "run codebase-index watch",
+                     '"codebase-index search X"', "'codebase-index verify'", "(codebase-index refs X)",
+                     "$(codebase-index impact X)"):
             with self.subTest(text=text):
                 self.assertIsNotNone(UNPINNED_CLI.search(text))
         for text in ("the `codebase-index` package", "pip install codebase-index", "skills/codebase-index/scripts/cbx",
-                     "codebase-index is a package"):
+                     "codebase-index is a package", "x-codebase-index search", "skills/codebase-index search"):
             with self.subTest(text=text):
                 self.assertIsNone(UNPINNED_CLI.search(text))
 
@@ -537,10 +558,9 @@ class CbxWrapper(unittest.TestCase):
         def nothing(fake):
             return fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN), 4, ""
 
-        ours = {name: value for name, value in os.environ.items()
-                if name not in ("PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE")}
+        ours = _without_wrapper_vars()
         for route in (path_cli, module, nothing):
-            for held in ({}, {"PYTHONSAFEPATH": "kept", "CBX_NO_SKILL_AUTO_UPDATE": "mine"}):
+            for held in ({}, {"PYTHONSAFEPATH": "kept", "CBX_NO_SKILL_AUTO_UPDATE": "mine", NO_CWD_SEARCH: "0"}):
                 with self.subTest(route=route.__name__, held=held), \
                         tempfile.TemporaryDirectory(prefix="cbx-ps-env-") as fake:
                     path, code, said = route(fake)
@@ -548,7 +568,8 @@ class CbxWrapper(unittest.TestCase):
                     self.assertIn(f"code={code} ", out.stdout, out.stdout + out.stderr)
                     self.assertIn(said, out.stdout, out.stdout + out.stderr)
                     self.assertIn(
-                        f"safe=[{held.get('PYTHONSAFEPATH', '')}] auto=[{held.get('CBX_NO_SKILL_AUTO_UPDATE', '')}]",
+                        f"safe=[{held.get('PYTHONSAFEPATH', '')}] auto=[{held.get('CBX_NO_SKILL_AUTO_UPDATE', '')}]"
+                        f" nocwd=[{held.get(NO_CWD_SEARCH, '')}]",
                         out.stdout)
 
     def test_powershell_py_fallback_when_cli_is_absent(self):
@@ -610,12 +631,15 @@ class CbxWrapper(unittest.TestCase):
             py_dir = str(Path(sys.executable).resolve().parent)
             env = {
                 **os.environ,
-                "PATH": py_dir + os.pathsep + _path_without_launchers(
-                    "codebase-index", "py", "python3"),
+                "PATH": _keeping_git(self, py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3")),
             }
             out = subprocess.run(
                 [_bash(), str(CBX), "search", "X"],
                 capture_output=True, text=True, encoding="utf-8", env=env, cwd=fake)
+            # Past the gate, or the negatives below hold of a run that never reached an import: 4 is no
+            # interpreter, 3 a refused index. The CLI itself may be absent, as on CI, so its own exit is not read.
+            self.assertNotIn(out.returncode, (3, 4), out.stderr)
             self.assertFalse(
                 (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
             self.assertNotIn("CHECKOUT", out.stdout)
@@ -627,10 +651,13 @@ class CbxWrapper(unittest.TestCase):
             py_dir = str(Path(sys.executable).resolve().parent)
             env = {
                 **os.environ,
-                "PATH": py_dir + os.pathsep + _path_without_launchers(
-                    "codebase-index", "py", "python3"),
+                "PATH": _keeping_git(self, py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3")),
             }
             out = _ps_invoke(CBX_PS1, "search", "X", env=env, cwd=fake)
+            # Past the gate, or the negatives below hold of a run that never reached an import: 4 is no
+            # interpreter, 3 a refused index. The CLI itself may be absent, as on CI, so its own exit is not read.
+            self.assertNotIn(out.returncode, (3, 4), out.stderr)
             self.assertFalse(
                 (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
             self.assertNotIn("CHECKOUT", out.stdout)
@@ -677,12 +704,41 @@ class CbxWrapper(unittest.TestCase):
     def test_powershell_puts_both_variables_back_when_the_gate_refuses(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-gate-env-") as fake:
             _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
-            env = {name: value for name, value in os.environ.items()
-                   if name not in ("PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE")}
+            env = _without_wrapper_vars()
             env["CBX_STUB_GATE_EXIT"] = "3"
             env["PATH"] = fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN)
             out = _ps_in_the_callers_process("search", env)
-            self.assertIn("code=3 safe=[] auto=[]", out.stdout, out.stdout + out.stderr)
+            self.assertIn("code=3 safe=[] auto=[] nocwd=[]", out.stdout, out.stdout + out.stderr)
+
+    def test_the_bash_wrapper_starts_the_cli_with_no_working_directory_search(self):
+        """Windows runs a bare `git` from the working directory before PATH, and the CLI calls git from the
+        checkout, which any merged branch can plant a `git.exe` in. The variable is what turns that search off."""
+        with tempfile.TemporaryDirectory(prefix="cbx-nocwd-") as fake:
+            stub = Path(fake) / "codebase-index"
+            stub.write_text(f'#!/bin/sh\necho "NOCWD=[${NO_CWD_SEARCH}]"\n', encoding="utf-8")
+            stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            env = {**_without_wrapper_vars(), "PATH": fake + os.pathsep + os.environ.get("PATH", "")}
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, encoding="utf-8", env=env, cwd=fake)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("NOCWD=[1]", out.stdout)
+
+    def test_the_powershell_wrapper_starts_the_cli_with_no_working_directory_search(self):
+        """As the bash case has it; the restore cases above hold it put back afterwards."""
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-nocwd-") as fake:
+            if os.name == "nt":
+                stub = Path(fake) / "codebase-index.cmd"
+                stub.write_text(f"@echo off\r\necho NOCWD=[%{NO_CWD_SEARCH}%]\r\n", encoding="utf-8")
+            else:
+                stub = Path(fake) / "codebase-index"
+                stub.write_text(f'#!/bin/sh\necho "NOCWD=[${NO_CWD_SEARCH}]"\n', encoding="utf-8")
+                stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
+            env = {**_without_wrapper_vars(), "PATH": fake + os.pathsep + os.environ.get("PATH", "")}
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env, cwd=fake)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("NOCWD=[1]", out.stdout)
 
 
 if __name__ == "__main__":

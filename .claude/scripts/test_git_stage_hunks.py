@@ -8,7 +8,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from review_helpers import GIT, SCRIPTS, copy_template, fixture_template, run_bash, setUpModule  # noqa: F401
+from review_helpers import BASH, GIT, SCRIPTS, copy_template, fixture_template, run_bash, setUpModule  # noqa: F401
 
 HELPER = SCRIPTS / "git-stage-hunks.sh"
 QUIET = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
@@ -93,10 +93,12 @@ class Listing(Fixture):
         self.staged_nothing()
 
     def test_a_crlf_file_lists_without_its_carriage_returns(self):
-        result = self.helper("--list", "crlf.txt")
+        # Bytes: `run_bash` decodes in text mode, whose universal newlines turn every `\r` into a newline first.
+        result = subprocess.run([BASH, "-c", 'cd "$W"\nbash "$H" --list crlf.txt'], capture_output=True,
+                                env={**os.environ, "W": self.work.as_posix(), "H": HELPER.as_posix(), **QUIET})
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertNotIn("\r", result.stdout)
-        self.assertIn("    +edit 18\n", result.stdout)
+        self.assertNotIn(b"\r", result.stdout)
+        self.assertIn(b"    +edit 18\n", result.stdout)
 
     def test_a_clean_file_has_none(self):
         self.git("checkout", "--", "two.txt")

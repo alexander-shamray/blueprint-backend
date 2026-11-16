@@ -32,7 +32,7 @@ def frontmatter_list(text, key):
 
 
 def bash_deny_matches(rule, command):
-    """Whether a `Bash(...)` deny refuses `command`: `:*` is a prefix, and `*` matches at any position."""
+    """Whether a `Bash(...)` deny refuses `command`: `:*` is a prefix ending a word, and `*` matches at any position."""
     inner = re.fullmatch(r"Bash\((.*)\)", rule)
     if inner is None:
         return rule == "Bash"
@@ -41,7 +41,7 @@ def bash_deny_matches(rule, command):
     if prefix:
         spelled = spelled[:-2]
     body = ".*".join(re.escape(part) for part in spelled.split("*"))
-    return re.fullmatch(body + (".*" if prefix else ""), command,
+    return re.fullmatch(body + (r"(?:\s.*)?" if prefix else ""), command,
                         re.DOTALL) is not None
 
 
@@ -63,9 +63,15 @@ def profiles():
 
 
 def undenied_agents(text, profiles):
-    """The agent types a command that grants some neither grants nor denies, or None if it grants none."""
-    granted = {m for t in frontmatter_list(text, "allowed-tools")
-               for m in re.findall(r"^Agent\((.+)\)$", t)}
+    """The agent types a command that grants some neither grants nor denies, or None if it grants none.
+
+    A bare `Agent` or `Agent(*)` grant returns one item naming it, since it grants every type.
+    """
+    allowed = frontmatter_list(text, "allowed-tools")
+    # A bare grant admits every type, the broad grant this class exists to refuse.
+    if any(t in ("Agent", "Agent(*)") for t in allowed):
+        return ["every type, by a bare Agent grant"]
+    granted = {m for t in allowed for m in re.findall(r"^Agent\((.+)\)$", t)}
     if not granted:
         return None
     denied = set(frontmatter_list(text, "disallowed-tools"))
@@ -131,6 +137,13 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         # The two sweeps, /team and /ship: fewer means the grant pattern stopped matching and the loop passed over
         # nothing.
         self.assertGreaterEqual(granting, 4)
+
+    def test_a_bare_agent_grant_is_read_as_granting_and_refused(self):
+        names = profiles()
+        for grant in ("Agent", "Agent(*)", "Read, Agent"):
+            with self.subTest(grant=grant):
+                self.assertTrue(undenied_agents(f"---\nallowed-tools: {grant}\n---\n", names))
+        self.assertIsNone(undenied_agents("---\nallowed-tools: Read\n---\n", names))
 
     def test_ship_spawns_its_audits_as_the_check_auditor_and_denies_general_purpose(self):
         # Step 2's passes read the branch under review, so a type holding Edit or Bash is one planted line from
@@ -404,13 +417,57 @@ class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
         self.assertIsNone(self.BROAD_BASH.fullmatch("Bash(bash .claude/scripts/gh-issue-list.sh)"))
 
 
+class NoCommandGrantsGhWithoutASubcommand(unittest.TestCase):
+    """`gh alias set --shell` or `gh extension install` and then its name runs any program, so a `gh` grant names
+    the subcommand it runs, and that subcommand is not one of those."""
+
+    # The program word in any case, behind env assignments, with or without `.exe`, and what follows it.
+    GH = re.compile(r"Bash\((?:\w+=\S*\s+)*gh(?:\.exe)?(?![\w.-])(.*)\)", re.DOTALL | re.IGNORECASE)
+    # A lower-case word ending at a space, a `:` or the end: not a flag, a wildcard or a word cut by one.
+    SUBCOMMAND = re.compile(r"\s+([a-z][a-z-]*)(?=\s|:|$)")
+    EXECUTORS = {"alias", "extension", "extensions", "ext"}
+
+    def refused(self, entry):
+        grant = self.GH.fullmatch(entry)
+        if grant is None:
+            return False
+        word = self.SUBCOMMAND.match(grant.group(1))
+        return word is None or word.group(1) in self.EXECUTORS
+
+    def test_no_allowed_tools_entry_grants_gh_without_a_subcommand(self):
+        grants = 0
+        for path in sorted(COMMANDS.glob("*.md")):
+            for entry in frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"):
+                grants += entry.startswith("Bash(")
+                with self.subTest(command=path.name, entry=entry):
+                    self.assertFalse(self.refused(entry), f"{path.name} grants `{entry}`, which runs any gh alias "
+                                     "or extension: name the subcommand it runs")
+        # A parser that found no grant would satisfy every case above.
+        self.assertGreater(grants, 20, "found almost no Bash grants, so nothing was checked")
+
+    def test_the_reader_refuses_each_spelling_of_a_free_gh(self):
+        for entry in ("Bash(gh:*)", "Bash(gh)", "Bash(gh *)", "Bash(gh*)", "Bash(GH:*)", "Bash(gh.exe:*)",
+                      "Bash(GH_TOKEN=x gh:*)", "Bash(gh -R o/r issue list:*)", "Bash(gh --repo o/r:*)",
+                      "Bash(gh pr*)", "Bash(gh alias set:*)", "Bash(gh alias:*)", "Bash(gh extension install:*)",
+                      "Bash(gh ext:*)", "Bash(gh extensions:*)"):
+            with self.subTest(entry=entry):
+                self.assertTrue(self.refused(entry))
+        # Grants that name a subcommand, ship.md's among them, and the helpers whose names open with `gh` are spared.
+        for entry in ("Bash(gh pr checks:*)", "Bash(gh issue list:*)", "Bash(gh api repos:*)",
+                      "Bash(bash .claude/scripts/gh-issue-list.sh)", "Bash(bash .claude/scripts/gh-pr-merge.sh:*)",
+                      "Bash(git diff:*)", "Read"):
+            with self.subTest(entry=entry):
+                self.assertFalse(self.refused(entry))
+
+
 class ACommandThatDoesNotPublishCannotPush(unittest.TestCase):
     """The settings allow `git push origin`, so a command that neither grants nor denies it reaches the push."""
 
     PUBLISHING = ("pr.md", "ship.md")
     # A target's own commands its Ship checks chain are declared in its `local_commands.py`, and held below.
     CHAINED_BEFORE_A_PUSH = ("branch.md", "commit.md") + LOCAL.chained
-    PUSH = "git push origin fix/a-branch"
+    # The settings allow both spellings, so a deny that refuses one alone still lets the other through.
+    PUSHES = ("git push origin fix/a-branch", "git push -u origin fix/a-branch")
 
     def test_every_other_command_denies_push_or_the_shell(self):
         seen = 0
@@ -426,8 +483,9 @@ class ACommandThatDoesNotPublishCannotPush(unittest.TestCase):
                     continue
                 seen += 1
                 denied = frontmatter_list(text, "disallowed-tools")
-                self.assertTrue(any(bash_deny_matches(rule, self.PUSH) for rule in denied),
-                                "neither grants nor denies push, so the settings allow reaches it")
+                for push in self.PUSHES:
+                    self.assertTrue(any(bash_deny_matches(rule, push) for rule in denied),
+                                    f"neither grants nor denies {push}, so the settings allow reaches it")
         self.assertGreaterEqual(seen, 4, "found almost no command that does not publish")
 
 
@@ -474,6 +532,11 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
         for rule in ("Edit(.git/**)", "Bash(git commit:*)", "Bash(gh *)"):
             with self.subTest(rule=rule):
                 self.assertFalse(bash_deny_matches(rule, self.PUSHES[0]))
+        # `:*` ends at a word: a deny of `git clean` does not refuse `git cleanup`, which Claude Code admits.
+        self.assertTrue(bash_deny_matches("Bash(git clean:*)", "git clean -n"))
+        self.assertTrue(bash_deny_matches("Bash(git clean:*)", "git clean"))
+        self.assertFalse(bash_deny_matches("Bash(git clean:*)", "git cleanup"))
+        self.assertFalse(bash_deny_matches("Bash(git pu:*)", self.PUSHES[0]))
 
     def test_a_body_line_is_not_frontmatter(self):
         text = "---\nname: x\n---\n\ndisallowed-tools: Bash\n"
@@ -488,12 +551,13 @@ class AWritingCommandDeniesTheUsersMemoryAndOutputStyles(unittest.TestCase):
     The managed commands are the subject: a target's own are its to hold (`docs/harness-boundaries.md`).
     """
 
-    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)")
+    # `~/.claude/CLAUDE.md` is loaded into every later session as the owner's own rules.
+    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)", "Edit(~/.claude/CLAUDE.md)")
     MANIFEST = COMMANDS.parent.parent / ".harness" / "manifest.json"
 
     @staticmethod
     def writes(tool):
-        return re.match(r"(Write|Edit)(\(|$)", tool) is not None
+        return re.match(r"(Write|Edit|NotebookEdit|MultiEdit)(\(|$)", tool) is not None
 
     def writers(self):
         manifest = json.loads(self.MANIFEST.read_text(encoding="utf-8"))
@@ -508,14 +572,14 @@ class AWritingCommandDeniesTheUsersMemoryAndOutputStyles(unittest.TestCase):
         self.assertNotIn("branch.md", names)
 
     def test_a_grant_is_read_as_writing_only_when_it_is_one(self):
-        for tool in ("Write", "Edit", "Edit(artifacts/team/**)"):
+        for tool in ("Write", "Edit", "Edit(artifacts/team/**)", "NotebookEdit", "MultiEdit", "MultiEdit(docs/**)"):
             with self.subTest(tool=tool):
                 self.assertTrue(self.writes(tool))
         for tool in ("Read", "WriteNothing", "Bash(git status:*)"):
             with self.subTest(tool=tool):
                 self.assertFalse(self.writes(tool))
 
-    def test_every_command_granting_write_or_edit_denies_both_paths(self):
+    def test_every_command_granting_write_or_edit_denies_each_path(self):
         for path in self.writers():
             rules = frontmatter_list(path.read_text(encoding="utf-8"), "disallowed-tools")
             for required in self.REQUIRED:

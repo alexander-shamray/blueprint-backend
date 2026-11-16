@@ -2,7 +2,7 @@
 description: Run up to four read-only peers on one goal, in rounds over a shared board, until a round adds nothing and moves nothing; the user picks the count and each peer's model
 argument-hint: "\"<goal>\" --agents <1-4> [--models opus,sonnet,...] [--rounds <1-7>] [--issue <n>] [--name <run>]"
 allowed-tools: Read, Grep, Glob, Agent(team-peer), Edit(artifacts/team/**), Edit(./artifacts/team/**), Bash(py -3.12 .claude/scripts/team_board.py:*), Bash(bash .claude/scripts/gh-issue-text.sh:*), Bash(bash .claude/scripts/gh-issue-list.sh), Bash(bash .claude/scripts/gh-issue-hand.sh:*)
-disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(branch-reviewer), Agent(bug-auditor), Agent(security-auditor), Agent(check-auditor), Bash(gh issue create:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*), Bash(git push:*), Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
+disallowed-tools: Agent(general-purpose), Agent(claude), Agent(Explore), Agent(Plan), Agent(claude-code-guide), Agent(statusline-setup), Agent(fork), Agent(branch-reviewer), Agent(bug-auditor), Agent(security-auditor), Agent(check-auditor), Bash(gh issue create:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/gh-issue-sweep.sh:*), Bash(bash .claude/scripts/gh-issue-mutation.sh:*), Bash(git push:*), Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**), Edit(~/.claude/CLAUDE.md)
 ---
 
 Run a team on: $ARGUMENTS
@@ -74,7 +74,8 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    permission this session lacks. (why: docs/commands/team.md, *Who measures*)
 
    The run ends on the merge's `converged` line — a round that added no
-   claim and moved no status — or on the plan's round ceiling, reported as
+   claim and moved no status, and refused none while the board was empty
+   — or on the plan's round ceiling, reported as
    unconverged. Otherwise run the next round.
 
 4. **Decide.** Treat every claim on the board as a claim to check, never an

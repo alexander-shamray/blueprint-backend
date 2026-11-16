@@ -5,7 +5,9 @@ refusing what a reply cannot back. Exit 2 is a refusal: the plan is not run, or 
 """
 
 import argparse
+import contextlib
 import json
+import os
 import re
 import sys
 from pathlib import Path, PurePosixPath
@@ -74,15 +76,33 @@ def init(root, name, agents):
 
 
 def load(directory):
-    return json.loads((directory / "board.json").read_text(encoding="utf-8"))
+    path = directory / "board.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:  # a JSONDecodeError and a UnicodeDecodeError are both ValueErrors
+        raise Refusal(f"{path} cannot be read as a board: {error}") from None
+
+
+def _write(path, text):
+    # Written beside and swapped in, as dispatch_board._write does: an interrupted write leaves the last board whole.
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        os.replace(temporary, path)
+    except OSError as error:
+        with contextlib.suppress(OSError):
+            os.remove(temporary)
+        raise Refusal(f"could not write {path}: {error}") from None
 
 
 def save(directory, board):
-    (directory / "board.json").write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
     # The owner's measurements are read from the directory, so a file it writes there is on the next render.
     measured = sorted(p.relative_to(directory.parent.parent.parent).as_posix()
                       for p in (directory / "measure").glob("**/*") if p.is_file())
-    (directory / "board.md").write_text(render(board, measured), encoding="utf-8")
+    # board.json goes last, as the round's commit point: a refusal before it is a round that did not happen.
+    _write(directory / "board.md", render(board, measured))
+    _write(directory / "board.json", json.dumps(board, indent=2) + "\n")
 
 
 def evidence_problem(root, cited, run):
@@ -143,17 +163,21 @@ def merge(root, name, number):
         # A round missing a planned peer could read as converged only because that peer had not answered.
         raise Refusal(f"round {number} has replies from {', '.join(named)}, "
                       f"the plan names {', '.join(board['peers'])}")
-    by_id = {c["id"]: c for c in board["claims"]}
-    added = changed = refused = 0
+    # Every reply is read before any is merged, so a reply refused here leaves no other peer's record behind.
+    parsed = []
     for path in replies:
         peer = path.stem
         if not PEER.fullmatch(peer):
             raise Refusal(f"{path.name} is not a peer's reply")
         try:
             reply = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
+        except ValueError as error:  # a JSONDecodeError, or a UnicodeDecodeError for bytes that are not UTF-8
             raise Refusal(f"{path.name} is not JSON: {error}") from None
-        claims, statuses, requests = reply_shape(reply, peer)
+        parsed.append((peer, *reply_shape(reply, peer)))
+    by_id = {c["id"]: c for c in board["claims"]}
+    added = changed = refused = 0
+    records = {}
+    for peer, claims, statuses, requests in parsed:
         accepted, rejected = [], []
         for claim in claims:
             text = claim.get("text") if isinstance(claim, dict) else None
@@ -201,9 +225,12 @@ def merge(root, name, number):
             if isinstance(request, str) and request.strip():
                 board["requests"].append({"round": number, "by": peer, "text": one_line(request)})
         refused += len(rejected)
-        (round_dir / f"{peer}.md").write_text(round_record(peer, number, accepted, rejected), encoding="utf-8")
-    # docs/commands/team.md, *Rounds and convergence*: nothing new and nothing moved, whatever was refused.
-    converged = added == 0 and changed == 0
+        records[peer] = round_record(peer, number, accepted, rejected)
+    for peer, record in records.items():
+        (round_dir / f"{peer}.md").write_text(record, encoding="utf-8")
+    # docs/commands/team.md, *Rounds and convergence*: nothing new and nothing moved, whatever was refused, once
+    # the board holds a claim; a refusal over an empty board, a claim's or a status's, is not the peers agreeing.
+    converged = added == 0 and changed == 0 and (refused == 0 or bool(board["claims"]))
     board["rounds"].append({"round": number, "added": added, "changed": changed, "refused": refused,
                             "converged": converged})
     save(directory, board)

@@ -108,7 +108,7 @@ class ALauncherCheckout:
         for path in self.source.glob("run-guard.*"):
             shutil.copy2(path, self.hooks / path.name)
         if guards:
-            for path in self.source.glob("guard-*.py"):
+            for path in [*self.source.glob("guard-*.py"), self.source / "path_grammar.py"]:
                 shutil.copy2(path, self.hooks / path.name)
         self.launcher = self.hooks / "run-guard.sh"
         self.cache = self.root / ".claude" / "cache"
@@ -249,7 +249,7 @@ class TheHookWiringRunsOnMoreThanOneOperatingSystem(LauncherMarkCases, unittest.
         self.addCleanup(shutil.rmtree, str(parent), ignore_errors=True)
         hooks = parent / "O'Brien" / ".claude" / "hooks"
         hooks.mkdir(parents=True)
-        for name in ("run-guard.sh", "run-guard.py", "guard-git-argv.py"):
+        for name in ("run-guard.sh", "run-guard.py", "guard-git-argv.py", "path_grammar.py"):
             shutil.copy2(self.LAUNCHER.parent / name, hooks / name)
         event = json.dumps(REFUSES[0][1])
         for shell in sorted({BASH, shutil.which("sh")} - {None}):
@@ -262,9 +262,12 @@ class TheHookWiringRunsOnMoreThanOneOperatingSystem(LauncherMarkCases, unittest.
                 self.assertIn("permissionDecision", out.stdout)
                 self.assertNotIn("Traceback", out.stderr)
 
-    def test_no_guard_command_names_a_windows_only_interpreter(self):
-        found = self.guard_commands()
-        self.assertTrue(found, "no guard is registered at all")
+    def test_no_hook_command_names_a_windows_only_interpreter(self):
+        # Every hook, not the guards alone: an index hook wired as a raw `py -3.12` exited 127 on every call where
+        # `py` is absent, and each one's launcher picks the interpreter instead.
+        found = self.commands()
+        self.assertTrue(self.guard_commands(), "no guard is registered at all")
+        self.assertGreater(len(found), len(self.guard_commands()), "only the guards were read")
         for command in found:
             with self.subTest(command=command):
                 self.assertNotIn("py -3.12", command)
@@ -284,6 +287,9 @@ class TheHookWiringRunsOnMoreThanOneOperatingSystem(LauncherMarkCases, unittest.
         # On Windows `python3` is the Store alias, so a launcher probing it first finds the wrong thing there. The
         # probe lines, not the first mention: the `command -v` block above them names the remembered candidate.
         code = "\n".join(self.code())
+        # Present first: `find` answers -1 for a missing probe, which is less than any position.
+        self.assertIn('py -3.12 -c "$probe"', code)
+        self.assertIn('python3 -c "$probe"', code)
         self.assertLess(code.find('py -3.12 -c "$probe"'), code.find('python3 -c "$probe"'))
         self.assertIn("exec py -3.12", code)
         self.assertIn("exec python3", code)

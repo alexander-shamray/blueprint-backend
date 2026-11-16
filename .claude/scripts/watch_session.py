@@ -81,6 +81,34 @@ def cell_width(text):
     return width
 
 
+def wrap_cell(text, width):
+    """`textwrap.wrap` by display columns, which it counts as characters; a word wider than the cell is cut."""
+    lines, line = [], ""
+    for word in text.split():
+        while cell_width(word) > width:
+            cut = word[0]
+            for ch in word[1:]:
+                if cell_width(cut + ch) > width:
+                    break
+                cut += ch
+            if line:
+                lines.append(line)
+                line = ""
+            lines.append(cut)
+            word = word[len(cut):]
+        if not word:
+            continue
+        joined = f"{line} {word}" if line else word
+        if cell_width(joined) <= width:
+            line = joined
+        else:
+            lines.append(line)
+            line = word
+    if line or not lines:
+        lines.append(line)
+    return lines
+
+
 def pad_cell(text, width):
     return text + " " * (width - cell_width(text))
 
@@ -103,7 +131,7 @@ def render_table(rows):
         widths[widest] -= 1
     out = ["┌" + "┬".join("─" * (w + 2) for w in widths) + "┐"]
     for n, row in enumerate(cells):
-        wrapped = [textwrap.wrap(c, w) or [""] if cell_width(c) > w else [c] for c, w in zip(row, widths)]
+        wrapped = [wrap_cell(c, w) if cell_width(c) > w else [c] for c, w in zip(row, widths)]
         for k in range(max(len(w) for w in wrapped)):
             line = [pad_cell(col[k] if k < len(col) else "", w) for col, w in zip(wrapped, widths)]
             out.append("│ " + " │ ".join(line) + " │")
@@ -162,7 +190,8 @@ def show(event):
 
 
 def newest_transcript(directory, since):
-    # A directory means "the session that starts after this watcher": wait for a .jsonl newer than the start.
+    # A directory means the session started at most LOOKBACK seconds before this watcher, or after it: wait for a
+    # .jsonl created at or after `since`.
     while True:
         found = [os.path.join(directory, n) for n in os.listdir(directory) if n.endswith(".jsonl")] \
             if os.path.isdir(directory) else []

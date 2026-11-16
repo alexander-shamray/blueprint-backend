@@ -64,7 +64,21 @@ import shlex
 import sys
 import tempfile
 import traceback
+import types
 from bisect import bisect_left
+
+
+def path_grammar():
+    """`path_grammar.py` beside this file, which names a path on another machine; compiled, so no bytecode is left."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "path_grammar.py")
+    module = types.ModuleType("path_grammar")
+    module.__file__ = path
+    with open(path, encoding="utf-8") as handle:
+        exec(compile(handle.read(), path, "exec"), module.__dict__)
+    return module
+
+
+GRAMMAR = path_grammar()
 
 # Flags that write or execute rather than inspect. Matched on a prefix, so
 # `--exec-path=<dir>` — a directory of binaries for git to run — is the same act
@@ -143,6 +157,17 @@ GLOBAL_VALUE_FLAGS = {
     "--attr-source",
 }
 
+# Git's globals that take no value, so the word after one is the subcommand.
+# Only the push search reads it, and a flag missing here is read as taking a
+# value, which over-refuses rather than hiding a push.
+GLOBAL_VALUELESS_FLAGS = frozenset({
+    "-p", "--paginate", "-P", "--no-pager", "--bare", "--no-replace-objects",
+    "--no-lazy-fetch", "--no-optional-locks", "--no-advice",
+    "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs", "--exec-path", "--html-path", "--man-path",
+    "--info-path", "-v", "--version", "-h", "--help",
+})
+
 # Per subcommand, because arity is not a property of a flag name: `-m` is a
 # message for `commit` and "show merge diffs" for `log`. Absent an entry, nothing
 # is skipped — a false positive is cheap and a bypass is not.
@@ -216,6 +241,12 @@ HOME_FILES = frozenset({
     ".bash_login", ".bash_logout", ".bash_profile", ".bashrc", ".gitconfig",
     ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
 })
+# Deeper files that run as `.gitconfig` does: git reads its XDG config beside the home one, so a
+# `core.fsmonitor` or `core.sshCommand` there runs at the next git call.
+HOME_NESTED_FILES = frozenset({(".config", "git", "config")})
+# Beside `~/.claude` rather than in it: Claude Code's user state, whose MCP servers
+# and project grants every later session starts under.
+HOME_CONTROL_FILES = frozenset({".claude.json"})
 CONTROL_DIRECTORIES = frozenset({
     "agents", "commands", "hooks", "plugins", "sandbox", "scripts", "skills",
 })
@@ -224,8 +255,10 @@ CONTROL_FILES = frozenset({
 })
 # Below `~/.claude`, what later sessions load as the user's own. The editing
 # tools may save there, where a command's deny judges the path; a shell write
-# meets no such rule.
+# meets no such rule. `CLAUDE.md` is the owner's rules, so it is standing and
+# not control: an editing tool outside a writing command may still save it.
 STANDING_DIRECTORIES = frozenset({"output-styles", "projects"})
+STANDING_FILES = frozenset({"claude.md"})
 
 
 def home_place(parts):
@@ -233,8 +266,11 @@ def home_place(parts):
 
     `parts` are folded by the caller: the edit guard as the filesystem does, this one always.
     """
-    if parts[0] in HOME_TREES or (len(parts) == 1 and parts[0] in HOME_FILES):
+    if parts[0] in HOME_TREES or (len(parts) == 1 and parts[0] in HOME_FILES) or (
+            tuple(parts) in HOME_NESTED_FILES):
         return "login"
+    if len(parts) == 1 and parts[0] in HOME_CONTROL_FILES:
+        return "control"
     if parts[0] == ".claude" and len(parts) > 1 and (
             parts[1] in CONTROL_DIRECTORIES
             or (len(parts) == 2 and parts[1] in CONTROL_FILES)):
@@ -1793,19 +1829,22 @@ def leading_command(run):
 def reads_stdin_as_script(words):
     """Whether a run made of `words` will execute what arrives on its stdin.
 
-    A wrapper in front of a shell — `echo 'git push origin +HEAD:main' |
-    command bash`, or `env bash` — still runs the push, so the shell is looked
-    for anywhere in the run, and the exemption is `DATA_ONLY_COMMANDS`'
-    allow-list rather than a set of wrappers, which fails open on the first
-    one nobody listed. Reading any shell name in the run costs an over-refusal
-    only in the shape `echo '…git push…' | grep bash`, because the printer
-    half of the pipeline pass has to match first.
-
     A run carrying `-c` reads its script from the argv rather than from stdin,
     and `evaluated_scripts` judges that channel at any position already.
     """
     body = [word for word in words if not ASSIGNMENT.match(word)]
+
+    # A wrapper in front of a shell, `command bash` or `env bash`, still runs
+    # the push, so the shell is looked for anywhere in the run, and the
+    # exemption is an allow-list rather than a set of wrappers, which fails
+    # open on the first one nobody listed.
     if not body or program_name(body[0]) in DATA_ONLY_COMMANDS:
+        return False
+
+    # A reader takes a shell's name as a pattern or a file; `git` is no reader
+    # here, since `bisect run` executes its operand. A printer that formats,
+    # piped into any other run that reads its stdin as a script, is refused.
+    if program_name(body[0]) in READING_COMMANDS - {"git"}:
         return False
     for position, word in enumerate(body):
         if program_name(word) not in EVALUATORS:
@@ -2307,32 +2346,38 @@ def subcommand_of(segment):
     return stripped[0] if stripped else ""
 
 
+def push_position(segment):
+    """The index of `push` in `segment` where it is the subcommand, or None.
+
+    A non-flag after a flag is its value, without a list of value-taking
+    globals, so `git --some-future-global X push` is still a push.
+    """
+
+    # Unless the flag is in `GLOBAL_VALUELESS_FLAGS` or carries its value after
+    # `=`: then the non-flag is the subcommand, and `git --no-pager grep push`
+    # is a `grep`.
+    for index, element in enumerate(segment):
+        if element.startswith("-"):
+            continue
+        if element == "push":
+            return index
+        previous = segment[index - 1] if index else ""
+        if (not previous.startswith("-") or "=" in previous
+                or previous in GLOBAL_VALUELESS_FLAGS):
+            return None  # this is the subcommand, and it is not `push`
+    return None
+
+
 def push_offence(segment):
     """The reason to refuse a `git push`, or None — by allow-list.
 
     `push` is located rather than assumed to be first, so no global option,
     known or not, can hide it.
     """
-    # `push` is the subcommand when everything before it is either an option or
-    # an option's value — and a value is recognised structurally, as a non-flag
-    # immediately preceded by a flag, rather than by consulting a list of
-    # value-taking globals. That is what makes an unknown global harmless:
-    # `git --attr-source HEAD push` and `git --some-future-global X push` both
-    # resolve, without this file knowing either flag.
-    #
-    # It also keeps `git log push` — a ref that happens to be called `push` —
-    # out of the push checks, because `log` is a non-flag that no flag precedes,
-    # so `log` is the subcommand and `push` is one of its arguments: a guard
-    # that fires on innocent traffic is one somebody turns off.
-    start = None
-    for index, element in enumerate(segment):
-        if element.startswith("-"):
-            continue
-        if element == "push":
-            start = index
-            break
-        if index == 0 or not segment[index - 1].startswith("-"):
-            break  # this is the subcommand, and it is not `push`
+
+    # `git log push` names a ref, not a push: `log` is the subcommand, and a
+    # guard that fires on innocent traffic is one somebody turns off.
+    start = push_position(segment)
     if start is None:
         return None
     rest = segment[start + 1:]
@@ -2464,14 +2509,7 @@ CONFIG_OTHER_ACTIONS = frozenset({"edit", "get", "list", "remove-section",
 
 def _is_push(segment):
     """Whether `segment` is a `git push`, located as `push_offence` locates it."""
-    for index, element in enumerate(segment):
-        if element.startswith("-"):
-            continue
-        if element == "push":
-            return True
-        if index == 0 or not segment[index - 1].startswith("-"):
-            return False
-    return False
+    return push_position(segment) is not None
 
 
 def _sets_pipefail(words):
@@ -2489,6 +2527,12 @@ def unchecked_push_pipeline(tokens):
             current = []
         else:
             current.append(token)
+    # `|&` is a pipe too, as `pipeline_groups` reads it. A grouping token ends no
+    # pipeline's status: `(git push | tail) && x` chains on `tail`'s exit. The
+    # lexer glues punctuation (`)&&`, `|(`), so both are read inside a token.
+    def piped(separator):
+        return "|" in separator and "||" not in separator and set(separator) <= set("|&(){}")
+
     pipefail = piped_push = False
     for run, separator in runs:
         if run and program_name(run[0]) == "set":
@@ -2496,11 +2540,11 @@ def unchecked_push_pipeline(tokens):
         elif run and program_name(run[0]) not in DATA_ONLY_COMMANDS and any(
                 program_name(token) == "git" and _is_push(run[index + 1:])
                 for index, token in enumerate(run)):
-            piped_push = not pipefail and separator == "|"
+            piped_push = not pipefail and piped(separator)
             continue
-        if piped_push and separator in ("&&", "||"):
+        if piped_push and ("&&" in separator or "||" in separator):
             return True
-        if separator != "|":
+        if not piped(separator) and not set(separator) <= set("(){}"):
             piped_push = False
     return False
 
@@ -2852,11 +2896,21 @@ def written_path(word, cwd, command):
         if cwd is None:
             return None
         literal = os.path.join(cwd, literal)
+    if elsewhere(literal):
+        # As spelled: `abspath` puts the cwd's drive before `\??\`, which Windows reads as the share all the same.
+        return os.path.normpath(literal)
     return os.path.normpath(os.path.abspath(literal))
 
 
+def elsewhere(path):
+    """Whether `path` is on a share the session does not stand on, which no check here may open."""
+    return GRAMMAR.foreign(path, EVENT_CWD, os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+
+
 def checkout_of(path):
-    """The root of the checkout holding `path`, or `None` outside one."""
+    """The root of the checkout holding `path`, or `None` outside one or on another machine."""
+    if elsewhere(path):
+        return None
     root = path
     while not os.path.exists(os.path.join(root, ".git")):
         parent = os.path.dirname(root)
@@ -2917,22 +2971,15 @@ def protected_target(path, whole=False):
 def home_target(path, cwd, command, whole=False, removing=False):
     """The name below the home that shell-written `path` reaches, or `None`.
 
-    Judged as spelled and as resolved, the session's own checkout left to its denies. `whole` counts
-    `~/.claude` itself; `removing` frees a project's memory file, which no editing tool can remove.
+    Judged as spelled and as resolved, whatever checkout holds it: containing is not owning. `whole`
+    counts `~/.claude` itself; `removing` frees a project's memory file, which no editing tool can remove.
     """
     if whole and os.path.basename(path) == "*":
         path = os.path.dirname(path)
-    session = checkout_of(os.path.abspath(EVENT_CWD or os.getcwd()))
-    standing = (session, os.path.realpath(session)) if session is not None else ()
     homes = [written_path("~", cwd, command), os.path.expanduser("~")]
     roots = {root for home in homes if home
              for root in (os.path.abspath(home), os.path.realpath(home))}
-    # A checkout holding the home, a dotfiles one at `~`, has no deny naming these.
-    if any(beneath(root, checkout) for checkout in standing for root in roots):
-        standing = ()
     for place in (path, os.path.realpath(path)):
-        if any(beneath(place, checkout) for checkout in standing):
-            continue
         for root in roots:
             if not beneath(place, root) or os.path.normcase(place) == os.path.normcase(root):
                 continue
@@ -2943,7 +2990,9 @@ def home_target(path, cwd, command, whole=False, removing=False):
                 continue
             if home_place(parts) is not None or (parts[0] == ".claude" and (
                     (len(parts) > 1 and parts[1] in STANDING_DIRECTORIES)
-                    or (whole and len(parts) == 1))):
+                    or (len(parts) == 2 and parts[1] in STANDING_FILES)
+                    or (whole and len(parts) == 1))) or (whole and any(
+                        tuple(parts) == nested[:len(parts)] for nested in HOME_NESTED_FILES)):
                 return "~/" + "/".join(parts)
     return None
 
@@ -2957,6 +3006,15 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
     path = written_path(word, cwd, command)
     if path is not None and inside is not None:
         path = os.path.join(path, inside)
+    # As spelled too: `abspath` puts the cwd drive before `\??\`, which Windows then reads as the share.
+    if path is not None and (elsewhere(path) or elsewhere(target_literal(word) or "")):
+        return (
+            f"{writer} would write `{path}`, a share or device path that no place "
+            "this session stands on holds. The guard does not open it to judge it: "
+            "a share would get your Windows credentials before you answer, and a "
+            "device spelling of a local file passes the denies. Run it yourself if "
+            "it is meant (docs/harness-boundaries.md, *Paths on another machine*)."
+        )
     named = protected_target(path, whole) if path is not None else None
     if named is None:
         home = home_target(path, cwd, command, whole, removing) if path is not None else None
@@ -2964,8 +3022,8 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
             return None
         return (
             f"{writer} would write `{path}`, which is `{home}`: a key, a shell "
-            "profile, git's own configuration or what `~/.claude` applies to "
-            "later sessions. No rule judges a shell write there. Use an editing "
+            "profile, git's own configuration or what `~/.claude` or "
+            "`~/.claude.json` applies to later sessions. No rule judges a shell write there. Use an editing "
             "tool, where one does, or hand it to the owner "
             "(docs/harness-boundaries.md, *The edit-target guard*)."
         )
@@ -2995,7 +3053,7 @@ def removal_offence(word, cwd, command, writer):
     elif os.path.normcase(path) == os.path.normcase(written_path("~", cwd, command) or ""):
         place = "the home directory"
     for start in (EVENT_CWD or os.getcwd(), cwd):
-        root = checkout_of(os.path.abspath(start)) if start else None
+        root = checkout_of(os.path.abspath(start)) if start and not elsewhere(start) else None
         if place is None and root is not None and beneath(root, path) and (
                 os.path.normcase(root) != os.path.normcase(path)):
             place = f"a parent of the checkout `{root}`"
@@ -3209,7 +3267,8 @@ def landings(destination, sources, into, cwd, command):
     """
     literal = target_literal(destination) or ""
     path = written_path(destination, cwd, command)
-    if not (into or literal.endswith(("/", "\\")) or (path and os.path.isdir(path))):
+    if not (into or literal.endswith(("/", "\\")) or (
+            path and not elsewhere(path) and os.path.isdir(path))):
         return [None]
     names = []
     for source in sources:
@@ -3366,7 +3425,8 @@ def git_path_offence(words, cwd, command):
         if literals[position] == "-C" and position + 1 < len(words):
             cwd = written_path(words[position + 1], cwd, command)
         position += 2 if literals[position] in GLOBAL_VALUE_FLAGS else 1
-    if position >= len(words) or cwd is None or in_linked_worktree(os.path.abspath(cwd)):
+    if position >= len(words) or cwd is None or (
+            not elsewhere(cwd) and in_linked_worktree(os.path.abspath(cwd))):
         return None
     verb, words, literals = literals[position], words[position + 1:], literals[position + 1:]
     if verb in ("rm", "mv"):
@@ -3383,7 +3443,7 @@ def git_path_offence(words, cwd, command):
         source = (target_literal(before[0]) or "$") if before else None
         # As git disambiguates: with no `--`, a first word naming a path is one.
         first = written_path(before[0], cwd, command) if before and not after else None
-        if first is not None and os.path.lexists(first):
+        if first is not None and not elsewhere(first) and os.path.lexists(first):
             source = None
         paths = after or before[1:]
     elif verb == "restore":
