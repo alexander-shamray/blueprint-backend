@@ -328,13 +328,23 @@ class LadderTests(unittest.TestCase):
 
         self.assertTrue(any("dwells 150 minutes" in f and "cancelled at 150" in f for f in failures), failures)
 
+    def test_dwells_that_fit_alone_but_not_beside_the_upgrades_are_a_failure(self) -> None:
+        """Three 40-minute dwells fit the 150-minute cap alone, not beside four 20-minute upgrades."""
+        plan = descriptor_model.load_plan()
+        plan["steps"] = [{"weight": 5, "dwellMinutes": 40}, {"weight": 25, "dwellMinutes": 40},
+                         {"weight": 50, "dwellMinutes": 40}, {"weight": 100, "dwellMinutes": 0}]
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("dwells 120 minutes" in f and "200 in all" in f for f in failures), failures)
+
     def test_the_rollout_job_s_timeout_is_read_and_its_absence_refused(self) -> None:
         """The gate's own subject: a pattern that found nothing would bound nothing."""
-        self.assertEqual([], repo_gate._rollout_outlasts_the_dwells(30))
+        self.assertEqual([], repo_gate._rollout_outlasts_the_dwells(30, 4))
         path = Path(tempfile.mkdtemp()) / "deploy.yml"
         path.write_text("jobs:\n  rollout:\n    runs-on: x\n  other:\n    timeout-minutes: 500\n", encoding="utf-8")
 
-        failures = repo_gate._rollout_outlasts_the_dwells(30, path)
+        failures = repo_gate._rollout_outlasts_the_dwells(30, 4, path)
 
         self.assertEqual(1, len(failures), failures)
         self.assertIn("states no timeout-minutes", failures[0])
@@ -344,9 +354,45 @@ class LadderTests(unittest.TestCase):
         path = Path(tempfile.mkdtemp()) / "deploy.yml"
         path.write_text("jobs:\n  rollout:\n" + "    \n" * 5000 + "  other:\n", encoding="utf-8")
 
-        failures = repo_gate._rollout_outlasts_the_dwells(30, path)
+        failures = repo_gate._rollout_outlasts_the_dwells(30, 4, path)
 
         self.assertIn("states no timeout-minutes", failures[0])
+
+    @staticmethod
+    def _climb(*upgrades: str) -> Path:
+        """A rollout job capped at 150 whose climb step runs `plan` and each upgrade given."""
+        runs = "".join(f"            {upgrade}\n" for upgrade in upgrades)
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(
+            "jobs:\n  rollout:\n    timeout-minutes: 150\n    steps:\n      - name: Climb the ladder\n"
+            "        run: |\n            PLAN=$(python deploy/canary/canary.py plan --step 0)\n" + runs,
+            encoding="utf-8")
+        return path
+
+    def test_each_climb_upgrade_s_timeout_is_read_and_the_longest_counted(self) -> None:
+        """The gate's own subject: the `--timeout` each upgrade passes, in each spelling Helm takes."""
+        for timeout, minutes in (("20m", 20), ("1h", 60), ("1h30m", 90), ("90s", 2), ('"25m"', 25)):
+            with self.subTest(timeout=timeout):
+                path = self._climb("helm upgrade a --timeout 1m",f"helm upgrade b --wait --timeout {timeout}")
+
+                failures = repo_gate._rollout_outlasts_the_dwells(150 - 4 * minutes, 4, path)
+
+                self.assertTrue(any(f"may take {minutes} each" in f for f in failures), failures)
+                self.assertEqual([], repo_gate._rollout_outlasts_the_dwells(149 - 4 * minutes, 4, path))
+
+    def test_a_climb_upgrade_with_no_readable_timeout_is_a_failure(self) -> None:
+        for upgrade in ("helm upgrade a --wait", "helm upgrade a --timeout 20", "helm upgrade a --timeout 1d"):
+            with self.subTest(upgrade=upgrade):
+                failures = repo_gate._rollout_outlasts_the_dwells(30, 4, self._climb(upgrade))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("passes no `--timeout`", failures[0])
+
+    def test_a_climb_with_no_upgrade_is_a_failure(self) -> None:
+        failures = repo_gate._rollout_outlasts_the_dwells(30, 4, self._climb())
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs no `helm upgrade`", failures[0])
 
     def test_null_steps_are_a_failure_not_a_type_error(self) -> None:
         plan = descriptor_model.load_plan()
