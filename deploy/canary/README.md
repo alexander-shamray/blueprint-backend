@@ -107,7 +107,8 @@ because a branch driven by the file it judges asserts nothing. Every value
 
 1. The ladder climbs through weights from 1 to 100%, ends at 100%, and every
    rung but the last dwells a positive whole number of minutes, the dwells
-   together inside the rollout job's `timeout-minutes`.
+   together inside the rollout job's `timeout-minutes`; the upgrades' own
+   time beside them is not counted.
 2. Every threshold `analyse` reads is present — it indexes them, so a missing
    key would be a `KeyError` with a canary already serving traffic — and so
    is an integer `tolerance.weightOvershootPoints` that leaves every weight
