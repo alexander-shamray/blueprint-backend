@@ -57,9 +57,11 @@ wholly under `docs/superpowers/` gets only what `.claude/commands/ship.md`'s
 
 ## Full review mode
 
-1. **Establish the range.** `MERGE_BASE=$(git merge-base origin/main HEAD)`
-   (else `main`); `git diff --stat` / `--name-only` / full, and
-   `git log --oneline`, over `"$MERGE_BASE..HEAD"`. `--local`:
+1. **Establish the range.** Run `git merge-base origin/main HEAD` alone
+   (else `main`) and write the sha it prints into each later range, since
+   no shell variable outlives a Bash call: `git diff --stat` /
+   `--name-only` / full, and `git log --oneline`, over `<sha>..HEAD`.
+   `--local`:
    `git status --short`, `git diff HEAD`, untracked files that matter.
 2. **Read the change**, load-bearing files whole; grep `src/`, `tests/`,
    `deploy/` for each touched symbol and the section owning a moved rule;
