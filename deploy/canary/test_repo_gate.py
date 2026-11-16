@@ -373,7 +373,7 @@ class LadderTests(unittest.TestCase):
         """The gate's own subject: the `--timeout` each upgrade passes, in each spelling Helm takes."""
         for timeout, minutes in (("20m", 20), ("1h", 60), ("1h30m", 90), ("90s", 2), ('"25m"', 25)):
             with self.subTest(timeout=timeout):
-                path = self._climb("helm upgrade a --timeout 1m",f"helm upgrade b --wait --timeout {timeout}")
+                path = self._climb("helm upgrade a --timeout 1m", f"helm upgrade b --wait --timeout {timeout}")
 
                 failures = repo_gate._rollout_outlasts_the_dwells(150 - 4 * minutes, 4, path)
 
