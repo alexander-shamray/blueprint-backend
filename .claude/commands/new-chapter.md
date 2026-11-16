@@ -28,7 +28,7 @@ is the number and the rest is the title, so an unquoted title stays whole.
 
    ---
 
-   [← §<N-1> <Prev title>](<prev-file>.md) · [Index](README.md) · [§<N+1> <Next title>](<next-file>.md)
+   [← §<N-1> <Prev title>](<prev-file>.md) · [Index](README.md) · [§<N+1> <Next title> →](<next-file>.md)
    ```
 
 4. **Update the index** — add a row to the chapter table in
