@@ -31,7 +31,7 @@ esac
 started=$SECONDS
 code=0
 dotnet test "${args[@]}" || code=$?
-# python3 where no py launcher exists, chosen as mutation-run.sh chooses it (#2013).
+# python3 where no py launcher exists, chosen as mutation-run.sh chooses it.
 python=python3
 command -v py >/dev/null 2>&1 && python="py -3.12"
 $python -I .claude/scripts/harness_timings.py record --script dotnet-test.sh --mode "$mode" \

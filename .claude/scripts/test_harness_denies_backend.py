@@ -203,7 +203,7 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         self.assertIn("all) args=(Platform.slnx) ;;", code)
         self.assertIn('fast) args=(Platform.slnx --filter "Category!=Integration") ;;', code)
         # The one `dotnet` line whole, and a positional parameter in any spelling read only by the
-        # mode assignment: a word added to either is a parameter however it is spelled (#2028).
+        # mode assignment: a word added to either is a parameter however it is spelled.
         self.assertEqual(['dotnet test "${args[@]}" || code=$?'],
                          [line for line in code if re.search(r"\bdotnet\s", line)])
         positional = re.compile(r"\$(?:\{[#!]?)?[0-9@*]|\bshift\b|\bset --|BASH_ARGV")
@@ -211,7 +211,7 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         self.assertNotIn("$mode\"", source.replace('"$mode" in', "").replace('--mode "$mode"', ""))
 
     def test_the_timings_record_runs_where_no_py_launcher_exists(self):
-        # Linux and macOS have no `py`, so the recorder falls back to python3 as mutation-run.sh does (#2013).
+        # Linux and macOS have no `py`, so the recorder falls back to python3 as mutation-run.sh does.
         code = [line.strip() for line in (SCRIPTS / "dotnet-test.sh").read_text(encoding="utf-8").splitlines()]
         self.assertIn("python=python3", code)
         self.assertIn('command -v py >/dev/null 2>&1 && python="py -3.12"', code)

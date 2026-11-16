@@ -59,7 +59,7 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
                        for tool in payload.frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"))]
 
     def test_every_tool_that_writes_a_file_counts_as_a_write(self):
-        # MultiEdit and NotebookEdit write as Edit does, so a grant of either is held to the denies (#2028).
+        # MultiEdit and NotebookEdit write as Edit does, so a grant of either is held to the denies.
         for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit", "Edit(docs/**)", "NotebookEdit(**/*.ipynb)"):
             with self.subTest(tool=tool):
                 self.assertTrue(self.writes(tool))
