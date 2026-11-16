@@ -506,9 +506,8 @@ STEPS_KEY = re.compile(r"steps:[ \t]*(?:#.*)?$")
 def _steps(live: list[str]) -> list[list[str]]:
     """The workflow's live lines cut at each step, so a condition is read with its own run.
 
-    A step is any list item at the indent of a `steps:` block's first, whatever key opens it: one opening on `id:`
-    or `run:` read as part of the step above would inherit that step's `if:`. Outside a block, `- name:` and
-    `- uses:` still cut.
+    A step is any list item at its `steps:` block's item indent, whatever key opens it, or it inherits the `if:`
+    above; outside a block, `- name:` and `- uses:` still cut.
     """
     steps: list[list[str]] = []
     key = item = None
