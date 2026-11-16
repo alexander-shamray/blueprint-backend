@@ -370,7 +370,7 @@ class LadderTests(unittest.TestCase):
         return path
 
     def test_each_climb_upgrade_s_timeout_is_read_and_the_longest_counted(self) -> None:
-        """The gate's own subject: the `--timeout` each upgrade passes, in each spelling Helm takes."""
+        """The gate's own subject: the `--timeout` each upgrade passes, in each spelling check 1 reads."""
         for timeout, minutes in (("20m", 20), ("1h", 60), ("1h30m", 90), ("90s", 2), ('"25m"', 25)):
             with self.subTest(timeout=timeout):
                 path = self._climb("helm upgrade a --timeout 1m", f"helm upgrade b --wait --timeout {timeout}")
