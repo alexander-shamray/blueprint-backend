@@ -138,7 +138,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                     "nothing to average over"
                 )
         if all(isinstance(d, int) and not isinstance(d, bool) and d > 0 for d in dwells):
-            failures += _rollout_outlasts_the_dwells(sum(dwells))
+            failures += _rollout_outlasts_the_dwells(sum(dwells), len(steps))
 
     # 2. Every threshold the verdict reads exists. `analyse` indexes these
     #    rather than `.get`-ing them, so a missing key is a KeyError mid-rollout

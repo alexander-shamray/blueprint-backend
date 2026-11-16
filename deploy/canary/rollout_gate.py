@@ -362,8 +362,13 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     return []
 
 
-# The rollout job's own cap, the bound check 1 holds the ladder's dwells under, read a line at a time.
+# The rollout job's own cap, the bound check 1 holds the ladder's dwells and upgrades under, read a line at a time.
 ROLLOUT_TIMEOUT = re.compile(r"    timeout-minutes:[ \t]*(\d+)[ \t]*(?:#.*)?")
+
+# A climb upgrade's `--timeout`, and the Go durations Helm takes for it that check 1 reads: hours, minutes, seconds.
+HELM_TIMEOUT = re.compile(r"""--timeout[ =]["']?(\S+?)["']?(?:\s|$)""")
+
+HELM_DURATION = re.compile(r"(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?")
 
 
 def _rollout_timeout(text: str) -> int | None:
@@ -379,10 +384,41 @@ def _rollout_timeout(text: str) -> int | None:
     return None
 
 
-def _rollout_outlasts_the_dwells(total: int, workflow: Path = WORKFLOW) -> list[str]:
-    """Check 1's bound: the ladder's dwells alone fit inside the rollout job's `timeout-minutes`.
+def _minutes(duration: str) -> int | None:
+    """A Helm `--timeout` in whole minutes, rounded up, or None where it is not hours, minutes and seconds."""
+    found = HELM_DURATION.fullmatch(duration)
+    if not duration or found is None:
+        return None
+    hours, minutes, seconds = (int(part or 0) for part in found.groups())
+    return hours * 60 + minutes + -(-seconds // 60)
 
-    A job its cap cancels never promotes; the upgrades' own time beside the dwells is not counted.
+
+def _climb_upgrade_minutes(text: str) -> tuple[int | None, list[str]]:
+    """The longest `--timeout` any `helm upgrade` in the climb passes, or the reasons it cannot be read.
+
+    Each rung runs one upgrade, the canary's or the promotion, so the longest bounds every one of them.
+    """
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    runs = [run for step in _steps(live) if _invocations(step, "canary.py plan")
+            for run in _invocations(step, "helm upgrade")]
+    if not runs:
+        return None, [f"{WORKFLOW_PATH}'s climb runs no `helm upgrade`, so check 1 reads no upgrade's time"]
+    found = [(run, HELM_TIMEOUT.search(run)) for run in runs]
+    timeouts = [(run, _minutes(match.group(1)) if match else None) for run, match in found]
+    unread = [run for run, minutes in timeouts if minutes is None]
+    if unread:
+        return None, [
+            f"a {WORKFLOW_PATH} climb upgrade passes no `--timeout` in hours, minutes or seconds, so the time "
+            f"it may take beside the dwells is unbounded: {run[:80]}"
+            for run in unread
+        ]
+    return max(minutes for _, minutes in timeouts if minutes is not None), []
+
+
+def _rollout_outlasts_the_dwells(total: int, rungs: int, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 1's bound: the ladder's dwells, and one climb upgrade's `--timeout` per rung, fit inside the job's cap.
+
+    A job its cap cancels never promotes, and each rung's upgrade may run a migration hook for its whole timeout.
     """
     try:
         text = workflow.read_text(encoding="utf-8")
@@ -391,10 +427,15 @@ def _rollout_outlasts_the_dwells(total: int, workflow: Path = WORKFLOW) -> list[
     cap = _rollout_timeout(text)
     if cap is None:
         return [f"{WORKFLOW_PATH}'s rollout job states no timeout-minutes, so the ladder's dwells are unbounded"]
-    if total >= cap:
+    upgrade, failures = _climb_upgrade_minutes(text)
+    if upgrade is None:
+        return failures
+    budget = total + rungs * upgrade
+    if budget >= cap:
         return [
-            f"the ladder dwells {total} minutes and {WORKFLOW_PATH}'s rollout job is cancelled at "
-            f"{cap}, so a full climb is cancelled before it can promote"
+            f"the ladder dwells {total} minutes and its {rungs} upgrades may take {upgrade} each, {budget} in "
+            f"all, and {WORKFLOW_PATH}'s rollout job is cancelled at {cap}, so a full climb is cancelled before "
+            "it can promote"
         ]
     return []
 
