@@ -129,7 +129,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             )
         dwells = [step.get("dwellMinutes") for step in steps[:-1]]
         for step, dwell in zip(steps, dwells):
-            # deploy.yml sleeps on it with the canary installed, and a failed sleep leaves that release behind.
+            # deploy.yml sleeps on it with the canary installed, so a dwell it cannot sleep fails the climb.
             if not isinstance(dwell, int) or isinstance(dwell, bool) or dwell <= 0:
                 failures.append(
                     f"the {step.get('weight')}% step's dwell is {dwell!r}, not a "

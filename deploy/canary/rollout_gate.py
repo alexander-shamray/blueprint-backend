@@ -362,26 +362,39 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     return []
 
 
-# The rollout job's own cap, the bound check 1 holds the ladder's dwells under.
-ROLLOUT_TIMEOUT = re.compile(r"(?m)^  rollout:[ \t]*\r?\n(?:(?:    .*|[ \t]*)\r?\n)*?    timeout-minutes:[ \t]*(\d+)")
+# The rollout job's own cap, the bound check 1 holds the ladder's dwells under, read a line at a time.
+ROLLOUT_TIMEOUT = re.compile(r"    timeout-minutes:[ \t]*(\d+)[ \t]*(?:#.*)?")
+
+
+def _rollout_timeout(text: str) -> int | None:
+    """The rollout job's `timeout-minutes`, or None where the job states none: its block ends at an indent of two."""
+    inside = False
+    for line in text.splitlines():
+        if line.rstrip() == "  rollout:":
+            inside = True
+        elif inside and line.strip() and len(line) - len(line.lstrip()) <= 2:
+            return None
+        elif inside and (found := ROLLOUT_TIMEOUT.fullmatch(line.rstrip())):
+            return int(found.group(1))
+    return None
 
 
 def _rollout_outlasts_the_dwells(total: int, workflow: Path = WORKFLOW) -> list[str]:
-    """Check 1's bound: the ladder's dwells fit inside the rollout job's `timeout-minutes`.
+    """Check 1's bound: the ladder's dwells alone fit inside the rollout job's `timeout-minutes`.
 
-    A job cancelled mid-dwell runs no later step, so the canary it installed is left serving.
+    A job its cap cancels never promotes; the upgrades' own time beside the dwells is not counted.
     """
     try:
         text = workflow.read_text(encoding="utf-8")
     except OSError as error:
         return [f"{WORKFLOW_PATH} is not readable, so the ladder's dwells are unbounded: {error}"]
-    found = ROLLOUT_TIMEOUT.search(text)
-    if found is None:
+    cap = _rollout_timeout(text)
+    if cap is None:
         return [f"{WORKFLOW_PATH}'s rollout job states no timeout-minutes, so the ladder's dwells are unbounded"]
-    if total >= int(found.group(1)):
+    if total >= cap:
         return [
             f"the ladder dwells {total} minutes and {WORKFLOW_PATH}'s rollout job is cancelled at "
-            f"{found.group(1)}, so a full climb ends mid-dwell with the canary still installed"
+            f"{cap}, so a full climb is cancelled before it can promote"
         ]
     return []
 
