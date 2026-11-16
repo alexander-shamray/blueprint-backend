@@ -162,7 +162,8 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     else:
         for step in steps if isinstance(steps, list) else []:
             weight = step.get("weight") if isinstance(step, dict) else None
-            if isinstance(weight, int) and not isinstance(weight, bool) and weight + overshoot <= 0:
+            # The 100% rung is a promotion, which neither command reads the overshoot for.
+            if isinstance(weight, int) and not isinstance(weight, bool) and weight < 100 and weight + overshoot <= 0:
                 failures.append(
                     f"the {weight}% step plus tolerance.weightOvershootPoints {overshoot} is not above zero, "
                     "so `canary.py required` refuses it before the climb, or `plan` at that rung")
