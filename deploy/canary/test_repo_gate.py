@@ -363,6 +363,7 @@ class LadderTests(unittest.TestCase):
             ({"weightOvershootPoints": "0"}, "not an integer"),
             ({"weightOvershootPoints": False}, "not an integer"),
             ({"weightOvershootPoints": -5}, "the 5% step plus"),
+            ({"weightOvershootPoints": -100}, "the 50% step plus"),
         ):
             with self.subTest(tolerance=tolerance):
                 plan = descriptor_model.load_plan()
@@ -371,6 +372,7 @@ class LadderTests(unittest.TestCase):
                 failures = repo_gate.check(plan)
 
                 self.assertTrue(any(needle in f for f in failures), failures)
+                self.assertFalse(any("the 100% step plus" in f for f in failures), failures)
 
 
 class DescriptorTypeTests(unittest.TestCase):
