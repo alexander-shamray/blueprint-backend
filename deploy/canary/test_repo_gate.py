@@ -10,6 +10,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import analysis
 import csharp_sources
@@ -834,6 +835,15 @@ class SecondReleaseTests(unittest.TestCase):
         self.assertIsNone(repo_gate._chart_telemetry_name(nested))
         self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(quoted))
         self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(single))
+
+    def test_a_quoted_recreate_is_recreate(self) -> None:
+        entry = {"chart": "web-bff-assistant"}
+        for stated in ('"Recreate"', "'Recreate'", '"Recreate"  # one pod'):
+            with self.subTest(stated=stated):
+                with mock.patch.object(repo_gate, "_chart_values", return_value=f"strategy: {stated}\n"):
+                    failures = repo_gate._ladder_reads("x", entry, descriptor_model.ROOT)
+
+                self.assertTrue(any("rolls under Recreate" in f for f in failures), failures)
 
     def test_a_release_off_the_ladder_without_an_argument_is_refused(self) -> None:
         for argued in ("", "  ", None, 1):
