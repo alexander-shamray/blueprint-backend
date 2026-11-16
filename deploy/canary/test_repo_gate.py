@@ -380,6 +380,14 @@ class LadderTests(unittest.TestCase):
                 self.assertTrue(any(f"may take {minutes} each" in f for f in failures), failures)
                 self.assertEqual([], repo_gate._rollout_outlasts_the_dwells(149 - 4 * minutes, 4, path))
 
+    def test_the_longest_climb_timeout_counts_wherever_it_stands(self) -> None:
+        """deploy.yml's promotion upgrade comes before the canary's, so the longest is not always the last."""
+        path = self._climb("helm upgrade a --timeout 30m", "helm upgrade b --timeout 1m")
+
+        failures = repo_gate._rollout_outlasts_the_dwells(30, 4, path)
+
+        self.assertTrue(any("may take 30 each" in f for f in failures), failures)
+
     def test_a_climb_upgrade_with_no_readable_timeout_is_a_failure(self) -> None:
         for upgrade in ("helm upgrade a --wait", "helm upgrade a --timeout 20", "helm upgrade a --timeout 1d"):
             with self.subTest(upgrade=upgrade):
