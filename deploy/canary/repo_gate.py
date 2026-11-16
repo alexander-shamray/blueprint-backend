@@ -114,7 +114,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 f"every step needs an integer weight; got {weights}"
             )
         elif any(not 0 < w <= 100 for w in weights):
-            # `canary.py required` would refuse it at the first rung; refused here, it never reaches a dispatch.
+            # `canary.py plan` would refuse it only at its own rung, mid-climb; here it never reaches a dispatch.
             failures.append(
                 f"every step's weight is a percentage from 1 to 100; got {weights}"
             )
@@ -165,7 +165,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             if isinstance(weight, int) and not isinstance(weight, bool) and weight + overshoot <= 0:
                 failures.append(
                     f"the {weight}% step plus tolerance.weightOvershootPoints {overshoot} is not above zero, "
-                    "so `canary.py required` refuses that rung mid-rollout")
+                    "so `canary.py required` refuses it before the climb, or `plan` at that rung")
     failures += _relative_thresholds_are_numbers(thresholds)
     failures += _minimum_requests_express_the_error_rate(thresholds)
 
