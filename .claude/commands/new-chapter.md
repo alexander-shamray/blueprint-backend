@@ -2,7 +2,7 @@
 description: Scaffold a blueprint chapter and rewire the index and neighbouring footers
 argument-hint: "<number> <title>  e.g. 16 Data migration"
 allowed-tools: Read, Grep, Glob, Write, Edit, Bash(ls:*)
-disallowed-tools: Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**)
+disallowed-tools: Edit(~/.claude/projects/**), Edit(~/.claude/output-styles/**), Edit(~/.claude/CLAUDE.md)
 ---
 
 Add a chapter to `docs/backend-architecture/` from `$ARGUMENTS`: its first word
