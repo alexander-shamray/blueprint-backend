@@ -39,12 +39,12 @@ class MutationSweepFilesUnderTheMutationRoute(unittest.TestCase):
 
 
 class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase):
-    """A memory file or an output style instructs every later session, and these commands read a branch's text.
+    """Memory, output styles and ~/.claude/CLAUDE.md steer every later session, and these commands read branch text.
 
     The set is read from the tree, so a new local command that writes is a red build rather than a quiet widening.
     """
 
-    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)")
+    REQUIRED = ("Edit(~/.claude/projects/**)", "Edit(~/.claude/output-styles/**)", "Edit(~/.claude/CLAUDE.md)")
     MANIFEST = payload.COMMANDS.parent.parent / ".harness" / "manifest.json"
 
     @staticmethod
@@ -76,7 +76,7 @@ class TheLocalWritingCommandsDenyTheUsersMemoryAndOutputStyles(unittest.TestCase
         self.assertNotIn("mutation-sweep.md", names)
         self.assertNotIn("ship.md", names)
 
-    def test_every_local_command_granting_write_or_edit_denies_both_paths(self):
+    def test_every_local_command_granting_write_or_edit_denies_every_path(self):
         for path in self.writers():
             rules = payload.frontmatter_list(path.read_text(encoding="utf-8"), "disallowed-tools")
             for required in self.REQUIRED:
