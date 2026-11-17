@@ -158,7 +158,8 @@ class GuardCase(unittest.TestCase):
             [sys.executable, str(hook)],
             input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
             cwd=process_cwd,
-            env={**os.environ,
+            # A `/dispatch` executor runs this suite with the variable set, which only `env` may set here.
+            env={**{name: value for name, value in os.environ.items() if name != "HARNESS_DISPATCHED"},
                  "CLAUDE_PROJECT_DIR": self.root if project is None else project,
                  **(env or {})},
         )
@@ -697,6 +698,9 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             os.path.join(self.HOME, ".gitconfig"),
             # git's XDG config runs as `.gitconfig` does.
             os.path.join(self.HOME, ".config", "git", "config"),
+            # npm's user config: its `script-shell` and `node-options` run under each npm script.
+            os.path.join(self.HOME, ".npmrc"),
+            *self.recased(os.path.join(self.HOME, ".NPMRC")),
         ):
             with self.subTest(target=target):
                 self.assertIn("what runs at login", self.assertRefused(target))
@@ -742,6 +746,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
             os.path.join(self.HOME, ".config", "other", "config"),
             os.path.join(self.HOME, ".config", "git", "ignore"),
             os.path.join(self.HOME, "projects", ".claude.json"),
+            os.path.join(self.HOME, "projects", ".npmrc"),
         ):
             with self.subTest(target=target):
                 self.assertAdmitted(target)
@@ -816,9 +821,9 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         self.assertIn("what runs at login", self.assertRefused(
             os.path.join(keys, "authorized_keys"), project=keys, env=env))
 
-    def test_names_that_cannot_be_read_refuse_the_home_and_the_xdg_config_only(self):
-        # They live in `guard-git-argv.py`, so a guard copied without it fails closed under the
-        # home directory and at a `git/config` while `XDG_CONFIG_HOME` is set, and leaves the rest.
+    def test_names_that_cannot_be_read_refuse_the_home_the_xdg_config_and_build_names_only(self):
+        # They live in `guard-git-argv.py`, so a guard copied without it fails closed under the home
+        # directory, at a `git/config` while `XDG_CONFIG_HOME` is set and at a build's name, and leaves the rest.
         alone = os.path.join(self.outside, "lone", ".claude", "hooks")
         home = os.path.join(self.outside, "home")
         os.makedirs(alone)
@@ -832,6 +837,7 @@ class TheHomeDirectoryKeepsWhatRunsAtLogin(GuardCase):
         env.update(HOME=home, USERPROFILE=home, XDG_CONFIG_HOME=os.path.join(self.outside, "xdg"))
         for target, reason in ((os.path.join(home, "notes.md"), "cannot be read"),
                                (os.path.join(self.outside, "xdg", "git", "config"), "cannot be read"),
+                               (os.path.join(self.outside, "NuGet.Config"), "cannot be read"),
                                (os.path.join(self.outside, "loot.txt"), None)):
             with self.subTest(target=target):
                 result = subprocess.run(
@@ -1038,6 +1044,113 @@ class AWorktreeTheSessionHasNotEntered(GuardCase):
                     JUNCTIONS(real, link)
                 reason = self.assertRefused(os.path.join(link, "note.md"))
                 self.assertIn("resolves outside the checkout", reason)
+
+
+class ADispatchedSessionLeavesTheDispatchersState(GuardCase):
+    """Under `HARNESS_DISPATCHED`, the main checkout's `artifacts/dispatch/` is refused."""
+
+    DISPATCHED = {"HARNESS_DISPATCHED": "1"}
+
+    def setUp(self):
+        super().setUp()
+        beside = os.path.join(self.root, ".claude", "worktrees")
+        os.makedirs(beside, exist_ok=True)
+        self.worktree = AWorktreeTheSessionHasNotEntered.linked(self, "executor", beside=beside)
+
+    def from_worktree(self, **kwargs):
+        return {"cwd": self.worktree, "project": self.worktree} | kwargs
+
+    def assertThisRule(self, path, env=None):
+        """Refused by this rule rather than by another layer, which its message tells apart."""
+        reason = self.assertRefused(path, **self.from_worktree(env=self.DISPATCHED if env is None else env))
+        self.assertIn("dispatcher's own state", reason)
+
+    def test_the_main_checkouts_dispatch_state_is_refused(self):
+        for parts in (("artifacts", "dispatch", "handbacks.json"),
+                      ("artifacts", "dispatch", "20261117-152904", "state.json"),
+                      ("artifacts", "dispatch", "20261117-152904", "G1.json"),
+                      ("artifacts", "dispatch")):
+            with self.subTest(parts=parts):
+                self.assertThisRule(os.path.join(self.root, *parts))
+        self.assertThisRule(os.path.join(self.worktree, "..", "..", "..", "artifacts", "dispatch", "x.json"))
+        # A `.git` made inside the state is not a checkout of its own that hides it.
+        planted = os.path.join(self.root, "artifacts", "dispatch", "20261117-152904")
+        for name in (".git", os.path.join("..", ".git")):
+            os.makedirs(os.path.join(planted, name), exist_ok=True)
+        self.assertThisRule(os.path.join(planted, "state.json"))
+        # Set at all is the test, as the task list's.
+        self.assertThisRule(os.path.join(self.root, "artifacts", "dispatch", "handbacks.json"),
+                            env={"HARNESS_DISPATCHED": ""})
+
+    def test_a_case_folded_spelling_is_refused_where_the_filesystem_folds(self):
+        if not self.guard_module().case_insensitive(self.root):
+            self.skipTest("this filesystem tells the two spellings apart")
+        self.assertThisRule(os.path.join(self.root, "Artifacts", "DISPATCH", "handbacks.json"))
+
+    def test_the_executors_own_result_and_the_rest_of_main_are_admitted(self):
+        for path in (os.path.join(self.worktree, "artifacts", "dispatch", "20261117-152904", "G1.json"),
+                     os.path.join("artifacts", "dispatch", "20261117-152904", "G1.json"),
+                     os.path.join(self.root, "artifacts", "review", "x-r1.diff"),
+                     os.path.join(self.root, "artifacts", "dispatched", "x.json"),
+                     os.path.join(self.root, "docs", "note.md")):
+            with self.subTest(path=path):
+                self.assertAdmitted(path, **self.from_worktree(env=self.DISPATCHED))
+
+    def test_a_session_not_dispatched_is_not_this_rule(self):
+        self.assertAdmitted(os.path.join(self.root, "artifacts", "dispatch", "handbacks.json"),
+                            **self.from_worktree())
+        self.assertAdmitted(os.path.join(self.root, "artifacts", "dispatch", "20261117-152904", "state.json"))
+
+
+class ABuildLoadsNothingPlantedAboveTheCheckout(GuardCase):
+    """The .NET SDK and NuGet read these names from every directory above a project."""
+
+    NAMES = ("Directory.Build.props", "Directory.Build.targets", "Directory.Build.rsp",
+             "Directory.Solution.props", "Directory.Solution.targets", "Directory.Packages.props",
+             "NuGet.Config", "nuget.config", "NUGET.CONFIG", "global.json")
+
+    def setUp(self):
+        super().setUp()
+        self.parent = os.path.join(self.outside, "parent")
+        self.checkout = os.path.join(self.parent, "repo")
+        os.makedirs(os.path.join(self.checkout, ".git"))
+        self.inside = {"project": self.checkout, "cwd": self.checkout}
+
+    def test_each_name_in_a_directory_above_the_checkout_is_refused(self):
+        for directory in (self.parent, self.outside):
+            for name in self.NAMES:
+                with self.subTest(directory=directory, name=name):
+                    self.assertIn("loads from a directory above", self.assertRefused(
+                        os.path.join(directory, name), tool="Write", **self.inside))
+        self.assertIn("loads from a directory above", self.assertRefused(
+            os.path.join("..", "Directory.Build.targets"), **self.inside))
+        # Windows opens the same file through its default stream and with trailing dots or spaces.
+        for name in ("NuGet.Config::$DATA", "global.json.", "NuGet.Config "):
+            with self.subTest(name=name):
+                self.assertIn("loads from a directory above", self.assertRefused(
+                    os.path.join(self.parent, name), tool="Write", **self.inside))
+
+    def test_the_checkout_root_a_sibling_and_other_names_stay_admitted(self):
+        for target in (os.path.join(self.checkout, "Directory.Build.props"),
+                       os.path.join(self.checkout, "src", "nuget.config"),
+                       os.path.join(self.parent, "sibling", "NuGet.Config"),
+                       os.path.join(self.parent, "notes.md"),
+                       # No shell expands an editing tool's path, so a brace or a class is its own name.
+                       os.path.join(self.parent, "a{b}.md"),
+                       os.path.join(self.parent, "[n]uget.config")):
+            with self.subTest(target=target):
+                self.assertAdmitted(target, tool="Write", **self.inside)
+
+    def test_a_worktree_takes_nothing_from_its_main_checkout_root(self):
+        # The worktree's build walks up through the main checkout, so its root is above the worktree's.
+        worktree = os.path.join(self.checkout, ".claude", "worktrees", "w")
+        os.makedirs(worktree)
+        self.write(os.path.join(worktree, ".git"), "gitdir: elsewhere\n")
+        for target in (os.path.join(self.checkout, "Directory.Build.props"),
+                       os.path.join(self.checkout, ".claude", "worktrees", "global.json")):
+            with self.subTest(target=target):
+                self.assertIn("loads from a directory above", self.assertRefused(
+                    target, tool="Write", project=worktree, cwd=worktree))
 
 
 class WhatThisGuardIsNotTheSubjectOf(GuardCase):

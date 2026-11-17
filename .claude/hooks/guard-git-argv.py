@@ -237,9 +237,11 @@ def denied_path(relative, whole=False):
 # checkouts and the task list. `CLAUDE.md` and `AGENTS.md` stay out of the
 # control set: they are the owner's rules, not a grant. Both guards read these.
 HOME_TREES = frozenset({".ssh"})
+# `.npmrc` is npm's user config, read on every npm call: its `script-shell` and
+# `node-options` run a program under each granted `npm ci`, `npm test` and build.
 HOME_FILES = frozenset({
     ".bash_login", ".bash_logout", ".bash_profile", ".bashrc", ".gitconfig",
-    ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
+    ".npmrc", ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
 })
 # Deeper files that run as `.gitconfig` does: git reads its XDG config beside the home one, so a
 # `core.fsmonitor` or `core.sshCommand` there runs at the next git call.
@@ -282,7 +284,7 @@ def xdg_git_config(path, cwd=None, whole=False):
     """`$XDG_CONFIG_HOME/git/config` when `path` names it, or `None`; git reads it for `~/.config`'s.
 
     A relative value is from `cwd`. `whole` counts the directories holding it, short of the first
-    that also holds the home and of the filesystem's root, as a move or a copy puts them whole.
+    that also holds the home and of the filesystem's root, as a move, a copy or a link puts them whole.
     """
     value = os.environ.get("XDG_CONFIG_HOME")
     if not value:
@@ -308,6 +310,87 @@ def xdg_git_config(path, cwd=None, whole=False):
         if os.path.normcase(os.path.normpath(place)).lower() in names:
             return "$XDG_CONFIG_HOME/git/config"
     return None
+
+
+# ---- what a build loads from above a checkout --------------------------------
+
+# The SDK's build imports the nearest `Directory.Build.*`, `Directory.Solution.*` and `Directory.Packages.props` above a
+# project, the SDK the nearest `global.json`, and NuGet merges every `NuGet.Config` from the drive root down: one
+# planted above a checkout loads at its next build, where none of its denies reach. Folded; both guards read it.
+BUILD_ANCESTOR_FILES = frozenset({
+    "directory.build.props", "directory.build.targets", "directory.build.rsp",
+    "directory.solution.props", "directory.solution.targets", "directory.packages.props",
+    "nuget.config", "global.json",
+})
+
+
+def folded_place(place):
+    """`place` absolute, normalised and folded, as both build-name readers compare it."""
+    return os.path.normcase(os.path.normpath(os.path.abspath(place))).lower()
+
+
+def above_checkout(directories, roots):
+    """The checkout of `roots` one of `directories` sits strictly above, or `None`; a root's own is its denies'."""
+    checkouts = {folded_place(root): root for root in roots if root}
+    for directory in {folded_place(place) for place in directories if place}:
+        for root, spelled in checkouts.items():
+            if root != directory and beneath(root, directory):
+                return spelled
+    return None
+
+
+def build_named(last):
+    """Whether folded last component `last` can name a build's file, as Windows opens it and bash expands it.
+
+    A `:` stream and trailing dots and spaces are dropped; `[^` is bash's `[!`; a brace or a class is any name.
+    """
+    if any(mark in last for mark in ("{", "[:", "[=", "[.", "`")):
+        return True
+    return any(fnmatch.fnmatchcase(name, form.replace("[^", "[!")) for name in BUILD_ANCESTOR_FILES
+               for form in (last, last.split(":")[0].rstrip(". ")))
+
+
+def build_ancestor(places, roots, shell=False):
+    """The checkout of `roots` whose build loads one of `places` from a directory above it, or `None`.
+
+    `shell` reads a name as bash expands it; an editing tool's is literal, a stream and trailing dots dropped.
+    """
+    def named(last):
+        return build_named(last) if shell else last.split(":")[0].rstrip(". ") in BUILD_ANCESTOR_FILES
+
+    return above_checkout([os.path.dirname(folded_place(place)) for place in places
+                           if place and named(os.path.basename(folded_place(place)))], roots)
+
+
+def unknown_landing_offence(word, sources, cwd, command, writer):
+    """The reason to refuse `sources` landing under names not known in a directory above a checkout, or `None`.
+
+    Each is asked as `build_named` asks a name; an expansion, `.`, `..` or a word not read can be any name.
+    """
+    path = written_path(word, cwd, command)
+    if path is None or elsewhere(path):
+        return None
+    above = above_checkout((path, os.path.realpath(path)), known_checkouts(cwd))
+    if above is None:
+        return None
+    for source in sources:
+        last = re.split(r"[\\/]", (target_literal(source) or "").rstrip("/\\"))[-1].lower()
+        if last in ("", ".", "..") or "$" in last or build_named(last):
+            return (
+                f"{writer} would put `{source}` in `{path}`, above the checkout `{above}`, under a name that may be "
+                "one the .NET SDK or NuGet loads from there into its next build, and no deny reaches "
+                "above a checkout's root. Name each file, or hand it to the owner "
+                "(docs/harness-boundaries.md, *The edit-target guard*)."
+            )
+    return None
+
+
+def known_checkouts(cwd):
+    """The roots of the checkouts this session stands in: the event's, the command's, the project's and this guard's."""
+    starts = (EVENT_CWD or os.getcwd(), cwd, os.environ.get("CLAUDE_PROJECT_DIR"),
+              os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    roots = (checkout_of(os.path.abspath(start)) for start in starts if start and not elsewhere(start))
+    return [form for root in roots if root for form in (root, os.path.realpath(root))]
 
 
 # ---- the push allow-list ---------------------------------------------------
@@ -2838,8 +2921,11 @@ WRITING_VERBS = {
     "dd": "of",
 }
 TARGET_OPTION_VERBS = frozenset({"cp", "install", "ln", "mv"})
-# Verbs that remove, move or fill a directory whole, so its parent is a write.
-TREE_VERBS = frozenset({"cp", "install", "mv", "rm", "rmdir", "shred"})
+# Verbs that remove, move, fill or link a directory whole, so its parent is a write:
+# a link where a directory goes puts the files below its target where that directory's are read.
+TREE_VERBS = frozenset({"cp", "install", "ln", "mv", "rm", "rmdir", "shred"})
+# The sources of a `-T` copy or move, which fill the destination under names not known, as a `.` would.
+FILLED = (".",)
 # Verbs whose operand goes away, so a parent of the checkout goes with it.
 REMOVING_VERBS = frozenset({"mv", "rm", "rmdir", "shred", "unlink"})
 
@@ -2988,6 +3074,34 @@ def scratch_checkout(path):
     return session is None or not beneath(path, os.path.realpath(session))
 
 
+# `dispatch_run.py` sets it in each `/dispatch` executor's environment; set at all is the test, as the task list's.
+DISPATCHED = "HARNESS_DISPATCHED"
+# Below a main checkout, the dispatcher's own state: each run's `state.json` and `handbacks.json` decide what it
+# launches. An executor's result goes under its own worktree's copy, which a `.git` file marks.
+DISPATCH_STATE = ("artifacts", "dispatch")
+
+
+def dispatcher_state(path, whole=False):
+    """Whether a dispatched session's write to `path` reaches a main checkout's `artifacts/dispatch/`.
+
+    A main checkout is one whose `.git` is a directory. Every such ancestor is asked, not the nearest, so a `.git`
+    made below one hides nothing. Folded, as `denied_path` folds; `whole` counts a parent.
+    """
+    if DISPATCHED not in os.environ or elsewhere(path):
+        return False
+    root = os.path.abspath(path)
+    while True:
+        if os.path.isdir(os.path.join(root, ".git")):
+            parts = [part.lower() for part in re.split(r"[\\/]+", os.path.relpath(path, root))
+                     if part not in ("", ".")]
+            if parts[:2] == list(DISPATCH_STATE) or (whole and list(DISPATCH_STATE[:len(parts)]) == parts):
+                return True
+        parent = os.path.dirname(root)
+        if parent == root:
+            return False
+        root = parent
+
+
 def protected_target(path, whole=False):
     """The deny holding `path`, as spelled or where its links land, or `None`."""
     if scratch_checkout(os.path.realpath(path)):
@@ -3047,6 +3161,19 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
             "device spelling of a local file passes the denies. Run it yourself if "
             "it is meant (docs/harness-boundaries.md, *Paths on another machine*)."
         )
+    if path is not None and any(dispatcher_state(place, whole) for place in (path, os.path.realpath(path))):
+        return (
+            f"{writer} would write `{path}`, under a main checkout's `artifacts/dispatch/`: the dispatcher's own "
+            "state, which decides what it launches, and a dispatched session writes none of it. The result goes "
+            "in this worktree's `artifacts/dispatch/` (docs/harness-boundaries.md, *Headless dispatched sessions*)."
+        )
+    above = build_ancestor((path, os.path.realpath(path)), known_checkouts(cwd), True) if path is not None else None
+    if above is not None:
+        return (
+            f"{writer} would write `{path}`, a file the .NET SDK or NuGet loads from a directory above "
+            f"the checkout `{above}` into its next build, and no deny reaches above a checkout's root. Hand it to "
+            "the owner (docs/harness-boundaries.md, *The edit-target guard*)."
+        )
     named = protected_target(path, whole) if path is not None else None
     if named is None:
         home = home_target(path, cwd, command, whole, removing) if path is not None else None
@@ -3054,7 +3181,7 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
             return None
         return (
             f"{writer} would write `{path}`, which is `{home}`: a key, a shell "
-            "profile, git's own configuration or what `~/.claude` or "
+            "profile, git's or npm's own configuration or what `~/.claude` or "
             "`~/.claude.json` applies to later sessions. No rule judges a shell write there. Use an editing "
             "tool, where one does, or hand it to the owner "
             "(docs/harness-boundaries.md, *The edit-target guard*)."
@@ -3191,7 +3318,7 @@ def verb_destinations(verb, words):
 
     operands, targets, suffixes = [], [], []
     in_place = script_given = directory_mode = options_done = False
-    symbolic = hard_link = no_target = False
+    symbolic = hard_link = no_target = no_dereference = False
     short_values = SHORT_VALUE_OPTIONS.get(verb, "")
     long_values = LONG_VALUE_OPTIONS.get(verb, ())
     position = 0
@@ -3225,6 +3352,8 @@ def verb_destinations(verb, words):
                     suffixes.append(literal[len(name) + 1:])
             elif verb == "ln" and abbreviates("--symbolic") and not abbreviates("--suffix"):
                 symbolic = True
+            elif verb == "ln" and abbreviates("--no-dereference"):
+                no_dereference = True
             elif verb == "cp" and abbreviates("--link"):
                 hard_link = True
             elif verb == "install" and abbreviates("--directory"):
@@ -3245,6 +3374,10 @@ def verb_destinations(verb, words):
                 break
             if verb == "ln" and letter == "s":
                 symbolic = True
+                continue
+            # BSD's `-h` is GNU's `-n`; GNU has no `-h`.
+            if verb == "ln" and letter in "hn":
+                no_dereference = True
                 continue
             if verb == "cp" and letter == "l":
                 hard_link = True
@@ -3279,9 +3412,13 @@ def verb_destinations(verb, words):
         if verb in TARGET_OPTION_VERBS and not directory_mode and (
                 targets or len(operands) > 1):
             sources = operands if targets else operands[:-1]
-            landed = [(word, None if no_target else sources,
+            landed = [(word, FILLED if no_target else sources,
                        bool(targets) or len(sources) > 1)
                       for word in (targets or operands[-1:])]
+            # `ln -n` replaces a link to a directory, which `landings` reads as the
+            # directory and links inside, so the destination is judged itself as well.
+            landed += [(word, None, False) for word in operands[-1:]
+                       if no_dereference and not (no_target or targets)]
             return [(word, None, False) for word in sources] * whole_list + landed
         return [(word, None, False) for word in operands + targets] * whole_list
     if not in_place:
@@ -3357,11 +3494,15 @@ def verb_offence(verb, operands, cwd, command, writer):
     """The reason to refuse writing verb `verb` with `operands`, or `None`."""
     for word, sources, into in verb_destinations(verb, operands):
         refusal = removal_offence(word, cwd, command, writer) if (
-            sources is None and verb in REMOVING_VERBS) else None
+            (sources is None or sources is FILLED) and verb in REMOVING_VERBS) else None
         if refusal is not None:
             return refusal
         names = [None] if sources is None or verb not in TREE_VERBS else (
             landings(word, sources, into, cwd, command))
+        if names == [None] and sources and verb in TREE_VERBS:
+            refusal = unknown_landing_offence(word, sources, cwd, command, writer)
+            if refusal is not None:
+                return refusal
         for name in names:
             refusal = destination_offence(word, cwd, command, writer, verb in TREE_VERBS, name,
                                           verb in ("rm", "unlink"))

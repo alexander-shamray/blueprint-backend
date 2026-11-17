@@ -638,6 +638,11 @@ class WriteTests(unittest.TestCase):
         self.dir = Path(self.tmp.name)
         self.path = self.dir / "todo.md"
         self.run_dir = self.dir / "artifacts" / "dispatch" / RUN
+        # A dispatched executor runs this suite too, and its marker would refuse every run written here.
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(db.DISPATCHED, None)
 
     def write(self, text):
         with open(self.path, "w", encoding="utf-8", newline="") as handle:
@@ -1605,6 +1610,23 @@ class EventTests(unittest.TestCase):
                 code, out = self.cli(*args)
                 self.assertEqual((2, dashed), (code, self.read()))
                 self.assertIn("names no issue number", out)
+
+    def test_a_dispatched_executor_writes_no_run(self):
+        # `--root` could name the main checkout, whose run state decides what the dispatcher launches.
+        run = self.dir / "artifacts" / "dispatch" / RUN
+        run.mkdir(parents=True)
+        (run / "state.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {db.DISPATCHED: ""}):
+            for args in (("back", "S1"), ("done", "S1"), ("place", "1", "S3", "1700"), ("rewrite", "--from", "x")):
+                with self.subTest(args=args):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        code = db.main(["tasks", args[0], "--tasks", str(self.path), "--root", str(self.dir),
+                                        "--run", RUN, *args[1:]])
+                    self.assertEqual(2, code)
+                    self.assertIn("writes no run", err.getvalue())
+        self.assertEqual(["state.json"], [p.name for p in run.iterdir()])
+        self.assertEqual(FIXTURE, self.read())
 
     def test_a_dispatched_executor_writes_no_list(self):
         self.issues = {1700: issue(1700)}
