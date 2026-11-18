@@ -13,6 +13,10 @@ public static class OutboxBackoffRule
     /// way.</summary>
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(8);
 
+    /// <summary>Above the wait, the slack is at most half a rung, so a wait one rung too long is still told
+    /// apart.</summary>
+    private static TimeSpan Above(TimeSpan expected) => Slack < expected / 2 ? Slack : expected / 2;
+
     /// <summary>The ladder's wait for a failure made at <paramref name="attemptsBefore"/> attempts.</summary>
     public static TimeSpan Ladder(int attemptsBefore) =>
         TimeSpan.FromSeconds(
@@ -20,19 +24,23 @@ public static class OutboxBackoffRule
             OutboxDispatcher.BackoffBaseSeconds);
 
     /// <summary>Null when the row's <c>LockedUntil</c> is the ladder's wait from now, within the slack.</summary>
-    public static string? Violation(OutboxMessage row, int attemptsBefore)
+    public static string? Violation(OutboxMessage row, int attemptsBefore) =>
+        Violation(row.LockedUntil, attemptsBefore);
+
+    /// <summary>Null when <paramref name="lockedUntil"/> is the ladder's wait from now, within the slack.</summary>
+    public static string? Violation(DateTimeOffset? lockedUntil, int attemptsBefore)
     {
         TimeSpan expected = Ladder(attemptsBefore);
 
-        if (row.LockedUntil is not { } lockedUntil)
+        if (lockedUntil is not { } until)
             return "a failed row is backed off, not left with no LockedUntil";
 
-        TimeSpan remaining = lockedUntil - DateTimeOffset.UtcNow;
+        TimeSpan remaining = until - DateTimeOffset.UtcNow;
 
         if (remaining <= TimeSpan.Zero)
             return $"no backoff time is left ({remaining.TotalSeconds:F1}s), so the next pass claims the row at once";
 
-        if (remaining < expected - Slack || remaining > expected + Slack)
+        if (remaining < expected - Slack || remaining > expected + Above(expected))
         {
             return $"{remaining.TotalSeconds:F1}s remain where the ladder waits {expected.TotalSeconds:F0}s and the " +
                 $"claim's own lease is {OutboxDispatcher.LeaseSeconds}s";
