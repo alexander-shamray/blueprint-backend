@@ -27,6 +27,12 @@ public sealed partial class MigratorIsolationTests
     [InlineData("/* if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal); */\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("await MigratorCommand.IsolationRefusalAsync(db, ct);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("var open = \"/*\"; await db.Database.MigrateAsync(ct); var close = \"*/\";\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("var url = \"https://example.test\"; await db.Database.MigrateAsync(ct);\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("_ = db.Database.MigrateAsync(ct);\n"
         + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
@@ -37,6 +43,9 @@ public sealed partial class MigratorIsolationTests
         GuardsFirst(source).ShouldBeFalse();
 
     [Theory]
+    [InlineData("var url = \"https://example.test\";\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("// .MigrateAsync( runs below\n"
         + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
@@ -52,7 +61,7 @@ public sealed partial class MigratorIsolationTests
     // counts as the check.
     private static bool GuardsFirst(string source)
     {
-        string code = Comment().Replace(source, string.Empty);
+        string code = Comment().Replace(source, found => found.Groups["literal"].Success ? found.Value : string.Empty);
         Match check = GuardedCheck().Match(code);
         Match migrate = Migration().Match(code);
         return check.Success && migrate.Success && migrate.Index > check.Index;
@@ -69,7 +78,10 @@ public sealed partial class MigratorIsolationTests
         throw new InvalidOperationException($"No Platform.slnx above {AppContext.BaseDirectory}.");
     }
 
-    [GeneratedRegex(@"//[^\r\n]*|/\*.*?\*/", RegexOptions.Singleline)]
+    // A literal is matched first and kept, so a `//` or `/*` inside one strips no code.
+    [GeneratedRegex(
+        @"(?<literal>@""(?:[^""]|"""")*""|""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)+')|//[^\r\n]*|/\*.*?\*/",
+        RegexOptions.Singleline)]
     private static partial Regex Comment();
 
     [GeneratedRegex(
