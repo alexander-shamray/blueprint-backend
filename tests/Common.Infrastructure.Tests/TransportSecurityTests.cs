@@ -184,6 +184,54 @@ public sealed class TransportSecurityTests
     }
 
     [Fact]
+    public void Every_broker_host_a_bus_dials_asks_the_scheme_for_tls()
+    {
+        // Per call site, as the project check above is not: a project whose second bus or topology bus sets its
+        // host without asking would pass it. A host's ask is read up to the next host, and a file's asks must
+        // equal its hosts, so an ask below the last host is not its. The connection-string check needs no such
+        // case: the start-up check reads every ConnectionStrings key, so one call covers the host.
+        string root = RepositoryRoot();
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(Path.Combine(root, "tools"), "*.cs", SearchOption.AllDirectories))
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
+                            !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                .Where(f => SourceCode.Code(File.ReadAllText(f)).Contains("UsingRabbitMq(", StringComparison.Ordinal))
+        ];
+        int hosts = 0;
+
+        foreach (string file in files)
+        {
+            string code = SourceCode.Code(File.ReadAllText(file));
+            string[] sites = BrokerHosts(code);
+            hosts += sites.Length;
+            for (int i = 0; i < sites.Length; i++)
+                Asks(sites[i]).ShouldBe(1, $"{Path.GetRelativePath(root, file)}, host {i + 1}");
+
+            Asks(code).ShouldBe(sites.Length, Path.GetRelativePath(root, file));
+        }
+
+        hosts.ShouldBeGreaterThanOrEqualTo(files.Length, "every bus file sets a host, so fewer means a scan read none");
+    }
+
+    [Fact]
+    public void A_host_beside_one_that_asks_is_read_on_its_own()
+    {
+        // The case's subject is the split: a per-project presence check would read this source as covered.
+        const string source = """
+                              cfg.Host(broker, h => { if (TransportSecurity.IsTls(broker)) h.UseSsl(s => { }); });
+                              topology.Host(broker, h => { });
+                              """;
+
+        string[] sites = BrokerHosts(source);
+
+        sites.Length.ShouldBe(2);
+        Asks(sites[0]).ShouldBe(1);
+        Asks(sites[1]).ShouldBe(0);
+    }
+
+    [Fact]
     public void A_call_named_only_in_a_comment_or_a_string_is_not_read_as_made()
     {
         // Through the scans' own reader, so a reader that went back to the raw text fails here.
@@ -205,6 +253,22 @@ public sealed class TransportSecurityTests
             Directory.Delete(project, recursive: true);
         }
     }
+
+    // Each `.Host(` call up to the next: MassTransit's broker address, where the TLS decision is made.
+    private static string[] BrokerHosts(string code)
+    {
+        List<int> starts = [];
+        for (int at = code.IndexOf(".Host(", StringComparison.Ordinal);
+             at >= 0;
+             at = code.IndexOf(".Host(", at + 1, StringComparison.Ordinal))
+        {
+            starts.Add(at);
+        }
+
+        return [.. starts.Select((at, i) => code[at..(i + 1 < starts.Count ? starts[i + 1] : code.Length)])];
+    }
+
+    private static int Asks(string code) => code.Split("TransportSecurity.IsTls(").Length - 1;
 
     // Code alone, so a comment or a string naming a call is not the project making it.
     private static IEnumerable<string> Sources(string project) =>
