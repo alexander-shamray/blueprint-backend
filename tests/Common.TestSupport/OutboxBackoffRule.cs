@@ -12,9 +12,9 @@ public static class OutboxBackoffRule
     /// <summary>The time between the failure and the read, which only shortens what remains.</summary>
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(8);
 
-    /// <summary>Above the wait, the slack is at most half a rung, so a wait one rung too long is still told
-    /// apart.</summary>
-    private static TimeSpan Above(TimeSpan expected) => Slack < expected / 2 ? Slack : expected / 2;
+    /// <summary>Above the wait, a rounding margin only: the stamp and the read are both the database's clock, and
+    /// the read comes after, so nothing else lengthens what remains.</summary>
+    private static readonly TimeSpan Rounding = TimeSpan.FromSeconds(1);
 
     /// <summary>The ladder's wait for a failure made at <paramref name="attemptsBefore"/> attempts.</summary>
     public static TimeSpan Ladder(int attemptsBefore) =>
@@ -40,7 +40,7 @@ public static class OutboxBackoffRule
         if (remaining <= TimeSpan.Zero)
             return $"no backoff time is left ({remaining.TotalSeconds:F1}s), so the next pass claims the row at once";
 
-        if (remaining < expected - Slack || remaining > expected + Above(expected))
+        if (remaining < expected - Slack || remaining > expected + Rounding)
         {
             return $"{remaining.TotalSeconds:F1}s remain where the ladder waits {expected.TotalSeconds:F0}s and the " +
                 $"claim's own lease is {OutboxDispatcher.LeaseSeconds}s";
