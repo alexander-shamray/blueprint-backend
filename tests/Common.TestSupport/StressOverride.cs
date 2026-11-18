@@ -20,31 +20,39 @@ public static partial class StressOverride
 
         List<KeyValuePair<string, string?>> entries = [];
 
-        foreach (string line in lines.Where(line => ConfigurationKey().IsMatch(line)))
+        foreach (Match entry in lines.Select(line => Entry().Match(line)).Where(entry => entry.Success))
         {
-            // Dropped, a misspelt key would leave its option at the default, and a strict bind never sees it.
-            Match entry = Entry().Match(line);
+            string key = entry.Groups["key"].Value;
 
-            if (!entry.Success)
+            if (!Meant().IsMatch(key))
+                continue;
+
+            // Dropped, a misspelt key would leave its option at the default, and a strict bind never sees it.
+            if (!SectionKey().IsMatch(key))
             {
                 throw new InvalidOperationException(
-                    $"'{line.Trim()}' in the stress override is not a Section__Key entry, so no bind would read it");
+                    $"'{key}' in the stress override is not a Section__Key entry, so no bind would read it");
             }
 
-            entries.Add(new(
-                entry.Groups["key"].Value.Replace("__", ":", StringComparison.Ordinal),
-                entry.Groups["value"].Value));
+            entries.Add(new(key.Replace("__", ":", StringComparison.Ordinal), entry.Groups["value"].Value));
         }
 
         return new ConfigurationBuilder().AddInMemoryCollection(entries).Build();
     }
 
-    // A capitalised key with a lower-case letter is configuration; an environment variable is all capitals, and
-    // Compose's own keys are lower case.
-    [GeneratedRegex("""^\s+[A-Z][\w.-]*[a-z][\w.-]*:""")]
-    private static partial Regex ConfigurationKey();
-
+    // A map entry, bare or quoted, or a list item's `Key=value`.
     [GeneratedRegex(
-        """^\s+(?<key>[A-Za-z][A-Za-z0-9]*(?:__[A-Za-z][A-Za-z0-9.]*)+):\s*"?(?<value>[^"#\s]+)"?\s*(?:#.*)?$""")]
+        """^\s+(?:-\s*(?<key>[^\s=#"]+)=(?<value>\S*)|""" +
+        @"""?(?<key>[^\s:#""]+)""?\s*:\s*(?:""(?<value>[^""]*)""|(?<value>[^\s""#]+))?)\s*(?:#.*)?$")]
     private static partial Regex Entry();
+
+    // Configuration is case-blind, so a `__` in any case is meant as a key, and so is a capitalised name holding a
+    // lower-case letter and an underscore; an environment variable is all capitals, and Compose's own keys are lower
+    // case.
+    [GeneratedRegex("""__|^(?=[A-Z])(?=.*[a-z]).*_""")]
+    private static partial Regex Meant();
+
+    // Sections joined by `__`, each a name or an array index.
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9]*(?:__(?:[A-Za-z][A-Za-z0-9.]*|[0-9]+))+$")]
+    private static partial Regex SectionKey();
 }
