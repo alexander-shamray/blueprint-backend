@@ -49,8 +49,7 @@ it off the build's path: it runs beside the build, never downstream of it.
   expects only its chosen half;
 - a project that pins for itself rather than through the props file;
 - a pinned package whose register row's licence cell names nothing, empty
-  or slashes alone: a cell read as no licences would otherwise clear itself.
-  An unpinned Aspire row is skipped whole, this check with it;
+  or slashes alone: a cell read as no licences would otherwise clear itself;
 - a registered licence any part of which is outside `allowed-licences.txt`.
   **Every** part of a multi-part cell has to be inside it: the gate reads a
   `/` and cannot tell a disjunction from a conjunction, so a row cleared
@@ -69,6 +68,11 @@ it off the build's path: it runs beside the build, never downstream of it.
 
 ## What it does not claim
 
+- **The licence of a row nothing pins.** The three licence-cell refusals
+  above are made per pin, so an unpinned Aspire row, or the unchosen half of
+  an either/or row, is never read: an empty, forbidden or unknown licence
+  there passes. Such a row reaches no build until it is pinned, and then it
+  is read.
 - **A pin written anywhere but the props file.** A `PackageVersion` or
   `GlobalPackageReference` in another imported `.props` or `.targets` is not
   read as a pin, so a package supplied that way passes unregistered. That is
