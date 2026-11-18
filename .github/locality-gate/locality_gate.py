@@ -40,8 +40,8 @@ _TOUCH_ROW = re.compile(r"^\| *Touch set *\|(.*)$")
 _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 # A list item, block quote or HTML block start. GitHub ends a fence opened inside one when the container ends,
-# and hides a fence line inside a comment, which a line reader cannot follow; so a row in a fence after one is
-# refused rather than skipped, since GitHub may show it as the table.
+# which a line reader cannot follow; so a row in a fence after one is refused rather than skipped, since GitHub may
+# show it as the table.
 _CONTAINER = re.compile(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)|^ {0,3}[<>]")
 # Any spelling GitHub could render as either row once such a fence ends early: indented, or without its pipe.
 _ROWISH = re.compile(r"^[ \t]*\|?[ \t]*(?:Class|Touch set)[ \t]*\|")
@@ -134,11 +134,12 @@ def _unfenced(body: str) -> list[str]:
     contained = after_container = comment = False
     for line in body.replace("\r", "").split("\n"):
         if comment:
-            # GitHub hides the comment, fence lines and rows alike, so a row here is not the one a reviewer sees.
-            if _ROWISH.match(line):
+            # A comment left open past its line is never closed here: a later `-->` ends it only when its opener
+            # began an HTML block of its own, which a line reader cannot tell, and GitHub otherwise hides the rest.
+            if _ROWISH.match(line) or _FENCE_OPEN.match(line):
                 raise InputRefused(
-                    "a `| Class |` or `| Touch set |` row sits inside an HTML comment, which GitHub hides")
-            comment = _opens_comment(line, comment)
+                    "a `| Class |` or `| Touch set |` row, or a fence line, sits after an HTML comment left open, "
+                    "which GitHub may hide")
             continue
         if fence:
             if contained and _ROWISH.match(line):
@@ -154,21 +155,19 @@ def _unfenced(body: str) -> list[str]:
         if opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
             fence, contained = opener.group(1), after_container
             continue
-        comment = _opens_comment(line, comment)
+        comment = _opens_comment(line)
         lines.append(line)
     return lines
 
 
-def _opens_comment(line: str, inside: bool) -> bool:
-    """Whether an HTML comment is open after the line: its last `<!--` has no `-->` after it.
+def _opens_comment(line: str) -> bool:
+    """Whether an HTML comment is left open by the line: its last `<!--` has no `-->` after it.
 
-    A backtick is not read as a code span, since its run length and escapes decide one; a quoted `<!--` is then
-    read as opening a comment, which can only refuse a body GitHub shows, never read one it hides.
+    A backtick is not read as a code span, since its run length and escapes decide one, so a quoted `<!--` is
+    read as an opener too.
     """
     opened = line.rfind("<!--")
-    if opened >= 0:
-        return "-->" not in line[opened + 2:]
-    return inside and "-->" not in line
+    return opened >= 0 and "-->" not in line[opened + 2:]
 
 
 def _cell(rest: str, row: str) -> str:

@@ -161,7 +161,6 @@ class TouchSetGrammar(unittest.TestCase):
             ("list item", "- note\n\n  ```\n"),
             ("numbered item", "1. note\n\n   ```\n"),
             ("block quote", "> note\n\n```\n"),
-            ("html comment", "<!--\n```\n-->\n"),
         ):
             with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "after a list, block quote or HTML"):
                 read_rows(lead + table + "```\n" + example + "```\n")
@@ -175,8 +174,9 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "carriage return"):
             read_rows("note\r```\n" + table + "```\n" + example)
 
-    def test_a_row_inside_an_html_comment_is_refused(self) -> None:
-        # GitHub hides the comment, so its row is not the table a reviewer reads.
+    def test_a_row_after_an_html_comment_left_open_is_refused(self) -> None:
+        # GitHub hides the comment, and a later `-->` closes it only when its opener began an HTML block of its own,
+        # which a line reader cannot tell, so every row or fence line after an open comment is refused.
         table = "| Class | D |\n| Touch set | docs/x.md |\n"
         hidden = "| Class | E |\n| Touch set | src/y.py |\n"
         for name, text in (
@@ -184,7 +184,10 @@ class TouchSetGrammar(unittest.TestCase):
             ("after the table", table + "<!-- a note\n" + hidden + "-->\n"),
             ("never closed", table + "\n<!--\n" + hidden),
             ("opened mid-line", table + "text <!-- note\n" + hidden + "-->\n"),
-            ("reopened after a close", table + "<!-- a --> b <!--\n" + hidden + "-->\n"),
+            ("reopened after a close", "<!-- a --> b <!--\nnote\n-->\n" + table),
+            ("inside a list item", "- <!--\nnote\n-->\n\n" + table),
+            ("inside an html block", "<div>\n<!--\n\n-->\n" + table),
+            ("closed later, which may close nothing", "<!--\nnote\n-->\n" + table),
             ("indented row", table + "<!--\n  | Class | E |\n-->\n"),
             ("pipeless row", table + "<!--\nTouch set | src/y.py |\n-->\n"),
             ("crlf", (table + "<!--\n" + hidden + "-->\n").replace("\n", "\r\n")),
@@ -192,18 +195,20 @@ class TouchSetGrammar(unittest.TestCase):
             ("an unmatched backtick run", "``<!--`\n" + hidden + "-->\n | Class | D |\n"),
             ("an escaped backtick", "\\`<!--`\n" + hidden + "-->\n | Class | D |\n"),
             ("a quoted opener refuses, as a precaution", "the `<!--` marker\n" + table),
+            ("a fence line inside a comment", "<!--\n```\n-->\n" + table + "```\n" + hidden + "```\n"),
+            ("a quoted opener before a fenced example",
+             "Use the `<!--` marker.\n\n```\n-->\n" + hidden + "```\n\n" + table),
         ):
-            with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "inside an HTML comment"):
+            with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "after an HTML comment left open"):
                 read_rows(text)
-        # A comment GitHub closes, by any `-->`, quoted or not, hides nothing the table holds.
+        # A comment closed on its own line, or a marker inside a fence, hides nothing the table holds.
         for name, text in (
             ("closed on its line", "<!-- note -->\n" + table),
-            ("closed before the table", "<!--\nnote\n-->\n" + table),
             ("an empty comment", "<!-->\n" + table),
             ("a quoted closer on the opening line", "<!-- `-->`\n" + table),
             ("a marker in a fence", "```\n<!--\n```\n" + table),
             ("a closer alone", "-->\n" + table),
-            ("a backticked closer still closes", "<!--\n`-->`\n" + table),
+            ("a comment after the table", table + "\n<!--\nnote\n"),
         ):
             with self.subTest(name=name):
                 self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))

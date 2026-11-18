@@ -18,14 +18,15 @@ for the first two; this gate is §3 enforced.
   alone, and a body holding a carriage return outside a CRLF is refused,
   since GitHub and the helper would fence different lines. A row in a fence
   that opens after a list item, block quote or HTML block is refused rather
-  than skipped: GitHub ends a fence in a list item when the list ends, and
-  hides a fence line inside a comment, which a line reader cannot follow; a
-  block quote is refused too, as a precaution. A row inside an HTML comment
-  is refused as well, since GitHub hides it: a comment opens at a `<!--`
-  outside a fence with no `-->` after it on its line, and closes at the
-  next line holding a `-->`. Backticks are not read as code spans here, so
-  a quoted `<!--` is refused as an opener rather than risk reading a row
-  GitHub hides.
+  than skipped: GitHub ends a fence in a list item when the list ends,
+  which a line reader cannot follow; a
+  block quote is refused too, as a precaution. A row or a fence line after
+  an HTML comment left open is refused as well: a `<!--` outside a fence
+  with no `-->` after it on its line leaves one open, and it is never
+  closed, since a later `-->` ends it on GitHub only when its opener began
+  an HTML block of its own, and otherwise GitHub hides the rest of the
+  body. Backticks are not read as code spans here, so a quoted `<!--`
+  counts as an opener.
 - [`classes.yml`](classes.yml), the one place the class → tree-set map
   lives. The contract's table states each class in words and cites the file.
   It is read by a parser that accepts the one shape the file's header states
