@@ -85,8 +85,8 @@ public sealed class InboxEndpointExtensionsTests
         {
             string code = SourceCode.Code(File.ReadAllText(Path.Combine(root, file)));
             string[] endpoints = Endpoints(code);
-            for (int i = 0; i < endpoints.Length; i++)
-                Inboxes(endpoints[i]).ShouldBe(1, $"{file}, endpoint {i + 1}");
+            foreach (string endpoint in endpoints)
+                Inboxes(endpoint).ShouldBe(1, $"{file}: {Opening(endpoint)}");
 
             Inboxes(code).ShouldBe(endpoints.Length, file);
 
@@ -143,6 +143,13 @@ public sealed class InboxEndpointExtensionsTests
     private static int Inboxes(string code) =>
         Positions(code, ".UseInboxAndInMemoryOutbox(").Length +
         Positions(code, "UseConsumeFilter(typeof(InboxFilter<>)").Length;
+
+    // By its own text, as `Endpoints` lists the plain calls before the switched ones, not in source order.
+    private static string Opening(string call)
+    {
+        string flat = string.Join(' ', call.Split(default(char[]), StringSplitOptions.RemoveEmptyEntries));
+        return flat[..Math.Min(80, flat.Length)];
+    }
 
     // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call; `ConnectReceiveEndpoint` is refused outside
     // the switch by the case above.
