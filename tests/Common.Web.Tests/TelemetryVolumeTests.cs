@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Text.RegularExpressions;
 using Common.TestSupport;
 using Microsoft.Extensions.Configuration;
@@ -121,16 +122,14 @@ public partial class TelemetryVolumeTests
 
         List<string> exporting = Directory
             .EnumerateFiles(Path.Combine(compose, "services"), "*.yml")
-            .SelectMany(file => ServiceEntry().Matches(File.ReadAllText(file)))
+            .SelectMany(Services)
             .Where(entry => entry.Value.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal))
-            .Select(entry => entry.Groups["name"].Value)
+            .Select(entry => entry.Key)
             .ToList();
 
         exporting.ShouldNotBeEmpty("no Compose service exports telemetry, so nothing below was checked");
 
-        Dictionary<string, string> overridden = ServiceEntry()
-            .Matches(File.ReadAllText(StressOverride.Path))
-            .ToDictionary(entry => entry.Groups["name"].Value, entry => entry.Value);
+        Dictionary<string, string> overridden = Services(StressOverride.Path);
 
         foreach (string service in exporting)
         {
@@ -155,14 +154,13 @@ public partial class TelemetryVolumeTests
             .SelectMany(file => SentTo().Matches(File.ReadAllText(file)))
             .Concat(SentTo().Matches(collector))
             .Select(sent => sent.Groups["host"].Value)
+            .Where(host => !IPAddress.TryParse(host, out _))
             .Distinct()
             .ToList();
 
         hops.Count.ShouldBeGreaterThanOrEqualTo(2, "the collector and the store it exports to were not both found");
 
-        Dictionary<string, string> overridden = ServiceEntry()
-            .Matches(File.ReadAllText(StressOverride.Path))
-            .ToDictionary(entry => entry.Groups["name"].Value, entry => entry.Value);
+        Dictionary<string, string> overridden = Services(StressOverride.Path);
 
         foreach (string hop in hops)
         {
@@ -201,6 +199,29 @@ public partial class TelemetryVolumeTests
         return exported;
     }
 
+    /// <summary>
+    /// Each entry under <paramref name="file"/>'s <c>services:</c>, by name, refusing a key the entry pattern does
+    /// not read: a service it skipped would escape the sampling and hop checks with nothing failing.
+    /// </summary>
+    private static Dictionary<string, string> Services(string file)
+    {
+        string yaml = File.ReadAllText(file);
+        Match start = ServicesSection().Match(yaml);
+        start.Success.ShouldBeTrue($"{file} has no services section");
+
+        Match end = TopLevelKey().Match(yaml, start.Index + start.Length);
+        string section = end.Success ? yaml[start.Index..end.Index] : yaml[start.Index..];
+
+        Dictionary<string, string> entries = ServiceEntry()
+            .Matches(section)
+            .ToDictionary(entry => entry.Groups["name"].Value, entry => entry.Value);
+        List<string> keys = ServiceKey().Matches(section).Select(key => key.Groups["name"].Value).ToList();
+
+        keys.ShouldNotBeEmpty($"{file} names no service");
+        entries.Keys.ShouldBe(keys, ignoreOrder: true, $"{file} holds a service the entry pattern does not read");
+        return entries;
+    }
+
     private static string SamplingEntry(string key)
     {
         Match entry = Regex.Match(
@@ -212,11 +233,21 @@ public partial class TelemetryVolumeTests
         return entry.Groups["value"].Value;
     }
 
-    [GeneratedRegex(@"^  (?<name>[a-z][a-z-]*):\r?\n(?:(?:    .*|[ \t]*)\r?\n)*", RegexOptions.Multiline)]
+    // Compose's service-name grammar, [a-zA-Z0-9._-]; Services holds this to every key the section has.
+    [GeneratedRegex(@"^  (?<name>[a-zA-Z0-9._-]+):\r?\n(?:(?:    .*|[ \t]*)\r?\n)*", RegexOptions.Multiline)]
     private static partial Regex ServiceEntry();
 
+    [GeneratedRegex(@"^  (?<name>[^\s#][^:\r\n]*):", RegexOptions.Multiline)]
+    private static partial Regex ServiceKey();
+
+    [GeneratedRegex(@"^services:[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex ServicesSection();
+
+    [GeneratedRegex(@"^[^\s#]", RegexOptions.Multiline)]
+    private static partial Regex TopLevelKey();
+
     [GeneratedRegex(
-        @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?(?:https?://)?(?<host>[a-z][a-z-]*):\d+",
+        @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?(?:https?://)?(?<host>[a-zA-Z0-9._-]+):\d+",
         RegexOptions.Multiline)]
     private static partial Regex SentTo();
 
