@@ -13,17 +13,38 @@ public static partial class StressOverride
     /// <summary>Every <c>Section__Key</c> environment entry the override sets, under its configuration key.</summary>
     public static IConfiguration Configuration() => Configuration(File.ReadAllLines(Path));
 
-    public static IConfiguration Configuration(IReadOnlyList<string> lines) =>
-        new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                lines
-                    .Select(line => Entry().Match(line))
-                    .Where(entry => entry.Success)
-                    .Select(entry => new KeyValuePair<string, string?>(
-                        entry.Groups["key"].Value.Replace("__", ":", StringComparison.Ordinal),
-                        entry.Groups["value"].Value)))
-            .Build();
+    /// <summary>The entries <paramref name="lines"/> set, refusing a configuration key it cannot read.</summary>
+    public static IConfiguration Configuration(IReadOnlyList<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
 
-    [GeneratedRegex("""^\s+(?<key>[A-Za-z]+__[A-Za-z]+):\s*"?(?<value>[^"#\s]+)"?\s*(?:#.*)?$""")]
+        List<KeyValuePair<string, string?>> entries = [];
+
+        foreach (string line in lines.Where(line => ConfigurationKey().IsMatch(line)))
+        {
+            // Dropped, a misspelt key would leave its option at the default, and a strict bind never sees it.
+            Match entry = Entry().Match(line);
+
+            if (!entry.Success)
+            {
+                throw new InvalidOperationException(
+                    $"'{line.Trim()}' in the stress override is not a Section__Key entry, so no bind would read it");
+            }
+
+            entries.Add(new(
+                entry.Groups["key"].Value.Replace("__", ":", StringComparison.Ordinal),
+                entry.Groups["value"].Value));
+        }
+
+        return new ConfigurationBuilder().AddInMemoryCollection(entries).Build();
+    }
+
+    // A capitalised key with a lower-case letter is configuration; an environment variable is all capitals, and
+    // Compose's own keys are lower case.
+    [GeneratedRegex("""^\s+[A-Z][\w.-]*[a-z][\w.-]*:""")]
+    private static partial Regex ConfigurationKey();
+
+    [GeneratedRegex(
+        """^\s+(?<key>[A-Za-z][A-Za-z0-9]*(?:__[A-Za-z][A-Za-z0-9.]*)+):\s*"?(?<value>[^"#\s]+)"?\s*(?:#.*)?$""")]
     private static partial Regex Entry();
 }

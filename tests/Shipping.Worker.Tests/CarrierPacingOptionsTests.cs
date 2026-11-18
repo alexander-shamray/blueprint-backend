@@ -92,5 +92,20 @@ public sealed class CarrierPacingOptionsTests
             .Message.ShouldContain("TrackingClaimBatchSise");
     }
 
+    [Fact]
+    public void A_key_the_override_cannot_read_is_refused_rather_than_dropped()
+    {
+        string[] unread = ["CarrierPacing_TrackingTick", "CarrierPacing__", "Carrier-Pacing__TrackingTick"];
+
+        foreach (string key in unread)
+        {
+            Should.Throw<InvalidOperationException>(() => StressOverride.Configuration([$"      {key}: \"00:00:01\""]))
+                .Message.ShouldContain(key);
+        }
+
+        StressOverride.Configuration(["      CarrierPacing__Tracking2Tick: \"00:00:01\""])
+            ["CarrierPacing:Tracking2Tick"].ShouldBe("00:00:01");
+    }
+
     private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;
 }
