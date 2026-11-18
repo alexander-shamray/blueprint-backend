@@ -470,7 +470,8 @@ path the PR exists to stop answering 502.
 **Privacy has no line here, because it has no host-run recipe.** The
 infra-only override excludes `privacy-api`, and a host-run gateway still
 forwards `/api/v1/privacy/*` to that container name, so the erasure request
-above answers 502 under this block: raise it against the full Compose stack.
+above fails at the gateway under this block: raise it against the full Compose
+stack.
 
 The BFF is excluded too, and it needs more than an authority — its
 projection's database (ADR-051), which the override leaves running and the
