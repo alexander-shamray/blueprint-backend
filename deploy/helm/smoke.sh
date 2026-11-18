@@ -2636,9 +2636,11 @@ section 'The Service forwards to a port something is listening on'
 # Keys match in any case, as .NET binds configuration, and a `//` line is
 # skipped, as the host's JSON reader skips it. Any scheme and host is read, so a
 # `+`, `*` or https endpoint is compared too; every Url must give its port.
-kestrel_urls() { grep -v '^[[:space:]]*//' "$1" | { grep -oiE '"url"[[:space:]]*:' || true; } | wc -l; }
+# An empty or all-comment file gives nothing to read, not an exit that ends the smoke under pipefail.
+kestrel_lines() { grep -v '^[[:space:]]*//' "$1" || true; }
+kestrel_urls() { kestrel_lines "$1" | { grep -oiE '"url"[[:space:]]*:' || true; } | wc -l; }
 kestrel_ports() {
-    grep -v '^[[:space:]]*//' "$1" |
+    kestrel_lines "$1" |
         { grep -oiE '"url"[[:space:]]*:[[:space:]]*"[a-z]+://[^"/]+:[0-9]+' || true; } |
         sed -E 's|.*:([0-9]+)$|\1|'
 }
