@@ -65,7 +65,8 @@ public sealed class InboxEndpointExtensionsTests
     {
         // Per endpoint, not per file: a new endpoint in a file whose others take the helper would pass a
         // per-file check while §9.8 admits none without the inbox. Each is read up to the next endpoint, so a
-        // delegate built outside the call reads as no inbox and fails, where every host's today is inline.
+        // delegate built outside the call reads as no inbox and fails, where every host's delegate is inline.
+        // A file's inbox calls must also equal its endpoints, so a call below the last one is not its.
         string root = RepositoryRoot();
         string[] files =
         [
@@ -76,13 +77,12 @@ public sealed class InboxEndpointExtensionsTests
 
         foreach (string file in files)
         {
-            string[] endpoints = Endpoints(SourceCode.Code(File.ReadAllText(Path.Combine(root, file))));
+            string code = SourceCode.Code(File.ReadAllText(Path.Combine(root, file)));
+            string[] endpoints = Endpoints(code);
             for (int i = 0; i < endpoints.Length; i++)
-            {
-                int inboxes = Positions(endpoints[i], ".UseInboxAndInMemoryOutbox(").Length +
-                              Positions(endpoints[i], "UseConsumeFilter(typeof(InboxFilter<>)").Length;
-                inboxes.ShouldBe(1, $"{file}, endpoint {i + 1}");
-            }
+                Inboxes(endpoints[i]).ShouldBe(1, $"{file}, endpoint {i + 1}");
+
+            Inboxes(code).ShouldBe(endpoints.Length, file);
 
             if (endpoints.Length > 0)
                 read.Add(file);
@@ -111,6 +111,31 @@ public sealed class InboxEndpointExtensionsTests
         Positions(endpoints[0], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(1);
         Positions(endpoints[1], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(0);
     }
+
+    [Fact]
+    public void No_host_makes_an_endpoint_but_by_declaring_it()
+    {
+        // ConfigureEndpoints binds every unbound consumer with no inbox, and ConnectReceiveEndpoint is the
+        // switch's plumbing: either in a host would make an endpoint the scan above never reads.
+        string root = RepositoryRoot();
+
+        foreach (string call in new[] { ".ConfigureEndpoints(", ".ConnectReceiveEndpoint(" })
+        {
+            string[] makers =
+            [
+                .. Callers(root, call)
+                    .Where(c => !c.StartsWith("src/BuildingBlocks/", StringComparison.Ordinal))
+                    .Where(c => SourceCode.Code(File.ReadAllText(Path.Combine(root, c))).Contains(
+                        call,
+                        StringComparison.Ordinal))
+            ];
+            makers.ShouldBeEmpty(call);
+        }
+    }
+
+    private static int Inboxes(string code) =>
+        Positions(code, ".UseInboxAndInMemoryOutbox(").Length +
+        Positions(code, "UseConsumeFilter(typeof(InboxFilter<>)").Length;
 
     // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call up to the next; `ConnectReceiveEndpoint` is
     // the switch's own plumbing and is not an endpoint a host declares.
