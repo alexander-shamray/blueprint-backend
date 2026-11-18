@@ -176,7 +176,7 @@ class TouchSetGrammar(unittest.TestCase):
             read_rows("note\r```\n" + table + "```\n" + example)
 
     def test_a_row_inside_an_html_comment_is_refused(self) -> None:
-        # GitHub hides the comment, so its row is not the table a reviewer reads; the cases are test_pr_helpers.py's.
+        # GitHub hides the comment, so its row is not the table a reviewer reads.
         table = "| Class | D |\n| Touch set | docs/x.md |\n"
         hidden = "| Class | E |\n| Touch set | src/y.py |\n"
         for name, text in (
@@ -188,15 +188,19 @@ class TouchSetGrammar(unittest.TestCase):
             ("indented row", table + "<!--\n  | Class | E |\n-->\n"),
             ("pipeless row", table + "<!--\nTouch set | src/y.py |\n-->\n"),
             ("crlf", (table + "<!--\n" + hidden + "-->\n").replace("\n", "\r\n")),
+            # A backtick decides no code span here, so neither an unmatched run nor an escape hides the opener.
+            ("an unmatched backtick run", "``<!--`\n" + hidden + "-->\n | Class | D |\n"),
+            ("an escaped backtick", "\\`<!--`\n" + hidden + "-->\n | Class | D |\n"),
+            ("a quoted opener refuses, as a precaution", "the `<!--` marker\n" + table),
         ):
             with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "inside an HTML comment"):
                 read_rows(text)
-        # A comment GitHub closes, or a marker GitHub shows as code, hides nothing the table holds.
+        # A comment GitHub closes, by any `-->`, quoted or not, hides nothing the table holds.
         for name, text in (
             ("closed on its line", "<!-- note -->\n" + table),
             ("closed before the table", "<!--\nnote\n-->\n" + table),
             ("an empty comment", "<!-->\n" + table),
-            ("a marker in a code span", "the `<!--` marker\n" + table),
+            ("a quoted closer on the opening line", "<!-- `-->`\n" + table),
             ("a marker in a fence", "```\n<!--\n```\n" + table),
             ("a closer alone", "-->\n" + table),
             ("a backticked closer still closes", "<!--\n`-->`\n" + table),

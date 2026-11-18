@@ -45,8 +45,6 @@ _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 _CONTAINER = re.compile(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)|^ {0,3}[<>]")
 # Any spelling GitHub could render as either row once such a fence ends early: indented, or without its pipe.
 _ROWISH = re.compile(r"^[ \t]*\|?[ \t]*(?:Class|Touch set)[ \t]*\|")
-# A code span, the last on its line first, as pr-locality.sh's bash match takes it, so a quoted `<!--` opens nothing.
-_LAST_CODE_SPAN = re.compile(r"^(.*)`[^`]*`(.*)$", re.DOTALL)
 _MAP_CLASS = re.compile(r"^([A-E]):\s*$")
 _MAP_ITEM = re.compile(r"^  - '([^']+)'\s*$")
 
@@ -162,14 +160,15 @@ def _unfenced(body: str) -> list[str]:
 
 
 def _opens_comment(line: str, inside: bool) -> bool:
-    """Whether an HTML comment is open after the line: its last `<!--` outside a code span has no `-->` after it.
+    """Whether an HTML comment is open after the line: its last `<!--` has no `-->` after it.
 
-    Inside a comment a backtick is no code span, since GitHub ends the comment at any `-->`.
+    A backtick is not read as a code span, since its run length and escapes decide one; a quoted `<!--` is then
+    read as opening a comment, which can only refuse a body GitHub shows, never read one it hides.
     """
-    while not inside and (match := _LAST_CODE_SPAN.match(line)):
-        line = match.group(1) + match.group(2)
-    opened, closed = line.rfind("<!--"), line.rfind("-->")
-    return inside if opened < 0 and closed < 0 else opened > closed
+    opened = line.rfind("<!--")
+    if opened >= 0:
+        return "-->" not in line[opened + 2:]
+    return inside and "-->" not in line
 
 
 def _cell(rest: str, row: str) -> str:
