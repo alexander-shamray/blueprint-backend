@@ -68,11 +68,12 @@ it off the build's path: it runs beside the build, never downstream of it.
 
 ## What it does not claim
 
-- **The licence of a row nothing pins.** The three licence-cell refusals
-  above are made per pin, so an unpinned Aspire row, or the unchosen half of
-  an either/or row, is never read: an empty, forbidden or unknown licence
-  there passes. Such a row reaches no build until it is pinned, and then it
-  is read.
+- **The licence of an Aspire row.** The three licence-cell refusals above
+  are made per pin, and the deliberately unpinned Aspire rows are skipped
+  whole, so an empty, forbidden or unknown licence there passes. A pin of an
+  Aspire package is refused as unregistered, since the rows name globs, so
+  the cell is read only once a row names the package and leaves
+  `UNPINNED_ROWS`.
 - **A pin written anywhere but the props file.** A `PackageVersion` or
   `GlobalPackageReference` in another imported `.props` or `.targets` is not
   read as a pin, so a package supplied that way passes unregistered. That is
