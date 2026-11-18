@@ -187,9 +187,9 @@ public sealed class TransportSecurityTests
     public void Every_broker_host_a_bus_dials_asks_the_scheme_for_tls()
     {
         // Per call site, as the project check above is not: a project whose second bus or topology bus sets its
-        // host without asking would pass it. A host's ask is read up to the next host, and a file's asks must
-        // equal its hosts, so an ask below the last host is not its. The connection-string check needs no such
-        // case: the start-up check reads every ConnectionStrings key, so one call covers the host.
+        // host without asking would pass it. A host's ask is read inside its own call, and a file's asks must
+        // equal its hosts, so one outside every host fails. The connection-string check needs no such case:
+        // the start-up check reads every ConnectionStrings key, so one call covers the host.
         string root = RepositoryRoot();
         string[] files =
         [
@@ -204,7 +204,7 @@ public sealed class TransportSecurityTests
         foreach (string file in files)
         {
             string code = SourceCode.Code(File.ReadAllText(file));
-            string[] sites = BrokerHosts(code);
+            string[] sites = SourceCode.Calls(code, ".Host(");
             hosts += sites.Length;
             for (int i = 0; i < sites.Length; i++)
                 Asks(sites[i]).ShouldBe(1, $"{Path.GetRelativePath(root, file)}, host {i + 1}");
@@ -218,13 +218,15 @@ public sealed class TransportSecurityTests
     [Fact]
     public void A_host_beside_one_that_asks_is_read_on_its_own()
     {
-        // The case's subject is the split: a per-project presence check would read this source as covered.
+        // The case's subject is the split: a per-project presence check would read this source as covered, and a
+        // slice to the next host or the file's end would give the last host the ask below it.
         const string source = """
                               cfg.Host(broker, h => { if (TransportSecurity.IsTls(broker)) h.UseSsl(s => { }); });
                               topology.Host(broker, h => { });
+                              bool tls = TransportSecurity.IsTls(broker);
                               """;
 
-        string[] sites = BrokerHosts(source);
+        string[] sites = SourceCode.Calls(source, ".Host(");
 
         sites.Length.ShouldBe(2);
         Asks(sites[0]).ShouldBe(1);
@@ -252,20 +254,6 @@ public sealed class TransportSecurityTests
         {
             Directory.Delete(project, recursive: true);
         }
-    }
-
-    // Each `.Host(` call up to the next: MassTransit's broker address, where the TLS decision is made.
-    private static string[] BrokerHosts(string code)
-    {
-        List<int> starts = [];
-        for (int at = code.IndexOf(".Host(", StringComparison.Ordinal);
-             at >= 0;
-             at = code.IndexOf(".Host(", at + 1, StringComparison.Ordinal))
-        {
-            starts.Add(at);
-        }
-
-        return [.. starts.Select((at, i) => code[at..(i + 1 < starts.Count ? starts[i + 1] : code.Length)])];
     }
 
     private static int Asks(string code) => code.Split("TransportSecurity.IsTls(").Length - 1;
