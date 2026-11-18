@@ -2652,11 +2652,19 @@ for chart in $SERVICE_CHARTS; do
         continue
     else
         pinned=$((pinned + 1))
-        { grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" || true; } |
-            sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
+        # Any scheme and host, so a `+`, `*` or https endpoint is compared too; every Url must give its port.
+        { grep -ohE '"Url"[[:space:]]*:[[:space:]]*"[a-z]+://[^"/]+:[0-9]+' "$settings" || true; } |
+            sed -E 's|.*:([0-9]+)$|\1|' >"$OUT/$chart-ports.txt"
+        urls="$({ grep -oE '"Url"[[:space:]]*:' "$settings" || true; } | wc -l)"
+        sort -u "$OUT/$chart-ports.txt" >"$OUT/$chart-listeners.txt"
 
         if [ ! -s "$OUT/$chart-listeners.txt" ]; then
             fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
+            continue
+        fi
+        parsed="$(wc -l <"$OUT/$chart-ports.txt")"
+        if [ "$parsed" -ne "$urls" ]; then
+            fail "$settings holds $urls Kestrel Url(s) but $parsed port(s) parsed — the parse, not the chart, is wrong"
             continue
         fi
     fi
