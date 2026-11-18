@@ -35,7 +35,8 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         OutboxMessage poison = rows.Single(r => r.ProcessedAt is null);
         poison.Attempts.ShouldBe(1);
         poison.LastError.ShouldNotBeNullOrEmpty();
-        OutboxBackoffRule.Violation(poison, attemptsBefore: 0).ShouldBeNull();     // backed off, not abandoned
+        OutboxBackoffRule.Violation(poison, attemptsBefore: 0, await fixture.DatabaseNowAsync())
+            .ShouldBeNull();     // backed off, not abandoned
     }
 
     [Fact]
@@ -49,7 +50,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         OutboxMessage row = (await fixture.OutboxAsync()).Single();
         row.Attempts.ShouldBe(4);
-        OutboxBackoffRule.Violation(row, attemptsBefore: 3).ShouldBeNull();
+        OutboxBackoffRule.Violation(row, attemptsBefore: 3, await fixture.DatabaseNowAsync()).ShouldBeNull();
     }
 
     [Fact]

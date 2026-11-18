@@ -250,10 +250,6 @@ public sealed class ServiceFixture()
     public Task<DateTimeOffset?> LockedUntilAsync(ShipmentId id) =>
         ScalarAsync<DateTimeOffset?>("SELECT Value = LockedUntil FROM shipping.Shipments WHERE Id = {0}", id.Value);
 
-    /// <summary>The engine's own clock, since the container's and the host's can disagree.</summary>
-    public Task<DateTimeOffset> DatabaseNowAsync() =>
-        ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
-
     /// <summary>Repoints a booked row at a reference a test's own carrier answers.</summary>
     public Task SetCarrierReferenceAsync(ShipmentId id, string reference) =>
         ExecuteAsync(

@@ -10,26 +10,26 @@ public class OutboxBackoffRuleTests
     [Fact]
     public void A_first_failure_backed_off_for_the_next_rung_is_refused()
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = DateTimeOffset.UnixEpoch;
 
-        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(0), attemptsBefore: 0).ShouldBeNull();
-        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(1), attemptsBefore: 0).ShouldNotBeNull();
+        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(0), attemptsBefore: 0, now).ShouldBeNull();
+        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(1), attemptsBefore: 0, now).ShouldNotBeNull();
     }
 
     [Fact]
     public void A_later_failure_keeps_the_full_slack_either_way()
     {
         TimeSpan expected = OutboxBackoffRule.Ladder(3);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = DateTimeOffset.UnixEpoch;
 
-        OutboxBackoffRule.Violation(now + expected + TimeSpan.FromSeconds(7), attemptsBefore: 3).ShouldBeNull();
-        OutboxBackoffRule.Violation(now + expected - TimeSpan.FromSeconds(7), attemptsBefore: 3).ShouldBeNull();
-        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(4), attemptsBefore: 3).ShouldNotBeNull();
+        OutboxBackoffRule.Violation(now + expected + TimeSpan.FromSeconds(7), attemptsBefore: 3, now).ShouldBeNull();
+        OutboxBackoffRule.Violation(now + expected - TimeSpan.FromSeconds(7), attemptsBefore: 3, now).ShouldBeNull();
+        OutboxBackoffRule.Violation(now + OutboxBackoffRule.Ladder(4), attemptsBefore: 3, now).ShouldNotBeNull();
     }
 
     [Fact]
     public void A_row_with_no_lock_is_refused()
     {
-        OutboxBackoffRule.Violation(lockedUntil: null, attemptsBefore: 0).ShouldNotBeNull();
+        OutboxBackoffRule.Violation(lockedUntil: null, attemptsBefore: 0, DateTimeOffset.UtcNow).ShouldNotBeNull();
     }
 }

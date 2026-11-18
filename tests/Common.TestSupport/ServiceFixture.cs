@@ -377,6 +377,11 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             lane.ToString(),
             messageId);
 
+    /// <summary>The engine's own clock, which stamps every back-off, since the container's and the host's can
+    /// disagree.</summary>
+    public Task<DateTimeOffset> DatabaseNowAsync() =>
+        ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
+
     /// <summary>Clears retry backoff leases, so the next pass is gated only by the attempt cap.</summary>
     public Task ExpireOutboxLeasesAsync() =>
         ExecuteAsync($"UPDATE {_schema}.OutboxMessages SET LockedUntil = NULL WHERE ProcessedAt IS NULL;");
