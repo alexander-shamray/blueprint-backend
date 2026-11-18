@@ -314,6 +314,16 @@ class Audit(unittest.TestCase):
         self.assertIn("MPL-2.0", findings[0])
         self.assertIn("outside the allow-list", findings[0])
 
+    def test_fails_a_registered_pin_whose_licence_cell_names_nothing(self):
+        # spdx() drops empty parts, so an empty or slash-only cell is no licences, which nothing below refused.
+        for cell in ("", " ", "/", " / "):
+            with self.subTest(cell=cell):
+                rows = register(f"| `Dapper` | {cell} | Data |")
+                findings = licence_gate.audit({"Dapper"}, rows, ALLOWED)
+                self.assertEqual(len(findings), 1, findings)
+                self.assertIn("Dapper", findings[0])
+                self.assertIn("no licence", findings[0])
+
     def test_clears_a_dual_licence_when_every_half_is_allowed(self):
         rows = register("| `Google.Protobuf` | Apache 2.0 / BSD-3 | gRPC |")
         self.assertEqual(licence_gate.audit({"Google.Protobuf"}, rows, ALLOWED), [])

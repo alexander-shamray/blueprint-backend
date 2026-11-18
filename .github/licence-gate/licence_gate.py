@@ -341,6 +341,12 @@ def audit(pins: set[str], rows: list[tuple[list[str], str]], allowed: set[str]) 
             unregistered.append(
                 f"{pin} is pinned and absent from Appendix B: its licence has never been cleared")
             continue
+        # An empty cell, or one of slashes alone, names nothing; read as no parts, it would clear itself.
+        if not licences:
+            forbidden.append(
+                f"{pin} is registered with no licence in its Appendix B row: a licence "
+                f"this gate cannot name is one it must not clear")
+            continue
         unnamed = [licence for licence in licences if licence not in NAMEABLE]
         if unnamed:
             forbidden.append(
