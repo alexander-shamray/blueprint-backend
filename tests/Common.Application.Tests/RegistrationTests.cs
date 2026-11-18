@@ -84,6 +84,26 @@ public class RegistrationTests
     }
 
     [Fact]
+    public void A_class_in_two_families_is_registered_once_under_each()
+    {
+        // A duplicate runs the handler twice per event, and every ShouldContain above passes with one.
+        ServiceCollection services = new();
+        services.AddPluggableFrom(typeof(Ping).Assembly);
+
+        List<string> duplicates = services
+            .GroupBy(d => (d.ServiceType, d.ImplementationType))
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key.ImplementationType?.Name} as {g.Key.ServiceType.Name} x{g.Count()}")
+            .ToList();
+
+        duplicates.ShouldBeEmpty();
+        services.ShouldContain(d => d.ImplementationType == typeof(TwoFamilyHandler)
+            && d.ServiceType == typeof(IProjectionHandler<TwoFamilyEvent>));
+        services.ShouldContain(d => d.ImplementationType == typeof(TwoFamilyHandler)
+            && d.ServiceType == typeof(IIntegrationEventHandler<TwoFamilyEvent>));
+    }
+
+    [Fact]
     public void The_pipeline_behaviour_interface_is_not_one_of_the_scanned_ones()
     {
         // Registration order is pipeline order (§6.3), and a scan guarantees no order.

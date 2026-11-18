@@ -31,17 +31,11 @@ public static class DependencyInjection
         /// </summary>
         /// <remarks>Each layer calls this, because handlers do not all live in Application (§6.2).</remarks>
         public IServiceCollection AddPluggableFrom(Assembly assembly) =>
-            services.Scan(scan =>
-            {
-                IImplementationTypeSelector from = scan.FromAssemblies(assembly);
-
-                foreach (Type contract in PluggableInterfaces.All)
-                {
-                    from
-                        .AddClasses(c => c.AssignableTo(contract))
-                        .AsImplementedInterfaces()
-                        .WithScopedLifetime();
-                }
-            });
+            // One pass over every family: a pass per family registers a class that implements two of them twice.
+            services.Scan(scan => scan
+                .FromAssemblies(assembly)
+                .AddClasses(c => c.AssignableToAny(PluggableInterfaces.All))
+                .AsImplementedInterfaces()
+                .WithScopedLifetime());
     }
 }
