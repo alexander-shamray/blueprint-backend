@@ -175,8 +175,8 @@ class TouchSetGrammar(unittest.TestCase):
             read_rows("note\r```\n" + table + "```\n" + example)
 
     def test_a_row_after_an_html_comment_left_open_is_refused(self) -> None:
-        # GitHub hides the comment, and a later `-->` closes it only when its opener began an HTML block of its own,
-        # which a line reader cannot tell, so every row or fence line after an open comment is refused.
+        # GitHub hides the comment, and whether a later `-->` closes it turns on context a line reader cannot tell,
+        # so every row or fence line after an open comment is refused.
         table = "| Class | D |\n| Touch set | docs/x.md |\n"
         hidden = "| Class | E |\n| Touch set | src/y.py |\n"
         for name, text in (
@@ -196,6 +196,7 @@ class TouchSetGrammar(unittest.TestCase):
             ("an escaped backtick", "\\`<!--`\n" + hidden + "-->\n | Class | D |\n"),
             ("a quoted opener refuses, as a precaution", "the `<!--` marker\n" + table),
             ("a fence line inside a comment", "<!--\n```\n-->\n" + table + "```\n" + hidden + "```\n"),
+            ("an opener in a fence GitHub may have ended", "- note\n\n  ```\n<!--\n```\n" + hidden),
             ("a quoted opener before a fenced example",
              "Use the `<!--` marker.\n\n```\n-->\n" + hidden + "```\n\n" + table),
         ):

@@ -23,10 +23,11 @@ for the first two; this gate is §3 enforced.
   block quote is refused too, as a precaution. A row or a fence line after
   an HTML comment left open is refused as well: a `<!--` outside a fence
   with no `-->` after it on its line leaves one open, and it is never
-  closed, since a later `-->` ends it on GitHub only when its opener began
-  an HTML block of its own, and otherwise GitHub hides the rest of the
-  body. Backticks are not read as code spans here, so a quoted `<!--`
-  counts as an opener.
+  closed, since whether a later `-->` ends it on GitHub turns on block or
+  inline context and paragraph ends, which a line reader cannot tell. So
+  does such a `<!--` inside a fence opened after a list item, block quote
+  or HTML block, which GitHub may have ended already. Backticks are not
+  read as code spans here, so a quoted `<!--` counts as an opener.
 - [`classes.yml`](classes.yml), the one place the class → tree-set map
   lives. The contract's table states each class in words and cites the file.
   It is read by a parser that accepts the one shape the file's header states

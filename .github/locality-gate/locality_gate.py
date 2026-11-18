@@ -134,8 +134,8 @@ def _unfenced(body: str) -> list[str]:
     contained = after_container = comment = False
     for line in body.replace("\r", "").split("\n"):
         if comment:
-            # A comment left open past its line is never closed here: a later `-->` ends it only when its opener
-            # began an HTML block of its own, which a line reader cannot tell, and GitHub otherwise hides the rest.
+            # A comment left open past its line is never closed here: whether a later `-->` ends it turns on block
+            # or inline context and paragraph ends, which a line reader cannot tell, so none is assumed to.
             if _ROWISH.match(line) or _FENCE_OPEN.match(line):
                 raise InputRefused(
                     "a `| Class |` or `| Touch set |` row, or a fence line, sits after an HTML comment left open, "
@@ -146,6 +146,8 @@ def _unfenced(body: str) -> list[str]:
                 raise InputRefused(
                     "a `| Class |` or `| Touch set |` row sits in a fenced block after a list, block quote or "
                     "HTML block, where GitHub can end the fence sooner than this gate reads it")
+            # GitHub may have ended such a fence already, and then this line's `<!--` hides the rest of the body.
+            comment = comment or (contained and _opens_comment(line))
             close = _FENCE_CLOSE.match(line)
             if close and close.group(1)[0] == fence[0] and len(close.group(1)) >= len(fence):
                 fence = ""
