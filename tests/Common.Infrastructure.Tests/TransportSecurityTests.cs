@@ -183,11 +183,24 @@ public sealed class TransportSecurityTests
             .ShouldBeEmpty();
     }
 
+    [Fact]
+    public void A_call_named_only_in_a_comment_or_a_string_is_not_read_as_made()
+    {
+        string code = SourceCode.Code(
+            "// services.AddTransportSecurity()\n/* MigratorTransport.Refusal( */\n"
+            + "var s = \"TransportSecurity.IsTls(\"; var u = \"https://x\"; services.AddTransportSecurity();");
+
+        code.ShouldNotContain("MigratorTransport.Refusal(");
+        code.ShouldNotContain("TransportSecurity.IsTls(");
+        code.Split("services.AddTransportSecurity()").Length.ShouldBe(2, "only the call itself is code");
+    }
+
+    // Code alone, so a comment or a string naming a call is not the project making it.
     private static IEnumerable<string> Sources(string project) =>
         Directory.EnumerateFiles(project, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
                         !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-            .Select(File.ReadAllText);
+            .Select(file => SourceCode.Code(File.ReadAllText(file)));
 
     private static string RepositoryRoot()
     {
