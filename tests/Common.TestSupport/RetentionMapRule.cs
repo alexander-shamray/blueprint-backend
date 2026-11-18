@@ -158,16 +158,18 @@ public static partial class RetentionMapRule
 
     private static string MapPath => Path.Combine(ComposeImage.RepositoryRoot(), "docs", "personal-data.md");
 
+    // Inherited members too, static ones included, since a window a base class declares is still this type's.
     private static IEnumerable<string> MembersOf(Type type)
     {
         const BindingFlags Visible = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
-            BindingFlags.DeclaredOnly;
+            BindingFlags.FlattenHierarchy;
 
         return type
             .GetProperties(Visible)
             .Where(property => IsWindow(property.PropertyType))
             .Select(property => property.Name)
-            .Concat(type.GetFields(Visible).Where(field => IsWindow(field.FieldType)).Select(field => field.Name));
+            .Concat(type.GetFields(Visible).Where(field => IsWindow(field.FieldType)).Select(field => field.Name))
+            .Distinct();
     }
 
     private static bool IsWindow(Type type) => type == typeof(TimeSpan) || type == typeof(TimeSpan?);
