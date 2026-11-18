@@ -186,13 +186,24 @@ public sealed class TransportSecurityTests
     [Fact]
     public void A_call_named_only_in_a_comment_or_a_string_is_not_read_as_made()
     {
-        string code = SourceCode.Code(
-            "// services.AddTransportSecurity()\n/* MigratorTransport.Refusal( */\n"
-            + "var s = \"TransportSecurity.IsTls(\"; var u = \"https://x\"; services.AddTransportSecurity();");
+        // Through the scans' own reader, so a reader that went back to the raw text fails here.
+        string project = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(project, "Program.cs"),
+                "// services.AddTransportSecurity()\n/* MigratorTransport.Refusal( */\n"
+                + "var s = \"TransportSecurity.IsTls(\"; var u = \"https://x\"; services.AddTransportSecurity();");
 
-        code.ShouldNotContain("MigratorTransport.Refusal(");
-        code.ShouldNotContain("TransportSecurity.IsTls(");
-        code.Split("services.AddTransportSecurity()").Length.ShouldBe(2, "only the call itself is code");
+            string code = Sources(project).ShouldHaveSingleItem();
+            code.ShouldNotContain("MigratorTransport.Refusal(");
+            code.ShouldNotContain("TransportSecurity.IsTls(");
+            code.Split("services.AddTransportSecurity()").Length.ShouldBe(2, "only the call itself is code");
+        }
+        finally
+        {
+            Directory.Delete(project, recursive: true);
+        }
     }
 
     // Code alone, so a comment or a string naming a call is not the project making it.
