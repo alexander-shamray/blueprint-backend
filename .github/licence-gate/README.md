@@ -48,6 +48,8 @@ it off the build's path: it runs beside the build, never downstream of it.
   one: the Aspire rows are deliberately unpinned, and an either/or row
   expects only its chosen half;
 - a project that pins for itself rather than through the props file;
+- a registered row whose licence cell names nothing, empty or slashes
+  alone: a cell read as no licences would otherwise clear itself;
 - a registered licence any part of which is outside `allowed-licences.txt`.
   **Every** part of a multi-part cell has to be inside it: the gate reads a
   `/` and cannot tell a disjunction from a conjunction, so a row cleared
