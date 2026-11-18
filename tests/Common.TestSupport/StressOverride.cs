@@ -37,7 +37,10 @@ public static partial class StressOverride
                     $"'{key}' in the stress override is not a Section__Key entry, so no bind would read it");
             }
 
-            entries.Add(new(key.Replace("__", ":", StringComparison.Ordinal), entry.Groups["value"].Value));
+            string value = entry.Groups["single"].Success
+                ? entry.Groups["value"].Value.Replace("''", "'", StringComparison.Ordinal)
+                : entry.Groups["value"].Value;
+            entries.Add(new(key.Replace("__", ":", StringComparison.Ordinal), value));
         }
 
         return new ConfigurationBuilder().AddInMemoryCollection(entries).Build();
@@ -45,11 +48,15 @@ public static partial class StressOverride
 
     // A map entry, bare, double- or single-quoted, or a list item's `Key=value`, a closing quote only where one
     // opened. A bare value may hold a space or a quote, so the key on such a line is still judged rather than the line
-    // skipped, and as in YAML only a `#` after a space starts a comment.
+    // skipped; as in YAML, a quoted value runs to its quote, `''` escapes one inside single quotes (`single` marks
+    // it), and only a `#` after a space starts a comment.
     [GeneratedRegex(
-        """^\s+(?:-\s*(?<lq>["']?)(?<key>[^\s=#"']+)=(?<value>(?:[^#]|(?<=\S)#)*?)\k<lq>|""" +
+        """^\s+(?:-\s*(?:"(?<key>[^\s=#"']+)=(?<value>[^"]*)"|""" +
+        """'(?<key>[^\s=#"']+)=(?<single>(?<value>(?:[^']|'')*))'|""" +
+        """(?<key>[^\s=#"']+)=(?<value>(?:[^#]|(?<=\S)#)*?))|""" +
         """(?<kq>["']?)(?<key>(?:[^\s:#"']|:(?=[^\s"']))+)\k<kq>\s*:\s*""" +
-        """(?:"(?<value>[^"]*)"|'(?<value>[^']*)'|(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)\s*(?:(?<=\s)#.*)?$""")]
+        """(?:"(?<value>[^"]*)"|'(?<single>(?<value>(?:[^']|'')*))'|(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)""" +
+        """\s*(?:(?<=\s)#.*)?$""")]
     private static partial Regex Entry();
 
     // Beside a `__` in any case, since configuration is case-blind, a capitalised name with a lower-case letter and a
