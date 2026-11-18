@@ -2632,6 +2632,30 @@ section 'The Service forwards to a port something is listening on'
 # service stops pinning is held to 8080 rather than skipped. The count that
 # pins is asserted below, so a search that stops finding any fails rather than
 # passing quietly.
+
+# Keys match in any case, as .NET binds configuration, and a `//` line is
+# skipped, as the host's JSON reader skips it. Any scheme and host is read, so a
+# `+`, `*` or https endpoint is compared too; every Url must give its port.
+kestrel_urls() { grep -v '^[[:space:]]*//' "$1" | { grep -oiE '"url"[[:space:]]*:' || true; } | wc -l; }
+kestrel_ports() {
+    grep -v '^[[:space:]]*//' "$1" |
+        { grep -oiE '"url"[[:space:]]*:[[:space:]]*"[a-z]+://[^"/]+:[0-9]+' || true; } |
+        sed -E 's|.*:([0-9]+)$|\1|'
+}
+
+# The parse is held to fixtures, because every real file parses as many ports
+# as it has Urls, and a regression in either function would read as agreement.
+printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
+    '  "Grpc": { "url": "http://+:8082" },' '  // "Old": { "Url": "http://0.0.0.0:9999" }' '} } }' \
+    >"$OUT/kestrel-mixed.json"
+printf '%s\n' '{ "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0" } } } }' >"$OUT/kestrel-portless.json"
+check 'the listener parse reads a + host and a lower-case key, and skips a // line' \
+    test "$(kestrel_ports "$OUT/kestrel-mixed.json" | tr '\n' ' ')" = '8080 8082 '
+check 'the listener count matches the parse when every Url gives a port' \
+    test "$(kestrel_urls "$OUT/kestrel-mixed.json")" -eq 2
+check 'a portless Url is counted but parses no port, so the count check refuses it' \
+    test "$(kestrel_urls "$OUT/kestrel-portless.json")" -eq 1 -a -z "$(kestrel_ports "$OUT/kestrel-portless.json")"
+
 pinned=0
 for chart in $SERVICE_CHARTS; do
     # The host's own project, not its source: a service with two hosts holds two settings files under one source,
@@ -2642,7 +2666,7 @@ for chart in $SERVICE_CHARTS; do
         fail "$chart's host $(field "$chart" host) has no project under its source — the search is wrong"
         continue
     fi
-    settings="$(grep -rl '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
+    settings="$(grep -rli '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
         "$(dirname "$project")" || true)"
 
     if [ -z "$settings" ]; then
@@ -2652,10 +2676,8 @@ for chart in $SERVICE_CHARTS; do
         continue
     else
         pinned=$((pinned + 1))
-        # Any scheme and host, so a `+`, `*` or https endpoint is compared too; every Url must give its port.
-        { grep -ohE '"Url"[[:space:]]*:[[:space:]]*"[a-z]+://[^"/]+:[0-9]+' "$settings" || true; } |
-            sed -E 's|.*:([0-9]+)$|\1|' >"$OUT/$chart-ports.txt"
-        urls="$({ grep -oE '"Url"[[:space:]]*:' "$settings" || true; } | wc -l)"
+        kestrel_ports "$settings" >"$OUT/$chart-ports.txt"
+        urls="$(kestrel_urls "$settings")"
         sort -u "$OUT/$chart-ports.txt" >"$OUT/$chart-listeners.txt"
 
         if [ ! -s "$OUT/$chart-listeners.txt" ]; then
@@ -2664,7 +2686,8 @@ for chart in $SERVICE_CHARTS; do
         fi
         parsed="$(wc -l <"$OUT/$chart-ports.txt")"
         if [ "$parsed" -ne "$urls" ]; then
-            fail "$settings holds $urls Kestrel Url(s) but $parsed port(s) parsed — the parse, not the chart, is wrong"
+            # The whole file is read, so a Url outside the Kestrel object is counted too.
+            fail "$settings holds $urls Url(s), $parsed port(s) parsed — a portless or non-Kestrel Url, or the parse"
             continue
         fi
     fi
