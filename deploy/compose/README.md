@@ -439,6 +439,7 @@ where the service actually is.
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
+export ASPNETCORE_URLS='http://localhost:5000'
 export Identity__Authority='http://localhost:8080/realms/commerce'
 export ReverseProxy__Clusters__catalog__Destinations__d1__Address='http://localhost:5102/'
 export ReverseProxy__Clusters__ordering__Destinations__d1__Address='http://localhost:5101/'
@@ -449,6 +450,15 @@ env 'ReverseProxy__Clusters__web-bff__Destinations__d1__Address=http://localhost
     'ReverseProxy__Clusters__web-bff-assistant__Destinations__d1__Address=http://localhost:5200/' \
     dotnet run --project src/Gateway/Gateway.Api
 ```
+
+**Each host-run block that has no `Kestrel:Endpoints` of its own names its
+address in `ASPNETCORE_URLS`.** None ships a `launchSettings.json`, so without
+it the gateway, Payments, the BFF and Shipping's worker all bind Kestrel's
+default `http://localhost:5000`, and the second to start fails to bind. The
+gateway keeps 5000, the port Compose publishes it on; Payments and the BFF
+take 5104 and 5200, the addresses its clusters above name; and Shipping's
+worker, which no host-run peer calls, takes 5106, which nothing else here
+publishes.
 
 **A destination joins this block with the PR that builds its service**, the
 same rule the Compose file's `depends_on` follows. Ordering's line arrived with
@@ -467,6 +477,7 @@ Catalog's **gRPC** port rather than its REST one:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
+export ASPNETCORE_URLS='http://localhost:5200'
 export ConnectionStrings__Bff='Server=localhost;Database=Bff;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://bff-svc:local-dev-bff@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
@@ -493,6 +504,7 @@ unit sets:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
+export ASPNETCORE_URLS='http://localhost:5104'
 export ConnectionStrings__Payments='Server=localhost;Database=Payments;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://payments-svc:local-dev-payments@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
@@ -527,6 +539,7 @@ points at the port it publishes:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
+export ASPNETCORE_URLS='http://localhost:5106'
 export ConnectionStrings__Shipping='Server=localhost;Database=Shipping;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://shipping-svc:local-dev-shipping@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
