@@ -20,7 +20,10 @@ for the first two; this gate is §3 enforced.
   that opens after a list item, block quote or HTML block is refused rather
   than skipped: GitHub ends a fence in a list item when the list ends, and
   hides a fence line inside a comment, which a line reader cannot follow; a
-  block quote is refused too, as a precaution.
+  block quote is refused too, as a precaution. A row inside an HTML comment
+  is refused as well, since GitHub hides it: a comment opens at a `<!--`
+  outside a code span and fence with no `-->` after it on its line, and
+  closes at the next line holding a `-->`, quoted or not.
 - [`classes.yml`](classes.yml), the one place the class → tree-set map
   lives. The contract's table states each class in words and cites the file.
   It is read by a parser that accepts the one shape the file's header states

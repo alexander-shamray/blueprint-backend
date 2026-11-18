@@ -45,6 +45,8 @@ _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 _CONTAINER = re.compile(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)|^ {0,3}[<>]")
 # Any spelling GitHub could render as either row once such a fence ends early: indented, or without its pipe.
 _ROWISH = re.compile(r"^[ \t]*\|?[ \t]*(?:Class|Touch set)[ \t]*\|")
+# A code span, the last on its line first, as pr-locality.sh's bash match takes it, so a quoted `<!--` opens nothing.
+_LAST_CODE_SPAN = re.compile(r"^(.*)`[^`]*`(.*)$", re.DOTALL)
 _MAP_CLASS = re.compile(r"^([A-E]):\s*$")
 _MAP_ITEM = re.compile(r"^  - '([^']+)'\s*$")
 
@@ -131,8 +133,15 @@ def _unfenced(body: str) -> list[str]:
         raise InputRefused("the body carries a carriage return that is not part of a CRLF line ending")
     lines: list[str] = []
     fence = ""
-    contained = after_container = False
+    contained = after_container = comment = False
     for line in body.replace("\r", "").split("\n"):
+        if comment:
+            # GitHub hides the comment, fence lines and rows alike, so a row here is not the one a reviewer sees.
+            if _ROWISH.match(line):
+                raise InputRefused(
+                    "a `| Class |` or `| Touch set |` row sits inside an HTML comment, which GitHub hides")
+            comment = _opens_comment(line, comment)
+            continue
         if fence:
             if contained and _ROWISH.match(line):
                 raise InputRefused(
@@ -147,8 +156,20 @@ def _unfenced(body: str) -> list[str]:
         if opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
             fence, contained = opener.group(1), after_container
             continue
+        comment = _opens_comment(line, comment)
         lines.append(line)
     return lines
+
+
+def _opens_comment(line: str, inside: bool) -> bool:
+    """Whether an HTML comment is open after the line: its last `<!--` outside a code span has no `-->` after it.
+
+    Inside a comment a backtick is no code span, since GitHub ends the comment at any `-->`.
+    """
+    while not inside and (match := _LAST_CODE_SPAN.match(line)):
+        line = match.group(1) + match.group(2)
+    opened, closed = line.rfind("<!--"), line.rfind("-->")
+    return inside if opened < 0 and closed < 0 else opened > closed
 
 
 def _cell(rest: str, row: str) -> str:

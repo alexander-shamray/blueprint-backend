@@ -175,6 +175,35 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "carriage return"):
             read_rows("note\r```\n" + table + "```\n" + example)
 
+    def test_a_row_inside_an_html_comment_is_refused(self) -> None:
+        # GitHub hides the comment, so its row is not the table a reviewer reads; the cases are test_pr_helpers.py's.
+        table = "| Class | D |\n| Touch set | docs/x.md |\n"
+        hidden = "| Class | E |\n| Touch set | src/y.py |\n"
+        for name, text in (
+            ("before the table", "<!--\n" + hidden + "-->\n" + table),
+            ("after the table", table + "<!-- a note\n" + hidden + "-->\n"),
+            ("never closed", table + "\n<!--\n" + hidden),
+            ("opened mid-line", table + "text <!-- note\n" + hidden + "-->\n"),
+            ("reopened after a close", table + "<!-- a --> b <!--\n" + hidden + "-->\n"),
+            ("indented row", table + "<!--\n  | Class | E |\n-->\n"),
+            ("pipeless row", table + "<!--\nTouch set | src/y.py |\n-->\n"),
+            ("crlf", (table + "<!--\n" + hidden + "-->\n").replace("\n", "\r\n")),
+        ):
+            with self.subTest(name=name), self.assertRaisesRegex(InputRefused, "inside an HTML comment"):
+                read_rows(text)
+        # A comment GitHub closes, or a marker GitHub shows as code, hides nothing the table holds.
+        for name, text in (
+            ("closed on its line", "<!-- note -->\n" + table),
+            ("closed before the table", "<!--\nnote\n-->\n" + table),
+            ("an empty comment", "<!-->\n" + table),
+            ("a marker in a code span", "the `<!--` marker\n" + table),
+            ("a marker in a fence", "```\n<!--\n```\n" + table),
+            ("a closer alone", "-->\n" + table),
+            ("a backticked closer still closes", "<!--\n`-->`\n" + table),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(read_rows(text), (["D"], ["docs/x.md"]))
+
     def test_a_class_letter_outside_a_to_e_is_refused(self) -> None:
         with self.assertRaisesRegex(InputRefused, "Class row is not a class"):
             read_rows(body("Z", "`docs/**`"))
