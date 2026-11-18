@@ -135,6 +135,67 @@ def mktemp_fixture(source: str) -> list[int]:
     return [node.lineno for node in _strings(tree) if id(node) not in prose and MKTEMP_DIRECTORY.search(node.value)]
 
 
+# Stands for a `*splice` in the argv: any number of options may be in it, so it is read past.
+SPLICED = object()
+
+
+def dash_c_unguarded(flags: list[object]) -> bool:
+    """Whether interpreter options reach `-c`, alone or in a combined short flag, with neither `P` nor `I` before it.
+
+    Options end at the first element not starting with `-`, or at `-m`. A `None` (one non-literal) is the script and
+    ends them too, but straight after a `SPLICED` it may be a spliced option's argument, so it is read past there.
+    """
+    guarded, spliced, at = False, False, 0
+    while at < len(flags):
+        flag = flags[at]
+        if flag is SPLICED or (flag is None and spliced):
+            spliced, at = flag is SPLICED, at + 1
+            continue
+        spliced = False
+        if not isinstance(flag, str):
+            return False
+        if not flag.startswith("-") or flag in ("-", "--"):
+            return False
+        if flag.startswith("--"):
+            at += 2 if flag == "--check-hash-based-pycs" else 1
+            continue
+        for place, letter in enumerate(flag[1:], 1):
+            if letter in "PI":
+                guarded = True
+            elif letter == "c":
+                return not guarded
+            elif letter == "m":
+                return False
+            elif letter in "WX":
+                # The rest of the flag, or the next element, is the option's argument.
+                at += place == len(flag) - 1
+                break
+        at += 1
+    return False
+
+
+def unsafe_dash_c(source: str) -> list[int]:
+    """Lines of an argv literal that runs `sys.executable -c` with neither `-P` nor `-I` before the `-c`.
+
+    `-c` puts the working directory first on `sys.path`, where a planted stdlib-named module would be imported.
+    Only a literal list or tuple headed by `sys.executable` is read, not one built by name, splice or `.append`.
+    """
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.List, ast.Tuple)) or not node.elts:
+            continue
+        head = node.elts[0]
+        if not (isinstance(head, ast.Attribute) and head.attr == "executable" and _name(head.value) == "sys"):
+            continue
+        # A placeholder keeps each element's place, so an option's argument stays the element after it.
+        flags = [e.value if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                 else SPLICED if isinstance(e, ast.Starred) else None
+                 for e in node.elts[1:]]
+        if dash_c_unguarded(flags):
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
 def offences(root: Path, check) -> list[str]:
     return [f"{path.relative_to(root).as_posix()}:{line}"
             for path in python_files(root)
@@ -172,6 +233,39 @@ class PythonHygiene(unittest.TestCase):
     def test_no_cleanup_swallows_its_errors_beside_a_repository(self) -> None:
         self.assertEqual(offences(ROOT, swallowed_cleanup), [],
                          "build on tempfile.TemporaryDirectory: its cleanup clears the bit git sets on an object")
+
+    def test_no_dash_c_child_puts_the_root_first_on_its_path(self) -> None:
+        self.assertEqual(offences(ROOT, unsafe_dash_c), [],
+                         "start a `sys.executable -c` child with `-P`: `-c` puts the working directory first"
+                         " (only a literal argv headed by `sys.executable` is checked)")
+
+    def test_an_unsafe_dash_c_child_is_refused(self) -> None:
+        source = ("import subprocess, sys\n"
+                  "subprocess.run([sys.executable, '-c', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-P', '-c', 'pass'])\n"
+                  "CHILD = (sys.executable, '-c', 'import fcntl')\n"
+                  "subprocess.run([sys.executable, '-I', '-c', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-uc', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-cpass'])\n"
+                  "subprocess.run([sys.executable, '-W', 'ignore', '-c', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-Pc', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-cP', 'pass'])\n"
+                  "subprocess.run([sys.executable, 'script.py', '-c'])\n"
+                  "subprocess.run([sys.executable, '-m', 'unittest', '-c'])\n"
+                  "subprocess.run([sys.executable, '-W', '-c', 'script.py'])\n"
+                  "subprocess.run([sys.executable, '-W', warn, '-c', code])\n"
+                  "subprocess.run([sys.executable, '--check-hash-based-pycs', 'always', '-c', 'pass'])\n"
+                  "subprocess.run([sys.executable, '-Wc'])\n"
+                  "subprocess.run([sys.executable, '-Xdev', '-c', 'pass'])\n"
+                  "subprocess.run([sys.executable, '--', '-c'])\n"
+                  # A splice may hold any options, so the `-c` after it counts; a single non-literal is the script.
+                  "subprocess.run([sys.executable, *opts, '-c', code])\n"
+                  "subprocess.run([sys.executable, str(SCRIPT), '-c'])\n"
+                  "subprocess.run([sys.executable, *opts, warn, '-c', code])\n"
+                  # Only the element straight after a splice is read past; the next non-literal is the script.
+                  "subprocess.run([sys.executable, *opts, warn, str(SCRIPT), '-c'])\n"
+                  "subprocess.run([sys.executable, *opts, '-u', str(SCRIPT), '-c'])\n")
+        self.assertEqual(unsafe_dash_c(source), [2, 4, 6, 7, 8, 10, 14, 15, 17, 19, 21])
 
     def test_no_fixture_makes_its_root_with_mktemp(self) -> None:
         self.assertEqual(offences(ROOT, mktemp_fixture), [], "take the root from review_helpers.temp_root")

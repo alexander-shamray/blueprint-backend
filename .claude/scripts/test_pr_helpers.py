@@ -147,6 +147,27 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         self.assertIsNone(GH_GRANT.search("ghost"))
         self.assertIsNone(GH_GRANT.search("bash .claude/scripts/gh-pr-create.sh"))
 
+    @staticmethod
+    def code_of(helper):
+        # Comments stripped: a helper's header explains the hazard by naming
+        # the very fields it must not request, and prose cannot drift into use.
+        return [line for line in helper.read_text(encoding="utf-8").splitlines()
+                if not line.lstrip().startswith("#")]
+
+    def json_fields(self, helper):
+        """The field list after each `--json` in the helper's code, in order;
+        every `--json` must yield one, so a spelling the pattern misses fails."""
+        code = "\n".join(self.code_of(helper))
+        fields = re.findall(r"--json(?:[ \t]+|=)[\"']?([\w,]+)", code)
+        self.assertEqual(code.count("--json"), len(fields), helper.name)
+        return fields
+
+    def assert_no_feed_field(self, helper):
+        for line in self.code_of(helper):
+            with self.subTest(helper=helper.name, line=line):
+                self.assertNotIn("reviews", line)
+                self.assertNotIn("comments", line)
+
     # The payload's commands that hold each helper's grant; a target's own commands that do are held to it there.
     BRANCH_LOOKUP_COMMANDS = ("pr.md", "ship.md")
     LOCALITY_COMMANDS = ("ship.md",)
@@ -156,16 +177,12 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         # commands need, so one helper with a fixed field set serves them.
         helper = SCRIPTS / "pr-for-branch.sh"
         self.assertTrue(helper.exists())
-        text = helper.read_text(encoding="utf-8")
-        self.assertIn("--json number,state,url", text)
-        # Comments stripped: the helper's header explains the hazard by naming
-        # the very fields it must not request, and prose cannot drift into use.
-        code = [
-            line for line in text.splitlines() if not line.lstrip().startswith("#")
-        ]
-        for line in code:
-            self.assertNotIn("reviews", line)
-            self.assertNotIn("comments", line)
+        # The whole field list of every call, not a prefix: a field appended
+        # after the expected ones, `body` or `author`, would pass a prefix.
+        self.assertEqual(
+            ["nameWithOwner", "number,state,url,headRepository,headRefOid,baseRefName,mergeCommit"],
+            self.json_fields(helper))
+        self.assert_no_feed_field(helper)
         for name in self.BRANCH_LOOKUP_COMMANDS:
             with self.subTest(command=name):
                 frontmatter = (COMMANDS / name).read_text(
@@ -191,10 +208,13 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
         text = (COMMANDS / "ship.md").read_text(encoding="utf-8")
         frontmatter = text.split("---")[1]
         self.assertIn("bash .claude/scripts/pr-state.sh:*", frontmatter)
-        helper = (SCRIPTS / "pr-state.sh").read_text(encoding="utf-8")
-        self.assertIn("--json state,mergeable,mergeStateStatus,headRefOid,mergeCommit",
-                      helper)
-        self.assertNotIn("$2", helper)
+        helper = SCRIPTS / "pr-state.sh"
+        # It prints gh's JSON raw, so a field appended to the list reaches the
+        # caller: the list is compared whole, and the feed scan applies here too.
+        self.assertEqual(["state,mergeable,mergeStateStatus,headRefOid,mergeCommit"],
+                         self.json_fields(helper))
+        self.assert_no_feed_field(helper)
+        self.assertNotIn("$2", helper.read_text(encoding="utf-8"))
 
     def test_the_locality_rows_go_through_the_fixed_helper(self):
         # The change contract `docs/harness-local.md` *Documents* names asks a PR body for `| Class |` and
@@ -651,6 +671,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
                 r = self._run_locality_with_gh(self._gh_printing(body))
                 self.assertEqual(3, r.returncode, r.stderr)
                 self.assertEqual("", r.stdout)
+                # Without that refusal the missing row fails as "is not one cell", also exit 3, so the message is named.
+                self.assertIn("one row without the other", r.stderr)
 
     def test_a_row_with_no_closing_pipe_is_not_one_cell(self):
         # The CI gate's `_cell` refuses a row whose cell is not closed by a `|`, so the local verdict must too.
@@ -949,8 +971,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(GhShim, unittest.TestCase):
 # What bash 3.2, /bin/bash on macOS, refuses: `mapfile` and `readarray`, an
 # associative array, and the case-changing expansions.
 BASH_4 = re.compile(
-    r"\b(?:mapfile|readarray)\b|\b(?:declare|local|typeset)(?:\s+-[a-zA-Z]+)*?\s+-[a-zA-Z]*A"
-    r"|\$\{\w+(?:\[[^]]*\])?(?:,|\^)")
+    r"\b(?:mapfile|readarray|coproc|globstar)\b|\b(?:declare|local|typeset)(?:\s+-[a-zA-Z]+)*?\s+-[a-zA-Z]*[An]"
+    r"|\$\{\w+(?:\[[^]]*\])?(?:,|\^|@[a-zA-Z]\})|\$\{#?\w+\[\s*-"
+    r"|(?<!\|)\|&|&>>|;;&")
 
 
 class AStalledGhReadEndsAtTheBound(GhShim, unittest.TestCase):
@@ -1004,11 +1027,15 @@ class NoHelperNeedsBash4(unittest.TestCase):
         # The positive control: a pattern that matched nothing would pass every script.
         for line in ("mapfile -d '' tree < x", "readarray -t a", "declare -A seen=()", "local -rA x",
                      "declare -g -A seen=()", "local -r -A x",
-                     'echo "${name,,}"', 'echo "${name^^}"', 'echo "${name^}"'):
+                     'echo "${name,,}"', 'echo "${name^^}"', 'echo "${name^}"',
+                     "local -n ref=$1", "declare -rn ref=x", 'echo "${list[-1]}"', 'echo "${#list[ -1]}"',
+                     "git log |& head", "make &>> log", "  a) x ;;&", "coproc cat", "shopt -s globstar",
+                     'echo "${name@Q}"', 'echo "${list[0]@E}"'):
             with self.subTest(line=line):
                 self.assertRegex(line, BASH_4)
         for line in ('echo "${name}"', 'echo "${name:-a,b}"', "declare -a list=()", 'echo "${#list[@]}"',
-                     'echo "${name/,/;}"'):
+                     'echo "${name/,/;}"', 'echo "${list[@]}"', 'echo "${@}"', "a || b &", "x &> log",
+                     "  a) x ;;", 'echo "${list[i-1]}"', "local -r x", "declare -i n"):
             with self.subTest(line=line):
                 self.assertNotRegex(line, BASH_4)
 

@@ -114,6 +114,17 @@ class SyncShape(unittest.TestCase):
         self.assertEqual(3, result.returncode)
         self.assertIn("branch already exists", result.stderr)
 
+    def test_a_local_branch_differing_only_in_case_is_refused(self):
+        # Packed, so a case-insensitive filesystem holds both spellings and only the fold refuses there; a
+        # case-sensitive one holds both anyway, where the exact check misses the sibling.
+        root = self.fixture()
+        run_bash('git -C "$C" branch "$B" && git -C "$C" pack-refs --all', C=f"{root}/checkout", B=BRANCH.upper())
+        before = run_bash('git -C "$C" for-each-ref', C=f"{root}/checkout").stdout
+        result = self.sync(f"{root}/checkout")
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertIn("differs only in case", result.stderr)
+        self.assertEqual(before, run_bash('git -C "$C" for-each-ref', C=f"{root}/checkout").stdout)
+
     def test_a_branch_origin_lacks_is_refused(self):
         root = self.fixture()
         result = self.sync(f"{root}/checkout", PATH.replace("abcdef0", "1234567"), "chore/harness-sync-1234567")

@@ -36,6 +36,11 @@ OUTPUT_DIRECTORY_NAMES = frozenset({"bin", "obj"})
 # reported against the earlier stage rather than twice.
 ARTIFACT_STAGES = (("obj", "restore"), ("bin", "build"))
 
+# What `npm ci` and the Angular CLI write under a web project in `src/`. A
+# package ships its own `bin/`, which is not MSBuild's, so the residue walk
+# does not enter them.
+NOT_SOURCE_DIRECTORY_NAMES = frozenset({"node_modules", ".angular"})
+
 
 def find_solution(repo_root: Path) -> tuple[Path | None, list[str]]:
     """The one `.slnx` at the root, found rather than named, since each target
@@ -201,12 +206,10 @@ def find_missing_output(artifacts: Path, walked: list[Path], solution: str) -> l
 
 
 def find_residue(repo_root: Path) -> list[str]:
-    """Any `bin/` or `obj/` under the source roots, outermost first.
+    """Any `bin/` or `obj/` under the source roots, outside `NOT_SOURCE_DIRECTORY_NAMES`, outermost first.
 
-    The walk prunes what it reports, so a stale `obj/` full of a previous
-    layout's subdirectories is one finding rather than a screenful. The
-    outermost directory is also the one to delete, which makes the finding and
-    the fix the same sentence.
+    The walk prunes what it reports: a stale `obj/` is one finding, and the
+    outermost directory is the one to delete.
     """
     findings: list[str] = []
     for source_root in SOURCE_ROOTS:
@@ -220,7 +223,9 @@ def find_residue(repo_root: Path) -> list[str]:
                     f"built from. Delete it: git-ignored output is never removed by a "
                     f"checkout, so a directory written before the redirect landed "
                     f"survives every branch")
-            subdirectories[:] = [name for name in subdirectories if name not in residue]
+            subdirectories[:] = [
+                name for name in subdirectories
+                if name not in residue and name.lower() not in NOT_SOURCE_DIRECTORY_NAMES]
     return findings
 
 

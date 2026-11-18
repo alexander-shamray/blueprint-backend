@@ -9,6 +9,7 @@ than re-implementing, are `review_helpers.py`'s.
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -43,12 +44,23 @@ def blanking_directories(root):
 
 
 def matching_ignore_file(root, directory):
-    """The ignore file git says excludes `directory`, or None if none does."""
+    """The ignore file git says excludes `directory` when the root's is the only one, or None."""
     probe = directory.relative_to(root).as_posix()
-    result = subprocess.run(
-        [GIT, "check-ignore", "-v", "-z", "--stdin", "--no-index"], input=probe + chr(0),
-        cwd=str(root), capture_output=True, text=True, encoding="utf-8",
-    )
+    # Asked in place, git names the deepest file that matches, so a nested one naming the directory would hide a
+    # root rule that covers it; a scratch repository holding only the root file asks about that file alone.
+    with tempfile.TemporaryDirectory(prefix="rootignore-") as tmp:
+        subprocess.run([GIT, "init", "-q", tmp], check=True, capture_output=True)
+        if (root / ".gitignore").is_file():
+            shutil.copyfile(root / ".gitignore", Path(tmp) / ".gitignore")
+        (Path(tmp) / probe).mkdir(parents=True)
+        # The excludes file git reads for `root` still applies, so its rules and their parsing are judged as before.
+        excludes = subprocess.run([GIT, "config", "core.excludesFile"], cwd=str(root), capture_output=True,
+                                  text=True, encoding="utf-8").stdout.strip()
+        setting = ["-c", f"core.excludesFile={excludes}"] if excludes else []
+        result = subprocess.run(
+            [GIT, *setting, "check-ignore", "-v", "-z", "--stdin", "--no-index"], input=probe + chr(0),
+            cwd=tmp, capture_output=True, text=True, encoding="utf-8",
+        )
     if result.returncode != 0:
         return None
     # `-z` ends the source, line, pattern and path each with a NUL, so a drive
@@ -122,6 +134,16 @@ class TheCheckFailsWhereTheRootRuleIsAbsent(unittest.TestCase):
         subprocess.run([GIT, "config", "core.excludesFile", excludes.as_posix()], cwd=str(root), check=True)
 
         self.assertIsNone(matching_ignore_file(root, scratch))
+
+    def test_a_nested_file_naming_the_directory_does_not_hide_the_root_rule(self):
+        # Git ranks the deeper file first, so asked in place it names `parent/.gitignore` though the root covers it.
+        root, _ = self.scratch_repository("parent/scratch/")
+        scratch = root / "parent" / "scratch"
+        scratch.mkdir(parents=True)
+        (scratch / ".gitignore").write_text("*" + NEWLINE, encoding="utf-8", newline=NEWLINE)
+        (root / "parent" / ".gitignore").write_text("scratch/" + NEWLINE, encoding="utf-8", newline=NEWLINE)
+
+        self.assertEqual(matching_ignore_file(root, scratch), ".gitignore")
 
     def test_a_root_negation_is_not_a_match(self):
         # `check-ignore -v` exits 0 for a negated pattern too, and names it as the rule.
