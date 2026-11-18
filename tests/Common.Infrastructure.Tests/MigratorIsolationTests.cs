@@ -30,6 +30,9 @@ public sealed partial class MigratorIsolationTests
     [InlineData("var open = \"/*\"; await db.Database.MigrateAsync(ct); var close = \"*/\";\n"
         + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("var sql = \"\"\"\n/*\n\"\"\"; await db.Database.MigrateAsync(ct); var tail = \"\"\"\n*/\n\"\"\";\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("var url = \"https://example.test\"; await db.Database.MigrateAsync(ct);\n"
         + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
@@ -78,9 +81,11 @@ public sealed partial class MigratorIsolationTests
         throw new InvalidOperationException($"No Platform.slnx above {AppContext.BaseDirectory}.");
     }
 
-    // A literal is matched first and kept, so a `//` or `/*` inside one strips no code.
+    // A literal, raw, verbatim, regular or a character, is matched first and kept, so a `//` or `/*` inside one strips
+    // no code; an interpolation hole's own literals are not told apart.
     [GeneratedRegex(
-        @"(?<literal>@""(?:[^""]|"""")*""|""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)+')|//[^\r\n]*|/\*.*?\*/",
+        @"(?<literal>(?<raw>""{3,}).*?\k<raw>|(?:@\$?|\$@)""(?:[^""]|"""")*""|""(?:[^""\\\r\n]|\\.)*""|"
+            + @"'(?:[^'\\\r\n]|\\.)+')|//[^\r\n]*|/\*.*?\*/",
         RegexOptions.Singleline)]
     private static partial Regex Comment();
 
