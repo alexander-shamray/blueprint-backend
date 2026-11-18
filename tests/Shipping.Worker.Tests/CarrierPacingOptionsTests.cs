@@ -113,6 +113,7 @@ public sealed class CarrierPacingOptionsTests
             "      'CarrierPacing_TrackingTick': '00:00:01'", "      CarrierPacing_TrackingTick: 00:00:01 extra",
             "      - CarrierPacing_TrackingTick=a b", "      - 'CarrierPacing_TrackingTick=00:00:01'",
             "      CarrierPacing_TrackingTick: it's", "      - CarrierPacing_TrackingTick=it's",
+            "      'CarrierPacing_TrackingTick': 'it''s'", "      - \"CarrierPacing_TrackingTick=a #b\"",
         ];
 
         foreach (string line in spelledOtherwise)
@@ -129,6 +130,9 @@ public sealed class CarrierPacingOptionsTests
             "      - CarrierPacing__HashInValue=a#b",
             "      - CarrierPacing__QuoteAtEnd=abc'",
             "      CarrierPacing__Spaced: two words # and a comment",
+            "      CarrierPacing__Escaped: 'it''s'",
+            "      - 'CarrierPacing__EscapedItem=it''s'",
+            "      - \"CarrierPacing__QuotedHash=a #b\"",
             "      \"CarrierPacing__Tracking2Tick\" : \"00:00:02\"",
             "      - CarrierPacing__FulfilmentTick=00:00:03",
             "      - \"CarrierPacing__FulfilmentLeaseSeconds=60\"",
@@ -149,6 +153,9 @@ public sealed class CarrierPacingOptionsTests
         read["CarrierPacing:HashInValue"].ShouldBe("a#b");
         read["CarrierPacing:QuoteAtEnd"].ShouldBe("abc'");
         read["CarrierPacing:Spaced"].ShouldBe("two words");
+        read["CarrierPacing:Escaped"].ShouldBe("it's");
+        read["CarrierPacing:EscapedItem"].ShouldBe("it's");
+        read["CarrierPacing:QuotedHash"].ShouldBe("a #b");
     }
 
     private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;
