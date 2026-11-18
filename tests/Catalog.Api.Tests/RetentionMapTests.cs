@@ -38,4 +38,19 @@ public class RetentionMapTests
     {
         RetentionMapRule.Undeclared(Host, Declared, Prefixes).ShouldBeEmpty();
     }
+
+    [Fact]
+    public void A_window_a_base_type_declares_is_read_on_the_derived_type()
+    {
+        RetentionMapRule.Members([typeof(DerivedWindows)]).ShouldBe(["DerivedWindows.Kept", "DerivedWindows.Shared"]);
+    }
+
+    private class BaseWindows
+    {
+        public static readonly TimeSpan Shared = TimeSpan.FromDays(1);
+
+        public TimeSpan Kept { get; init; }
+    }
+
+    private sealed class DerivedWindows : BaseWindows;
 }
