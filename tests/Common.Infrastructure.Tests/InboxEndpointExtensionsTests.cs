@@ -11,6 +11,9 @@ public sealed class InboxEndpointExtensionsTests
 {
     private const string Helper = "src/BuildingBlocks/Common.Infrastructure/Inbox/InboxEndpointExtensions.cs";
 
+    private static readonly string[] Hosts =
+        ["Catalog", "Inventory", "Notifications", "Ordering", "Payments", "Privacy", "Shipping", "BFF/Web.Bff"];
+
     [Fact]
     public void No_source_adds_the_in_memory_outbox_but_the_helper()
     {
@@ -26,11 +29,7 @@ public sealed class InboxEndpointExtensionsTests
         string root = RepositoryRoot();
         string[] callers = Callers(root, ".UseInboxAndInMemoryOutbox(");
 
-        foreach (string host in new[]
-                 {
-                     "Catalog", "Inventory", "Notifications", "Ordering", "Payments", "Privacy", "Shipping",
-                     "BFF/Web.Bff"
-                 })
+        foreach (string host in Hosts)
         {
             callers.ShouldContain(c => c.Contains($"/{host}/", StringComparison.Ordinal), host);
         }
@@ -59,6 +58,70 @@ public sealed class InboxEndpointExtensionsTests
                     checks[i].ShouldBeGreaterThan(inboxes[i - 1], file);
             }
         }
+    }
+
+    [Fact]
+    public void Every_receive_endpoint_takes_exactly_one_inbox()
+    {
+        // Per endpoint, not per file: a new endpoint in a file whose others take the helper would pass a
+        // per-file check while §9.8 admits none without the inbox. Each is read up to the next endpoint, so a
+        // delegate built outside the call reads as no inbox and fails, where every host's today is inline.
+        string root = RepositoryRoot();
+        string[] files =
+        [
+            .. Callers(root, "ReceiveEndpoint(")
+                .Where(c => !c.StartsWith("src/BuildingBlocks/", StringComparison.Ordinal))
+        ];
+        List<string> read = [];
+
+        foreach (string file in files)
+        {
+            string[] endpoints = Endpoints(SourceCode.Code(File.ReadAllText(Path.Combine(root, file))));
+            for (int i = 0; i < endpoints.Length; i++)
+            {
+                int inboxes = Positions(endpoints[i], ".UseInboxAndInMemoryOutbox(").Length +
+                              Positions(endpoints[i], "UseConsumeFilter(typeof(InboxFilter<>)").Length;
+                inboxes.ShouldBe(1, $"{file}, endpoint {i + 1}");
+            }
+
+            if (endpoints.Length > 0)
+                read.Add(file);
+        }
+
+        // Its subject is the scan, as above: one that split no host's endpoints would pass with nothing read.
+        foreach (string host in Hosts)
+        {
+            read.ShouldContain(c => c.Contains($"/{host}/", StringComparison.Ordinal), host);
+        }
+    }
+
+    [Fact]
+    public void An_endpoint_beside_one_with_the_helper_is_read_on_its_own()
+    {
+        // The case's subject is the split: a file-wide count would read this source as covered.
+        const string source = """
+                              cfg.ReceiveEndpoint(A, e => { e.UseInboxAndInMemoryOutbox(context); });
+                              cfg.SwitchedReceiveEndpoint(B, e => { e.ConfigureConsumer<C>(context); });
+                              x.ConnectReceiveEndpoint(D, e => { });
+                              """;
+
+        string[] endpoints = Endpoints(source);
+
+        endpoints.Length.ShouldBe(2);
+        Positions(endpoints[0], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(1);
+        Positions(endpoints[1], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(0);
+    }
+
+    // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call up to the next; `ConnectReceiveEndpoint` is
+    // the switch's own plumbing and is not an endpoint a host declares.
+    private static string[] Endpoints(string code)
+    {
+        int[] starts =
+        [
+            .. Positions(code, ".ReceiveEndpoint(").Concat(Positions(code, ".SwitchedReceiveEndpoint(")).Order()
+        ];
+
+        return [.. starts.Select((at, i) => code[at..(i + 1 < starts.Length ? starts[i + 1] : code.Length)])];
     }
 
     private static int[] Positions(string text, string call)
