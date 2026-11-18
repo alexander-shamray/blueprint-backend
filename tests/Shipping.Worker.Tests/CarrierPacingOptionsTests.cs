@@ -114,6 +114,7 @@ public sealed class CarrierPacingOptionsTests
             "      - CarrierPacing_TrackingTick=a b", "      - 'CarrierPacing_TrackingTick=00:00:01'",
             "      CarrierPacing_TrackingTick: it's", "      - CarrierPacing_TrackingTick=it's",
             "      'CarrierPacing_TrackingTick': 'it''s'", "      - \"CarrierPacing_TrackingTick=a #b\"",
+            "      - \"CarrierPacing_TrackingTick=a\\\"b\"", "      CarrierPacing_TrackingTick: \"a\\\"b\"",
         ];
 
         foreach (string line in spelledOtherwise)
