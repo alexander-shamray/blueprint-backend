@@ -11,6 +11,13 @@ public sealed class InboxEndpointExtensionsTests
 {
     private const string Helper = "src/BuildingBlocks/Common.Infrastructure/Inbox/InboxEndpointExtensions.cs";
 
+    // The operator switch only forwards a host's own delegate to the bus, so its calls declare no endpoint.
+    private static readonly string[] Switch =
+    [
+        "src/BuildingBlocks/Common.Infrastructure/Switching/OperatorSwitchExtensions.cs",
+        "src/BuildingBlocks/Common.Infrastructure/Switching/ReceiveEndpointSwitch.cs"
+    ];
+
     private static readonly string[] Hosts =
         ["Catalog", "Inventory", "Notifications", "Ordering", "Payments", "Privacy", "Shipping", "BFF/Web.Bff"];
 
@@ -70,8 +77,7 @@ public sealed class InboxEndpointExtensionsTests
         string root = RepositoryRoot();
         string[] files =
         [
-            .. Callers(root, "ReceiveEndpoint(")
-                .Where(c => !c.StartsWith("src/BuildingBlocks/", StringComparison.Ordinal))
+            .. Callers(root, "ReceiveEndpoint(").Except(Switch)
         ];
         List<string> read = [];
 
@@ -98,7 +104,7 @@ public sealed class InboxEndpointExtensionsTests
     [Fact]
     public void An_endpoint_beside_one_with_the_helper_is_read_on_its_own()
     {
-        // The case's subject is the split: a file-wide count would read this source as covered.
+        // The case's subject is the split: a per-file presence check would read this source as covered.
         const string source = """
                               cfg.ReceiveEndpoint(A, e => { e.UseInboxAndInMemoryOutbox(context); });
                               cfg.SwitchedReceiveEndpoint(B, e => { e.ConfigureConsumer<C>(context); });
@@ -116,15 +122,14 @@ public sealed class InboxEndpointExtensionsTests
     public void No_host_makes_an_endpoint_but_by_declaring_it()
     {
         // ConfigureEndpoints binds every unbound consumer with no inbox, and ConnectReceiveEndpoint is the
-        // switch's plumbing: either in a host would make an endpoint the scan above never reads.
+        // switch's plumbing: either outside the switch would make an endpoint the scan above never reads.
         string root = RepositoryRoot();
 
         foreach (string call in new[] { ".ConfigureEndpoints(", ".ConnectReceiveEndpoint(" })
         {
             string[] makers =
             [
-                .. Callers(root, call)
-                    .Where(c => !c.StartsWith("src/BuildingBlocks/", StringComparison.Ordinal))
+                .. Callers(root, call).Except(Switch)
                     .Where(c => SourceCode.Code(File.ReadAllText(Path.Combine(root, c))).Contains(
                         call,
                         StringComparison.Ordinal))
@@ -138,7 +143,7 @@ public sealed class InboxEndpointExtensionsTests
         Positions(code, "UseConsumeFilter(typeof(InboxFilter<>)").Length;
 
     // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call up to the next; `ConnectReceiveEndpoint` is
-    // the switch's own plumbing and is not an endpoint a host declares.
+    // refused outside the switch by the case above.
     private static string[] Endpoints(string code)
     {
         int[] starts =
