@@ -71,9 +71,9 @@ public sealed class InboxEndpointExtensionsTests
     public void Every_receive_endpoint_takes_exactly_one_inbox()
     {
         // Per endpoint, not per file: a new endpoint in a file whose others take the helper would pass a
-        // per-file check while §9.8 admits none without the inbox. Each is read up to the next endpoint, so a
-        // delegate built outside the call reads as no inbox and fails, where every host's delegate is inline.
-        // A file's inbox calls must also equal its endpoints, so a call below the last one is not its.
+        // per-file check while §9.8 admits none without the inbox. Each is read to its own closing parenthesis,
+        // so a delegate built outside the call reads as no inbox and fails, where every host's delegate is
+        // inline. A file's inbox calls must also equal its endpoints, so one outside every endpoint fails.
         string root = RepositoryRoot();
         string[] files =
         [
@@ -104,18 +104,20 @@ public sealed class InboxEndpointExtensionsTests
     [Fact]
     public void An_endpoint_beside_one_with_the_helper_is_read_on_its_own()
     {
-        // The case's subject is the split: a per-file presence check would read this source as covered.
+        // The case's subject is the split: a per-file presence check would read this source as covered, and a
+        // slice to the next endpoint or the file's end would give the last endpoint the call below it.
         const string source = """
                               cfg.ReceiveEndpoint(A, e => { e.UseInboxAndInMemoryOutbox(context); });
                               cfg.SwitchedReceiveEndpoint(B, e => { e.ConfigureConsumer<C>(context); });
                               x.ConnectReceiveEndpoint(D, e => { });
+                              Later(e => e.UseInboxAndInMemoryOutbox(context));
                               """;
 
         string[] endpoints = Endpoints(source);
 
         endpoints.Length.ShouldBe(2);
-        Positions(endpoints[0], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(1);
-        Positions(endpoints[1], ".UseInboxAndInMemoryOutbox(").Length.ShouldBe(0);
+        Inboxes(endpoints[0]).ShouldBe(1);
+        Inboxes(endpoints[1]).ShouldBe(0);
     }
 
     [Fact]
@@ -142,17 +144,10 @@ public sealed class InboxEndpointExtensionsTests
         Positions(code, ".UseInboxAndInMemoryOutbox(").Length +
         Positions(code, "UseConsumeFilter(typeof(InboxFilter<>)").Length;
 
-    // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call up to the next; `ConnectReceiveEndpoint` is
-    // refused outside the switch by the case above.
-    private static string[] Endpoints(string code)
-    {
-        int[] starts =
-        [
-            .. Positions(code, ".ReceiveEndpoint(").Concat(Positions(code, ".SwitchedReceiveEndpoint(")).Order()
-        ];
-
-        return [.. starts.Select((at, i) => code[at..(i + 1 < starts.Length ? starts[i + 1] : code.Length)])];
-    }
+    // Each `.ReceiveEndpoint(` or `.SwitchedReceiveEndpoint(` call; `ConnectReceiveEndpoint` is refused outside
+    // the switch by the case above.
+    private static string[] Endpoints(string code) =>
+        [.. SourceCode.Calls(code, ".ReceiveEndpoint("), .. SourceCode.Calls(code, ".SwitchedReceiveEndpoint(")];
 
     private static int[] Positions(string text, string call)
     {
