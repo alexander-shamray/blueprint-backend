@@ -51,11 +51,12 @@ public static partial class StressOverride
     // skipped; as in YAML, a quoted value runs to its quote, `''` escapes one inside single quotes (`single` marks
     // it), and only a `#` after a space starts a comment.
     [GeneratedRegex(
-        """^\s+(?:-\s*(?:"(?<key>[^\s=#"']+)=(?<value>[^"]*)"|""" +
+        """^\s+(?:-\s*(?:"(?<key>[^\s=#"']+)=(?<value>(?:[^"\\]|\\.)*)"|""" +
         """'(?<key>[^\s=#"']+)=(?<single>(?<value>(?:[^']|'')*))'|""" +
         """(?<key>[^\s=#"']+)=(?<value>(?:[^#]|(?<=\S)#)*?))|""" +
         """(?<kq>["']?)(?<key>(?:[^\s:#"']|:(?=[^\s"']))+)\k<kq>\s*:\s*""" +
-        """(?:"(?<value>[^"]*)"|'(?<single>(?<value>(?:[^']|'')*))'|(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)""" +
+        """(?:"(?<value>(?:[^"\\]|\\.)*)"|'(?<single>(?<value>(?:[^']|'')*))'|""" +
+        """(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)""" +
         """\s*(?:(?<=\s)#.*)?$""")]
     private static partial Regex Entry();
 
