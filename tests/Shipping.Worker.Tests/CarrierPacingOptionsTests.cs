@@ -103,8 +103,18 @@ public sealed class CarrierPacingOptionsTests
                 .Message.ShouldContain(key);
         }
 
-        StressOverride.Configuration(["      CarrierPacing__Tracking2Tick: \"00:00:01\""])
-            ["CarrierPacing:Tracking2Tick"].ShouldBe("00:00:01");
+        IConfiguration read = StressOverride.Configuration([
+            "      carrierPacing__TrackingTik: \"00:00:01\"",
+            "      \"CarrierPacing__Tracking2Tick\" : \"00:00:02\"",
+            "      - CarrierPacing__FulfilmentTick=00:00:03",
+            "      Kestrel__Endpoints__0__Url: \"\"",
+            "  Seq:",
+        ]);
+
+        read["CarrierPacing:TrackingTik"].ShouldBe("00:00:01");
+        read["CarrierPacing:Tracking2Tick"].ShouldBe("00:00:02");
+        read["CarrierPacing:FulfilmentTick"].ShouldBe("00:00:03");
+        read["Kestrel:Endpoints:0:Url"].ShouldBe(string.Empty);
     }
 
     private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;
