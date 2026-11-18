@@ -9,12 +9,13 @@ internal static partial class SourceCode
     public static string WithoutComments(string source) =>
         Token().Replace(source, found => found.Groups["literal"].Success ? found.Value : string.Empty);
 
-    /// <summary><paramref name="source"/> with its comments removed and each literal left as an empty one.</summary>
+    /// <summary><paramref name="source"/> without its comments, each literal replaced by an empty string.</summary>
     public static string Code(string source) =>
         Token().Replace(source, found => found.Groups["literal"].Success ? "\"\"" : string.Empty);
 
     // A literal, raw, verbatim, regular or a character, is matched first, so a `//` or `/*` inside one strips no
-    // code; an interpolation hole's own literals are not told apart.
+    // code. An interpolation hole is read as part of its literal: its own literals are not told apart, and under
+    // `Code` its code is blanked with it.
     [GeneratedRegex(
         @"(?<literal>(?<raw>""{3,}).*?\k<raw>|(?:@\$?|\$@)""(?:[^""]|"""")*""|""(?:[^""\\\r\n]|\\.)*""|"
             + @"'(?:[^'\\\r\n]|\\.)+')|//[^\r\n]*|/\*.*?\*/",
