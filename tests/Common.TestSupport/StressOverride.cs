@@ -43,12 +43,13 @@ public static partial class StressOverride
         return new ConfigurationBuilder().AddInMemoryCollection(entries).Build();
     }
 
-    // A map entry, bare, double- or single-quoted, or a list item's `Key=value`. A bare value may hold a space, so
-    // the key on such a line is still judged rather than the whole line skipped.
+    // A map entry, bare, double- or single-quoted, or a list item's `Key=value`, a closing quote only where one
+    // opened. A bare value may hold a space or a quote, so the key on such a line is still judged rather than the line
+    // skipped, and as in YAML only a `#` after a space starts a comment.
     [GeneratedRegex(
-        """^\s+(?:-\s*["']?(?<key>[^\s=#"']+)=(?<value>[^"'#]*?)["']?|""" +
-        @"[""']?(?<key>(?:[^\s:#""']|:(?=[^\s""']))+)[""']?\s*:\s*" +
-        @"(?:""(?<value>[^""]*)""|'(?<value>[^']*)'|(?<value>[^\s""'#][^""'#]*?))?)\s*(?:#.*)?$")]
+        """^\s+(?:-\s*(?<lq>["']?)(?<key>[^\s=#"']+)=(?<value>(?:[^#]|(?<=\S)#)*?)\k<lq>|""" +
+        """(?<kq>["']?)(?<key>(?:[^\s:#"']|:(?=[^\s"']))+)\k<kq>\s*:\s*""" +
+        """(?:"(?<value>[^"]*)"|'(?<value>[^']*)'|(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)\s*(?:(?<=\s)#.*)?$""")]
     private static partial Regex Entry();
 
     // Beside a `__` in any case, since configuration is case-blind, a capitalised name with a lower-case letter and a
