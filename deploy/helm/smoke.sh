@@ -2638,6 +2638,7 @@ section 'The Service forwards to a port something is listening on'
 # `+`, `*` or https endpoint is compared too; every Url must give its port.
 # An empty or all-comment file gives nothing to read, not an exit that ends the smoke under pipefail.
 kestrel_lines() { grep -v '^[[:space:]]*//' "$1" || true; }
+kestrel_pins() { [ "$(kestrel_lines "$1" | { grep -ci '"kestrel"' || true; })" -gt 0 ]; }
 kestrel_urls() { kestrel_lines "$1" | { grep -oiE '"url"[[:space:]]*:' || true; } | wc -l; }
 kestrel_ports() {
     kestrel_lines "$1" |
@@ -2651,6 +2652,11 @@ printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.
     '  "Grpc": { "url": "http://+:8082" },' '  // "Old": { "Url": "http://0.0.0.0:9999" }' '} } }' \
     >"$OUT/kestrel-mixed.json"
 printf '%s\n' '{ "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0" } } } }' >"$OUT/kestrel-portless.json"
+printf '%s\n' '// "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0:9999" } } }' '{ }' \
+    >"$OUT/kestrel-commented.json"
+check 'a settings file pins ports when a live line names Kestrel in any case' kestrel_pins "$OUT/kestrel-mixed.json"
+check 'a settings file naming Kestrel only on a // line pins nothing' \
+    test "$(kestrel_pins "$OUT/kestrel-commented.json" && echo pins)" = ''
 check 'the listener parse reads a + host and a lower-case key, and skips a // line' \
     test "$(kestrel_ports "$OUT/kestrel-mixed.json" | tr '\n' ' ')" = '8080 8082 '
 check 'the listener count matches the parse when every Url gives a port' \
@@ -2668,8 +2674,8 @@ for chart in $SERVICE_CHARTS; do
         fail "$chart's host $(field "$chart" host) has no project under its source — the search is wrong"
         continue
     fi
-    settings="$(grep -rli '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
-        "$(dirname "$project")" || true)"
+    settings="$(find "$(dirname "$project")" -name appsettings.json -not -path '*/bin/*' -not -path '*/obj/*' |
+        while read -r candidate; do if kestrel_pins "$candidate"; then echo "$candidate"; fi; done)"
 
     if [ -z "$settings" ]; then
         echo 8080 >"$OUT/$chart-listeners.txt"
