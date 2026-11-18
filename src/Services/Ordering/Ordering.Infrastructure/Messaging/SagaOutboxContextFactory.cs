@@ -57,6 +57,9 @@ internal sealed class SagaOutboxContextFactory(
     {
         Stopwatch timer = Stopwatch.StartNew();
 
+        // Each strategy attempt starts from committed state, for EfUnitOfWork's reason (§6.3).
+        db.ChangeTracker.Clear();
+
         await using IDbContextTransaction transaction =
             await db.Database.BeginTransactionAsync(outboxOptions.Value.IsolationLevel, context.CancellationToken);
 

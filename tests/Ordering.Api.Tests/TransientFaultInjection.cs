@@ -1,4 +1,6 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -40,3 +42,30 @@ public sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencie
         });
     }
 }
+
+/// <summary>Once armed, fails the next commit with the marker, after every write of the attempt.</summary>
+public sealed class FailNextCommit : DbTransactionInterceptor
+{
+    private int _armed;
+
+    /// <summary>Armed after the arrange half, whose own commits must not take the fault.</summary>
+    public void Arm() => Interlocked.Exchange(ref _armed, 1);
+
+    public override InterceptionResult TransactionCommitting(
+        DbTransaction transaction,
+        TransactionEventData eventData,
+        InterceptionResult result) =>
+        Interlocked.Exchange(ref _armed, 0) == 1 ? throw new FakeTransientException() : result;
+
+    public override ValueTask<InterceptionResult> TransactionCommittingAsync(
+        DbTransaction transaction,
+        TransactionEventData eventData,
+        InterceptionResult result,
+        CancellationToken cancellationToken = default) =>
+        Interlocked.Exchange(ref _armed, 0) == 1
+            ? throw new FakeTransientException()
+            : ValueTask.FromResult(result);
+}
+
+/// <summary>The message the saga outbox retry test consumes; its content is never read.</summary>
+public sealed record SagaOutboxProbeMessage;
