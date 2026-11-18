@@ -35,8 +35,8 @@ local default it carries — and
 boots with an empty database and skips it when definitions are imported, which
 `rabbitmq/20-commerce.conf` arranges. Note the consequence of a stale volume:
 importing definitions does not *delete* a `guest` that already exists, so
-`docker compose down -v` is what makes the removal true on a stack that ran
-before this landed.
+`docker compose -f deploy/compose/docker-compose.yml down -v` is what makes the
+removal true on a stack that ran before this landed.
 
 No service account carries a tag, so **nothing here can log into
 http://localhost:15672**, and that is the design rather than an oversight —
@@ -162,8 +162,9 @@ order recipe below can name. The units' start order is what makes those
 deliveries arrive, and §14.3 says why.
 
 A seeder skips an id that already has a row, so a second `up` changes
-nothing and an edit to a seeded row survives it; `docker compose down -v` and
-`up` is the way back to exactly this table. **This table is the owner of the
+nothing and an edit to a seeded row survives it;
+`docker compose -f deploy/compose/docker-compose.yml down -v` and `up` is the
+way back to exactly this table. **This table is the owner of the
 seeded ids**: both seeders' tests read it, and a sibling repository cites it
 rather than copying it.
 
@@ -332,9 +333,10 @@ test of `Platform.IntegrationTests`
 ([§12.1](../../docs/backend-architecture/12-test-strategy.md)): it runs in
 the integration stage's `platform` shard, which no service name selects, over
 hosts it starts itself rather than over this stack. Run
-`docker compose down -v` first on a machine that has applied an earlier draft
-of a migration: its row stays in `__EFMigrationsHistory` on the named volume,
-and the migrator then applies nothing and reports success.
+`docker compose -f deploy/compose/docker-compose.yml down -v` first on a
+machine that has applied an earlier draft of a migration: its row stays in
+`__EFMigrationsHistory` on the named volume, and the migrator then applies
+nothing and reports success.
 
 Override connection strings with `<SERVICE>_CONNECTION` /
 `<SERVICE>_MIGRATOR_CONNECTION` — one pair per service, every one commented out
