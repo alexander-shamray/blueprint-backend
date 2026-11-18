@@ -26,7 +26,8 @@ public static partial class StressOverride
 
             bool named = entry.Groups["value"].Success && Named().IsMatch(key);
 
-            if (!key.Contains("__", StringComparison.Ordinal) && !named)
+            // A key with no value passes the host's own through, which the override never means to read.
+            if (!entry.Groups["value"].Success || (!key.Contains("__", StringComparison.Ordinal) && !named))
                 continue;
 
             // Dropped, a misspelt key would leave its option at the default, and a strict bind never sees it.
@@ -45,7 +46,7 @@ public static partial class StressOverride
     // A map entry, bare or quoted, or a list item's `Key=value`.
     [GeneratedRegex(
         """^\s+(?:-\s*"?(?<key>[^\s=#"]+)=(?<value>[^\s"]*)"?|""" +
-        @"""?(?<key>[^\s:#""]+)""?\s*:\s*(?:""(?<value>[^""]*)""|(?<value>[^\s""#]+))?)\s*(?:#.*)?$")]
+        @"""?(?<key>(?:[^\s:#""]|:(?=[^\s""]))+)""?\s*:\s*(?:""(?<value>[^""]*)""|(?<value>[^\s""#]+))?)\s*(?:#.*)?$")]
     private static partial Regex Entry();
 
     // Beside a `__` in any case, since configuration is case-blind, a capitalised name with a lower-case letter and a

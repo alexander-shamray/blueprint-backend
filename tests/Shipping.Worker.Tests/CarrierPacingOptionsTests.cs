@@ -96,7 +96,10 @@ public sealed class CarrierPacingOptionsTests
     public void A_key_the_override_cannot_read_is_refused_rather_than_dropped()
     {
         string[] unread =
-            ["CarrierPacing_TrackingTick", "CarrierPacing__", "Carrier-Pacing__TrackingTick", "TrackingTick"];
+        [
+            "CarrierPacing_TrackingTick", "CarrierPacing__", "Carrier-Pacing__TrackingTick", "TrackingTick",
+            "CarrierPacing:TrackingTick",
+        ];
 
         foreach (string key in unread)
         {
