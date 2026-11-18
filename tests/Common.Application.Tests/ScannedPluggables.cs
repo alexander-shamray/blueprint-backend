@@ -24,3 +24,12 @@ public sealed class ScannedProjection : IProjectionHandler<ScannedEvent>
 {
     public Task HandleAsync(ScannedEvent domainEvent, CancellationToken ct) => Task.CompletedTask;
 }
+
+/// <summary>An event the class below handles under two families.</summary>
+public sealed record TwoFamilyEvent(Guid Id);
+
+/// <summary>One class in two pluggable families, which the scan must register once under each.</summary>
+public sealed class TwoFamilyHandler : IProjectionHandler<TwoFamilyEvent>, IIntegrationEventHandler<TwoFamilyEvent>
+{
+    public Task HandleAsync(TwoFamilyEvent domainEvent, CancellationToken ct) => Task.CompletedTask;
+}

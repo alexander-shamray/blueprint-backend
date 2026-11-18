@@ -172,18 +172,12 @@ public interface ICommandMessageMapper<in TMessage, out TCommand>
 ```csharp
 // A member of the same extension block as AddDispatcher above.
 public IServiceCollection AddPluggableFrom(Assembly assembly) =>
-    services.Scan(scan =>
-    {
-        IImplementationTypeSelector from = scan.FromAssemblies(assembly);
-
-        foreach (Type contract in PluggableInterfaces.All)
-        {
-            from
-                .AddClasses(c => c.AssignableTo(contract))
-                .AsImplementedInterfaces()
-                .WithScopedLifetime();
-        }
-    });
+    // One pass over every family: a pass per family registers a class that implements two of them twice.
+    services.Scan(scan => scan
+        .FromAssemblies(assembly)
+        .AddClasses(c => c.AssignableToAny(PluggableInterfaces.All))
+        .AsImplementedInterfaces()
+        .WithScopedLifetime());
 ```
 
 **Each layer scans itself.** Handlers do not all live in Application: the
