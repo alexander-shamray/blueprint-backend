@@ -136,7 +136,8 @@ public partial class TelemetryVolumeTests
         foreach (string service in exporting)
         {
             overridden.ShouldContainKey(service, $"the stress override has no {service} entry");
-            overridden[service].ShouldContain("<<: *trace-sampling", Case.Sensitive, $"{service} is not sampled");
+            // Anchored as the limits below are: a body also holds the comment that opens the next service.
+            overridden[service].ShouldMatch(@"\n {6}<<: \*trace-sampling\r?\n", $"{service} is not sampled");
         }
 
         double ratio = double.Parse(SamplingEntry("OTEL_TRACES_SAMPLER_ARG"), CultureInfo.InvariantCulture);
