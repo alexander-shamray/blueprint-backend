@@ -107,8 +107,24 @@ public sealed class CarrierPacingOptionsTests
                 .Message.ShouldContain(key);
         }
 
+        // Single quotes, and a bare value holding a space, still put the key before the judge.
+        string[] spelledOtherwise =
+        [
+            "      'CarrierPacing_TrackingTick': '00:00:01'", "      CarrierPacing_TrackingTick: 00:00:01 extra",
+            "      - CarrierPacing_TrackingTick=a b", "      - 'CarrierPacing_TrackingTick=00:00:01'",
+        ];
+
+        foreach (string line in spelledOtherwise)
+        {
+            Should.Throw<InvalidOperationException>(() => StressOverride.Configuration([line]))
+                .Message.ShouldContain("CarrierPacing_TrackingTick");
+        }
+
         IConfiguration read = StressOverride.Configuration([
             "      carrierPacing__TrackingTik: \"00:00:01\"",
+            "      'CarrierPacing__TrackingTick': '00:00:04'",
+            "      - 'CarrierPacing__TrackingClaimBatchSize=200'",
+            "      COMPlus_gcServer: \"1\"",
             "      \"CarrierPacing__Tracking2Tick\" : \"00:00:02\"",
             "      - CarrierPacing__FulfilmentTick=00:00:03",
             "      - \"CarrierPacing__FulfilmentLeaseSeconds=60\"",
@@ -123,6 +139,9 @@ public sealed class CarrierPacingOptionsTests
         read["Kestrel:Endpoints:0:Url"].ShouldBe(string.Empty);
         read["CarrierPacing:FulfilmentLeaseSeconds"].ShouldBe("60");
         read["DOTNET_gcServer"].ShouldBeNull();
+        read["CarrierPacing:TrackingTick"].ShouldBe("00:00:04");
+        read["CarrierPacing:TrackingClaimBatchSize"].ShouldBe("200");
+        read["COMPlus_gcServer"].ShouldBeNull();
     }
 
     private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;

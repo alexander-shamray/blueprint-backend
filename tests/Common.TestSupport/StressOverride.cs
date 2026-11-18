@@ -43,15 +43,17 @@ public static partial class StressOverride
         return new ConfigurationBuilder().AddInMemoryCollection(entries).Build();
     }
 
-    // A map entry, bare or quoted, or a list item's `Key=value`.
+    // A map entry, bare, double- or single-quoted, or a list item's `Key=value`. A bare value may hold a space, so
+    // the key on such a line is still judged rather than the whole line skipped.
     [GeneratedRegex(
-        """^\s+(?:-\s*"?(?<key>[^\s=#"]+)=(?<value>[^\s"]*)"?|""" +
-        @"""?(?<key>(?:[^\s:#""]|:(?=[^\s""]))+)""?\s*:\s*(?:""(?<value>[^""]*)""|(?<value>[^\s""#]+))?)\s*(?:#.*)?$")]
+        """^\s+(?:-\s*["']?(?<key>[^\s=#"']+)=(?<value>[^"'#]*?)["']?|""" +
+        @"[""']?(?<key>(?:[^\s:#""']|:(?=[^\s""']))+)[""']?\s*:\s*" +
+        @"(?:""(?<value>[^""]*)""|'(?<value>[^']*)'|(?<value>[^\s""'#][^""'#]*?))?)\s*(?:#.*)?$")]
     private static partial Regex Entry();
 
     // Beside a `__` in any case, since configuration is case-blind, a capitalised name with a lower-case letter and a
     // value is meant as a key, a section-less one included; the runtime's own mixed-case variables are not.
-    [GeneratedRegex("^(?!DOTNET_|ASPNETCORE_)[A-Z](?=.*[a-z])")]
+    [GeneratedRegex("^(?!DOTNET_|ASPNETCORE_|COMPlus_)[A-Z](?=.*[a-z])")]
     private static partial Regex Named();
 
     // Sections joined by `__`, each a name or an array index.
