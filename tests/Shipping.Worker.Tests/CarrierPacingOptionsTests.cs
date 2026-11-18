@@ -95,7 +95,8 @@ public sealed class CarrierPacingOptionsTests
     [Fact]
     public void A_key_the_override_cannot_read_is_refused_rather_than_dropped()
     {
-        string[] unread = ["CarrierPacing_TrackingTick", "CarrierPacing__", "Carrier-Pacing__TrackingTick"];
+        string[] unread =
+            ["CarrierPacing_TrackingTick", "CarrierPacing__", "Carrier-Pacing__TrackingTick", "TrackingTick"];
 
         foreach (string key in unread)
         {
@@ -107,6 +108,8 @@ public sealed class CarrierPacingOptionsTests
             "      carrierPacing__TrackingTik: \"00:00:01\"",
             "      \"CarrierPacing__Tracking2Tick\" : \"00:00:02\"",
             "      - CarrierPacing__FulfilmentTick=00:00:03",
+            "      - \"CarrierPacing__FulfilmentLeaseSeconds=60\"",
+            "      DOTNET_gcServer: \"1\"",
             "      Kestrel__Endpoints__0__Url: \"\"",
             "  Seq:",
         ]);
@@ -115,6 +118,8 @@ public sealed class CarrierPacingOptionsTests
         read["CarrierPacing:Tracking2Tick"].ShouldBe("00:00:02");
         read["CarrierPacing:FulfilmentTick"].ShouldBe("00:00:03");
         read["Kestrel:Endpoints:0:Url"].ShouldBe(string.Empty);
+        read["CarrierPacing:FulfilmentLeaseSeconds"].ShouldBe("60");
+        read["DOTNET_gcServer"].ShouldBeNull();
     }
 
     private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;
