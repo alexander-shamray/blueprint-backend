@@ -24,7 +24,9 @@ public static partial class StressOverride
         {
             string key = entry.Groups["key"].Value;
 
-            if (!Meant().IsMatch(key))
+            bool named = entry.Groups["value"].Success && Named().IsMatch(key);
+
+            if (!key.Contains("__", StringComparison.Ordinal) && !named)
                 continue;
 
             // Dropped, a misspelt key would leave its option at the default, and a strict bind never sees it.
@@ -42,15 +44,14 @@ public static partial class StressOverride
 
     // A map entry, bare or quoted, or a list item's `Key=value`.
     [GeneratedRegex(
-        """^\s+(?:-\s*(?<key>[^\s=#"]+)=(?<value>\S*)|""" +
+        """^\s+(?:-\s*"?(?<key>[^\s=#"]+)=(?<value>[^\s"]*)"?|""" +
         @"""?(?<key>[^\s:#""]+)""?\s*:\s*(?:""(?<value>[^""]*)""|(?<value>[^\s""#]+))?)\s*(?:#.*)?$")]
     private static partial Regex Entry();
 
-    // Configuration is case-blind, so a `__` in any case is meant as a key, and so is a capitalised name holding a
-    // lower-case letter and an underscore; an environment variable is all capitals, and Compose's own keys are lower
-    // case.
-    [GeneratedRegex("""__|^(?=[A-Z])(?=.*[a-z]).*_""")]
-    private static partial Regex Meant();
+    // Beside a `__` in any case, since configuration is case-blind, a capitalised name with a lower-case letter and a
+    // value is meant as a key, a section-less one included; the runtime's own mixed-case variables are not.
+    [GeneratedRegex("^(?!DOTNET_|ASPNETCORE_)[A-Z](?=.*[a-z])")]
+    private static partial Regex Named();
 
     // Sections joined by `__`, each a name or an array index.
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9]*(?:__(?:[A-Za-z][A-Za-z0-9.]*|[0-9]+))+$")]
