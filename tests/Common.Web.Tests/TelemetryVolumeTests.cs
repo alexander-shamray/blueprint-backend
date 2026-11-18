@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Net;
 using System.Text.RegularExpressions;
 using Common.TestSupport;
 using Microsoft.Extensions.Configuration;
@@ -20,6 +19,9 @@ namespace Common.Web.Tests;
 /// </summary>
 public partial class TelemetryVolumeTests
 {
+    // The collector's receivers listen on every interface; that is where telemetry arrives, not a hop it is sent to.
+    private const string ListenAll = "0.0.0.0";
+
     private static readonly Action<ILogger, Exception?> InformationProbe =
         LoggerMessage.Define(LogLevel.Information, new EventId(1, nameof(InformationProbe)), "probe");
 
@@ -154,7 +156,7 @@ public partial class TelemetryVolumeTests
             .SelectMany(file => SentTo().Matches(File.ReadAllText(file)))
             .Concat(SentTo().Matches(collector))
             .Select(sent => sent.Groups["host"].Value)
-            .Where(host => !IPAddress.TryParse(host, out _))
+            .Where(host => host != ListenAll)
             .Distinct()
             .ToList();
 
@@ -200,8 +202,8 @@ public partial class TelemetryVolumeTests
     }
 
     /// <summary>
-    /// Each entry under <paramref name="file"/>'s <c>services:</c>, by name, refusing a key the entry pattern does
-    /// not read: a service it skipped would escape the sampling and hop checks with nothing failing.
+    /// Each entry under <paramref name="file"/>'s <c>services:</c>, by name, running to the next service's key: no
+    /// name or line in a body is skipped, so a service cannot escape the sampling and hop checks unread.
     /// </summary>
     private static Dictionary<string, string> Services(string file)
     {
@@ -212,14 +214,12 @@ public partial class TelemetryVolumeTests
         Match end = TopLevelKey().Match(yaml, start.Index + start.Length);
         string section = end.Success ? yaml[start.Index..end.Index] : yaml[start.Index..];
 
-        Dictionary<string, string> entries = ServiceEntry()
-            .Matches(section)
-            .ToDictionary(entry => entry.Groups["name"].Value, entry => entry.Value);
-        List<string> keys = ServiceKey().Matches(section).Select(key => key.Groups["name"].Value).ToList();
-
+        List<Match> keys = ServiceKey().Matches(section).ToList();
         keys.ShouldNotBeEmpty($"{file} names no service");
-        entries.Keys.ShouldBe(keys, ignoreOrder: true, $"{file} holds a service the entry pattern does not read");
-        return entries;
+
+        return keys
+            .Select((key, at) => (key, end: at + 1 < keys.Count ? keys[at + 1].Index : section.Length))
+            .ToDictionary(entry => entry.key.Groups["name"].Value, entry => section[entry.key.Index..entry.end]);
     }
 
     private static string SamplingEntry(string key)
@@ -233,10 +233,6 @@ public partial class TelemetryVolumeTests
         return entry.Groups["value"].Value;
     }
 
-    // Compose's service-name grammar, [a-zA-Z0-9._-]; Services holds this to every key the section has.
-    [GeneratedRegex(@"^  (?<name>[a-zA-Z0-9._-]+):\r?\n(?:(?:    .*|[ \t]*)\r?\n)*", RegexOptions.Multiline)]
-    private static partial Regex ServiceEntry();
-
     [GeneratedRegex(@"^  (?<name>[^\s#][^:\r\n]*):", RegexOptions.Multiline)]
     private static partial Regex ServiceKey();
 
@@ -246,6 +242,7 @@ public partial class TelemetryVolumeTests
     [GeneratedRegex(@"^[^\s#]", RegexOptions.Multiline)]
     private static partial Regex TopLevelKey();
 
+    // A host in Compose's service-name grammar, [a-zA-Z0-9._-], so no name a service may take is skipped.
     [GeneratedRegex(
         @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?(?:https?://)?(?<host>[a-zA-Z0-9._-]+):\d+",
         RegexOptions.Multiline)]
