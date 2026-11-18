@@ -66,6 +66,40 @@ class OutboxMetricsTests(unittest.TestCase):
         self.assertTrue(any("found no service hosting OutboxDispatcher" in f for f in found), found)
 
 
+class InstrumentUnitTests(unittest.TestCase):
+    """A unit outside UNIT_SUFFIX and not an annotation is refused rather than dropped."""
+
+    def instruments(self, unit: str) -> tuple[set[str], list[str]]:
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "src").mkdir()
+        (root / "src" / "Metrics.cs").write_text(
+            f'_d = meter.CreateHistogram<double>("request.duration", unit: "{unit}");\n', encoding="utf-8")
+        with (
+            mock.patch.object(check, "ROOT", root),
+            mock.patch.object(check, "failures", []) as failures,
+        ):
+            return check.declared_instruments(), list(failures)
+
+    def test_a_mapped_unit_becomes_its_suffix(self) -> None:
+        names, found = self.instruments("s")
+
+        self.assertEqual([], found)
+        self.assertIn("request_duration_seconds_bucket", names)
+
+    def test_an_annotation_unit_is_dropped(self) -> None:
+        names, found = self.instruments("{request}")
+
+        self.assertEqual([], found)
+        self.assertIn("request_duration_bucket", names)
+
+    def test_an_unmapped_unit_is_refused(self) -> None:
+        names, found = self.instruments("ms")
+
+        self.assertTrue(any("unit 'ms'" in f for f in found), found)
+        self.assertNotIn("request_duration_bucket", names)
+
+
 class ParseRulesTests(unittest.TestCase):
     def rules(self, text: str) -> list[dict[str, object]]:
         """What parse_rules reads from a rules file holding `text`."""

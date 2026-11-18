@@ -417,6 +417,11 @@ def declared_instruments() -> set[str]:
             observable, kind, name, rest = match.groups()
             unit_match = UNIT_ARGUMENT.search(rest or "")
             unit = unit_match.group(1) if unit_match else ""
+            if unit and unit not in UNIT_SUFFIX and not (unit.startswith("{") and unit.endswith("}")):
+                # A suffix this map does not know would name a series nobody writes, and check 4 would pass it.
+                fail(f"{source.relative_to(ROOT).as_posix()}: {name} has unit {unit!r}, which UNIT_SUFFIX "
+                     "does not map; teach it the exporter's suffix for that unit")
+                continue
 
             # An observable counter still exports `_total`; `Observable` only
             # says how the value is produced, not what shape it has.
