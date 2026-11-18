@@ -27,17 +27,23 @@ public sealed partial class MigratorIsolationTests
     [InlineData("/* if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal); */\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("await MigratorCommand.IsolationRefusalAsync(db, ct);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("_ = db.Database.MigrateAsync(ct);\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
     [InlineData("await db.Database.MigrateAsync(ct);\n"
         + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
         + "    throw new InvalidOperationException(refusal);")]
     public void A_check_that_is_commented_out_discarded_or_late_does_not_count(string source) =>
         GuardsFirst(source).ShouldBeFalse();
 
-    [Fact]
-    public void A_guarded_check_ahead_of_the_migration_counts_whatever_a_comment_names() =>
-        GuardsFirst("// MigrateAsync( runs below\n"
-            + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
-            + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);").ShouldBeTrue();
+    [Theory]
+    [InlineData("// .MigrateAsync( runs below\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("if (await MigratorCommand.IsolationRefusalAsync(db, cancellationToken: ct).ConfigureAwait(false) "
+        + "is { } refusal)\n{\n    throw new InvalidOperationException(refusal);\n}\ndb.Database.Migrate();")]
+    public void A_guarded_check_ahead_of_the_migration_counts_whatever_a_comment_names(string source) =>
+        GuardsFirst(source).ShouldBeTrue();
 
     // Before, so a refused database is left as the operator made it, with no migration applied to it.
     private static bool ChecksFirst(string runner) => File.Exists(runner) && GuardsFirst(File.ReadAllText(runner));
@@ -67,11 +73,12 @@ public sealed partial class MigratorIsolationTests
     private static partial Regex Comment();
 
     [GeneratedRegex(
-        @"^\s*if \(await MigratorCommand\.IsolationRefusalAsync\(\w+, \w+\) is \{ \} (?<refusal>\w+)\)\s*"
-            + @"throw new InvalidOperationException\(\k<refusal>\);",
+        @"^\s*if \(await MigratorCommand\.IsolationRefusalAsync\([^()]*\)(?:\.ConfigureAwait\(false\))? "
+            + @"is \{ \} (?<refusal>\w+)\)\s*\{?\s*throw new InvalidOperationException\(\k<refusal>\);",
         RegexOptions.Multiline)]
     private static partial Regex GuardedCheck();
 
-    [GeneratedRegex(@"^\s*await \w+\.Database\.MigrateAsync\(", RegexOptions.Multiline)]
+    // Any spelling of a migration counts, so one ahead of the check is seen however it is written.
+    [GeneratedRegex(@"\.Migrate(?:Async)?\(")]
     private static partial Regex Migration();
 }
