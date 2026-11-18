@@ -154,8 +154,8 @@ Compose README's "no login ships" stays true. Give it one for an incident on
 the local stack, and take it away after:
 
 ```bash
-docker compose exec rabbitmq rabbitmqctl change_password dead-letter-operator '<password>'
-docker compose exec rabbitmq rabbitmqctl clear_password dead-letter-operator
+docker compose -f deploy/compose/docker-compose.yml exec rabbitmq rabbitmqctl change_password dead-letter-operator '<password>'
+docker compose -f deploy/compose/docker-compose.yml exec rabbitmq rabbitmqctl clear_password dead-letter-operator
 ```
 
 On a deployed broker it is provisioned from the vault, on the terms ADR-036
