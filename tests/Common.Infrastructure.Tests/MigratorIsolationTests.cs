@@ -64,7 +64,7 @@ public sealed partial class MigratorIsolationTests
     // counts as the check.
     private static bool GuardsFirst(string source)
     {
-        string code = Comment().Replace(source, found => found.Groups["literal"].Success ? found.Value : string.Empty);
+        string code = SourceCode.WithoutComments(source);
         Match check = GuardedCheck().Match(code);
         Match migrate = Migration().Match(code);
         return check.Success && migrate.Success && migrate.Index > check.Index;
@@ -80,14 +80,6 @@ public sealed partial class MigratorIsolationTests
 
         throw new InvalidOperationException($"No Platform.slnx above {AppContext.BaseDirectory}.");
     }
-
-    // A literal, raw, verbatim, regular or a character, is matched first and kept, so a `//` or `/*` inside one strips
-    // no code; an interpolation hole's own literals are not told apart.
-    [GeneratedRegex(
-        @"(?<literal>(?<raw>""{3,}).*?\k<raw>|(?:@\$?|\$@)""(?:[^""]|"""")*""|""(?:[^""\\\r\n]|\\.)*""|"
-            + @"'(?:[^'\\\r\n]|\\.)+')|//[^\r\n]*|/\*.*?\*/",
-        RegexOptions.Singleline)]
-    private static partial Regex Comment();
 
     [GeneratedRegex(
         @"^\s*if \(await MigratorCommand\.IsolationRefusalAsync\([^()]*\)(?:\.ConfigureAwait\(false\))? "
