@@ -1,10 +1,11 @@
+using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
 /// <summary>ADR-185's check, held to every migrator under src/ rather than to the ones that exist today.</summary>
-public sealed class MigratorIsolationTests
+public sealed partial class MigratorIsolationTests
 {
     [Fact]
     public void Every_migrator_reads_the_isolation_before_it_migrates()
@@ -20,16 +21,35 @@ public sealed class MigratorIsolationTests
         runners.Where(r => !ChecksFirst(r)).Select(r => Path.GetRelativePath(root, r)).ShouldBeEmpty();
     }
 
-    // Before, so a refused database is left as the operator made it, with no migration applied to it.
-    private static bool ChecksFirst(string runner)
-    {
-        if (!File.Exists(runner))
-            return false;
+    [Theory]
+    [InlineData("// if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "//     throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("/* if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal); */\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("await MigratorCommand.IsolationRefusalAsync(db, ct);\nawait db.Database.MigrateAsync(ct);")]
+    [InlineData("await db.Database.MigrateAsync(ct);\n"
+        + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+        + "    throw new InvalidOperationException(refusal);")]
+    public void A_check_that_is_commented_out_discarded_or_late_does_not_count(string source) =>
+        GuardsFirst(source).ShouldBeFalse();
 
-        string source = File.ReadAllText(runner);
-        int check = source.IndexOf("MigratorCommand.IsolationRefusalAsync(", StringComparison.Ordinal);
-        int migrate = source.IndexOf(".MigrateAsync(", StringComparison.Ordinal);
-        return check >= 0 && migrate > check;
+    [Fact]
+    public void A_guarded_check_ahead_of_the_migration_counts_whatever_a_comment_names() =>
+        GuardsFirst("// MigrateAsync( runs below\n"
+            + "if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)\n"
+            + "    throw new InvalidOperationException(refusal);\nawait db.Database.MigrateAsync(ct);").ShouldBeTrue();
+
+    // Before, so a refused database is left as the operator made it, with no migration applied to it.
+    private static bool ChecksFirst(string runner) => File.Exists(runner) && GuardsFirst(File.ReadAllText(runner));
+
+    // Read without comments, so neither call counts for being named, and only the form that throws on a refusal
+    // counts as the check.
+    private static bool GuardsFirst(string source)
+    {
+        string code = Comment().Replace(source, string.Empty);
+        Match check = GuardedCheck().Match(code);
+        Match migrate = Migration().Match(code);
+        return check.Success && migrate.Success && migrate.Index > check.Index;
     }
 
     private static string RepositoryRoot()
@@ -42,4 +62,16 @@ public sealed class MigratorIsolationTests
 
         throw new InvalidOperationException($"No Platform.slnx above {AppContext.BaseDirectory}.");
     }
+
+    [GeneratedRegex(@"//[^\r\n]*|/\*.*?\*/", RegexOptions.Singleline)]
+    private static partial Regex Comment();
+
+    [GeneratedRegex(
+        @"^\s*if \(await MigratorCommand\.IsolationRefusalAsync\(\w+, \w+\) is \{ \} (?<refusal>\w+)\)\s*"
+            + @"throw new InvalidOperationException\(\k<refusal>\);",
+        RegexOptions.Multiline)]
+    private static partial Regex GuardedCheck();
+
+    [GeneratedRegex(@"^\s*await \w+\.Database\.MigrateAsync\(", RegexOptions.Multiline)]
+    private static partial Regex Migration();
 }
