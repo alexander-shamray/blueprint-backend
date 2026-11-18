@@ -37,6 +37,16 @@ public static partial class StressOverride
                     $"'{key}' in the stress override is not a Section__Key entry, so no bind would read it");
             }
 
+            // YAML unescapes `\"`, `\\` and `\n` inside double quotes, so such a value kept raw would differ from the
+            // one Compose sets; the override needs none, so one is refused rather than unescaped.
+            bool escaped = entry.Groups["double"].Success
+                && entry.Groups["value"].Value.Contains('\\', StringComparison.Ordinal);
+            if (escaped)
+            {
+                throw new InvalidOperationException(
+                    $"'{key}' in the stress override holds a double-quoted escape, which YAML would unescape");
+            }
+
             string value = entry.Groups["single"].Success
                 ? entry.Groups["value"].Value.Replace("''", "'", StringComparison.Ordinal)
                 : entry.Groups["value"].Value;
@@ -49,13 +59,13 @@ public static partial class StressOverride
     // A map entry, bare, double- or single-quoted, or a list item's `Key=value`, a closing quote only where one
     // opened. A bare value may hold a space or a quote, so the key on such a line is still judged rather than the line
     // skipped; as in YAML, a quoted value runs to its quote, `''` escapes one inside single quotes (`single` marks
-    // it), and only a `#` after a space starts a comment.
+    // it, as `double` marks a double-quoted one), and only a `#` after a space starts a comment.
     [GeneratedRegex(
-        """^\s+(?:-\s*(?:"(?<key>[^\s=#"']+)=(?<value>(?:[^"\\]|\\.)*)"|""" +
+        """^\s+(?:-\s*(?:"(?<key>[^\s=#"']+)=(?<double>(?<value>(?:[^"\\]|\\.)*))"|""" +
         """'(?<key>[^\s=#"']+)=(?<single>(?<value>(?:[^']|'')*))'|""" +
         """(?<key>[^\s=#"']+)=(?<value>(?:[^#]|(?<=\S)#)*?))|""" +
         """(?<kq>["']?)(?<key>(?:[^\s:#"']|:(?=[^\s"']))+)\k<kq>\s*:\s*""" +
-        """(?:"(?<value>(?:[^"\\]|\\.)*)"|'(?<single>(?<value>(?:[^']|'')*))'|""" +
+        """(?:"(?<double>(?<value>(?:[^"\\]|\\.)*))"|'(?<single>(?<value>(?:[^']|'')*))'|""" +
         """(?<value>[^\s"'#](?:[^#]|(?<=\S)#)*?))?)""" +
         """\s*(?:(?<=\s)#.*)?$""")]
     private static partial Regex Entry();

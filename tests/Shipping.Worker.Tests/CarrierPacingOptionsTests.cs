@@ -123,6 +123,19 @@ public sealed class CarrierPacingOptionsTests
                 .Message.ShouldContain("CarrierPacing_TrackingTick");
         }
 
+        // A well-formed key whose double-quoted value holds an escape YAML would unescape is refused, not kept raw.
+        string[] escaped =
+        [
+            "      CarrierPacing__TrackingTick: \"a\\\"b\"", "      - \"CarrierPacing__TrackingTick=a\\\\b\"",
+            "      CarrierPacing__TrackingTick: \"00:00:01\\n\"",
+        ];
+
+        foreach (string line in escaped)
+        {
+            Should.Throw<InvalidOperationException>(() => StressOverride.Configuration([line]))
+                .Message.ShouldContain("CarrierPacing__TrackingTick");
+        }
+
         IConfiguration read = StressOverride.Configuration([
             "      carrierPacing__TrackingTik: \"00:00:01\"",
             "      'CarrierPacing__TrackingTick': '00:00:04'",
@@ -136,6 +149,7 @@ public sealed class CarrierPacingOptionsTests
             "      - \"CarrierPacing__QuotedHash=a #b\"",
             "      \"CarrierPacing__Tracking2Tick\" : \"00:00:02\"",
             "      - CarrierPacing__FulfilmentTick=00:00:03",
+            "      CarrierPacing__BareSlash: a\\b",
             "      - \"CarrierPacing__FulfilmentLeaseSeconds=60\"",
             "      DOTNET_gcServer: \"1\"",
             "      Kestrel__Endpoints__0__Url: \"\"",
@@ -145,6 +159,7 @@ public sealed class CarrierPacingOptionsTests
         read["CarrierPacing:TrackingTik"].ShouldBe("00:00:01");
         read["CarrierPacing:Tracking2Tick"].ShouldBe("00:00:02");
         read["CarrierPacing:FulfilmentTick"].ShouldBe("00:00:03");
+        read["CarrierPacing:BareSlash"].ShouldBe("a\\b");
         read["Kestrel:Endpoints:0:Url"].ShouldBe(string.Empty);
         read["CarrierPacing:FulfilmentLeaseSeconds"].ShouldBe("60");
         read["DOTNET_gcServer"].ShouldBeNull();
