@@ -14,7 +14,7 @@ from review_helpers import BASH, SCRIPTS, setUpModule  # noqa: F401
 
 SLEEP = SCRIPTS / "system-sleep.sh"
 SHIP = SCRIPTS.parent / "commands" / "ship.md"
-COMMAND = "powrprof.dll,SetSuspendState 0,1,0"
+COMMAND = "powrprof.dll,SetSuspendState"
 
 
 def run(*args, probe=True):

@@ -400,7 +400,8 @@ class PathTests(unittest.TestCase):
 
     # The directories a case's dotless tokens are judged against, laid out as a checkout of its own: the walk is the
     # subject, and the checkout this suite sits in is a different tree in every target.
-    CHECKOUT = ("src/Services/Ordering", "src/Services/Catalog", "deploy/rabbitmq", "tools/quality-sets", "docs")
+    CHECKOUT = ("src/Services/Ordering", "src/Services/Catalog", "deploy/rabbitmq", "tools/quality-sets", "docs",
+                "android/app")
 
     def in_checkout(self):
         tmp = tempfile.TemporaryDirectory()
@@ -470,6 +471,34 @@ class PathTests(unittest.TestCase):
         b = db.group_claim(group_of(line(gid="Z2", number=1701, task="`Services/Ordering` and `b.md`")), {1701: ""})
         self.assertFalse(a.unknown or b.unknown)
         self.assertTrue(db.overlaps(a, "Z1", {1700}, b, "Z2", {1701}))
+
+    def test_a_frontend_file_type_claims_like_a_backend_one(self):
+        self.in_checkout()
+        found = db.extract_paths("Edit src/app/core/api/client.ts and `app.component.html`, then theme.scss.")
+        self.assertEqual({"src/app/core/api/client.ts", "app.component.html", "theme.scss"}, found)
+        for name in ("a.tsx", "src/a.js", "src/a.mjs", "src/a.cjs", "a.css", "a.xml", "a.gradle", "a.kts", "a.kt", "a.java",
+                     "a.swift", "a.plist", "gradle.properties", "project.pbxproj", "debug.xcconfig", "main.storyboard"):
+            with self.subTest(name=name):
+                self.assertEqual({name}, db.extract_paths(f"see {name} here"))
+
+    def test_a_product_named_like_a_script_is_not_a_claim(self):
+        self.in_checkout()
+        found = db.extract_paths("bump Node.js to 24, `Vue.js` with Chart.js, and drop `zone.js` and main.mjs")
+        self.assertEqual(frozenset(), found)
+        claim = db.group_claim(group_of(line(task="it installs no `zone.js`")), {1700: "Node.js 24 is out"})
+        self.assertTrue(claim.unknown)
+        self.assertEqual({"src/node.js", "tools/main.mjs"}, db.extract_paths("edit `src/Node.js` and tools/main.mjs"))
+
+    def test_a_top_level_directory_claims_everything_under_it(self):
+        self.in_checkout()
+        self.assertEqual({"android"}, db.extract_paths("touches `android/` only"))
+        for spelling in ("`android/,`", "`android/.`", "(`android/)`", "`android\\`"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual({"android"}, db.extract_paths(f"touches {spelling} only"))
+        top, inside = self.claim({"android"}), self.claim({"android/app/src/main/androidmanifest.xml"})
+        self.assertTrue(self.over(top, inside))
+        self.assertTrue(self.over(inside, top))
+        self.assertFalse(self.over(top, self.claim({"src/androidx/a.kt"})))
 
     def test_paths_are_normalised_case_slashes_and_dot_prefix(self):
         found = db.extract_paths(r"`.\Src\Gateway\Program.cs` and `./Docs/A.MD`")
@@ -580,18 +609,42 @@ class PathTests(unittest.TestCase):
 
         def fake(root, *args):
             calls.append(args)
-            if args[2] == "origin/main...fix/other":
+            if args[4] == "origin/main...fix/other":
                 raise db.Refusal("unknown revision")
-            return "src/Gateway/Program.cs\ndocs/A.md\n\n"
+            return "src/Gateway/Program.cs\0docs/A.md\0\0"
         with mock.patch.object(db, "git", fake):
             self.assertEqual({"src/gateway/program.cs", "docs/a.md"}, db.branch_paths(".", "fix/other"))
-        self.assertEqual([("diff", "--name-only", "origin/main...fix/other", "--"),
-                          ("diff", "--name-only", "origin/main...origin/fix/other", "--")], calls)
+        self.assertEqual([("diff", "--name-only", "--no-renames", "-z", "origin/main...fix/other", "--"),
+                          ("diff", "--name-only", "--no-renames", "-z", "origin/main...origin/fix/other", "--")],
+                         calls)
         with mock.patch.object(db, "git", side_effect=db.Refusal("no such ref")):
             self.assertEqual(frozenset(), db.branch_paths(".", "fix/other"))
         with mock.patch.object(db, "git", side_effect=AssertionError("git was asked")):
             self.assertEqual(frozenset(), db.branch_paths(".", "-x"))
             self.assertEqual(frozenset(), db.branch_paths(".", None))
+
+    def test_branch_paths_claim_a_moved_files_old_path_and_a_non_ascii_name(self):
+        # Against real git, since the defaults this guards against (rename detection, quoted paths) are git's own.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def run(*args):
+                db.git(root, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                       "-c", "commit.gpgsign=false", *args)
+            run("init", "-q", "-b", "main")
+            (root / "src" / "old").mkdir(parents=True)
+            (root / "src" / "old" / "x.cs").write_text("class X {}\n" * 20, encoding="utf-8")
+            run("add", "-A")
+            run("commit", "-q", "-m", "base")
+            run("update-ref", "refs/remotes/origin/main", "HEAD")
+            run("checkout", "-q", "-b", "fix/move")
+            run("mv", "src/old", "src/new")
+            (root / "docs").mkdir()
+            (root / "docs" / "caf\u00e9.md").write_text("menu\n", encoding="utf-8")
+            run("add", "-A")
+            run("commit", "-q", "-m", "move")
+            self.assertEqual({"src/old/x.cs", "src/new/x.cs", "docs/caf\u00e9.md"},
+                             db.branch_paths(root, "fix/move"))
 
     def test_pick_takes_the_earliest_wave_then_table_order(self):
         groups = db.groups(db.parse_tasks(tasks_of(
@@ -638,6 +691,11 @@ class WriteTests(unittest.TestCase):
         self.dir = Path(self.tmp.name)
         self.path = self.dir / "todo.md"
         self.run_dir = self.dir / "artifacts" / "dispatch" / RUN
+        # A dispatched executor runs this suite too, and its marker would refuse every run written here.
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(db.DISPATCHED, None)
 
     def write(self, text):
         with open(self.path, "w", encoding="utf-8", newline="") as handle:
@@ -832,12 +890,17 @@ class WriteTests(unittest.TestCase):
         self.assertIn("does not record S1", err)
 
     def test_a_group_id_that_is_not_a_letter_and_number_is_refused(self):
+        # A started run, so an unguarded id would have a directory to write under; the whole tree,
+        # the task list included, must come out as it went in.
         self.write(FIXTURE)
+        dr.save_state(self.run_dir, {"groups": {}})
+        tree = lambda: {p: p.read_bytes() for p in self.dir.rglob("*") if p.is_file()}
+        before = tree()
         for bad in ("../x", "s1", "S1/../../y"):
             code, err = self.cli("move", bad)
             self.assertEqual(2, code, bad)
             self.assertIn("is not a group id", err)
-        self.assertFalse((self.dir / "x.json").exists())
+        self.assertEqual(before, tree())
 
     def test_place_refuses_a_group_an_in_progress_row_holds(self):
         moved = db.move_to_in_progress(FIXTURE, self.s1(), "b", "w", TODAY)
@@ -1605,6 +1668,23 @@ class EventTests(unittest.TestCase):
                 code, out = self.cli(*args)
                 self.assertEqual((2, dashed), (code, self.read()))
                 self.assertIn("names no issue number", out)
+
+    def test_a_dispatched_executor_writes_no_run(self):
+        # `--root` could name the main checkout, whose run state decides what the dispatcher launches.
+        run = self.dir / "artifacts" / "dispatch" / RUN
+        run.mkdir(parents=True)
+        (run / "state.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {db.DISPATCHED: ""}):
+            for args in (("back", "S1"), ("done", "S1"), ("place", "1", "S3", "1700"), ("rewrite", "--from", "x")):
+                with self.subTest(args=args):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        code = db.main(["tasks", args[0], "--tasks", str(self.path), "--root", str(self.dir),
+                                        "--run", RUN, *args[1:]])
+                    self.assertEqual(2, code)
+                    self.assertIn("writes no run", err.getvalue())
+        self.assertEqual(["state.json"], [p.name for p in run.iterdir()])
+        self.assertEqual(FIXTURE, self.read())
 
     def test_a_dispatched_executor_writes_no_list(self):
         self.issues = {1700: issue(1700)}

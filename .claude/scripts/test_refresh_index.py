@@ -1916,7 +1916,7 @@ class TheIndexerAKilledWorkerLeftBehind(Base):
     def child(self):
         """A process that runs until it is told not to, stopped by cleanup."""
         child = self.start_process(
-            [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE)
+            [sys.executable, "-P", "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE)
 
         def stop():
             # Kill before waiting: a failing assertion must not leave the
@@ -1970,7 +1970,7 @@ class TheIndexerAKilledWorkerLeftBehind(Base):
 
     def test_a_record_naming_nothing_alive_keeps_nothing(self):
         root = self.checkout("main")
-        gone = self.start_process([sys.executable, "-c", "pass"])
+        gone = self.start_process([sys.executable, "-P", "-c", "pass"])
         gone.wait(timeout=60)
         for text in ("", "not a pid", "0", "99999999999999999999", str(gone.pid)):
             with self.subTest(record=text):

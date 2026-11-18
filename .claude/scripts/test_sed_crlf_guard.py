@@ -606,6 +606,14 @@ class TheHookAsTheHarnessRunsIt(ACheckout):
                 self.assertEqual(b"", result.stdout.strip())
                 self.assertIn(b"guard-sed-crlf", result.stderr)
 
+    def test_an_event_that_is_not_utf8_is_refused(self):
+        # Not the fail-open above: bytes nothing could decode hold a command nothing read.
+        result = subprocess.run([sys.executable, str(HOOK)], input=b"\xff", capture_output=True)
+        self.assertEqual(0, result.returncode)
+        verdict = json.loads(result.stdout.decode("utf-8"))["hookSpecificOutput"]
+        self.assertEqual("deny", verdict["permissionDecision"])
+        self.assertIn("not UTF-8", verdict["permissionDecisionReason"])
+
 
 class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):
 

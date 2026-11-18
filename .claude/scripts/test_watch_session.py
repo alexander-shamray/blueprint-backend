@@ -75,6 +75,10 @@ class CleanTests(unittest.TestCase):
         self.assertIn("Usage: py -3.12 watch_session.py", done.stderr.decode("utf-8", errors="replace"))
 
 
+class Stop(Exception):
+    pass
+
+
 class FollowTests(unittest.TestCase):
     def test_the_newest_transcript_is_one_created_after_since_not_an_older_one_still_written(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -83,9 +87,87 @@ class FollowTests(unittest.TestCase):
                 Path(tmp, name).write_text("{}\n", encoding="utf-8")
             # The old transcript is the one appended to last; only its creation time may count.
             os.utime(Path(tmp, "old.jsonl"), (900.0, 900.0))
-            with mock.patch.object(ws.os.path, "getctime", lambda path: created[os.path.basename(path)]), \
+            with mock.patch.object(ws, "created", lambda path: created[os.path.basename(path)]), \
                     mock.patch.object(ws.time, "sleep", side_effect=AssertionError("waited")):
                 self.assertEqual(os.path.join(tmp, "new.jsonl"), ws.newest_transcript(tmp, 200.0))
+
+    def test_the_change_time_is_creation_time_only_on_windows(self):
+        stat = mock.Mock(spec=["st_ctime"], st_ctime=900.0)
+        with mock.patch.object(ws.os, "stat", return_value=stat):
+            for name, expected in (("posix", None), ("nt", 900.0)):
+                with self.subTest(os=name), mock.patch.object(ws.os, "name", name):
+                    self.assertEqual(expected, ws.created("any.jsonl"))
+        born = mock.Mock(spec=["st_ctime", "st_birthtime"], st_ctime=900.0, st_birthtime=100.0)
+        with mock.patch.object(ws.os, "stat", return_value=born):
+            self.assertEqual(100.0, ws.created("any.jsonl"))
+
+    def test_without_a_creation_time_a_transcript_there_before_the_watcher_is_passed_over(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "old.jsonl").write_text("{}\n", encoding="utf-8")
+
+            def a_session_starts(_seconds):
+                Path(tmp, "new.jsonl").write_text("{}\n", encoding="utf-8")
+                Path(tmp, "old.jsonl").write_text("{}\n{}\n", encoding="utf-8")
+
+            with mock.patch.object(ws, "created", return_value=None), \
+                    mock.patch.object(ws.time, "sleep", side_effect=a_session_starts):
+                self.assertEqual(os.path.join(tmp, "new.jsonl"), ws.newest_transcript(tmp, 0.0))
+
+    def test_a_transcript_gone_before_it_is_read_is_skipped_rather_than_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(ws.created(os.path.join(tmp, "gone.jsonl")))
+            Path(tmp, "new.jsonl").write_text("{}\n", encoding="utf-8")
+            listed = ["gone.jsonl", "new.jsonl"]
+
+            def dated(path):
+                return 300.0 if os.path.isfile(path) else None
+
+            with mock.patch.object(ws.os, "listdir", return_value=listed), \
+                    mock.patch.object(ws, "created", side_effect=dated), \
+                    mock.patch.object(ws.time, "sleep", side_effect=AssertionError("waited")):
+                self.assertEqual(os.path.join(tmp, "new.jsonl"), ws.newest_transcript(tmp, 200.0))
+
+    def test_a_line_written_in_two_pieces_is_shown_once_whole(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "session.jsonl")
+            path.write_text('{"type": "user", "mess', encoding="utf-8")
+            shown, polls = [], []
+
+            def the_writer_finishes(_seconds):
+                polls.append(1)
+                if len(polls) == 1:
+                    with open(path, "a", encoding="utf-8") as handle:
+                        handle.write('age": {"content": "hi"}}\n')
+                else:
+                    raise Stop
+
+            with mock.patch.object(ws, "show", side_effect=shown.append), \
+                    mock.patch.object(ws.time, "sleep", side_effect=the_writer_finishes), \
+                    self.assertRaises(Stop):
+                ws.main(str(path))
+            self.assertEqual([{"type": "user", "message": {"content": "hi"}}], shown)
+
+    def test_a_character_split_between_two_writes_is_shown_whole(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "session.jsonl")
+            record = '{"type": "user", "message": {"content": "\u2705 done"}}\n'.encode("utf-8")
+            cut = record.index("\u2705".encode("utf-8")) + 1
+            path.write_bytes(record[:cut])
+            shown, polls = [], []
+
+            def the_writer_finishes(_seconds):
+                polls.append(1)
+                if len(polls) == 1:
+                    with open(path, "ab") as handle:
+                        handle.write(record[cut:])
+                else:
+                    raise Stop
+
+            with mock.patch.object(ws, "show", side_effect=shown.append), \
+                    mock.patch.object(ws.time, "sleep", side_effect=the_writer_finishes), \
+                    self.assertRaises(Stop):
+                ws.main(str(path))
+            self.assertEqual([{"type": "user", "message": {"content": "\u2705 done"}}], shown)
 
 
 if __name__ == "__main__":
