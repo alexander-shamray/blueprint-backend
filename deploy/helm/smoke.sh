@@ -2649,7 +2649,7 @@ kestrel_ports() {
 
 # The parse is held to fixtures, because every real file parses as many ports
 # as it has Urls, and a regression in either function would read as agreement.
-printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
+printf '%s\n' '{ "kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
     '  "Grpc": { "url": "http://+:8082" },' '  // "Old": { "Url": "http://0.0.0.0:9999" }' '} } }' \
     >"$OUT/kestrel-mixed.json"
 printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
