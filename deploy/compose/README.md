@@ -46,9 +46,9 @@ about. Inspect the local broker through the container instead, which needs no
 account at all:
 
 ```bash
-docker compose exec rabbitmq rabbitmqctl list_queues name messages
-docker compose exec rabbitmq rabbitmqctl list_exchanges name type
-docker compose exec rabbitmq rabbitmqctl list_permissions
+docker compose -f deploy/compose/docker-compose.yml exec rabbitmq rabbitmqctl list_queues name messages
+docker compose -f deploy/compose/docker-compose.yml exec rabbitmq rabbitmqctl list_exchanges name type
+docker compose -f deploy/compose/docker-compose.yml exec rabbitmq rabbitmqctl list_permissions
 ```
 
 [`runbooks/error-queue.md`](../../docs/runbooks/error-queue.md) drives the

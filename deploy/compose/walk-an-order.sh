@@ -21,7 +21,7 @@ say() { echo "[+$((SECONDS - started))s] $*"; }
 
 # A failed call says what failed and exits 1, rather than ending on curl's own code with nothing printed.
 token=$(curl -sSf "$keycloak/realms/commerce/protocol/openid-connect/token" \
-  -d grant_type=password -d client_id=web-app -d username=demo -d password=demo | jq -r .access_token) ||
+  -d grant_type=password -d client_id=web-app -d username=demo -d password=demo | jq -er .access_token) ||
   { say "no token from $keycloak"; exit 1; }
 
 body=$(jq -nc --arg id "$(uuid)" --arg product "$product" '{
