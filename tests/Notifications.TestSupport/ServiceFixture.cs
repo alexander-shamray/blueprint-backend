@@ -458,10 +458,6 @@ public sealed class ServiceFixture()
         throw new TimeoutException($"A notice was still pending after {maxPasses} passes.");
     }
 
-    /// <summary>The engine's clock, which stamps every back-off, so a test reads its window there.</summary>
-    public Task<DateTimeOffset> DatabaseNowAsync() =>
-        ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
-
     /// <summary>Seeds the failed passes a notice has had, through the column the backoff writes.</summary>
     public Task SetAttemptsAsync(Guid notificationId, int attempts) =>
         ExecuteAsync(

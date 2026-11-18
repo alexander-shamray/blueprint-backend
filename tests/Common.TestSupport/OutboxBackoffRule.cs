@@ -9,8 +9,7 @@ namespace Common.TestSupport;
 /// </remarks>
 public static class OutboxBackoffRule
 {
-    /// <summary>The time between the failure and the read, and the database's clock against this host's, either
-    /// way.</summary>
+    /// <summary>The time between the failure and the read, which only shortens what remains.</summary>
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(8);
 
     /// <summary>Above the wait, the slack is at most half a rung, so a wait one rung too long is still told
@@ -23,19 +22,20 @@ public static class OutboxBackoffRule
             Math.Pow(2, Math.Min(attemptsBefore, OutboxDispatcher.BackoffAttemptCap)) *
             OutboxDispatcher.BackoffBaseSeconds);
 
-    /// <summary>Null when the row's <c>LockedUntil</c> is the ladder's wait from now, within the slack.</summary>
-    public static string? Violation(OutboxMessage row, int attemptsBefore) =>
-        Violation(row.LockedUntil, attemptsBefore);
+    /// <summary>Null when the row's <c>LockedUntil</c> is the ladder's wait from <paramref name="now"/>, the
+    /// database's clock that stamped it.</summary>
+    public static string? Violation(OutboxMessage row, int attemptsBefore, DateTimeOffset now) =>
+        Violation(row.LockedUntil, attemptsBefore, now);
 
-    /// <summary>Null when <paramref name="lockedUntil"/> is the ladder's wait from now, within the slack.</summary>
-    public static string? Violation(DateTimeOffset? lockedUntil, int attemptsBefore)
+    /// <summary>Null when <paramref name="lockedUntil"/> is the ladder's wait from <paramref name="now"/>.</summary>
+    public static string? Violation(DateTimeOffset? lockedUntil, int attemptsBefore, DateTimeOffset now)
     {
         TimeSpan expected = Ladder(attemptsBefore);
 
         if (lockedUntil is not { } until)
             return "a failed row is backed off, not left with no LockedUntil";
 
-        TimeSpan remaining = until - DateTimeOffset.UtcNow;
+        TimeSpan remaining = until - now;
 
         if (remaining <= TimeSpan.Zero)
             return $"no backoff time is left ({remaining.TotalSeconds:F1}s), so the next pass claims the row at once";
