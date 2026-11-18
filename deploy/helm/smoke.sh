@@ -2640,6 +2640,7 @@ section 'The Service forwards to a port something is listening on'
 kestrel_lines() { grep -v '^[[:space:]]*//' "$1" || true; }
 kestrel_pins() { [ "$(kestrel_lines "$1" | { grep -ci '"kestrel"' || true; })" -gt 0 ]; }
 kestrel_urls() { kestrel_lines "$1" | { grep -oiE '"url"[[:space:]]*:' || true; } | wc -l; }
+kestrel_whole() { [ "$(kestrel_ports "$1" | wc -l)" -eq "$(kestrel_urls "$1")" ]; }
 kestrel_ports() {
     kestrel_lines "$1" |
         { grep -oiE '"url"[[:space:]]*:[[:space:]]*"[a-z]+://[^"/]+:[0-9]+' || true; } |
@@ -2651,7 +2652,8 @@ kestrel_ports() {
 printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
     '  "Grpc": { "url": "http://+:8082" },' '  // "Old": { "Url": "http://0.0.0.0:9999" }' '} } }' \
     >"$OUT/kestrel-mixed.json"
-printf '%s\n' '{ "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0" } } } }' >"$OUT/kestrel-portless.json"
+printf '%s\n' '{ "Kestrel": { "Endpoints": {' '  "Http": { "Url": "http://0.0.0.0:8080" },' \
+    '  "Grpc": { "Url": "http://0.0.0.0" }' '} } }' >"$OUT/kestrel-portless.json"
 printf '%s\n' '// "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0:9999" } } }' '{ }' \
     >"$OUT/kestrel-commented.json"
 check 'a settings file pins ports when a live line names Kestrel in any case' kestrel_pins "$OUT/kestrel-mixed.json"
@@ -2659,10 +2661,11 @@ check 'a settings file naming Kestrel only on a // line pins nothing' \
     test "$(kestrel_pins "$OUT/kestrel-commented.json" && echo pins)" = ''
 check 'the listener parse reads a + host and a lower-case key, and skips a // line' \
     test "$(kestrel_ports "$OUT/kestrel-mixed.json" | tr '\n' ' ')" = '8080 8082 '
-check 'the listener count matches the parse when every Url gives a port' \
-    test "$(kestrel_urls "$OUT/kestrel-mixed.json")" -eq 2
-check 'a portless Url is counted but parses no port, so the count check refuses it' \
-    test "$(kestrel_urls "$OUT/kestrel-portless.json")" -eq 1 -a -z "$(kestrel_ports "$OUT/kestrel-portless.json")"
+check 'the listener count matches the parse when every Url gives a port' kestrel_whole "$OUT/kestrel-mixed.json"
+# Beside a ported Url, so the parse is not empty and only the count check can refuse it.
+check 'a portless Url beside a ported one is counted but parses no port' \
+    test "$(kestrel_ports "$OUT/kestrel-portless.json")" = 8080
+check 'and the count check refuses it' test "$(kestrel_whole "$OUT/kestrel-portless.json" || echo refused)" = refused
 
 pinned=0
 for chart in $SERVICE_CHARTS; do
@@ -2684,18 +2687,16 @@ for chart in $SERVICE_CHARTS; do
         continue
     else
         pinned=$((pinned + 1))
-        kestrel_ports "$settings" >"$OUT/$chart-ports.txt"
-        urls="$(kestrel_urls "$settings")"
-        sort -u "$OUT/$chart-ports.txt" >"$OUT/$chart-listeners.txt"
+        kestrel_ports "$settings" | sort -u >"$OUT/$chart-listeners.txt"
 
         if [ ! -s "$OUT/$chart-listeners.txt" ]; then
             fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
             continue
         fi
-        parsed="$(wc -l <"$OUT/$chart-ports.txt")"
-        if [ "$parsed" -ne "$urls" ]; then
+        if ! kestrel_whole "$settings"; then
             # The whole file is read, so a Url outside the Kestrel object is counted too.
-            fail "$settings holds $urls Url(s), $parsed port(s) parsed — a portless or non-Kestrel Url, or the parse"
+            urls="$(kestrel_urls "$settings")"
+            fail "$settings holds $urls Url(s) but fewer ports parsed — a portless or non-Kestrel Url, or the parse"
             continue
         fi
     fi
