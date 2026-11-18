@@ -4,10 +4,15 @@ using Ordering.Infrastructure;
 using Ordering.Infrastructure.Persistence;
 using Ordering.TestSupport;
 using Common.Application;
+using MassTransit;
+using MassTransit.Middleware;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using Ordering.Infrastructure.Messaging;
 using Shouldly;
 using Xunit;
 
@@ -283,11 +288,96 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "attempt 2 must read committed state, not attempt 1's mutation out of the identity map");
     }
 
+    [Fact]
+    public async Task A_transient_commit_fault_on_the_saga_outbox_retries_from_committed_state()
+    {
+        // SagaOutboxContextFactory retries on the scoped context the saga shares; a rollback leaves attempt 1's
+        // inbox row and mutation tracked, so attempt 2 must start from a cleared tracker as EfUnitOfWork's does.
+        Guid id = Guid.CreateVersion7();
+        Guid messageId = Guid.CreateVersion7();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FailNextCommit commitFault = new();
+
+        await using ServiceProvider provider = BuildFaultInjectingProvider(commitFault);
+
+        await using (AsyncServiceScope seedScope = provider.CreateAsyncScope())
+        {
+            OrderingDbContext seed = seedScope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+            seed.Add(new TrackedProbe { Id = id, Note = "committed" });
+            await seed.SaveChangesAsync(ct);
+        }
+
+        await using AsyncServiceScope scope = provider.CreateAsyncScope();
+        OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+        IOutboxContextFactory<OrderingDbContext> factory =
+            scope.ServiceProvider.GetRequiredService<IOutboxContextFactory<OrderingDbContext>>();
+        factory.ShouldBeOfType<SagaOutboxContextFactory>("the saga endpoint's factory is the one under test (ADR-174)");
+
+        ConsumeContext<SagaOutboxProbeMessage> context = Substitute.For<ConsumeContext<SagaOutboxProbeMessage>>();
+        context.MessageId.Returns(messageId);
+        context.CancellationToken.Returns(ct);
+
+        OutboxConsumeOptions options = new()
+        {
+            ConsumerId = Guid.CreateVersion7(),
+            ConsumerType = nameof(SagaOutboxProbeMessage),
+            MessageDeliveryLimit = 1,
+            MessageDeliveryTimeout = TimeSpan.FromSeconds(5)
+        };
+
+        int consumes = 0;
+
+        // The consume pass stands in for the saga's transition; the delivery pass, with nothing staged, ends the loop.
+        IPipe<OutboxConsumeContext<SagaOutboxProbeMessage>> next =
+            Pipe.ExecuteAsync<OutboxConsumeContext<SagaOutboxProbeMessage>>(async outbox =>
+            {
+                if (!outbox.IsMessageConsumed)
+                {
+                    consumes++;
+                    TrackedProbe probe = await db.Set<TrackedProbe>().SingleAsync(p => p.Id == id, ct);
+                    probe.Note += "+once";
+                    await outbox.SetConsumed();
+                }
+                else
+                {
+                    await outbox.SetDelivered();
+                    outbox.ContinueProcessing = false;
+                }
+            });
+
+        commitFault.Arm();
+        await factory.Send(context, options, next);
+
+        consumes.ShouldBe(2, "attempt 1's consume rolled back with its commit, so the strategy's retry consumes again");
+
+        string note = await fixture.ScalarAsync<string>(
+            "SELECT Value = Note FROM ordering.TransactionProbe WHERE Id = {0}",
+            id);
+        note.ShouldBe(
+            "committed+once",
+            "attempt 2 must read committed state, not attempt 1's mutation out of the identity map");
+
+        int inboxRows = await fixture.ScalarAsync<int>(
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.InboxState
+            WHERE MessageId = {0}
+                AND Consumed IS NOT NULL
+                AND Delivered IS NOT NULL
+                AND ReceiveCount = 1
+            """,
+            messageId);
+        inboxRows.ShouldBe(
+            1,
+            "one inbox row, consumed by the retried pass and delivered by the next; an uncleared tracker meets " +
+                "attempt 1's row again and refuses the insert");
+    }
+
     /// <summary>
-    /// AddOrderingInfrastructure over the fixture's database, with a strategy that retries the marker and a model
-    /// carrying <see cref="TrackedProbe"/>.
+    /// AddOrderingInfrastructure over the fixture's database, with a strategy that retries the marker, a model
+    /// carrying <see cref="TrackedProbe"/> and the caller's interceptors.
     /// </summary>
-    private ServiceProvider BuildFaultInjectingProvider()
+    private ServiceProvider BuildFaultInjectingProvider(params IInterceptor[] interceptors)
     {
         ServiceCollection services = new();
         services.AddOrderingInfrastructure(
@@ -311,6 +401,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             .UseSqlServer(
                 fixture.ConnectionString,
                 sql => sql.ExecutionStrategy(deps => new MarkerRetryingStrategy(deps)))
+            .AddInterceptors(interceptors)
             .ReplaceService<IModelCustomizer, ProbeModelCustomizer>());
 
         return services.BuildServiceProvider();
