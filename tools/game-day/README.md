@@ -195,11 +195,21 @@ which the suite fails on the day anything under `src/`, `deploy/compose/` or
 `deploy/helm/` sets it), plus the evaluation interval (60 seconds), plus the
 same interval again for reporting. The bundled Grafana image's Prometheus
 configuration sets no `evaluation_interval`, which was read from the running
-container, so the default applies. The first runs, on 2026-10-10, fired
-`OutboxAbandonedRows` after 75 seconds of a 120-second deadline,
-`OutboxLocalLaneStalled` after 128 of 150, and `OutboxBrokerLaneStalled` after
-209 and 226 of 240. The last is close to its ceiling, which is what a sum of
-ceilings looks like when the cause lands on a bad phase of both intervals.
+container, so the default applies. A rule with a `deriv(...[10m:])` half
+adds one more term to its signal, `SUBQUERY_STEP_SECONDS`: a subquery with no
+step steps at the evaluation interval, on timestamps aligned to it, so a
+sample an instant selector already reads is seen by the subquery only at its
+next aligned step, up to one interval later. Until then the derivative reads
+flat and the `and` reads false. `OutboxGrowth` was still pending when its
+780 seconds ran out on 2026-11-18 (#2155), the deadline that left this term
+out; when its pending began was not measured, so the term bounds that run
+rather than explains it. The coverage test holds every rule with a subquery,
+of any range or step, to a signal of at least one step. The first runs, on
+2026-10-10, fired `OutboxAbandonedRows` after 75 seconds of a 120-second
+deadline, `OutboxLocalLaneStalled` after 128 of 150, and
+`OutboxBrokerLaneStalled` after 209 and 226 of 240. The last is close to its
+ceiling, which is what a sum of ceilings looks like when the cause lands on a
+bad phase of both intervals.
 `ErasureRequestsOverdue`, run on 2026-10-11, fired after 173 and 213 seconds of
 its deadline. `ErrorQueueDepth` and `SkippedQueueDepth`, run on 2026-10-11, each
 fired after 177 seconds of 240, and `QueueBacklogGrowing` after 712 of 780.

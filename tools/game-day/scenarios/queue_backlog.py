@@ -94,7 +94,9 @@ BACKLOG_ALERT = "QueueBacklogGrowing"
 QUEUE = "bff-order-events"
 # A type nothing binds, and none is ever delivered: the restore purges them all before the consumer is back.
 BACKLOG_TYPE = "urn:message:GameDay:Backlog"
-# The rule is `> 1000` and a positive `deriv` over 10 minutes, `for: 10m`; the first batch crosses the depth at once.
+# The rule is `> 1000` and a positive `deriv` over 10 minutes, `for: 10m`; the first batch crosses the depth at once,
+# and the `deriv(...[10m:])` half sees it one subquery step later (harness.SUBQUERY_STEP_SECONDS).
+BACKLOG_DEADLINE = harness.Deadline(signal_seconds=harness.SUBQUERY_STEP_SECONDS, for_seconds=FOR_SECONDS)
 FIRST_BATCH = 1100
 TOP_UP_MESSAGES = 20
 TOP_UP_SECONDS = 30
@@ -183,5 +185,6 @@ def _backlog_settled(world: harness.World) -> tuple[bool, str]:
 
 
 NEXT = SimpleNamespace(
-    RUNBOOK=RUNBOOK, IMPACT="data", SUSTAINED=True, ALERT=BACKLOG_ALERT, DEADLINE=DEADLINE, cause=_backlog_cause,
+    RUNBOOK=RUNBOOK, IMPACT="data", SUSTAINED=True, ALERT=BACKLOG_ALERT, DEADLINE=BACKLOG_DEADLINE,
+    cause=_backlog_cause,
     first_step=_backlog_first_step, restore=_backlog_restore, settled=_backlog_settled)
