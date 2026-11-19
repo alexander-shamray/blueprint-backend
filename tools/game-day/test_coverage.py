@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import harness
 import runbook_coverage as coverage
 
 LOADED_RULES = coverage.ROOT / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
@@ -174,6 +175,16 @@ class Scenarios(unittest.TestCase):
                 age = re.search(r"max by \(service_name\) \(bff_orders_unattributed_seconds\) > (\d+)", block)
                 if age:
                     self.assertGreaterEqual(module.DEADLINE.signal_seconds, int(age.group(1)))
+
+    def test_a_deadline_covers_a_subquery_step(self):
+        """A subquery half reads the cause a step late, so its signal is never the bare zero."""
+        subqueried = []
+        for name, module in self.modules():
+            if re.search(r"\[[0-9smhdwy]+:[0-9smhdwy]*\]", self.block(module)):
+                subqueried.append(name)
+                with self.subTest(name):
+                    self.assertGreaterEqual(module.DEADLINE.signal_seconds, harness.SUBQUERY_STEP_SECONDS)
+        self.assertTrue({"outbox_growth", "queue_backlog.NEXT"} <= set(subqueried), subqueried)
 
     def test_a_deadline_carries_the_rules_for_exactly(self):
         for name, module in self.modules():

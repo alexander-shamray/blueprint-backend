@@ -17,8 +17,9 @@ ALERT = "OutboxGrowth"
 COMPANION = "OutboxBrokerLaneStalled"
 FORCED_THROUGH_SQL = True
 FOR_SECONDS = 600
-# The count crosses 1000 as soon as the first batch is exported; the deadline is the `for:` and the three intervals.
-DEADLINE = harness.Deadline(signal_seconds=0, for_seconds=FOR_SECONDS)
+# The count crosses 1000 as soon as the first batch is exported; the signal is the `deriv(...[10m:])` half's
+# subquery step (harness.SUBQUERY_STEP_SECONDS), and the rest is the `for:` and the three intervals.
+DEADLINE = harness.Deadline(signal_seconds=harness.SUBQUERY_STEP_SECONDS, for_seconds=FOR_SECONDS)
 SERVICE = "Ordering.Api"
 MESSAGE_TYPE = "GameDay.Synthetic.Growth"
 FIRST_BATCH = 1100

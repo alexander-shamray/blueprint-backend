@@ -45,6 +45,9 @@ EVALUATION_INTERVAL_SECONDS = 60
 # The bundled Prometheus reports an alert one evaluation after the one that first saw its expression true, with
 # activeAt back-dated to the earlier one; README.md's deadline paragraph owns the measurements.
 REPORT_LAG_SECONDS = EVALUATION_INTERVAL_SECONDS
+# A subquery written `[10m:]` steps at the evaluation interval, on timestamps aligned to it, so a sample is seen
+# by it up to one step after an instant selector sees it; README.md's deadline paragraph owns the argument.
+SUBQUERY_STEP_SECONDS = EVALUATION_INTERVAL_SECONDS
 
 POLL_SECONDS = 2.0
 
