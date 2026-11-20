@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Refuse a code-index MCP call made from another checkout than the one the
-server reads, which is where the session started, and name the `cbx` command
-that reads this one. A call it cannot judge goes through, and it returns 0."""
+"""Refuse a code-index MCP call over an index the refresh hook would not open,
+as the `cbx` gate does, unjudged included; and one made from another checkout
+than the server reads, naming the `cbx` line that reads this one. Any other
+call it cannot judge goes through, and it returns 0."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shlex
@@ -13,10 +15,12 @@ from pathlib import Path
 
 MCP = "mcp__codebase-index__"
 CBX = "bash .claude/skills/codebase-index/scripts/cbx"
+REFRESH = Path(__file__).resolve().parent / "refresh-index.py"
 
 # Each tool's subcommand, its arguments in the CLI's positional order, and
 # whether it takes a session tag, after SKILL.md's route table. `healthcheck`
-# is absent and never refused: its `root` is how a session sees the mismatch.
+# is absent and never refused for a mismatch, since its `root` is how a session
+# sees one; it is refused, as every tool is, over an index that is not openable.
 COMMANDS = {
     "search_code": ("search", ("query",), True),
     "explain_code": ("explain", ("query",), True),
@@ -109,16 +113,41 @@ def command(tool: str, given: dict) -> str:
     return "`" + " ".join(words + ["--json"]) + "`"
 
 
+def unopenable(roots: list[Path]) -> str | None:
+    """Why the index under one of `roots` may not be opened, asked of the
+    refresh hook's own `index_openable`, which the `cbx` gate asks too; a
+    question it could not ask is a refusal, as the gate's is."""
+    try:
+        sys.dont_write_bytecode = True  # no `__pycache__` under `.claude/hooks/`
+        spec = importlib.util.spec_from_file_location("refresh_index", REFRESH)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        for root in roots:
+            if not hook.index_openable(root):
+                return (f"refusing to open the index under {root}: a link on its path, a rollback "
+                        "journal beside it, or a header that is not WAL mode. Remove what the branch "
+                        "tracked under .claude/cache/codebase-index/ and run it again.")
+    except Exception as error:  # noqa: BLE001 - unjudged is refused, as the gate refuses it
+        return (f"refusing to open the code index: whether it is openable could not be judged "
+                f"({type(error).__name__}: {error}).")
+    return None
+
+
 def answer(event: dict) -> str | None:
     """Why to refuse this call, or None to let it run."""
     name, given, cwd = event.get("tool_name"), event.get("tool_input"), event.get("cwd")
-    if not isinstance(name, str) or not name.startswith(MCP) or name[len(MCP):] not in COMMANDS:
+    if not isinstance(name, str) or not name.startswith(MCP):
         return None
     project = os.environ.get("CLAUDE_PROJECT_DIR")
-    if not isinstance(cwd, str) or not cwd or not project:
-        return None
-    here, served = checkout_root(Path(cwd)), checkout_root(Path(project))
-    if here is None or served is None or same(here, served):
+    here = checkout_root(Path(cwd)) if isinstance(cwd, str) and cwd else None
+    served = checkout_root(Path(project)) if project else None
+    roots = [root for root in (served, here) if root is not None]
+    if len(roots) == 2 and same(*roots):
+        roots = roots[:1]
+    refused = unopenable(roots)
+    if refused:
+        return f"index-mcp-root: {refused}"
+    if name[len(MCP):] not in COMMANDS or here is None or served is None or same(here, served):
         return None
     run = command(name[len(MCP):], given if isinstance(given, dict) else {})
     return (f"The codebase-index MCP server reads {served}, where this session started, and not {here}, "

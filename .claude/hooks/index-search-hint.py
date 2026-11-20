@@ -183,7 +183,10 @@ def segments(command: str, escape: str = "\\"):
             skip = False
         elif token and set(token) <= SEPARATORS:
             yield argv, piped, token
-            argv, piped = [], token.strip("\n") in ("|", "|&")
+            # shlex fuses a run of operators, so `|(` and `)|` pipe as `|` does; a bare `(` opens a
+            # subshell that reads what its own command would have read.
+            opens = set(token) == {"("}
+            argv, piped = [], piped if opens else token.strip("\n()") in ("|", "|&")
         elif token and set(token) <= SEPARATORS | REDIRECTS:
             skip, piped = True, piped or set(token) == {"<"}
         elif not (token.isdigit() and following and set(following) & REDIRECTS

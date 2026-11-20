@@ -173,8 +173,8 @@ jobs:
           fi
 
       # The pull request that introduces the gate has a base carrying none, so
-      # it is judged by its own copy, with a notice. A base that predates the
-      # gate while the head also lacks it still fails.
+      # it is judged by its own copy, with a notice. A base commit that is
+      # missing, or a head that also lacks the gate, fails.
       - name: Take the enforcing commit gate from the base commit
         id: commit_take
         if: ${{ !cancelled() && steps.dependabot.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
@@ -185,6 +185,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/commit-gate"
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::the base commit $BASE_SHA is not in the checkout"
+            exit 1
+          fi
           if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
             git show "$BASE_SHA:$GATE" > "$RUNNER_TEMP/commit-gate/commit_gate.py"
             echo "enforcing with the gate as of $BASE_SHA"
@@ -326,6 +330,10 @@ jobs:
         run: |
           set -euo pipefail
           judge="$RUNNER_TEMP/comment_gate.py"
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::the base commit $BASE_SHA is not in the checkout"
+            exit 1
+          fi
           if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
             git show "$BASE_SHA:$GATE" > "$judge"
             # An empty judge would read nothing and pass.

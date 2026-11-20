@@ -1,7 +1,8 @@
 # The output gate
 
-**The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`, and
-every project's output is under `artifacts/` instead.** It checks the rule
+**The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`,
+outside an npm or Angular CLI tree, and every project's output is under
+`artifacts/` instead.** It checks the rule
 that those trees hold source and nothing a build wrote, which backend's
 architecture states as its §4.1 and every target the gate is delivered to
 holds. A target's `Directory.Build.props` makes the rule true, and its
@@ -11,13 +12,17 @@ none of that reasoning.
 ## What it reads
 
 - The directory trees under `src/`, `tests/` and `tools/`, for a `bin/` or
-  `obj/` anywhere beneath any of them.
+  `obj/` anywhere beneath any of them, outside `node_modules/` and
+  `.angular/`: what `npm ci` and the Angular CLI write under a web project
+  there holds packages that ship a `bin/` of their own, which MSBuild did not
+  write.
 - `artifacts/obj/` and `artifacts/bin/`, where every project must be found.
   The negative half alone is weak — a checkout nobody has touched has no
   `obj/` under `src/` either — so the gate proves a restore and a build both
   ran: a restore alone creates every `obj` entry and no `bin` entry.
 - The solution, the one `.slnx` at the repository's root, reconciled in both
-  directions with the projects found on disk, because a walk that finds no
+  directions with the projects found on disk, outside the same two
+  directories, because a walk that finds no
   project satisfies every assertion above. It is found rather than named,
   since each target calls its solution something of its own, and none or more
   than one at the root is refused before anything else is read: either leaves

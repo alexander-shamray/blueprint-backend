@@ -6,6 +6,7 @@ What it reads and why is `README.md`'s; the rule is Section 4.1's.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import os
 import sys
 import xml.etree.ElementTree as ElementTree
@@ -35,6 +36,11 @@ OUTPUT_DIRECTORY_NAMES = frozenset({"bin", "obj"})
 # each one establishes. Ordered, because a project missing from both should be
 # reported against the earlier stage rather than twice.
 ARTIFACT_STAGES = (("obj", "restore"), ("bin", "build"))
+
+# What `npm ci` and the Angular CLI write under a web project in `src/`. A
+# package ships its own `bin/`, which is not MSBuild's, so the residue walk
+# does not enter them.
+NOT_SOURCE_DIRECTORY_NAMES = frozenset({"node_modules", ".angular"})
 
 
 def find_solution(repo_root: Path) -> tuple[Path | None, list[str]]:
@@ -81,11 +87,18 @@ def solution_projects(solution: Path) -> list[Path]:
 
 
 def walked_projects(repo_root: Path) -> list[Path]:
-    """Every `.csproj` on disk under the source roots, spelled the same way."""
+    """Every `.csproj` on disk under the source roots, spelled the same way,
+    outside `NOT_SOURCE_DIRECTORY_NAMES`: a package's own `.csproj` there is
+    not the solution's, and the tree is not walked for nothing. `fnmatch`
+    keeps the case rule `rglob` had on each host."""
     projects: list[Path] = []
     for source_root in SOURCE_ROOTS:
-        for csproj in (repo_root / source_root).rglob("*.csproj"):
-            projects.append(csproj.relative_to(repo_root))
+        for directory, subdirectories, files in os.walk(repo_root / source_root):
+            subdirectories[:] = [
+                name for name in subdirectories if name.lower() not in NOT_SOURCE_DIRECTORY_NAMES]
+            projects.extend(
+                (Path(directory) / name).relative_to(repo_root)
+                for name in files if fnmatch.fnmatch(name, "*.csproj"))
     return sorted(projects)
 
 
@@ -201,12 +214,10 @@ def find_missing_output(artifacts: Path, walked: list[Path], solution: str) -> l
 
 
 def find_residue(repo_root: Path) -> list[str]:
-    """Any `bin/` or `obj/` under the source roots, outermost first.
+    """Any `bin/` or `obj/` under the source roots, outside `NOT_SOURCE_DIRECTORY_NAMES`, outermost first.
 
-    The walk prunes what it reports, so a stale `obj/` full of a previous
-    layout's subdirectories is one finding rather than a screenful. The
-    outermost directory is also the one to delete, which makes the finding and
-    the fix the same sentence.
+    The walk prunes what it reports: a stale `obj/` is one finding, and the
+    outermost directory is the one to delete.
     """
     findings: list[str] = []
     for source_root in SOURCE_ROOTS:
@@ -220,7 +231,9 @@ def find_residue(repo_root: Path) -> list[str]:
                     f"built from. Delete it: git-ignored output is never removed by a "
                     f"checkout, so a directory written before the redirect landed "
                     f"survives every branch")
-            subdirectories[:] = [name for name in subdirectories if name not in residue]
+            subdirectories[:] = [
+                name for name in subdirectories
+                if name not in residue and name.lower() not in NOT_SOURCE_DIRECTORY_NAMES]
     return findings
 
 

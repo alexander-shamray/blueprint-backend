@@ -94,7 +94,9 @@ loads*).
   surface: no `Write` in place of a denied `Edit`, no shell redirection
   into a denied path, and no note in a PR body standing in for the ask.
 - **Do everything else first, then hand the denied edit over as a
-  script.** Write it to the scratchpad as a script that replaces exact
+  script.** Write it to the scratchpad, or a dispatched executor to its
+  worktree's `artifacts/handoff/` (`docs/harness/working-rules.md`,
+  *Hand-back scripts*), as a script that replaces exact
   anchored strings and checks every anchor before writing anything, so it
   applies all its edits or none and names the file on a miss; dry-run the
   anchors and say they matched. Name it without underscores.
@@ -105,9 +107,10 @@ loads*).
   `! py -3.12 <script>`. A `!` line runs in Git Bash, so a Windows path
   with backslashes loses them and the line dies on its first word with no
   output: give the script's path with forward slashes.
-- **The script writes a receipt beside itself**, so a script that never ran
-  can be told from one that ran and failed; read the receipt before
-  reading the files.
+- **The script writes a receipt beside itself**, in the one shape
+  `docs/harness/working-rules.md` *Hand-back scripts* gives, so a script
+  that never ran can be told from one that ran and failed; read the
+  receipt before reading the files.
 - **After the owner runs it, verify by reading the files**, then commit
   and carry on; the commit body says the owner applied it from a script.
 

@@ -266,6 +266,29 @@ keeping the guide's *Comments* rules be reworded, completed or expanded.
   `#B1-929+930` two issues worked as one change; read the group's rows and
   each issue, never grep for the tag.
 
+## Hand-back scripts
+
+A denied edit is handed to the owner as a script
+(`.harness/agent-rules.md`, *Handing over to the owner*), and its receipt
+has one shape everywhere, so a helper can read it rather than a person:
+
+- **`<script>.receipt`, beside the script**, rewritten on every run.
+- **A `head <oid>` line**: `git rev-parse HEAD` in the checkout the script
+  edits, read when it runs, so a receipt left over from another tip
+  cannot answer for this one.
+- **A last line of exactly `applied`, `failed` or `dry-run`**, and
+  anything else above it: the files written, each anchor that missed.
+  Two night-time scripts wrote `APPLIED to <path>` and per-file `written`
+  lines, and no helper could tell either from a failure.
+
+A `/ship --dispatched` executor writes its script under
+`artifacts/handoff/` in its own worktree, since the dispatcher removes the
+executor's temp directory when it exits, and describes the hand-back
+beside it in `artifacts/handoff/resume.json`; the dispatcher's `tasks
+back` records it, and once the owner has run the script a later
+`/dispatch` resumes the group in that worktree
+(`docs/commands/dispatch.md`, *Resume*).
+
 ## Managed files
 
 - **A managed file is changed in `blueprint-harness`**

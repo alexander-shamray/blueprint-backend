@@ -173,7 +173,9 @@ named=" " stocked=" "
 class_patterns=(); member=""
 while IFS= read -r raw || [ -n "$raw" ]; do
   raw=${raw%$'\r'}
-  t="${raw#"${raw%%[! ]*}"}"
+  # Any ASCII whitespace, as the gate's read_map strips it: a tab-indented comment or
+  # a tab-only line is skipped there, and refusing it here is a verdict CI never gives.
+  t="${raw#"${raw%%[![:space:]]*}"}"
   case "$t" in ''|'#'*) continue ;; esac
   if [[ "$raw" =~ ^([ABCDE]):[[:space:]]*$ ]]; then
     member=${BASH_REMATCH[1]}
@@ -247,31 +249,31 @@ while IFS= read -r line; do
 done < <(printf '%s\n' "$files")
 # The endpoint stops short of a very large pull request, and a short list would read as the whole diff.
 [ "$names" -eq "$changed" ] || refuse "the files endpoint returned $names names against changedFiles $changed"
+# No changed file is an empty subject, which the CI gate refuses rather than passes; a lone `class` line would read
+# to a caller as a diff with nothing outside its set.
+[ "$names" -gt 0 ] || refuse "the pull request has no changed files, which is an empty subject rather than a pass"
 # One grep per pattern over every path, reading a pipe, and line N's hit is
 # path N's: a validated path holds no newline. Status 2, a pattern grep
 # cannot compile, matches nothing; a status past 2 stops the run, since a
 # verdict read past a grep that did not finish is `outside` for a path
 # nothing judged.
 hits=(); class_hits=()
-if [ -n "$list" ]; then
-  for re in "${patterns[@]}"; do
-    matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
-    while IFS=: read -r n _; do
-      [ -z "$n" ] || hits[n - 1]=1
-    done < <(printf '%s\n' "$matched")
-  done
-  for re in "${class_patterns[@]}"; do
-    matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
-    while IFS=: read -r n _; do
-      [ -z "$n" ] || class_hits[n - 1]=1
-    done < <(printf '%s\n' "$matched")
-  done
-fi
+for re in "${patterns[@]}"; do
+  matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
+  while IFS=: read -r n _; do
+    [ -z "$n" ] || hits[n - 1]=1
+  done < <(printf '%s\n' "$matched")
+done
+for re in "${class_patterns[@]}"; do
+  matched=$(printf '%s\n' "${list%$'\n'}" | grep -nE -e "$re") || [ $? -le 2 ] || grep_died
+  while IFS=: read -r n _; do
+    [ -z "$n" ] || class_hits[n - 1]=1
+  done < <(printf '%s\n' "$matched")
+done
 # Printed once every grep has finished, so a run stopped above prints nothing that reads as a pull request with no paths.
 printf 'class %s\n' "$class"
 i=0
-# bash 3.2 calls an empty array unbound under `set -u`, and a pull request can have no changed file.
-for path in ${verdicts[@]+"${verdicts[@]}"}; do
+for path in "${verdicts[@]}"; do
   verdict=outside
   [ -z "${hits[i]:-}" ] || verdict=inside
   # The class's verdict overrides the row's, because no row may declare a path
