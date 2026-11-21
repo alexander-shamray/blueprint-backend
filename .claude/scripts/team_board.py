@@ -171,6 +171,8 @@ def merge(root, name, number):
             raise Refusal(f"{path.name} is not a peer's reply")
         try:
             reply = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as error:  # a reply that cannot be opened or read is a refusal, not a traceback
+            raise Refusal(f"{path.name} cannot be read: {error}") from None
         except ValueError as error:  # a JSONDecodeError, or a UnicodeDecodeError for bytes that are not UTF-8
             raise Refusal(f"{path.name} is not JSON: {error}") from None
         parsed.append((peer, *reply_shape(reply, peer)))

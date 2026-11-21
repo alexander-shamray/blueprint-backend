@@ -277,13 +277,15 @@ class LabelHelperHasNoFreeParameter(unittest.TestCase):
         )
 
     def test_a_name_outside_the_vocabulary_never_reaches_gh(self):
-        # Refused by the case, before `gh repo view` is called — so this test
-        # needs no network and proves the refusal is the first thing that
-        # happens rather than a message printed after a lookup.
+        # Refused by the case, before `gh repo view` is called: a recording
+        # `gh` first on PATH shows the refusal comes before any lookup.
+        stub = LabelStub()
+        self.addCleanup(stub.cleanup)
         for name in ("nonsense", "security --force", "-R other/repo", ""):
             with self.subTest(name=name):
-                result = self.run_helper(name)
+                result = stub.run(name)
                 self.assertEqual(2, result.returncode)
+                self.assertEqual([], stub.calls())
 
     def test_it_takes_exactly_one_argument(self):
         self.assertEqual(2, self.run_helper().returncode)
