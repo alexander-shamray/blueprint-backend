@@ -66,7 +66,13 @@ work that ends with its issue open, which `/ship` step 6 runs.
   and stay at about three issues or one family. A group never spans a
   wave, a dependency or a model; a row that shares nothing with its
   neighbours is a group of one. A re-cut never reuses a letter and number
-  an *In progress* row still carries.
+  an *In progress* row still carries: every `tasks` write refuses a row
+  that newly takes such a letter and number, and lets through one keeping
+  the group it already had (`unheld` in `dispatch_board.py`). Nor does a
+  run reuse the letter and number of a group it finished, whose record is
+  the morning report's, or give one it sent back an issue that group did
+  not hold: its `tasks place` and `tasks move` refuse both (`reused` in
+  `dispatch_run.py`).
 - **`Depends on`** is `none`, issue references (`#n`, `after n`,
   `waits on n`), ISO dates, or `OWNER` for an owner's decision. An issue
   labelled `question` carries `OWNER`, in any case GitHub spells the
@@ -132,10 +138,10 @@ another session changed it in between.
   from `sync_pr.py list`, and it lives for minutes; `/ship sync #<n>` writes
   nothing to the list.
 - **A `/dispatch` executor writes no list.** The dispatcher sets
-  `HARNESS_DISPATCHED` in each executor's environment, every run-less write
-  refuses under it, and a filing helper files and places nothing; the
-  dispatcher places what the result's `filed` names, through
-  `tasks place --run`.
+  `HARNESS_DISPATCHED` in each executor's environment, every `tasks` write,
+  run-less or `--run`, refuses under it (#604), and a filing helper files
+  and places nothing; the dispatcher places what the result's `filed`
+  names, through `tasks place --run`.
 - **A filing that cannot place its row still files.** The helper says so on
   stderr with the call that repairs it and exits 0, since a non-zero exit
   would read as a failed filing and file it twice.

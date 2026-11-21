@@ -2,7 +2,7 @@
 
 `record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments and
 closes as not planned, `comment` only comments. Exit 2: refused, nothing written; 3: `gh` failed; 4: `tasks sync` left a
-row. The untrusted body is matched by heading line alone, so one in a fence counts; a retried `close` comments twice."""
+row. The untrusted body is matched by heading line outside a fence; a retried `close` comments twice."""
 
 import argparse
 import json
@@ -26,10 +26,18 @@ ENTRY_RE = re.compile(
     % (PART_LIMIT - 1, PART_LIMIT - 1)
 )
 ANY_HEADING = re.compile(r"#{1,6}\s")
+# A CommonMark fence opener or closer: a `# line` between two is code, not the heading that ends the section.
+FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
 
 
 class Refusal(Exception):
     pass
+
+
+# Each child's bound, a copy of dispatch_board.py's CHILD_TIMEOUT held to it by a test: a stalled call otherwise
+# blocks until the Bash tool kills the helper, and the message saying which step landed is never printed. It ends
+# the direct child only; a Windows gh.cmd or shim's own child can still hold the pipes (pitfalls.md).
+CHILD_TIMEOUT = 120
 
 
 class GhFailure(Exception):
@@ -59,29 +67,51 @@ def entry(day, question, answer):
     return line
 
 
+def fenced(lines):
+    """The indexes of the lines a CommonMark fence holds, closer included, and where one left open starts, or None."""
+    inside, fence, opened = set(), "", None
+    for i, text in enumerate(lines):
+        mark = FENCE.match(text)
+        if fence:
+            inside.add(i)
+            # A closer is the opener's character, at least as long, with nothing but spaces after it.
+            if mark and mark.group(1)[0] == fence[0] and len(mark.group(1)) >= len(fence) \
+                    and not text[mark.end():].strip():
+                fence = ""
+        # A backtick run whose info string holds a backtick is inline code, not an opener.
+        elif mark and not (mark.group(1)[0] == "`" and "`" in text[mark.end():]):
+            inside.add(i)
+            fence, opened = mark.group(1), i
+    return inside, opened if fence else None
+
+
 def append_decision(body, line):
-    # The body is the issue author's text: only the heading line is located, nothing else in it is read.
+    # The body is the issue author's text: only heading and fence lines are read, to place the entry.
     crlf = "\r\n" in body
     eol = "\r" if crlf else ""
     lines = body.split("\n")
-    at = [i for i, text in enumerate(lines) if text.rstrip("\r") == HEADING]
+    code, unclosed = fenced(lines)
+    at = [i for i, text in enumerate(lines) if text.rstrip("\r") == HEADING and i not in code]
     if len(at) > 1:
         raise Refusal(f"the issue body holds {HEADING!r} {len(at)} times")
     if not body.strip():
         # Nothing to separate the section from, so it opens the body rather than following blank lines.
         return f"{HEADING}\n\n{line}\n"
+    # An entry written after an unclosed fence's opener would be code, and no decision would be read from it.
+    inside = Refusal("the issue body ends inside a fence, so an entry written there would be code")
     if not at:
+        if unclosed is not None:
+            raise inside
         return body.rstrip("\r\n") + f"{eol}\n{eol}\n{HEADING}{eol}\n{eol}\n{line}{eol}\n"
     start = at[0]
-    end = len(lines)
-    for i in range(start + 1, len(lines)):
-        if ANY_HEADING.match(lines[i]):
-            end = i
-            break
+    end = next((i for i in range(start + 1, len(lines)) if i not in code and ANY_HEADING.match(lines[i])),
+               len(lines))
     last = start
     for i in range(start + 1, end):
         if lines[i].strip():
             last = i
+    if unclosed is not None and last >= unclosed:
+        raise inside
     if last == start:
         lines[start + 1:start + 1] = [eol, line + eol]
     else:
@@ -176,9 +206,11 @@ def gh(*args, stdin=None):
     if exe is None:
         raise GhFailure("gh is not on PATH")
     try:
-        done = subprocess.run([exe, *args], input=stdin, capture_output=True)
+        done = subprocess.run([exe, *args], input=stdin, capture_output=True, timeout=CHILD_TIMEOUT)
     except OSError as error:
         raise GhFailure(f"gh {' '.join(args[:2])} could not start: {error}")
+    except subprocess.TimeoutExpired:
+        raise GhFailure(f"gh {' '.join(args[:2])} did not answer within {CHILD_TIMEOUT} s") from None
     if done.returncode != 0:
         detail = done.stderr.decode("utf-8", errors="replace").strip()
         raise GhFailure(f"gh {' '.join(args[:2])} exited {done.returncode}: {detail}")
@@ -197,9 +229,12 @@ def sync_row(number):
     it did not, or None. A child, so this helper still imports nothing of the dispatcher's."""
     script = Path(__file__).with_name("dispatch_board.py")
     try:
-        done = subprocess.run([sys.executable, str(script), "tasks", "sync", number], cwd=ROOT, capture_output=True)
+        done = subprocess.run([sys.executable, str(script), "tasks", "sync", number], cwd=ROOT, capture_output=True,
+                              timeout=CHILD_TIMEOUT)
     except OSError as error:
         return f"could not start: {error}"
+    except subprocess.TimeoutExpired:
+        return f"did not finish within {CHILD_TIMEOUT} s"
     if done.returncode == 0:
         return None
     return done.stderr.decode("utf-8", errors="replace").strip() or f"exited {done.returncode}"

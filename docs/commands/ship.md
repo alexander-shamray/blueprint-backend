@@ -1601,6 +1601,22 @@ as a table row, because `test_ship_dispatched.py` parses both: it holds the
 keys and alternatives equal to the validator's and runs a result built from
 every row through the validator, so the two cannot drift.
 
+**A hand-back on a denied edit leaves what resumes it.** The owner's script
+is their only step: after it, nothing used to continue the group, since its
+row read as sent back, and a later night would fork a fresh worktree from
+`main` beside the one holding the applied edit (blueprint-harness#602). The
+worktree is what survives into the next night, and the run's `state.json`
+is not, so the record goes there, under the gitignored
+`artifacts/handoff/`, with the script itself: the scratchpad is the
+executor's temp directory, which `dispatch_run.py` removes when it exits.
+The tree is committed clean first and the record names the `head` and the
+`paths`, because the dispatcher records the hand-back only from a clean
+tree at that head and resumes only that head plus exactly those edits;
+anything else is work it cannot account for. The record is the
+executor's word and lifts nothing alone: `tasks back` keeps its own copy,
+checked against the run's state, and that is what a later night reads
+(`docs/commands/dispatch.md`, *Resume*).
+
 **The path comes from the prompt, not from a convention.** The group is the
 argument's leading `#<group>-<n>[+<n>]` tag, which the launcher builds, and
 `<run-dir>` is the relative `artifacts/dispatch/<run>`, so the file lands in

@@ -30,8 +30,12 @@ git check-ignore -q "$path" ||
 [ ! -e "$path" ] || { echo "path already exists: $path" >&2; exit 2; }
 # It must not exist: refusing here is what makes the missing -B harmless, since
 # a caller cannot reset a branch by passing its name.
-! git show-ref --verify --quiet "refs/heads/$branch" ||
-  { echo "branch already exists: $branch" >&2; exit 3; }
+# Folded, as git-worktree-fork.sh does: a case-exact check misses a packed different-case sibling, whose loose ref
+# then moves it on a case-insensitive filesystem. In bash, not a grep on a pipe (`docs/harness/pitfalls.md`).
+wanted=$(printf %s "refs/heads/$branch" | tr '[:upper:]' '[:lower:]')
+heads=$(git for-each-ref --format='%(refname)' refs/heads/ | tr '[:upper:]' '[:lower:]')
+[[ $'\n'"$heads"$'\n' != *$'\n'"$wanted"$'\n'* ]] ||
+  { echo "branch already exists: $branch, or a spelling of it that differs only in case" >&2; exit 3; }
 # A failed fetch stops here even where a stale origin/<branch> is left, so the
 # start point below is always the tip just read.
 git fetch -q origin "$branch" ||

@@ -11,8 +11,10 @@ case "$#:${1-}" in
 esac
 command -v rundll32.exe >/dev/null 2>&1 ||
   { echo "rundll32.exe not found: this helper suspends Windows only" >&2; exit 3; }
+# No argument follows the export: rundll32 hands its command tail to the export as one string, not as
+# SetSuspendState's three flags, so `0,1,0` there would claim flags that are never applied.
 if $dry; then
-  echo "would run: rundll32.exe powrprof.dll,SetSuspendState 0,1,0"
+  echo "would run: rundll32.exe powrprof.dll,SetSuspendState"
   exit 0
 fi
-exec rundll32.exe powrprof.dll,SetSuspendState 0,1,0
+exec rundll32.exe powrprof.dll,SetSuspendState

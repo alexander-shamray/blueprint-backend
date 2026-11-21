@@ -400,7 +400,8 @@ class PathTests(unittest.TestCase):
 
     # The directories a case's dotless tokens are judged against, laid out as a checkout of its own: the walk is the
     # subject, and the checkout this suite sits in is a different tree in every target.
-    CHECKOUT = ("src/Services/Ordering", "src/Services/Catalog", "deploy/rabbitmq", "tools/quality-sets", "docs")
+    CHECKOUT = ("src/Services/Ordering", "src/Services/Catalog", "deploy/rabbitmq", "tools/quality-sets", "docs",
+                "android/app")
 
     def in_checkout(self):
         tmp = tempfile.TemporaryDirectory()
@@ -470,6 +471,61 @@ class PathTests(unittest.TestCase):
         b = db.group_claim(group_of(line(gid="Z2", number=1701, task="`Services/Ordering` and `b.md`")), {1701: ""})
         self.assertFalse(a.unknown or b.unknown)
         self.assertTrue(db.overlaps(a, "Z1", {1700}, b, "Z2", {1701}))
+
+    def test_a_frontend_file_type_claims_like_a_backend_one(self):
+        self.in_checkout()
+        found = db.extract_paths("Edit src/app/core/api/client.ts and `app.component.html`, then theme.scss.")
+        self.assertEqual({"src/app/core/api/client.ts", "app.component.html", "theme.scss"}, found)
+        for name in ("a.tsx", "src/a.js", "src/a.mjs", "src/a.cjs", "a.css", "a.xml", "a.gradle", "a.kts", "a.kt", "a.java",
+                     "a.swift", "a.plist", "gradle.properties", "project.pbxproj", "debug.xcconfig", "main.storyboard"):
+            with self.subTest(name=name):
+                self.assertEqual({name}, db.extract_paths(f"see {name} here"))
+
+    def test_a_product_named_like_a_script_is_not_a_claim(self):
+        self.in_checkout()
+        found = db.extract_paths("bump Node.js to 24, `Vue.js` with Chart.js, and drop `zone.js` and main.mjs")
+        self.assertEqual(frozenset(), found)
+        claim = db.group_claim(group_of(line(task="it installs no `zone.js`")), {1700: "Node.js 24 is out"})
+        self.assertTrue(claim.unknown)
+        self.assertEqual({"src/node.js", "tools/main.mjs"}, db.extract_paths("edit `src/Node.js` and tools/main.mjs"))
+
+    def test_a_slashed_product_name_in_prose_claims_nothing(self):
+        self.in_checkout()
+        # Neither `npm` nor `react.js` names a directory of the checkout, so each pair stays an unknown claim.
+        self.assertEqual(frozenset(), db.extract_paths("built on npm/Node.js, React/Next.js and React.js/Next.js"))
+        self.assertEqual(frozenset(), db.extract_paths("built on zone.js/Angular.js"))
+        # A checkout that cannot be walked claims the pair, erring towards exclusive as `_slash_path` does.
+        with mock.patch.object(db, "_directory_names", lambda: None):
+            self.assertEqual({"npm/node.js"}, db.extract_paths("built on npm/Node.js"))
+
+    def test_a_script_path_beside_the_product_rule_still_claims(self):
+        self.in_checkout()
+        found = db.extract_paths("add scripts/check.mjs, newpkg/src/index.js, /repo/src/main.js and C:\\repo\\app.js")
+        self.assertEqual({"scripts/check.mjs", "newpkg/src/index.js", "/repo/src/main.js", "/repo/app.js"}, found)
+        self.assertEqual({"src/main.js"}, db.extract_paths("edit src/Main.js"))
+        # A new lower-case directory is no product, an absolute path names a file, and so does a deeper one, though
+        # each holds a capitalised script under a segment no directory in the checkout has.
+        self.assertEqual({"widgets/header.js"}, db.extract_paths("add widgets/Header.js"))
+        self.assertEqual({"/main.js"}, db.extract_paths("edit /Main.js"))
+        self.assertIn("lib/node.js/main.js", db.extract_paths("edit Lib/Node.js/Main.js"))
+
+    def test_two_names_joined_by_a_slash_each_claim(self):
+        self.in_checkout()
+        found = db.extract_paths("see README.md/client.ts")
+        self.assertEqual({"readme.md", "client.ts", "readme.md/client.ts"}, found)
+        self.assertTrue(any(db._touch(path, "docs/readme.md") for path in found))
+        self.assertTrue(any(db._touch(path, "src/api/client.ts") for path in found))
+
+    def test_a_top_level_directory_claims_everything_under_it(self):
+        self.in_checkout()
+        self.assertEqual({"android"}, db.extract_paths("touches `android/` only"))
+        for spelling in ("`android/,`", "`android/.`", "(`android/)`", "`android\\`"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual({"android"}, db.extract_paths(f"touches {spelling} only"))
+        top, inside = self.claim({"android"}), self.claim({"android/app/src/main/androidmanifest.xml"})
+        self.assertTrue(self.over(top, inside))
+        self.assertTrue(self.over(inside, top))
+        self.assertFalse(self.over(top, self.claim({"src/androidx/a.kt"})))
 
     def test_paths_are_normalised_case_slashes_and_dot_prefix(self):
         found = db.extract_paths(r"`.\Src\Gateway\Program.cs` and `./Docs/A.MD`")
@@ -580,13 +636,14 @@ class PathTests(unittest.TestCase):
 
         def fake(root, *args):
             calls.append(args)
-            if args[2] == "origin/main...fix/other":
+            if args[4] == "origin/main...fix/other":
                 raise db.Refusal("unknown revision")
-            return "src/Gateway/Program.cs\ndocs/A.md\n\n"
+            return "src/Gateway/Program.cs\0docs/A.md\0\0"
         with mock.patch.object(db, "git", fake):
             self.assertEqual({"src/gateway/program.cs", "docs/a.md"}, db.branch_paths(".", "fix/other"))
-        self.assertEqual([("diff", "--name-only", "origin/main...fix/other", "--"),
-                          ("diff", "--name-only", "origin/main...origin/fix/other", "--")], calls)
+        self.assertEqual([("diff", "--name-only", "--no-renames", "-z", "origin/main...fix/other", "--"),
+                          ("diff", "--name-only", "--no-renames", "-z", "origin/main...origin/fix/other", "--")],
+                         calls)
         with mock.patch.object(db, "git", side_effect=db.Refusal("no such ref")):
             self.assertEqual(frozenset(), db.branch_paths(".", "fix/other"))
         with mock.patch.object(db, "git", side_effect=AssertionError("git was asked")):
@@ -638,6 +695,11 @@ class WriteTests(unittest.TestCase):
         self.dir = Path(self.tmp.name)
         self.path = self.dir / "todo.md"
         self.run_dir = self.dir / "artifacts" / "dispatch" / RUN
+        # A dispatched executor runs this suite too, and its marker would refuse every run written here.
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop(db.DISPATCHED, None)
 
     def write(self, text):
         with open(self.path, "w", encoding="utf-8", newline="") as handle:
@@ -832,17 +894,62 @@ class WriteTests(unittest.TestCase):
         self.assertIn("does not record S1", err)
 
     def test_a_group_id_that_is_not_a_letter_and_number_is_refused(self):
+        # A started run, so an unguarded id would have a directory to write under; the whole tree,
+        # the task list included, must come out as it went in.
         self.write(FIXTURE)
+        dr.save_state(self.run_dir, {"groups": {}})
+        tree = lambda: {p: p.read_bytes() for p in self.dir.rglob("*") if p.is_file()}
+        before = tree()
         for bad in ("../x", "s1", "S1/../../y"):
             code, err = self.cli("move", bad)
             self.assertEqual(2, code, bad)
             self.assertIn("is not a group id", err)
-        self.assertFalse((self.dir / "x.json").exists())
+        self.assertEqual(before, tree())
 
     def test_place_refuses_a_group_an_in_progress_row_holds(self):
         moved = db.move_to_in_progress(FIXTURE, self.s1(), "b", "w", TODAY)
         with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
             db.place(moved, 1, "S1", 1700)
+
+    def test_no_write_puts_a_row_in_a_group_an_in_progress_row_holds(self):
+        # place held the rule alone, so a night or day rewrite, a day placement and a night back each let a row join
+        # a running group's letter, which the night then read as one claim or merged on the next back.
+        moved = db.move_to_in_progress(FIXTURE, self.s1(), "b", "w", TODAY)
+        recut = moved.replace("| 1 | S3 | 1681 |", "| 1 | S1 | 1681 |")
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.rewrite(moved, moved, recut)
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.rewrite_day(moved, recut)
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.settle(moved, issue(1700), {"wave": "1", "group": "S1"}, new=True)
+        tracked = moved.replace("| 5 | — | 1406 |", "| 5 | S1 | 1406 |")
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.unheld(db.parse_tasks(moved), db.parse_tasks(tracked))
+        # A row that carried the letter before keeps it: the rule is about a re-cut, not the group's own rows.
+        db.unheld(db.parse_tasks(moved), db.parse_tasks(db.return_to_remaining(
+            moved, [self.s1().rows[0].line], {"#1682"})))
+        self.assertIsNone(db.rewrite_day(moved, moved))
+        # An owed row's key is its wording, so a rewrite rewording one that sits in a held group is no re-cut.
+        owed = "| 1 | S1 | owed (not filed) | Write the note | docs | none | Opus | none |\n"
+        with_owed = moved.replace("| 1 | S3 | 1681 |", owed + "| 1 | S3 | 1681 |")
+        self.assertIsNotNone(db.rewrite_day(with_owed, with_owed.replace("Write the note", "Write the long note")))
+        # But a held group never gains an owed row, however many it already has.
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.rewrite_day(with_owed, with_owed.replace(owed, owed + owed.replace("Write the note", "Another")))
+
+    def test_a_night_back_refuses_a_list_board_would_refuse(self):
+        # back wrote its result unchecked, so returned rows joined a re-cut group of their letter in another wave.
+        self.start()
+        self.write(FIXTURE)
+        self.assertEqual((0, ""), self.cli("move", "S1"))
+        clash = self.read().replace("| 2 | M2 | 1686 |", "| 2 | S1 | 1686 |")
+        self.write(clash)
+        state = dr.load_state(self.run_dir)
+        state["groups"]["S1"]["status"] = "handed-back"
+        dr.save_state(self.run_dir, state)
+        code, err = self.cli("back", "S1")
+        self.assertEqual((2, clash), (code, self.read()))
+        self.assertIn("S1 spans waves", err)
 
     def test_the_old_four_column_in_progress_header_is_refused(self):
         old = FIXTURE.replace("| Group | # | What | Branch or PR | State |", "| # | What | Branch or PR | State |")
@@ -1107,6 +1214,44 @@ class WriteTests(unittest.TestCase):
         self.assertEqual((0, ""), self.cli("place", "1", "S3", "1700"))
         self.assertEqual([1700], dr.load_state(self.run_dir)["placed"])
 
+    def test_a_letter_this_run_finished_or_sent_back_takes_no_other_issues(self):
+        # A move overwrote a done group's record, and launch then removed its result and session files, so the
+        # morning report lost the merge, its usage and the issues it filed.
+        self.start()
+        self.write(FIXTURE)
+        self.cli("move", "S1")
+        self.verified("S1")
+        self.assertEqual((0, ""), self.cli("done", "S1"))
+        done = dr.load_state(self.run_dir)["groups"]["S1"]
+        listed = self.read()
+        code, err = self.cli("place", "1", "S1", "1700")
+        self.assertEqual((2, listed), (code, self.read()))
+        self.assertIn("S1 ended done in this run", err)
+        self.write(listed.replace("| 1 | S3 | 1681 |", "| 1 | S1 | 1681 |"))
+        recut = self.read()
+        code, err = self.cli("move", "S1")
+        self.assertEqual((2, recut), (code, self.read()))
+        self.assertIn("S1 ended done in this run", err)
+        self.assertEqual(done, dr.load_state(self.run_dir)["groups"]["S1"])
+        # A group sent back moves again with its own issues, never with others joined to its letter.
+        self.write(FIXTURE)
+        for gid in ("S3", "M1"):
+            self.cli("move", gid)
+            state = dr.load_state(self.run_dir)
+            state["groups"][gid]["status"] = "handed-back"
+            dr.save_state(self.run_dir, state)
+            self.assertEqual((0, ""), self.cli("back", gid))
+        self.assertEqual((0, ""), self.cli("move", "S3"))
+        listed = self.read()
+        code, err = self.cli("place", "2", "M1", "1700")
+        self.assertEqual((2, listed), (code, self.read()))
+        self.assertIn("M1 was sent back in this run with other issues", err)
+        self.write(self.read().replace("| 2 | M2 | 1686 |", "| 2 | M1 | 1686 |"))
+        joined = self.read()
+        code, err = self.cli("move", "M1")
+        self.assertEqual((2, joined), (code, self.read()))
+        self.assertIn("M1 was sent back in this run with other issues", err)
+
     def test_back_keeps_how_the_group_ended(self):
         self.start()
         self.write(FIXTURE)
@@ -1217,6 +1362,22 @@ class DayTests(unittest.TestCase):
         self.assertEqual(0, self.cli("back", "1683")[0])
         self.assertEqual(FIXTURE, self.read())
         self.assertFalse((self.saved / "1683.md").exists())
+
+    def test_back_refuses_a_saved_line_naming_another_rows_held_group_and_keeps_its_own(self):
+        # A row going back to its own group while a partner is still In progress is that group's own row.
+        self.start(1682)
+        self.start(1683)
+        self.assertEqual(0, self.cli("back", "1683")[0])
+        # One whose saved line now names a group another In progress row holds takes that letter anew.
+        self.start(1681)
+        saved = self.saved / "1683.md"
+        self.start(1683)
+        saved.write_text(saved.read_text(encoding="utf-8").replace("| 1 | S1 | 1683 |", "| 1 | S3 | 1683 |"),
+                         encoding="utf-8")
+        started = self.read()
+        code, out = self.cli("back", "1683")
+        self.assertEqual((2, started), (code, self.read()))
+        self.assertIn("S3 is held by an In progress row", out)
 
     def test_back_with_no_saved_line_keeps_the_row_in_progress(self):
         # An open issue goes back to its wave; a --what start or a row written by hand leaves none to go back to.
@@ -1473,6 +1634,25 @@ class EventTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertIn("nothing written", out)
 
+    def test_a_row_joining_a_remaining_group_takes_its_wave_unless_one_is_named(self):
+        # A group never spans a wave, so the highest wave as the default refused a group sitting in a lower one, and a
+        # Tracking row returning with a group that now sits in another wave refused the whole reconcile.
+        self.issues = {1700: issue(1700)}
+        self.assertEqual(0, self.cli("place", "1700", "--group", "M1")[0])
+        self.assertEqual((2, "M1"), (self.find(1700).wave, self.find(1700).group))
+        self.write(self.read().replace("| 5 | — | 1406 |", "| 5 | M1 | 1406 |"))
+        self.issues = every_fixture_issue(n1406=issue(1406, "x", "OPEN", "bug"))
+        code, out = self.cli("sync", "1406")
+        self.assertEqual(0, code, out)
+        self.assertEqual(("Remaining", 2, "M1"), (self.find(1406).section, self.find(1406).wave, self.find(1406).group))
+        self.readable()
+        # A wave the caller names is still the caller's, and a group cannot span it.
+        self.issues = {1701: issue(1701)}
+        before = self.read()
+        code, out = self.cli("place", "1701", "--group", "M1", "--wave", "3")
+        self.assertEqual((2, before), (code, self.read()))
+        self.assertIn("M1 spans waves", out)
+
     def test_a_label_moves_a_row_between_remaining_tracking_and_paused(self):
         self.issues = every_fixture_issue(n1685=issue(1685, "x", "OPEN", "test-gap", "code", "tracking"),
                                           n1677=issue(1677, "x", "OPEN", "bug"),
@@ -1605,6 +1785,23 @@ class EventTests(unittest.TestCase):
                 code, out = self.cli(*args)
                 self.assertEqual((2, dashed), (code, self.read()))
                 self.assertIn("names no issue number", out)
+
+    def test_a_dispatched_executor_writes_no_run(self):
+        # `--root` could name the main checkout, whose run state decides what the dispatcher launches.
+        run = self.dir / "artifacts" / "dispatch" / RUN
+        run.mkdir(parents=True)
+        (run / "state.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {db.DISPATCHED: ""}):
+            for args in (("back", "S1"), ("done", "S1"), ("place", "1", "S3", "1700"), ("rewrite", "--from", "x")):
+                with self.subTest(args=args):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        code = db.main(["tasks", args[0], "--tasks", str(self.path), "--root", str(self.dir),
+                                        "--run", RUN, *args[1:]])
+                    self.assertEqual(2, code)
+                    self.assertIn("writes no run", err.getvalue())
+        self.assertEqual(["state.json"], [p.name for p in run.iterdir()])
+        self.assertEqual(FIXTURE, self.read())
 
     def test_a_dispatched_executor_writes_no_list(self):
         self.issues = {1700: issue(1700)}

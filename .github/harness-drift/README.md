@@ -147,7 +147,7 @@ with the rest of `.harness/`, so the edit is the owner's to make or lift
 From a harness checkout:
 
 ```bash
-commit="$(py -3.12 -I -c 'import json, sys; print(json.load(sys.stdin)["harness_commit"])' < <target>/.harness/manifest.json)"
+commit="$(py -3.12 -I -c 'import json, sys; print(json.load(sys.stdin)["harness_commit"])' < <target>/.harness/manifest.json | tr -d '\r')"
 git worktree add --detach ../harness-at "$commit"
 cd ../harness-at
 py -3.12 -m harness_sync apply --payload payload --target <target> --commit "$commit"

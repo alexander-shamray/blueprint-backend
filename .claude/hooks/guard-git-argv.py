@@ -78,7 +78,15 @@ def path_grammar():
     return module
 
 
-GRAMMAR = path_grammar()
+def _loaded_grammar():
+    """The grammar, or `None` and why: a sibling broken mid-edit must reach main()'s refusal, not crash the import."""
+    try:
+        return path_grammar(), None
+    except Exception:  # noqa: BLE001
+        return None, traceback.format_exc()
+
+
+GRAMMAR, GRAMMAR_FAILURE = _loaded_grammar()
 
 # Flags that write or execute rather than inspect. Matched on a prefix, so
 # `--exec-path=<dir>` — a directory of binaries for git to run — is the same act
@@ -237,13 +245,18 @@ def denied_path(relative, whole=False):
 # checkouts and the task list. `CLAUDE.md` and `AGENTS.md` stay out of the
 # control set: they are the owner's rules, not a grant. Both guards read these.
 HOME_TREES = frozenset({".ssh"})
+# `.npmrc` is npm's user config, read on every npm call: its `script-shell` and
+# `node-options` run a program under each granted `npm ci`, `npm test` and build.
 HOME_FILES = frozenset({
     ".bash_login", ".bash_logout", ".bash_profile", ".bashrc", ".gitconfig",
-    ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
+    ".npmrc", ".profile", ".zlogin", ".zprofile", ".zshenv", ".zshrc",
 })
-# Deeper files that run as `.gitconfig` does: git reads its XDG config beside the home one, so a
-# `core.fsmonitor` or `core.sshCommand` there runs at the next git call.
-HOME_NESTED_FILES = frozenset({(".config", "git", "config")})
+# Deeper files that run as `.gitconfig` and `.npmrc` do: git reads its XDG config beside the home one,
+# so a `core.fsmonitor` or `core.sshCommand` there runs at the next git call; and npm reads its global
+# config from its prefix, which on Windows is `%APPDATA%\npm`, below the home and the session's to write.
+HOME_NESTED_FILES = frozenset({(".config", "git", "config"), ("appdata", "roaming", "npm", "etc", "npmrc")})
+# npm reads its user config from this variable in place of `~/.npmrc`; `npm_userconfig` reads it in any case.
+NPM_USERCONFIG_VARIABLES = ("NPM_CONFIG_USERCONFIG", "npm_config_userconfig")
 # Beside `~/.claude` rather than in it: Claude Code's user state, whose MCP servers
 # and project grants every later session starts under.
 HOME_CONTROL_FILES = frozenset({".claude.json"})
@@ -278,36 +291,140 @@ def home_place(parts):
     return None
 
 
-def xdg_git_config(path, cwd=None, whole=False):
-    """`$XDG_CONFIG_HOME/git/config` when `path` names it, or `None`; git reads it for `~/.config`'s.
+def moved_file(value, tail, path, cwd=None, whole=False):
+    """Whether `path` names `value` joined with `tail`, a file an environment variable moved.
 
     A relative value is from `cwd`. `whole` counts the directories holding it, short of the first
-    that also holds the home and of the filesystem's root, as a move or a copy puts them whole.
+    that also holds the home and of the filesystem's root, as a move, a copy or a link puts them whole.
     """
-    value = os.environ.get("XDG_CONFIG_HOME")
-    if not value:
-        return None
     if os.name == "nt":
         value = DRIVE_SPELLING.sub(lambda match: match.group(1) + ":" + (
             os.sep if match.end() == len(value) else ""), value)
     if not (os.path.isabs(value) or value.startswith(("/", "\\"))):
         value = os.path.join(cwd or os.getcwd(), value)
-    config = os.path.normpath(os.path.abspath(value))
-    named = [os.path.join(config, "git", "config")]
+    target = os.path.normpath(os.path.join(os.path.abspath(value), *tail))
+    named = [target]
     if whole:
-        named.append(os.path.join(config, "git"))
         homes = [os.path.abspath(home)
                  for home in (os.environ.get("HOME"), os.path.expanduser("~")) if home]
-        place = config
+        place = os.path.dirname(target)
         while os.path.dirname(place) != place and not any(beneath(home, place) for home in homes):
             named.append(place)
             place = os.path.dirname(place)
     names = {os.path.normcase(form).lower()
              for place in named for form in (place, os.path.realpath(place))}
-    for place in (os.path.abspath(path), os.path.realpath(path)):
-        if os.path.normcase(os.path.normpath(place)).lower() in names:
-            return "$XDG_CONFIG_HOME/git/config"
+    return any(os.path.normcase(os.path.normpath(place)).lower() in names
+               for place in (os.path.abspath(path), os.path.realpath(path)))
+
+
+def xdg_git_config(path, cwd=None, whole=False):
+    """`$XDG_CONFIG_HOME/git/config` when `path` names it, or `None`; git reads it for `~/.config`'s."""
+    value = os.environ.get("XDG_CONFIG_HOME")
+    if value and moved_file(value, ("git", "config"), path, cwd, whole):
+        return "$XDG_CONFIG_HOME/git/config"
     return None
+
+
+def npm_userconfig(path, cwd=None, whole=False):
+    """`$NPM_CONFIG_USERCONFIG` when `path` names it, or `None`; npm reads it for `~/.npmrc`.
+
+    npm takes the name in any case and expands a leading `~/` (or `~\\`) against the home, so both are read here;
+    a bare `~` it resolves from the working directory, as a relative path.
+    """
+    for name, value in os.environ.items():
+        if name.lower() != "npm_config_userconfig" or not value:
+            continue
+        if value.startswith(("~/", "~\\")):
+            value = os.path.expanduser(value)
+        if moved_file(value, (), path, cwd, whole):
+            return f"${name}"
+    return None
+
+
+def moved_config(path, cwd=None, whole=False):
+    """The variable naming the git or npm config `path` is where the environment moved it, or `None`."""
+    return xdg_git_config(path, cwd, whole) or npm_userconfig(path, cwd, whole)
+
+
+# ---- what a build loads from above a checkout --------------------------------
+
+# The SDK's build imports the nearest `Directory.Build.*`, `Directory.Solution.*` and `Directory.Packages.props` above a
+# project, the SDK the nearest `global.json`, and NuGet merges every `NuGet.Config` from the drive root down: one
+# planted above a checkout loads at its next build, where none of its denies reach. Folded; both guards read it.
+BUILD_ANCESTOR_FILES = frozenset({
+    "directory.build.props", "directory.build.targets", "directory.build.rsp",
+    "directory.solution.props", "directory.solution.targets", "directory.packages.props",
+    "nuget.config", "global.json",
+})
+
+
+def folded_place(place):
+    """`place` absolute, normalised and folded, as both build-name readers compare it."""
+    return os.path.normcase(os.path.normpath(os.path.abspath(place))).lower()
+
+
+def above_checkout(directories, roots):
+    """The checkout of `roots` one of `directories` sits strictly above, or `None`; a root's own is its denies'."""
+    checkouts = {folded_place(root): root for root in roots if root}
+    for directory in {folded_place(place) for place in directories if place}:
+        for root, spelled in checkouts.items():
+            if root != directory and beneath(root, directory):
+                return spelled
+    return None
+
+
+def build_named(last):
+    """Whether folded last component `last` can name a build's file, as Windows opens it and bash expands it.
+
+    A `:` stream and trailing dots and spaces are dropped; `[^` is bash's `[!`; a brace or a class is any name.
+    """
+    if any(mark in last for mark in ("{", "[:", "[=", "[.", "`")):
+        return True
+    return any(fnmatch.fnmatchcase(name, form.replace("[^", "[!")) for name in BUILD_ANCESTOR_FILES
+               for form in (last, last.split(":")[0].rstrip(". ")))
+
+
+def build_ancestor(places, roots, shell=False):
+    """The checkout of `roots` whose build loads one of `places` from a directory above it, or `None`.
+
+    `shell` reads a name as bash expands it; an editing tool's is literal, a stream and trailing dots dropped.
+    """
+    def named(last):
+        return build_named(last) if shell else last.split(":")[0].rstrip(". ") in BUILD_ANCESTOR_FILES
+
+    return above_checkout([os.path.dirname(folded_place(place)) for place in places
+                           if place and named(os.path.basename(folded_place(place)))], roots)
+
+
+def unknown_landing_offence(word, sources, cwd, command, writer):
+    """The reason to refuse `sources` landing under names not known in a directory above a checkout, or `None`.
+
+    Each is asked as `build_named` asks a name; an expansion, `.`, `..` or a word not read can be any name.
+    """
+    path = written_path(word, cwd, command)
+    if path is None or elsewhere(path):
+        return None
+    above = above_checkout((path, os.path.realpath(path)), known_checkouts(cwd))
+    if above is None:
+        return None
+    for source in sources:
+        last = re.split(r"[\\/]", (target_literal(source) or "").rstrip("/\\"))[-1].lower()
+        if last in ("", ".", "..") or "$" in last or build_named(last):
+            return (
+                f"{writer} would put `{source}` in `{path}`, above the checkout `{above}`, under a name that may be "
+                "one the .NET SDK or NuGet loads from there into its next build, and no deny reaches "
+                "above a checkout's root. Name each file, or hand it to the owner "
+                "(docs/harness-boundaries.md, *The edit-target guard*)."
+            )
+    return None
+
+
+def known_checkouts(cwd):
+    """The roots of the checkouts this session stands in: the event's, the command's, the project's and this guard's."""
+    starts = (EVENT_CWD or os.getcwd(), cwd, os.environ.get("CLAUDE_PROJECT_DIR"),
+              os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    roots = (checkout_of(os.path.abspath(start)) for start in starts if start and not elsewhere(start))
+    return [form for root in roots if root for form in (root, os.path.realpath(root))]
 
 
 # ---- the push allow-list ---------------------------------------------------
@@ -2814,6 +2931,7 @@ WRITING_REDIRECTION = re.compile(
 # Variables whose value this process shares with the session.
 EXPANDABLE_VARIABLES = frozenset({
     "CLAUDE_PROJECT_DIR", "HOME", "TEMP", "TMP", "TMPDIR", "XDG_CONFIG_HOME",
+    *NPM_USERCONFIG_VARIABLES,
 })
 VARIABLE_REFERENCE = re.compile(
     r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
@@ -2838,8 +2956,11 @@ WRITING_VERBS = {
     "dd": "of",
 }
 TARGET_OPTION_VERBS = frozenset({"cp", "install", "ln", "mv"})
-# Verbs that remove, move or fill a directory whole, so its parent is a write.
-TREE_VERBS = frozenset({"cp", "install", "mv", "rm", "rmdir", "shred"})
+# Verbs that remove, move, fill or link a directory whole, so its parent is a write:
+# a link where a directory goes puts the files below its target where that directory's are read.
+TREE_VERBS = frozenset({"cp", "install", "ln", "mv", "rm", "rmdir", "shred"})
+# The sources of a `-T` copy or move, which fill the destination under names not known, as a `.` would.
+FILLED = (".",)
 # Verbs whose operand goes away, so a parent of the checkout goes with it.
 REMOVING_VERBS = frozenset({"mv", "rm", "rmdir", "shred", "unlink"})
 
@@ -2988,6 +3109,34 @@ def scratch_checkout(path):
     return session is None or not beneath(path, os.path.realpath(session))
 
 
+# `dispatch_run.py` sets it in each `/dispatch` executor's environment; set at all is the test, as the task list's.
+DISPATCHED = "HARNESS_DISPATCHED"
+# Below a main checkout, the dispatcher's own state: each run's `state.json` and `handbacks.json` decide what it
+# launches. An executor's result goes under its own worktree's copy, which a `.git` file marks.
+DISPATCH_STATE = ("artifacts", "dispatch")
+
+
+def dispatcher_state(path, whole=False):
+    """Whether a dispatched session's write to `path` reaches a main checkout's `artifacts/dispatch/`.
+
+    A main checkout is one whose `.git` is a directory. Every such ancestor is asked, not the nearest, so a `.git`
+    made below one hides nothing. Folded, as `denied_path` folds; `whole` counts a parent.
+    """
+    if DISPATCHED not in os.environ or elsewhere(path):
+        return False
+    root = os.path.abspath(path)
+    while True:
+        if os.path.isdir(os.path.join(root, ".git")):
+            parts = [part.lower() for part in re.split(r"[\\/]+", os.path.relpath(path, root))
+                     if part not in ("", ".")]
+            if parts[:2] == list(DISPATCH_STATE) or (whole and list(DISPATCH_STATE[:len(parts)]) == parts):
+                return True
+        parent = os.path.dirname(root)
+        if parent == root:
+            return False
+        root = parent
+
+
 def protected_target(path, whole=False):
     """The deny holding `path`, as spelled or where its links land, or `None`."""
     if scratch_checkout(os.path.realpath(path)):
@@ -3026,7 +3175,7 @@ def home_target(path, cwd, command, whole=False, removing=False):
                     or (whole and len(parts) == 1))) or (whole and any(
                         tuple(parts) == nested[:len(parts)] for nested in HOME_NESTED_FILES)):
                 return "~/" + "/".join(parts)
-    return xdg_git_config(path, cwd, whole)
+    return moved_config(path, cwd, whole)
 
 
 def destination_offence(word, cwd, command, writer, whole=False, inside=None, removing=False):
@@ -3047,6 +3196,19 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
             "device spelling of a local file passes the denies. Run it yourself if "
             "it is meant (docs/harness-boundaries.md, *Paths on another machine*)."
         )
+    if path is not None and any(dispatcher_state(place, whole) for place in (path, os.path.realpath(path))):
+        return (
+            f"{writer} would write `{path}`, under a main checkout's `artifacts/dispatch/`: the dispatcher's own "
+            "state, which decides what it launches, and a dispatched session writes none of it. The result goes "
+            "in this worktree's `artifacts/dispatch/` (docs/harness-boundaries.md, *Headless dispatched sessions*)."
+        )
+    above = build_ancestor((path, os.path.realpath(path)), known_checkouts(cwd), True) if path is not None else None
+    if above is not None:
+        return (
+            f"{writer} would write `{path}`, a file the .NET SDK or NuGet loads from a directory above "
+            f"the checkout `{above}` into its next build, and no deny reaches above a checkout's root. Hand it to "
+            "the owner (docs/harness-boundaries.md, *The edit-target guard*)."
+        )
     named = protected_target(path, whole) if path is not None else None
     if named is None:
         home = home_target(path, cwd, command, whole, removing) if path is not None else None
@@ -3054,7 +3216,7 @@ def destination_offence(word, cwd, command, writer, whole=False, inside=None, re
             return None
         return (
             f"{writer} would write `{path}`, which is `{home}`: a key, a shell "
-            "profile, git's own configuration or what `~/.claude` or "
+            "profile, git's or npm's own configuration or what `~/.claude` or "
             "`~/.claude.json` applies to later sessions. No rule judges a shell write there. Use an editing "
             "tool, where one does, or hand it to the owner "
             "(docs/harness-boundaries.md, *The edit-target guard*)."
@@ -3112,11 +3274,14 @@ def ordinary_positions(command):
     return ordinary
 
 
-def raw_runs(command):
-    """`command`'s runs in order, as `(words, redirections)`, quoting intact.
+RUN_OPERATORS = ("&&", "||", "|&", ";;", "|", "&", ";", "\n")
 
-    `shlex` removes the quotes that decide whether `~` or `$` expands. A
-    subshell's `(` and `)` stand as themselves: a `cd` inside one ends with it.
+
+def raw_runs(command):
+    """`command`'s runs as `(words, redirections)`, quoting intact, with `(`, `)` and operators.
+
+    `shlex` removes the quotes that decide whether `~` or `$` expands. Each
+    `RUN_OPERATORS` entry decides whether a `cd` moves the next run's shell.
     """
     ordinary = ordinary_positions(command)
     spans = dict(redirection_spans(command))
@@ -3153,6 +3318,11 @@ def raw_runs(command):
                 break
             if command[index] in "()":
                 runs.append(command[index])
+            operator = next((op for op in RUN_OPERATORS if command.startswith(op, index)), None)
+            if operator is not None:
+                runs.append(operator)
+                index += len(operator)
+                continue
             index += 1
             continue
         words.append(command[index:end])
@@ -3191,7 +3361,7 @@ def verb_destinations(verb, words):
 
     operands, targets, suffixes = [], [], []
     in_place = script_given = directory_mode = options_done = False
-    symbolic = hard_link = no_target = False
+    symbolic = hard_link = no_target = no_dereference = False
     short_values = SHORT_VALUE_OPTIONS.get(verb, "")
     long_values = LONG_VALUE_OPTIONS.get(verb, ())
     position = 0
@@ -3225,6 +3395,8 @@ def verb_destinations(verb, words):
                     suffixes.append(literal[len(name) + 1:])
             elif verb == "ln" and abbreviates("--symbolic") and not abbreviates("--suffix"):
                 symbolic = True
+            elif verb == "ln" and abbreviates("--no-dereference"):
+                no_dereference = True
             elif verb == "cp" and abbreviates("--link"):
                 hard_link = True
             elif verb == "install" and abbreviates("--directory"):
@@ -3245,6 +3417,10 @@ def verb_destinations(verb, words):
                 break
             if verb == "ln" and letter == "s":
                 symbolic = True
+                continue
+            # BSD's `-h` is GNU's `-n`; GNU has no `-h`.
+            if verb == "ln" and letter in "hn":
+                no_dereference = True
                 continue
             if verb == "cp" and letter == "l":
                 hard_link = True
@@ -3279,9 +3455,13 @@ def verb_destinations(verb, words):
         if verb in TARGET_OPTION_VERBS and not directory_mode and (
                 targets or len(operands) > 1):
             sources = operands if targets else operands[:-1]
-            landed = [(word, None if no_target else sources,
+            landed = [(word, FILLED if no_target else sources,
                        bool(targets) or len(sources) > 1)
                       for word in (targets or operands[-1:])]
+            # `ln -n` replaces a link to a directory, which `landings` reads as the
+            # directory and links inside, so the destination is judged itself as well.
+            landed += [(word, None, False) for word in operands[-1:]
+                       if no_dereference and not (no_target or targets)]
             return [(word, None, False) for word in sources] * whole_list + landed
         return [(word, None, False) for word in operands + targets] * whole_list
     if not in_place:
@@ -3357,11 +3537,15 @@ def verb_offence(verb, operands, cwd, command, writer):
     """The reason to refuse writing verb `verb` with `operands`, or `None`."""
     for word, sources, into in verb_destinations(verb, operands):
         refusal = removal_offence(word, cwd, command, writer) if (
-            sources is None and verb in REMOVING_VERBS) else None
+            (sources is None or sources is FILLED) and verb in REMOVING_VERBS) else None
         if refusal is not None:
             return refusal
         names = [None] if sources is None or verb not in TREE_VERBS else (
             landings(word, sources, into, cwd, command))
+        if names == [None] and sources and verb in TREE_VERBS:
+            refusal = unknown_landing_offence(word, sources, cwd, command, writer)
+            if refusal is not None:
+                return refusal
         for name in names:
             refusal = destination_offence(word, cwd, command, writer, verb in TREE_VERBS, name,
                                           verb in ("rm", "unlink"))
@@ -3380,10 +3564,19 @@ def writing_verb_offence(words, cwd, command):
     if program_name(leading_command([word or "" for word in literals])) in (
             READING_COMMANDS | DATA_ONLY_COMMANDS):
         return None
+    finder, past = None, 0
     for index, literal in enumerate(literals):
-        if literal is None or ASSIGNMENT.match(words[index]):
+        if literal is None or ASSIGNMENT.match(words[index]) or index < past:
             continue
+        if finder is not None and (literal in FIND_EXECUTORS or literal in (";", "+")):
+            # Each command `find -exec` runs starts from find's own directory, whatever an `env -C` before it moved.
+            cwd = finder[0]
         verb = program_name(literal)
+        if verb == "env":
+            # `env -C DIR` runs what follows it from DIR; the words its options took are not commands.
+            cwd, past = env_directory(words, literals, index, cwd, command)
+        if verb == "find" and finder is None:
+            finder = (cwd,)
         if verb == "find":
             refusal = find_offence(words[index + 1:], cwd, command)
             if refusal is not None:
@@ -3400,6 +3593,57 @@ def writing_verb_offence(words, cwd, command):
         if refusal is not None:
             return refusal
     return None
+
+
+# `env`'s options that take a value: `-u NAME`, `-C DIR`, `-S STRING` and `-a ARG`, and their long names, which
+# getopt_long also takes as any prefix only one of its names has.
+ENV_VALUED = {"u": "unset", "C": "chdir", "S": "split-string", "a": "argv0"}
+ENV_LONG = ("argv0", "block-signal", "chdir", "debug", "default-signal", "help", "ignore-environment",
+            "ignore-signal", "list-signal-handling", "null", "split-string", "unset", "version")
+
+
+def env_directory(words, literals, index, cwd, command):
+    """`(directory, position)` for the `env` at `index`: where it runs its command from, `cwd` moved by each
+    `-C`/`--chdir` or `None` if unreadable, and the position of the first word past its options."""
+    position = index + 1
+    while position < len(literals):
+        literal = literals[position]
+        if literal is None:
+            # An option spelled with an expansion may be a `-C` nobody can read.
+            return (None if words[position].lstrip("\"'").startswith("-") else cwd), position
+        if literal == "--" or not literal.startswith("-") or literal == "-":
+            break
+        position += 1
+        if literal.startswith("--"):
+            name, given, value = literal[2:].partition("=")
+            names = [long for long in ENV_LONG if long.startswith(name)] if name else []
+            long = names[0] if len(names) == 1 or name in ENV_LONG else None
+            if long not in ENV_VALUED.values():
+                continue
+            if not given:
+                value, position = (words[position] if position < len(words) else None), position + 1
+            else:
+                value = shlex.quote(value)
+            if long == "chdir":
+                cwd = None if value is None or cwd is None else written_path(value, cwd, command)
+            elif long == "split-string":
+                # The string is split and read as more options, a `-C` among them, so the directory is unknown.
+                cwd = None
+            continue
+        for at, letter in enumerate(literal[1:], 1):
+            if letter not in ENV_VALUED:
+                continue
+            rest = literal[at + 1:]
+            if rest:
+                value = shlex.quote(rest)
+            else:
+                value, position = (words[position] if position < len(words) else None), position + 1
+            if letter == "C":
+                cwd = None if value is None or cwd is None else written_path(value, cwd, command)
+            elif letter == "S":
+                cwd = None
+            break
+    return cwd, position
 
 
 def _git_operands(words, literals, value_options):
@@ -3512,47 +3756,177 @@ def directory_after(words, cwd, command):
     verb = program_name(literals[start] or "")
     if verb not in DIRECTORY_CHANGES:
         return cwd
+    options = literals[start + 1:]
+    if verb == "pushd" and "-n" in options[:options.index("--") if "--" in options else None]:
+        return cwd
     operands = [word for word, literal in zip(words[start + 1:], literals[start + 1:])
                 if literal is None or not literal.startswith("-") or literal == "-"]
+    if verb == "pushd" and any(literal and re.fullmatch(r"[+-]\d+", literal) for literal in options):
+        return None
     if verb == "popd" or target_literal(operands[0] if operands else "~") == "-":
         return None
     return written_path(operands[0] if operands else "~", cwd, command)
 
 
-def write_offence(command):
-    """The reason to refuse a write in `command`, or `None`.
+LOOP_WORDS = frozenset({"do", "for", "select", "until", "while"})
 
-    A relative target is placed by following each literal `cd`, and after a
-    `cd` nothing can read, only an absolute target is judged.
+
+def stances(command, starts):
+    """`(run, directories)` for each run, then `(None, directories)` at the end.
+
+    A failed, skipped or subshell `cd` moves nothing, so the directories before
+    it stay possible but after `cd X &&`; `None` is one nothing can read.
     """
-    cwd = EVENT_CWD or os.getcwd()
-    saved = []
-    for run in raw_runs(command):
-        if run == "(":
-            saved.append(cwd)
+    walk = list(_stances(command, starts, frozenset()))
+    if any(run and LOOP_WORDS.intersection(target_literal(word) for word in run[0]) for run, _ in walk):
+        # A loop's next pass starts where its body's last left it, so every run is
+        # also judged from every directory the first walk reached; a loop word
+        # anywhere in a run counts, since a reserved word may lead it.
+        reached = frozenset().union(*(seen for _, seen in walk))
+        # More than the cap only has to saturate the second walk, so no more is carried.
+        if len(reached) > MAX_STANDINGS:
+            reached = frozenset(sorted(reached, key=lambda cwd: (cwd is None, cwd or ""))[:MAX_STANDINGS + 1])
+        walk = list(_stances(command, starts, reached))
+    yield from walk
+
+
+def _stances(command, starts, also):
+    """`stances` for one walk, each set joined with `also`."""
+    here, past_or, past_and = set(starts), set(), set()
+    stack, items, saturated = [], raw_runs(command), False
+
+    def settle(after, success, failure):
+        nonlocal here, past_or, past_and
+        if after == "&&":
+            past_or, here = past_or | failure, success
+        elif after == "||":
+            past_and, here = past_and | success, failure
+        else:
+            here = success | failure
+
+    for position, item in enumerate(items):
+        before = items[position - 1] if position else None
+        after = items[position + 1] if position + 1 < len(items) else None
+        everywhere = here | past_or | past_and | also
+        # Past the cap nothing is grown, since every relative cd could double the
+        # set; each run is judged from more than the cap, so a write is refused.
+        saturated = saturated or len(everywhere) > MAX_STANDINGS
+        if saturated:
+            if not isinstance(item, str):
+                yield item, frozenset(everywhere)
             continue
-        if run == ")":
-            cwd = saved.pop() if saved else cwd
+        if item == "(":
+            stack.append(("(", here, past_or, past_and))
+            past_or, past_and = set(), set()
             continue
+        if item == ")":
+            # A `case` pattern's `)` closes no subshell.
+            if stack and stack[-1][0] == "(":
+                _, here, past_or, past_and = stack.pop()
+                settle(after, here, here)
+            continue
+        if item == "&&":
+            here, past_and = here | past_and, set()
+            continue
+        if item == "||":
+            here, past_or = here | past_or, set()
+            continue
+        if isinstance(item, str):
+            here, past_or, past_and = here | past_or | past_and, set(), set()
+            continue
+        yield item, frozenset(here | also)
+        words = item[0]
+        literals = [target_literal(word) or "" for word in words]
+        lead = leading_command(literals)
+        if lead == "case":
+            stack.append(("case",))
+        elif lead == "esac" and stack and stack[-1][0] == "case":
+            stack.pop()
+        # A cd that is a whole pipeline stage, or backgrounded, moves a subshell.
+        alone = (before in ("|", "|&") and literals and literals[0] not in COMMAND_PREFIX_WORDS
+                 or after in ("|", "|&", "&"))
+        if alone or not any(program_name(literal) in DIRECTORY_CHANGES for literal in literals):
+            settle(after, here, here)
+            continue
+        moved = {directory_after(words, cwd, command) for cwd in here}
+        if "!" in literals[:literals.index(lead) if lead in literals else None]:
+            settle(after, here | moved, here | moved)
+        else:
+            settle(after, moved, here)
+    yield None, frozenset(here | past_or | past_and | also)
+
+
+def may_write(words, written):
+    """Whether a run could write anything this guard judges by its directory.
+
+    Wider than what the checks in `write_offence` read: a redirection, or a
+    word anywhere naming git, `find` or a writing verb.
+    """
+    return bool(written) or any(
+        program_name(target_literal(word) or "") in WRITING_VERBS
+        or program_name(target_literal(word) or "") in ("git", "find") for word in words)
+
+
+def write_offence(command, starts):
+    """The reason to refuse a write in `command` run from `starts`, or `None`.
+
+    A relative target is judged from every directory `stances` says the
+    shell may stand in, and from one nothing can read only an absolute target.
+    """
+    extra = 0
+    for run, directories in stances(command, starts):
+        if run is None:
+            break
         words, written = run
-        for text in written:
-            match = WRITING_REDIRECTION.match(text)
-            if match is None:
-                continue
-            target = match.group("target").strip()
-            if not target or (match.group("operator") == ">&"
-                              and (target == "-" or target.isdigit())):
-                continue
-            refusal = destination_offence(
-                target, cwd, command, f"`{match.group('operator')}`")
+        if not may_write(words, written):
+            continue
+        extra += len(directories) - 1
+        if len(directories) > MAX_STANDINGS or extra > MAX_EXTRA_JUDGEMENTS:
+            return TOO_MANY_STANDINGS
+        for cwd in directories:
+            for text in written:
+                match = WRITING_REDIRECTION.match(text)
+                if match is None:
+                    continue
+                target = match.group("target").strip()
+                if not target or (match.group("operator") == ">&"
+                                  and (target == "-" or target.isdigit())):
+                    continue
+                refusal = destination_offence(
+                    target, cwd, command, f"`{match.group('operator')}`")
+                if refusal is not None:
+                    return refusal
+            refusal = (git_path_offence(words, cwd, command)
+                       or writing_verb_offence(words, cwd, command))
             if refusal is not None:
                 return refusal
-        refusal = (git_path_offence(words, cwd, command)
-                   or writing_verb_offence(words, cwd, command))
-        if refusal is not None:
-            return refusal
-        cwd = directory_after(words, cwd, command)
     return None
+
+
+def standing_in(command, starts):
+    """Every directory the shell may stand in while it runs `command` from `starts`.
+
+    Sorted, so one set reached by two routes is one key in `offence`'s cache.
+    """
+    reached = set(starts)
+    for run, directories in stances(command, starts):
+        reached |= directories
+        if run is None:
+            continue
+        # A script behind `env -C DIR` runs from DIR.
+        words, past = run[0], 0
+        literals = [target_literal(word) for word in words]
+        for index, literal in enumerate(literals):
+            if index >= past and literal is not None and program_name(literal) == "env":
+                moved = [env_directory(words, literals, index, cwd, command) for cwd in directories]
+                reached |= {directory for directory, _ in moved}
+                past = max((position for _, position in moved), default=past)
+    return tuple(sorted(reached, key=lambda cwd: (cwd is None, cwd or "")))
+
+
+def performed_text(command):
+    """What bash performs of `command`: no heredoc body, no comment, no continuation."""
+    return separate_lines(join_continuations(strip_comments(strip_heredocs(command))))
 
 
 # Substitutions and evaluators both recurse, and a crafted nest of either would
@@ -3560,8 +3934,20 @@ def write_offence(command):
 # rather than a verdict, which is the one direction a guard must not fail in.
 MAX_NESTING = 24
 
+# A write or a nested script is judged from each directory its command may stand
+# in, and a string reached by several routes once per set of them; each multiplies
+# the cost, so past these it is refused rather than timed out.
+MAX_STANDINGS = 32
+MAX_EXTRA_JUDGEMENTS = 1000
+MAX_ROUTES = 8
+ROUTES = object()
+TOO_MANY_STANDINGS = (
+    "this command changes directory more often than the guard will follow "
+    "ahead of a write or a script it runs, and each is judged from every "
+    "directory; refusing rather than reading part of it.")
 
-def offence(command, depth=0, judged=None, reading=False):
+
+def offence(command, depth=0, judged=None, reading=False, starts=None):
     """The reason to refuse `command`, or None to allow it.
 
     `judged` is a verdict cache, and it is what keeps the cost finite. Each
@@ -3576,18 +3962,31 @@ def offence(command, depth=0, judged=None, reading=False):
     first, so a cycle terminates without inventing a verdict — the outer call
     is the one that answers.
     """
+    if GRAMMAR is None:
+        raise RuntimeError(f"path_grammar.py did not load:\n{GRAMMAR_FAILURE}")
     if judged is None:
         judged = {}
-    if command in judged:
-        return judged[command]
-    judged[command] = None
+    if starts is None:
+        starts = (EVENT_CWD or os.getcwd(),)
+    key = (command, starts)
+    if key in judged:
+        return judged[key]
+    routes = judged.setdefault(ROUTES, {})
+    routes[command] = routes.get(command, 0) + 1
+    if routes[command] > MAX_ROUTES:
+        judged[key] = (
+            "this command reaches one script from more sets of directories "
+            "than the guard will judge it from; refusing rather than reading "
+            "part of it.")
+        return judged[key]
+    judged[key] = None
 
-    verdict = _offence(command, depth, judged, reading)
-    judged[command] = verdict
+    verdict = _offence(command, depth, judged, reading, starts)
+    judged[key] = verdict
     return verdict
 
 
-def _offence(command, depth, judged, reading):
+def _offence(command, depth, judged, reading, starts):
     """`offence`'s body, called only through its cache."""
     if depth > MAX_NESTING:
         return (
@@ -3601,6 +4000,19 @@ def _offence(command, depth, judged, reading):
             "cannot tell where the body ends or which lines after it are "
             "commands; refusing rather than reading part of it."
         )
+
+    # A nested script runs where an earlier `cd` left the shell. Which run holds
+    # it is not tracked, so it is judged from every directory this command
+    # stands in, `starts` among them: refusing is the direction to be wrong in.
+    nested = []
+
+    def nested_starts():
+        if not nested:
+            nested.append(standing_in(performed_text(command), starts))
+        return nested[0]
+
+    def too_many_standings():
+        return TOO_MANY_STANDINGS if len(nested_starts()) > MAX_STANDINGS else None
 
 
     # An expansion has more than one reading, and the command is safe only if
@@ -3618,7 +4030,7 @@ def _offence(command, depth, judged, reading):
     ):
         variant = outside_verbatim(command, rewrite)
         if variant != command:
-            refusal = offence(variant, depth + 1, judged, reading=True)
+            refusal = offence(variant, depth + 1, judged, reading=True, starts=starts)
             if refusal is not None:
                 return f"with {description}: {refusal}"
 
@@ -3642,7 +4054,7 @@ def _offence(command, depth, judged, reading):
                 "be read; refusing rather than judging the source instead of "
                 "the result." + STDIN_DATA_ROUTE
             )
-        refusal = offence(script, depth + 1, judged)
+        refusal = too_many_standings() or offence(script, depth + 1, judged, starts=nested_starts())
         if refusal is not None:
             return f"in a script handed to a shell on stdin: {refusal}" + STDIN_DATA_ROUTE
 
@@ -3653,7 +4065,7 @@ def _offence(command, depth, judged, reading):
         # A heredoc body arrives with `quotes` false and is not a command line.
         text = join_continuations(text, quotes=quotes)
         for inner in substitutions(text, quotes=quotes):
-            refusal = offence(inner, depth + 1, judged)
+            refusal = too_many_standings() or offence(inner, depth + 1, judged, starts=nested_starts())
             if refusal is not None:
                 return f"inside a command substitution: {refusal}"
 
@@ -3664,8 +4076,7 @@ def _offence(command, depth, judged, reading):
     # body or a comment is not one bash performs. `join_continuations` sits
     # after `strip_comments` because a backslash at the end of a comment
     # continues nothing — bash ends a comment at the newline.
-    performed = separate_lines(
-        join_continuations(strip_comments(strip_heredocs(command))))
+    performed = performed_text(command)
     resolved = strip_redirections(performed)
 
     # The check and the code that acts on it read the same string: on the raw
@@ -3728,7 +4139,7 @@ def _offence(command, depth, judged, reading):
         )
 
     for script in evaluated_scripts(tokens):
-        refusal = offence(script, depth + 1, judged)
+        refusal = too_many_standings() or offence(script, depth + 1, judged, starts=nested_starts())
         if refusal is not None:
             return f"inside a shell evaluator: {refusal}"
 
@@ -3828,7 +4239,9 @@ def _offence(command, depth, judged, reading):
                         "express it."
                     )
     # A reading of an expansion hides a program; it names no file bash opens.
-    return None if reading else write_offence(performed)
+    if reading:
+        return None
+    return write_offence(performed, starts)
 
 
 # Every scan here must finish inside the hook's timeout, because a hook that
@@ -3856,7 +4269,8 @@ def scan_budget(command):
 # tool is admitted only as one read-only cmdlet over plain words: no quote,
 # escape, variable, call, pipe, separator or wildcard, and no launcher, whose
 # arguments (an encoded command, say) can carry git in characters this allows.
-POWERSHELL_PLAIN = re.compile(r"[A-Za-z0-9 _./:,=-]*")
+# A backslash is a Windows path's separator; PowerShell's escape is the backtick.
+POWERSHELL_PLAIN = re.compile(r"[A-Za-z0-9 _./:,=\\-]*")
 POWERSHELL_GIT = re.compile(r"(?i)(?<![a-z0-9_])git(?![a-z0-9_])")
 POWERSHELL_READS = frozenset((
     "get-childitem", "get-content", "get-item", "get-location", "resolve-path",
@@ -3942,6 +4356,9 @@ def main():
         # the session down for a defect in this file.
         print("guard-git-argv: unreadable hook event; not judging", file=sys.stderr)
         return 0
+    if not isinstance(event, dict):
+        print("guard-git-argv: hook event is not an object; not judging", file=sys.stderr)
+        return 0
 
     tool = event.get("tool_name")
     if tool not in ("Bash", "PowerShell"):
@@ -3951,17 +4368,17 @@ def main():
     cwd = event.get("cwd")
     EVENT_CWD = cwd if isinstance(cwd, str) and cwd else None
 
-    command = (event.get("tool_input") or {}).get("command")
+    tool_input = event.get("tool_input")
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if not isinstance(command, str):
         return 0
 
-    lost = main_checkout_reason(command)
-    if lost is not None:
-        return refuse(lost)
-
     try:
-        reason = (powershell_git(command) if tool == "PowerShell"
-                  else scan_budget(command) or offence(command))
+        if GRAMMAR is None:
+            raise RuntimeError(f"path_grammar.py did not load:\n{GRAMMAR_FAILURE}")
+        reason = main_checkout_reason(command) or (
+            powershell_git(command) if tool == "PowerShell"
+            else scan_budget(command) or offence(command))
     except Exception:  # noqa: BLE001 - the direction is the point
         # A crash is empty stdout, and `PreToolUse` reads empty stdout as
         # non-blocking, so an uncaught defect here would be a fail-open.
