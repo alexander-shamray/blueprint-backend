@@ -12,6 +12,7 @@ import re
 import shlex
 import subprocess
 import sys
+import traceback
 import types
 from pathlib import Path
 
@@ -708,21 +709,7 @@ def judge(command, cwd, git, checked, depth):
     return None
 
 
-def main():
-    try:
-        event = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-        # As in guard-edit-target.py: a hook that cannot read its own input has established nothing, and refusing
-        # every command on a malformed event would turn a defect here into a dead session.
-        print("guard-sed-crlf: unreadable hook event; not judging", file=sys.stderr)
-        return 0
-    if not isinstance(event, dict):
-        print("guard-sed-crlf: hook event is not an object; not judging", file=sys.stderr)
-        return 0
-
-    reason = offence(event)
-    if reason is None:
-        return 0
+def deny(reason):
     json.dump(
         {
             "hookSpecificOutput": {
@@ -734,6 +721,37 @@ def main():
         sys.stdout,
     )
     return 0
+
+
+def main():
+    # An event that is not UTF-8 holds a command nothing read, so it is refused, as the argv guards refuse one.
+    try:
+        text = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError:
+        return deny("guard-sed-crlf: this hook event is not UTF-8, so the command in it cannot be read; refusing "
+                    "rather than admitting what nothing judged.")
+    try:
+        event = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        # As in guard-edit-target.py: a hook that cannot read its own input has established nothing, and refusing
+        # every command on a malformed event would turn a defect here into a dead session.
+        print("guard-sed-crlf: unreadable hook event; not judging", file=sys.stderr)
+        return 0
+    if not isinstance(event, dict):
+        print("guard-sed-crlf: hook event is not an object; not judging", file=sys.stderr)
+        return 0
+
+    # A crash here would be empty stdout, which PreToolUse reads as admitted: the argv guards' fail-open, refused as
+    # they refuse it (`docs/harness-boundaries.md`, *The sed line-ending guard*).
+    try:
+        reason = offence(event)
+    except Exception:  # noqa: BLE001
+        traceback.print_exc(file=sys.stderr)
+        reason = ("guard-sed-crlf: this command crashed the sed line-ending guard, so nothing about it is "
+                  "established; refusing rather than admitting what nothing judged. The traceback is on stderr.")
+    if reason is None:
+        return 0
+    return deny(reason)
 
 
 if __name__ == "__main__":

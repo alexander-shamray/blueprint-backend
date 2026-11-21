@@ -5,6 +5,7 @@ cannot pin: the first class reads the flags, the rest run real repositories.
 """
 
 import unittest
+from pathlib import Path
 
 from review_helpers import (
     SCRIPTS,
@@ -312,6 +313,18 @@ class TheHelperPublishesTheBranchInHand(Fixture):
         self.amend()
         self.assertEqual(0, self.helper().returncode)
         self.at('git commit -q --amend -m "reworded again"')
+        result = self.helper()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(self.head(), self.remote())
+
+    def test_a_long_reflog_holding_the_lease_near_its_top_is_published_over(self):
+        # A pipe into `grep -q` closed on its first match, so under pipefail a reflog longer than the pipe's buffer
+        # failed its writer and read as a lease never held. Older entries go first in the log file.
+        lease = self.remote()
+        self.amend()
+        log = Path(self.work, ".git", "logs", "refs", "heads", "feat", "x")
+        older = f"{'0' * 40} {lease} A <a@example.com> 1 +0000\tolder\n" * 20000
+        log.write_text(older + log.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
         result = self.helper()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(self.head(), self.remote())

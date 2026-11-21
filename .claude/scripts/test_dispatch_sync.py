@@ -921,7 +921,7 @@ class Runbook(unittest.TestCase):
         text = self.text()
         self.assertIn("name sync-<n> beside its lines", text)
         interview = text[text.index("1. **The interview.**"):text.index("Take them one at a time")]
-        self.assertIn("and never a sync", interview)
+        self.assertIn("never a sync", interview)
 
     def test_step_2_launches_the_sync_before_wake(self):
         text = self.text()

@@ -148,7 +148,7 @@ class RemoveShape(unittest.TestCase):
     def hold(self, native, seconds, delay=0.0, wait=True, put_back=False, give_up=False, ready="ready"):
         ready = native / ready
         lock, pending = self.state(native)
-        holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(lock), str(pending), str(delay),
+        holder = subprocess.Popen([sys.executable, "-P", "-c", HOLDER, str(lock), str(pending), str(delay),
                                    str(seconds), str(ready), *(["put-back"] if put_back else []),
                                    *(["give-up"] if give_up else [])])
         self.addCleanup(holder.wait)

@@ -162,6 +162,46 @@ class Shapes(unittest.TestCase):
             f"Intro\n\n## Owner decisions\n\n{first}\n{second}\n\n## Notes\n\nTail\n",
         )
 
+    def test_a_heading_inside_a_fence_does_not_end_the_section(self):
+        first, second = "- 2026-11-01: Q: q A: a", "- 2026-11-02: Q: r A: b"
+        for fence, closer in (("```", "```"), ("~~~~", "~~~~~"), ("```sh", "```")):
+            with self.subTest(fence=fence):
+                body = f"## Owner decisions\n\n{first}\n{fence}\n# a comment\n{closer}\n\n## Notes\n"
+                self.assertEqual(
+                    ID.append_decision(body, second),
+                    f"## Owner decisions\n\n{first}\n{fence}\n# a comment\n{closer}\n{second}\n\n## Notes\n",
+                )
+
+    def test_a_fence_closes_only_on_its_own_character_and_length(self):
+        # "~~~" cannot close "````", so the "# comment" after it is still code and the section runs to "## Notes".
+        line = "- 2026-11-02: Q: r A: b"
+        body = "## Owner decisions\n\n````\n~~~\n# comment\n````\n\n## Notes\n"
+        self.assertEqual(
+            ID.append_decision(body, line),
+            f"## Owner decisions\n\n````\n~~~\n# comment\n````\n{line}\n\n## Notes\n",
+        )
+
+    def test_a_heading_inside_a_fence_is_not_the_section(self):
+        # A fenced example of the heading is code: the entry goes under the real one, or a new one after the body.
+        line = "- 2026-11-02: Q: r A: b"
+        example = "```md\n## Owner decisions\n```\n"
+        self.assertEqual(ID.append_decision(f"Intro\n{example}", line),
+                         f"Intro\n{example}\n## Owner decisions\n\n{line}\n")
+        self.assertEqual(ID.append_decision(f"{example}\n## Owner decisions\n\n- a\n", line),
+                         f"{example}\n## Owner decisions\n\n- a\n{line}\n")
+        for body in ("Intro\n```\n## Owner decisions\n", "## Owner decisions\n\n- a\n```\nx\n"):
+            with self.subTest(body=body), self.assertRaisesRegex(ID.Refusal, "ends inside a fence"):
+                ID.append_decision(body, line)
+        # An unclosed fence after the section's end leaves the section alone.
+        self.assertEqual(ID.append_decision("## Owner decisions\n\n- a\n\n## Notes\n```\n", line),
+                         f"## Owner decisions\n\n- a\n{line}\n\n## Notes\n```\n")
+        # A backtick run whose info string holds a backtick is inline code, so the heading below it counts.
+        self.assertEqual(ID.append_decision("```js```\n\n## Owner decisions\n\n- a\n", line),
+                         f"```js```\n\n## Owner decisions\n\n- a\n{line}\n")
+        # A tilde fence may hold a backtick in its info string, and still opens, so its heading is an example.
+        tilde = "~~~ a`b\n## Owner decisions\n~~~\n"
+        self.assertEqual(ID.append_decision(tilde, line), f"{tilde}\n## Owner decisions\n\n{line}\n")
+
     def test_an_empty_section_gets_its_first_entry(self):
         self.assertEqual(
             ID.append_decision("## Owner decisions\n", "- 2026-11-01: Q: q A: a"),
@@ -420,6 +460,22 @@ class Cli(StubGh):
         self.assertEqual(code, 3)
         self.assertIn("gh failed: gh repo view could not start: exec format error", err)
 
+    def test_a_close_that_stalls_after_the_comment_still_says_the_comment_landed(self):
+        comment = self.write("interview/9-close.txt", "closing\n")
+        real = ID.subprocess.run
+
+        def stalls_on_close(argv, **kwargs):
+            self.assertEqual(ID.CHILD_TIMEOUT, kwargs.get("timeout"))
+            if argv[1:3] == ["issue", "close"]:
+                raise ID.subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return real(argv, **kwargs)
+
+        with mock.patch.object(ID.subprocess, "run", side_effect=stalls_on_close):
+            code, err = self.run_main(["close", "9", "--comment-file", comment, "--run", RUN])
+        self.assertEqual(3, code)
+        self.assertIn("close step failed after the comment was posted; a retry posts a second", err)
+        self.assertIn(f"did not answer within {ID.CHILD_TIMEOUT} s", err)
+
     def test_a_usage_error_exits_2_with_the_refused_prefix(self):
         for argv in ([], ["record", "5"], ["fly", "5"]):
             with self.subTest(argv=argv):
@@ -441,10 +497,18 @@ class SyncRowChild(unittest.TestCase):
         refused = mock.Mock(returncode=2, stderr=b"refused: no list\n")
         with mock.patch.object(ID.subprocess, "run", return_value=refused):
             self.assertEqual("refused: no list", ID.sync_row("1677"))
+        self.assertEqual(ID.CHILD_TIMEOUT, kwargs["timeout"])
+        stalled = ID.subprocess.TimeoutExpired(["py"], ID.CHILD_TIMEOUT)
+        with mock.patch.object(ID.subprocess, "run", side_effect=stalled):
+            self.assertEqual(f"did not finish within {ID.CHILD_TIMEOUT} s", ID.sync_row("1677"))
 
 
 class PathWhichParity(unittest.TestCase):
     # issue_decisions keeps its own copy so it imports nothing of the dispatcher's; the two must answer alike.
+    def test_both_copies_bound_a_child_alike(self):
+        import dispatch_board
+        self.assertEqual(dispatch_board.CHILD_TIMEOUT, ID.CHILD_TIMEOUT)
+
     def test_both_copies_find_the_same_executable_and_skip_the_same_planted_one(self):
         import dispatch_board
         name = "tool.cmd" if os.name == "nt" else "tool"

@@ -271,7 +271,7 @@ require_no_merge_invented_anything() {
     changed=$(git -c core.quotePath=false diff --name-only "$tree" "$merge")
     while IFS= read -r path; do
       [ -n "$path" ] || continue
-      printf '%s\n' "$conflicted" | grep -qxF -- "$path" || kept="$kept$merge $path"$'\n'
+      case $'\n'"$conflicted"$'\n' in *$'\n'"$path"$'\n'*) ;; *) kept="$kept$merge $path"$'\n' ;; esac
     done < <(printf '%s\n' "$changed")
     base=$(git merge-base --all "$2" "$3") || base=""
     while IFS= read -r path; do
