@@ -38,7 +38,7 @@ answers `403` with the code `AccessDenied` to:
 
 And to a write under `products/` by the BFF's pair, at a key named for this
 run
-([ADR-215](../../docs/backend-architecture/adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166.md)).
+([ADR-215](../../docs/backend-architecture/adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166-amending-adr-110.md)).
 
 A delete names an absent key so that a store which wrongly allows it removes
 nothing: authorisation is decided before existence. The write sends no body

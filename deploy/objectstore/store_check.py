@@ -62,9 +62,7 @@ EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 # The public prefix, which the BFF's pair must not write (ADR-215).
 PUBLIC_PREFIX = "products/"
 
-# What the write probe signs as its payload's hash while it sends no body. A store authorises a request before it
-# reads the body, so a refusal still answers AccessDenied, and a store that wrongly allows the write fails the
-# hash instead of storing an object that would be served publicly and never expire.
+# Signed while no body is sent, so a write the store wrongly allows fails the hash and stores nothing (ADR-215).
 UNSENT_BODY_SHA256 = hashlib.sha256(b"a body the write probe never sends").hexdigest()
 
 
