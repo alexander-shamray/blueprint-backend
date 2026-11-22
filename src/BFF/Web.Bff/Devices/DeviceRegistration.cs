@@ -31,6 +31,7 @@ internal sealed class DeviceRegistrationValidator : AbstractValidator<DeviceRegi
             .WithMessage("is not an app this deployment pushes to on that platform.");
 
         RuleFor(r => r.Token)
+            .Cascade(CascadeMode.Stop)
             .Must(DeviceRules.IsPrintableAscii)
             .WithMessage("must be printable ASCII.")
             .Must(PathSegment.Holds)
