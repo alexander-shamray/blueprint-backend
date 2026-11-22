@@ -1258,7 +1258,9 @@ discarded. Trust in the key is the trust in the BFF's issue of it, and the
 prefix check is what stops one subject attaching another's upload. **A key that
 cannot be attached is a 422, and each refusal has its own code** — a key of the
 wrong shape or prefix, a key with no object behind it, and an object that
-disagrees with its type — none of which stores anything.
+disagrees with its type or is replaced between the read and the copy — none of
+which stores anything. The copy is conditional on the version the read saw, so
+bytes put again after the check are never published.
 
 **An upload that is never attached is expired, not swept.** The upload prefix
 carries a lifecycle rule set by the deployment and stated in the chart's

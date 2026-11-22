@@ -1547,8 +1547,10 @@ under another seller's prefix, or arrived with no principal;
 `product.image_not_uploaded` is a key with no object behind it, because the
 upload was never made or has expired; `product.image_not_an_image` is an object
 whose first bytes, or whose stored type, disagree with the type its key
-carries. None of them stores a product. A key longer than the longest
-destination key is a 400 before any of that, from the validator.
+carries, or that was replaced between the read and the copy, or whose
+version the store did not report. None of them stores a product. A key longer
+than the longest destination key is a 400 before any of that, from the
+validator.
 
 **The expiry rule is on `uploads/`.** Its lifecycle rule deletes objects after
 one day, and `products/` has none. A copy whose publish transaction then fails

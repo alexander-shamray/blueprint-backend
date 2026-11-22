@@ -427,13 +427,11 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
         {
             GetObjectResponse response = await base.GetObjectAsync(request, cancellationToken);
 
-            // Drained before the PUT, so the check reads the PNG whatever the store streams later, and the old
-            // unconditioned copy would have published the forged bytes.
-            MemoryStream checkedBytes = new();
-            await response.ResponseStream.CopyToAsync(checkedBytes, cancellationToken);
-            checkedBytes.Position = 0;
+            MemoryStream readBeforeThePut = new();
+            await response.ResponseStream.CopyToAsync(readBeforeThePut, cancellationToken);
+            readBeforeThePut.Position = 0;
             await response.ResponseStream.DisposeAsync();
-            response.ResponseStream = checkedBytes;
+            response.ResponseStream = readBeforeThePut;
 
             using HttpResponseMessage put = await PutAsync(upload, forged);
             put.StatusCode.ShouldBe(HttpStatusCode.OK);
