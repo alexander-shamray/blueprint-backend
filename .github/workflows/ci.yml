@@ -1100,21 +1100,34 @@ jobs:
 
       # A sighting is a flake that did not fail, so it goes where flakes are counted,
       # the flaky tests tracker (docs/harness/working-rules.md, CI), named by its file.
+      # A pull request's code writes it (ADR-197), so the name keeps a filename's
+      # characters, the body sits in a fence longer than its longest backtick run,
+      # where a mention stays inert, and one run posts at most ten.
       - name: "Post the sightings on #1406"
         continue-on-error: true
         run: |
           shopt -s nullglob
+          posted=0
           for f in sightings/sightings-*/*.txt; do
-            shard=$(basename "$(dirname "$f")")
+            if [ "$posted" -ge 10 ]; then
+              echo "::warning::more than ten sightings; the rest are in the run's artefacts"
+              break
+            fi
+            shard=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
+            name=$(basename "$f" .txt | tr -cd 'A-Za-z0-9._-' | head -c 128)
+            head -c 60000 "$f" > sighting.txt
+            longest=$({ grep -o '`*' sighting.txt || true; } | awk '{ if (length > n) n = length } END { print n + 0 }')
+            fence=$(printf '%*s' "$(( longest < 3 ? 3 : longest + 1 ))" '' | tr ' ' '`')
             {
-              echo "A passing run saw $(basename "$f" .txt). Run $RUN_URL, shard ${shard#sightings-}, ref $REF_NAME."
+              echo "A passing run saw ${name}. Run $RUN_URL, shard ${shard#sightings-}, ref $REF_NAME."
               echo
-              echo '```'
-              head -c 60000 "$f"
+              echo "$fence"
+              cat sighting.txt
               echo
-              echo '```'
+              echo "$fence"
             } > body.md
             gh issue comment 1406 --body-file body.md
+            posted=$((posted + 1))
           done
 
       - name: "Post the warm-up retries on #960"
@@ -1122,10 +1135,16 @@ jobs:
         run: |
           shopt -s nullglob
           for f in retries/warm-up-retry-*/warm-up-retry.txt; do
-            shard=$(basename "$(dirname "$f")")
+            # A step outcome is one of four words, so anything else is named as such.
+            shard=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
+            outcome=$(head -n 1 "$f" | head -c 16)
+            case "$outcome" in
+              success|failure|cancelled|skipped) ;;
+              *) outcome='not one a step reports' ;;
+            esac
             gh issue comment 960 --body \
               "TestcontainersWarmUp's named failure, and the shard ran again in a new process.
-              Run $RUN_URL, shard ${shard#warm-up-retry-}, ref $REF_NAME; the retry's outcome was $(cat "$f")."
+              Run $RUN_URL, shard ${shard#warm-up-retry-}, ref $REF_NAME; the retry's outcome was $outcome."
           done
 
   # Every stage's results in one place, the only place both readers below can
@@ -1586,10 +1605,13 @@ jobs:
         run: |
           shopt -s nullglob
           for f in retries/image-retry-*/image-retries.txt; do
-            leg=$(basename "$(dirname "$f")")
+            # The record is a pull request's own output (ADR-197): image_retry.sh's labels are
+            # words and spaces, so a line of any other shape is dropped and the list is capped.
+            leg=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
+            retried=$({ grep -xE '[A-Za-z][A-Za-z ]{0,39}' "$f" || true; } | head -n 10 | paste -sd, -)
             gh issue comment 1406 --body \
               "An image step failed and its retry recovered, so the leg stayed green.
-              Run $RUN_URL, image ${leg#image-retry-}, ref $REF_NAME; retried: $(paste -sd, "$f")."
+              Run $RUN_URL, image ${leg#image-retry-}, ref $REF_NAME; retried: ${retried:-no label of the expected shape}."
           done
 
   # ADR-149's two packages. Packed on every run a stage reads, once the test
