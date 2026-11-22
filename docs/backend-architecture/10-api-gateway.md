@@ -1284,6 +1284,10 @@ the upload prefix and the attaching service's reads it back, and a store that
 refuses either fails the run too, since only an allowed request tells the
 bucket the pairs are granted on from one that grants them nothing
 ([ADR-148](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)).
+The BFF's pair is then asked to write under the published prefix, and a store
+that does not refuse it fails the run; the write is signed over a body it never
+sends, so a store that wrongly allows it stores nothing
+([ADR-215](adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166.md)).
 
 **The file is served by the store, or a CDN in front of it, from the published
 prefix alone.** It is not served through the gateway, because the gateway would

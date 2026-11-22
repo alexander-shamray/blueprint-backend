@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Ask a deployed object store whether it refuses the two image credential pairs a delete and a list.
-
-§10.8 says neither pair can list a bucket or delete; Compose proves it locally and this of a deployed store
-(ADR-110), once an allowed write and read show the bucket is theirs (ADR-148): `store_check.py check`."""
+"""Ask a deployed object store whether it refuses each image credential pair a delete and a list, and the BFF's a
+write under `products/`, as §10.8 says (ADR-110, ADR-215), once an allowed write and read show the bucket is
+theirs (ADR-148): `store_check.py check`."""
 
 from __future__ import annotations
 
@@ -60,6 +59,14 @@ LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
+# The public prefix, which the BFF's pair must not write (ADR-215).
+PUBLIC_PREFIX = "products/"
+
+# What the write probe signs as its payload's hash while it sends no body. A store authorises a request before it
+# reads the body, so a refusal still answers AccessDenied, and a store that wrongly allows the write fails the
+# hash instead of storing an object that would be served publicly and never expire.
+UNSENT_BODY_SHA256 = hashlib.sha256(b"a body the write probe never sends").hexdigest()
+
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     """urllib re-sends a request's headers to a redirect's target, so a store, or
@@ -90,13 +97,19 @@ def signing_key(secret: str, date: str, region: str, service: str = "s3") -> byt
 
 
 def sign(
-    method: str, url: str, access_key: str, secret_key: str, region: str, now: datetime.datetime
+    method: str,
+    url: str,
+    access_key: str,
+    secret_key: str,
+    region: str,
+    now: datetime.datetime,
+    payload_sha256: str = EMPTY_SHA256,
 ) -> dict[str, str]:
-    """The headers of a SigV4-signed, bodiless request."""
+    """The headers of a SigV4-signed, bodiless request, claiming the payload hash given."""
     parts = urllib.parse.urlsplit(url)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     date = stamp[:8]
-    headers = {"host": parts.netloc, "x-amz-content-sha256": EMPTY_SHA256, "x-amz-date": stamp}
+    headers = {"host": parts.netloc, "x-amz-content-sha256": payload_sha256, "x-amz-date": stamp}
     names = ";".join(sorted(headers))
     query = "&".join(
         f"{urllib.parse.quote(k, safe='-_.~')}={urllib.parse.quote(v, safe='-_.~')}"
@@ -105,7 +118,7 @@ def sign(
     canonical = "\n".join(
         [method, urllib.parse.quote(parts.path or "/", safe="/-_.~"), query]
         + [f"{k}:{headers[k]}" for k in sorted(headers)]
-        + ["", names, EMPTY_SHA256]
+        + ["", names, payload_sha256]
     )
     scope = f"{date}/{region}/s3/aws4_request"
     to_sign = "\n".join(["AWS4-HMAC-SHA256", stamp, scope, hashlib.sha256(canonical.encode("utf-8")).hexdigest()])
@@ -116,10 +129,13 @@ def sign(
     return {("Host" if k == "host" else k): v for k, v in headers.items()}
 
 
-def ask(method: str, url: str, access_key: str, secret_key: str, region: str) -> tuple[int, str]:
+def ask(
+    method: str, url: str, access_key: str, secret_key: str, region: str, payload_sha256: str = EMPTY_SHA256
+) -> tuple[int, str]:
     """The status and body of one request; an HTTP error status is an answer, a network failure is not."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    request = urllib.request.Request(url, method=method, headers=sign(method, url, access_key, secret_key, region, now))
+    headers = sign(method, url, access_key, secret_key, region, now, payload_sha256)
+    request = urllib.request.Request(url, method=method, headers=headers)
     try:
         with OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
             return response.status, response.read(65536).decode("utf-8", "replace")
@@ -160,6 +176,13 @@ def probes(endpoint: str, bucket: str, addressing: str = "path") -> list[tuple[s
     found = [(f"delete under {prefix}", "DELETE", f"{base}/{prefix}{absent}") for prefix in PREFIXES]
     found.append(("list the bucket", "GET", f"{base}{listing}"))
     return found
+
+
+def public_write(endpoint: str, bucket: str, addressing: str = "path") -> tuple[str, str, str]:
+    """(label, method, url) of the write under `products/` the BFF's pair must be refused (ADR-215). It is sent
+    with no body and signed over UNSENT_BODY_SHA256, so a store that wrongly allows it stores nothing."""
+    base, _ = base_url(endpoint, bucket, addressing)
+    return f"write under {PUBLIC_PREFIX}", "PUT", f"{base}/{PUBLIC_PREFIX}check-{uuid.uuid4().hex}"
 
 
 def judge(label: str, status: int, body: str) -> str | None:
@@ -236,6 +259,11 @@ def check(env: dict[str, str]) -> list[str]:
             found = judge(label, status, body)
             if found:
                 violations.append(f"{host} pair, {found}")
+    access, secret = PAIRS["bff"]
+    label, method, url = public_write(env[ENDPOINT], env[BUCKET], addressing)
+    found = judge(label, *ask(method, url, env[access], env[secret], env[REGION], UNSENT_BODY_SHA256))
+    if found:
+        violations.append(f"bff pair, {found}")
     return violations
 
 
@@ -256,7 +284,8 @@ def main(argv: list[str]) -> int:
         print(f"::error::{line}")
     if violations:
         return 1
-    print("Both credential pairs reach the bucket, and neither can delete or list it.")
+    print("Both credential pairs reach the bucket, neither can delete or list it, and the BFF's cannot write "
+          f"under {PUBLIC_PREFIX}.")
     return 0
 
 

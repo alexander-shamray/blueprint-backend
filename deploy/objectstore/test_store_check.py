@@ -15,22 +15,32 @@ UNKNOWN_KEY = ("403", "<Error><Code>InvalidAccessKeyId</Code></Error>")
 ALLOWED = ("204", "")
 
 # The bucket the pairs are granted on: the sentinel is written and read back
-# empty, and every probe is refused (ADR-148).
-HOLDING = {"PUT": ("200", ""), "GET": ("200", ""), "DELETE": DENIED, "list": DENIED}
+# empty, and every probe is refused (ADR-148), the write under `products/` too
+# (ADR-215).
+HOLDING = {"PUT": ("200", ""), "GET": ("200", ""), "DELETE": DENIED, "list": DENIED, "publish": DENIED}
+
+# What a store that verifies the payload answers a write it wrongly allows.
+HASH_MISMATCH = ("400", "<Error><Code>XAmzContentSHA256Mismatch</Code></Error>")
 
 
 class Store:
-    """A server whose answer is chosen per (method, path prefix) and recorded."""
+    """A server whose answer is chosen per (method, path prefix) and recorded. A write under `products/` is
+    answered as "publish" where the answers name it, and as any other PUT where they do not."""
 
     def __init__(self, answers):
         self.answers = answers
         self.seen = []
+        self.payloads = []
         owner = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def _answer(self):
                 owner.seen.append((self.command, self.path, self.headers.get("Authorization", "")))
+                owner.payloads.append((self.command, self.path, self.headers.get("x-amz-content-sha256", ""),
+                                       self.headers.get("Content-Length")))
                 kind = "list" if "list-type" in self.path else self.command
+                if kind == "PUT" and "/products/" in self.path and "publish" in owner.answers:
+                    kind = "publish"
                 status, body = owner.answers[kind]
                 self.send_response(int(status))
                 self.end_headers()
@@ -96,9 +106,9 @@ class CheckTests(unittest.TestCase):
     def test_a_store_that_holds_the_policy_has_no_violation(self):
         store, violations = self.run_against(HOLDING)
         self.assertEqual(violations, [])
-        # The sentinel's write and read, then two pairs each asked two deletes and a list: the check asked,
-        # rather than found nothing to ask.
-        self.assertEqual(len(store.seen), 8)
+        # The sentinel's write and read, then two pairs each asked two deletes and a list, then the BFF's pair
+        # asked a write under products/: the check asked, rather than found nothing to ask.
+        self.assertEqual(len(store.seen), 9)
         self.assertTrue(all(auth.startswith("AWS4-HMAC-SHA256") for _, _, auth in store.seen))
 
     def test_a_delete_the_store_allows_is_a_violation_for_each_pair_and_prefix(self):
@@ -115,14 +125,14 @@ class CheckTests(unittest.TestCase):
     def test_a_pair_the_store_does_not_know_is_not_a_refusal(self):
         _, violations = self.run_against({"PUT": UNKNOWN_KEY, "GET": UNKNOWN_KEY, "DELETE": UNKNOWN_KEY,
                                           "list": UNKNOWN_KEY})
-        # The sentinel's refused write, and no read of what was never written, then the six probes.
-        self.assertEqual(len(violations), 7)
+        # The sentinel's refused write, and no read of what was never written, then the seven probes.
+        self.assertEqual(len(violations), 8)
         self.assertTrue(all("InvalidAccessKeyId" in v for v in violations))
 
     def test_a_missing_bucket_is_not_a_refusal(self):
         missing = ("404", "<Error><Code>NoSuchBucket</Code></Error>")
         _, violations = self.run_against({"PUT": missing, "GET": missing, "DELETE": missing, "list": DENIED})
-        self.assertEqual(len(violations), 5)
+        self.assertEqual(len(violations), 6)
         self.assertIn("write a sentinel under uploads/: answered 404 NoSuchBucket", violations[0])
 
     def test_the_delete_names_a_key_nothing_holds(self):
@@ -131,6 +141,66 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(len(deletes), 4)
         self.assertEqual(len(set(deletes)), 4)  # a fresh key per probe
         self.assertTrue(all("/check-" in path for path in deletes))
+
+
+class PublicWriteTests(unittest.TestCase):
+    """The BFF's pair writes under `uploads/` and nothing else, and a write the store wrongly allows under
+    `products/` stores nothing (ADR-215)."""
+
+    README = pathlib.Path(__file__).resolve().parent / "README.md"
+
+    def run_against(self, answers, **over):
+        store = Store(answers)
+        self.addCleanup(store.close)
+        return store, store_check.check(store.env(**over))
+
+    def writes(self, store):
+        return [(path, auth) for method, path, auth in store.seen if method == "PUT" and "/products/" in path]
+
+    def test_a_write_the_store_allows_is_a_violation(self):
+        for answer in (("200", ""), HASH_MISMATCH):
+            with self.subTest(answer=answer[0]):
+                _, violations = self.run_against({**HOLDING, "publish": answer})
+                self.assertEqual(violations, [f"bff pair, write under products/: answered {answer[0]}, "
+                                              "so the pair is not refused it"])
+
+    def test_a_write_refused_with_another_code_is_a_violation(self):
+        _, violations = self.run_against({**HOLDING, "publish": UNKNOWN_KEY})
+        self.assertEqual(len(violations), 1)
+        self.assertIn("write under products/: refused with InvalidAccessKeyId", violations[0])
+
+    def test_only_the_bff_pair_is_asked_at_a_fresh_key(self):
+        store, _ = self.run_against(HOLDING)
+        (path, auth), = self.writes(store)
+        self.assertRegex(path, r"^/product-images/products/check-[0-9a-f]{32}$")
+        self.assertIn("Credential=bff-key/", auth)
+
+        again, _ = self.run_against(HOLDING)
+        self.assertNotEqual(self.writes(again)[0][0], path)
+
+    def test_the_write_sends_no_body_and_signs_a_hash_that_is_not_the_empty_bodys(self):
+        store, _ = self.run_against(HOLDING)
+        (_, _, claimed, length), = [entry for entry in store.payloads
+                                    if entry[0] == "PUT" and "/products/" in entry[1]]
+        self.assertEqual(length, "0")
+        self.assertEqual(claimed, store_check.UNSENT_BODY_SHA256)
+        self.assertNotEqual(claimed, store_check.EMPTY_SHA256)
+
+    def test_every_other_request_signs_the_empty_bodys_hash(self):
+        store, _ = self.run_against(HOLDING)
+        others = [claimed for method, path, claimed, _ in store.payloads
+                  if not (method == "PUT" and "/products/" in path)]
+        self.assertEqual(len(others), 8)
+        self.assertTrue(all(claimed == store_check.EMPTY_SHA256 for claimed in others))
+
+    def test_the_write_is_named_by_the_configured_addressing(self):
+        label, method, url = store_check.public_write("https://s3.example:9000/", "product-images", "virtual")
+        self.assertEqual((label, method), ("write under products/", "PUT"))
+        self.assertRegex(url, r"^https://product-images\.s3\.example:9000/products/check-[0-9a-f]{32}$")
+
+    def test_the_readme_names_the_write_probe(self):
+        text = " ".join(self.README.read_text(encoding="utf-8").split())
+        self.assertIn("a write under `products/` by the BFF's pair", text)
 
 
 class ControlTests(unittest.TestCase):
@@ -218,8 +288,8 @@ class RedirectTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         env = elsewhere.env(**{store_check.ENDPOINT: f"http://127.0.0.1:{server.server_port}"})
         violations = store_check.check(env)
-        # The redirected write, and no read of it, then the six probes.
-        self.assertEqual(len(violations), 7)
+        # The redirected write, and no read of it, then the seven probes.
+        self.assertEqual(len(violations), 8)
         self.assertTrue(all("answered 307" in v for v in violations))
         self.assertEqual(elsewhere.seen, [])
 
