@@ -6,8 +6,9 @@ deliberately does not check.**
 [ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-985.md)
 is the decision. [§10.8](../../docs/backend-architecture/10-api-gateway.md)
 states that neither of the two image credential pairs can list a bucket or
-delete; Compose's store is held to it by `ProductImageStoreTests`, and this is
-the same question put to a store this repository does not run.
+delete, and that the BFF's writes under `uploads/` and nothing else; Compose's
+store is held to it by `ProductImageStoreTests`, and this is the same question
+put to a store this repository does not run.
 
 ```bash
 py -3.12 -m unittest discover -s deploy/objectstore
@@ -35,8 +36,18 @@ answers `403` with the code `AccessDenied` to:
 - the same under `products/`;
 - a list of the bucket.
 
+And to a write under `products/` by the BFF's pair, at a key named for this
+run
+([ADR-215](../../docs/backend-architecture/adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166.md)).
+
 A delete names an absent key so that a store which wrongly allows it removes
-nothing: authorisation is decided before existence.
+nothing: authorisation is decided before existence. The write sends no body
+and signs a payload hash that is not the empty body's for the same reason:
+authorisation is decided before the body is read, so a refusal still answers
+`AccessDenied`, and a store that wrongly allows the write fails the hash
+rather than storing a public object that never expires. A store that does not
+verify the payload's hash would keep that empty object, on a run that is red
+for it.
 
 **Anything else fails the run**, and the reasons are the suite's cases: a `2xx`
 is a permission that exists; a `403` with another code (`InvalidAccessKeyId`,
@@ -96,9 +107,11 @@ The run log says which of three things it was, per credential pair:
   `OBJECT_STORE_BUCKET` names a bucket the pairs are not granted on, or the
   policy has lost an access the services need. Correct whichever it is, then
   dispatch the workflow and close the issue on the green run.
-- **The store allowed a delete or a list**, or answered with a code other than
-  `AccessDenied`. The policy has drifted from §10.8: correct it, then dispatch
-  the workflow and close the issue on the green run.
+- **The store allowed a delete, a list or the BFF's write under `products/`**,
+  or answered with a code other than `AccessDenied`; an allowed write answers
+  a hash mismatch, usually `400 XAmzContentSHA256Mismatch`. The policy has
+  drifted from §10.8: correct it, then dispatch the workflow and close the
+  issue on the green run.
 - **The store could not be asked**: an unreachable endpoint, an unset variable
   or a pair the store does not know. Nothing is established either way, so
   treat it as an allowed delete or list until the run is green.
