@@ -1109,6 +1109,7 @@ jobs:
           shopt -s nullglob
           posted=0
           for f in sightings/sightings-*/*.txt; do
+            [ -f "$f" ] || continue
             if [ "$posted" -ge 10 ]; then
               echo "::warning::more than ten sightings; the rest are in the run's artefacts"
               break
@@ -1139,6 +1140,7 @@ jobs:
         run: |
           shopt -s nullglob
           for f in retries/warm-up-retry-*/warm-up-retry.txt; do
+            [ -f "$f" ] || continue
             # A step outcome is one of four words, so anything else is named as such.
             shard=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
             outcome=$(head -c 16 "$f" | head -n 1)
@@ -1609,6 +1611,7 @@ jobs:
         run: |
           shopt -s nullglob
           for f in retries/image-retry-*/image-retries.txt; do
+            [ -f "$f" ] || continue
             # The record is a pull request's own output (ADR-197): image_retry.sh's labels are
             # words and spaces, so a line of any other shape is dropped and the list is capped.
             leg=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
