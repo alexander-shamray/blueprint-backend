@@ -40,6 +40,14 @@ half-checked, as an IPv6 origin is below. */}}
 {{- if gt $prefix 32 }}
 {{- fail (printf "ingress.trustedNetworks[%d] has a prefix length above 32." $i) }}
 {{- end }}
+{{- /* The width, which is the other security half: every address in a trusted
+network chooses its own X-Forwarded-For and X-Forwarded-Proto, so 0.0.0.0/0
+lets every client pick its rate-limit partition and its logged IP. ADR-214
+holds it to ADR-080's floor for a NetworkPolicy peer, and the gateway refuses
+the same at startup. */}}
+{{- if lt $prefix 8 }}
+{{- fail (printf "ingress.trustedNetworks[%d] is wider than a /8, the widest network ADR-214 trusts: every address in it chooses its own forwarded client address, so state the ingress controller's own range (§15.3)." $i) }}
+{{- end }}
 {{- $value := 0 }}
 {{- range $octet := splitList "." $addr }}
 {{- if gt (atoi $octet) 255 }}
