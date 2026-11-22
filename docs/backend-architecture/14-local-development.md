@@ -70,12 +70,13 @@ the anonymous identity, each pair naming a policy under
 `object-store/policies/` that allows its reads and writes and so refuses a list
 and a delete. **Those policies bind the S3 listener alone, by design.**
 `weed server` also opens its master, volume and filer listeners on the Compose
-network, with no authentication, because `object-store-init` drives the master
-through `weed shell`. A container on that network can therefore read and write
-the store past the two pairs, so what this stack proves about the policies is
-what a client of the S3 endpoint can do, not what a foothold beside the store
-can. Only the S3 port is published, on loopback, and a deployment supplies its
-own store
+network, with no authentication, as its defaults: the command names no bind
+address, and `object-store-init` needs the master and, through it, the filer
+reachable from its own container to run `weed shell`. A container on that
+network can therefore read and write the store past the two pairs, so what this
+stack proves about the policies is what a client of the S3 endpoint can do, not
+what a foothold beside the store can. Only the S3 port is published, on
+loopback, and a deployment supplies its own store
 ([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
 `object-store-init` is a one-shot, like a migrator: it makes the bucket, puts
 the two policies and sets the one-day expiry on `uploads/`, from
