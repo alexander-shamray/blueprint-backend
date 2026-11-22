@@ -180,6 +180,19 @@ public class ErasureRequestAmendmentTests
         Should.Throw<DomainException>(() => request.AmendResponders(["bff"], [], Reason, Guid.Empty, Now));
     }
 
+    [Theory]
+    [InlineData("typo\r\nforged line")]
+    [InlineData("typo \u202Edesrever")]
+    [InlineData("typo\u2028x")]
+    [InlineData("typo\u200Bx")]
+    public void An_amendment_whose_reason_is_not_visible_text_is_refused(string reason)
+    {
+        ErasureRequest request = Raise("ordering");
+
+        Should.Throw<DomainException>(() => request.AmendResponders(["bff"], [], reason, Operator, Now));
+        request.Amendments.ShouldBeEmpty();
+    }
+
     private static ErasureRequest Raise(params string[] responders) =>
         ErasureRequest.Raise(Request, Subject, responders, Slo, Now);
 

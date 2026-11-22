@@ -191,8 +191,13 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         if (unfit is not null)
             throw new DomainException(unfit);
 
-        if (string.IsNullOrWhiteSpace(reason) || reason.Length > MaxReasonLength)
-            throw new DomainException($"An amendment gives a reason of at most {MaxReasonLength} characters.");
+        // The validator's rule as well, since the reason is the audit trail's whoever calls (ADR-216).
+        if (!VisibleText.Holds(reason, MaxReasonLength))
+        {
+            throw new DomainException(
+                $"An amendment gives a reason of at most {MaxReasonLength} characters, with no control, format or " +
+                "separator character.");
+        }
 
         if (amendedBy == Guid.Empty)
             throw new DomainException("An amendment names the operator who made it.");
