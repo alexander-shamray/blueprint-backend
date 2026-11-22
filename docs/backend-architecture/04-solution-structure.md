@@ -654,7 +654,27 @@ if (behindProxy)
 
     // A trusted network lets every address in it choose its own X-Forwarded-For, so ADR-214 holds it to ADR-080's
     // floor: 0.0.0.0/0 is not an ingress, and every client behind it would pick its own rate-limit partition.
-    if (trusted.Any(n => n.PrefixLength < 8))
+    static bool WiderThanASlash8(System.Net.IPNetwork network)
+    {
+        if (network.PrefixLength < 8)
+            return true;
+
+        if (network.BaseAddress.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6 ||
+            network.PrefixLength >= 104)
+            return false;
+
+        // The dual-mode listener sees an IPv4 client as ::ffff:a.b.c.d, so a network reaching ::ffff:0:0/96 is held
+        // to a /104, a /8 of IPv4 inside it. Compared on the prefix bits, since IPNetwork.Contains answers true for
+        // fd00::/8 and ::ffff:0.0.0.0 on .NET 10, measured.
+        UInt128 address = System.Buffers.Binary.BinaryPrimitives.ReadUInt128BigEndian(
+            network.BaseAddress.GetAddressBytes());
+        UInt128 mapped = (UInt128)0xFFFF << 32;
+        UInt128 mask = UInt128.MaxValue << (128 - Math.Min(network.PrefixLength, 96));
+
+        return (address & mask) == (mapped & mask);
+    }
+
+    if (trusted.Any(WiderThanASlash8))
     {
         throw new InvalidOperationException(
             "'Ingress:TrustedNetworks' holds a network wider than a /8. Every address in a trusted network " +

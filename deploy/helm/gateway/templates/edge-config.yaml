@@ -64,9 +64,9 @@ whole test, as it is for the port below. */}}
 {{- $value = add (mul $value 256) (atoi $octet) }}
 {{- end }}
 {{- /* The host bits, which `IPNetwork.Parse` refuses: `10.42.0.1/16` has a base
-address with bits set past its prefix, and the gateway throws on it when it
-first resolves ForwardedHeadersOptions, after the rollout has begun. The address
-as an integer must divide by the size of its block. */}}
+address with bits set past its prefix, and the gateway throws on it at startup,
+after the rollout has begun. The address as an integer must divide by the size
+of its block. */}}
 {{- $block := 1 }}
 {{- range until (int (sub 32 $prefix)) }}
 {{- $block = mul $block 2 }}

@@ -164,13 +164,15 @@ public sealed class ConditionalBlockTests
             _ = factory.Services;
         });
 
-    /// <summary>ADR-214's floor, ADR-080's: a network wider than a /8 lets most of the internet choose its own
-    /// forwarded address.</summary>
+    /// <summary>ADR-214's floor, ADR-080's, in either family and in IPv6's mapped IPv4 range.</summary>
     [Theory]
     [InlineData("0.0.0.0/0")]
     [InlineData("0.0.0.0/1")]
     [InlineData("10.0.0.0/7")]
     [InlineData("::/0")]
+    [InlineData("::/80")]
+    [InlineData("::ffff:0:0/96")]
+    [InlineData("::ffff:10.0.0.0/103")]
     public void Ingress_enabled_with_a_network_wider_than_a_slash_8_refuses_to_start(string network)
     {
         using IngressWithNetworkFactory factory = new(network);
@@ -185,6 +187,7 @@ public sealed class ConditionalBlockTests
     [Theory]
     [InlineData("10.0.0.0/8")]
     [InlineData("fd00::/8")]
+    [InlineData("::ffff:10.0.0.0/104")]
     public void Ingress_enabled_with_a_slash_8_network_starts(string network)
     {
         using IngressWithNetworkFactory factory = new(network);
