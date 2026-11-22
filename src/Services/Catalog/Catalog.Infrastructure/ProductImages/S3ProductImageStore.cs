@@ -39,6 +39,7 @@ public sealed class S3ProductImageStore(
         byte[] head = new byte[SignatureLength];
         int read;
         string storedType;
+        string? checkedVersion;
 
         try
         {
@@ -53,6 +54,7 @@ public sealed class S3ProductImageStore(
                 ct);
 
             storedType = response.Headers.ContentType ?? "";
+            checkedVersion = response.ETag;
             read = await response.ResponseStream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
@@ -65,8 +67,12 @@ public sealed class S3ProductImageStore(
 
         // Both the type the object was stored under and the bytes must agree with the key's extension, which is the
         // type the BFF signed; either one alone is something the client controls.
-        if (storedType != contentType || !HasSignature(head.AsSpan(0, read), contentType))
+        // No version, and the copy below could not be held to the bytes just checked.
+        if (storedType != contentType || !HasSignature(head.AsSpan(0, read), contentType) ||
+            string.IsNullOrEmpty(checkedVersion))
+        {
             return new ImageAttachment(ImageAttachOutcome.NotAnImage);
+        }
 
         // REPLACE with nothing of the client's: the type and cache header are fixed here and its metadata is dropped.
         CopyObjectRequest copy = new()
@@ -76,11 +82,22 @@ public sealed class S3ProductImageStore(
             DestinationBucket = store.Bucket,
             DestinationKey = destinationKey,
             MetadataDirective = S3MetadataDirective.REPLACE,
-            ContentType = contentType
+            ContentType = contentType,
+
+            // The signed URL stays valid after the read, so the copy takes only the version whose bytes were checked;
+            // a re-PUT in between is refused by the store rather than published under products/ (§10.8).
+            ETagToMatch = checkedVersion
         };
         copy.Headers.CacheControl = CacheControl;
 
-        await s3.CopyObjectAsync(copy, ct);
+        try
+        {
+            await s3.CopyObjectAsync(copy, ct);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+        {
+            return new ImageAttachment(ImageAttachOutcome.NotAnImage);
+        }
 
         return new ImageAttachment(ImageAttachOutcome.Attached, store.PublicUrlOf(destinationKey));
     }
