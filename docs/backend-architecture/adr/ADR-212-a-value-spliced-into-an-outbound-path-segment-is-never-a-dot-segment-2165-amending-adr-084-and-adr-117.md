@@ -22,13 +22,15 @@ The rule is a text rule, as ADR-084's is, so it is a building block's.
 **Consequences.** A provider or carrier that answers with `.` or `..` has
 that authorisation or booking backed off as unreadable until its answer
 changes. A client that registered such a token is refused with a 400 naming
-the token. A row written before this record is never sent: each delivery to
-it ends as an invalid token, and the row stays, as
+the token. An APNs row written before this record is never sent: each
+delivery to it ends as an invalid token, and the row stays, as
 [ADR-121](ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)
 keeps any such row, until the app registers again or the retention pass
-removes it. The rule covers no other shape: a slash or a percent sign is
-escaped and stays inside its segment, and only a dot segment survives
-escaping to be resolved.
+removes it. This amends ADR-121 in one respect: that invalid token spends no
+provider call. An FCM row carries its token in the request's body, so it is
+still sent, and Google's answer decides it. The rule covers no other shape:
+a slash or a percent sign is escaped and stays inside its segment, and only
+a dot segment survives escaping to be resolved.
 
 ---
 
