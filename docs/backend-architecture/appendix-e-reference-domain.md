@@ -1594,7 +1594,7 @@ it, or 404 with the code `address.not_found`; `DELETE` answers 204.
 `line1`, a `city` and a `postalCode` are present, a `country` is two ASCII
 letters (ISO 3166-1 alpha-2, in either case, stored in upper case), each
 part fits the width the order's own validator admits and holds no control,
-format or separator character
+format, line or paragraph separator character
 ([ADR-213](adr/ADR-213-an-address-part-holds-no-control-format-or-separator-character-2166-amending-adr-107.md)),
 so an address that saves is one an order accepts. A postcode's format is
 never checked, because no format is every country's. A `line2` that is blank
