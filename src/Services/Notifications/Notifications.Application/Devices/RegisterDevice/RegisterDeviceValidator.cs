@@ -14,8 +14,9 @@ public sealed class RegisterDeviceValidator : AbstractValidator<RegisterDeviceCo
         RuleFor(c => c.Platform).Must(p => DeviceLimits.Platforms.Contains(p)).WithMessage("must be fcm or apns.");
         RuleFor(c => c.AppId).NotEmpty().MaximumLength(DeviceLimits.MaxAppIdLength).Must(PrintableAscii.Holds)
             .WithMessage("must be printable ASCII.");
-        RuleFor(c => c.Token).NotEmpty().MaximumLength(DeviceLimits.MaxTokenLength).Must(PrintableAscii.Holds)
-            .WithMessage("must be printable ASCII.").Must(PathSegment.Holds).WithMessage("must not be a dot segment.");
+        RuleFor(c => c.Token).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(DeviceLimits.MaxTokenLength)
+            .Must(PrintableAscii.Holds).WithMessage("must be printable ASCII.")
+            .Must(PathSegment.Holds).WithMessage("must not be a dot segment.");
         RuleFor(c => c.Sequence).GreaterThan(0);
     }
 }
