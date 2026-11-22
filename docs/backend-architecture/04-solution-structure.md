@@ -645,8 +645,22 @@ bool corsEnabled = builder.Configuration.GetValue<bool>("Cors:Enabled");
 
 if (behindProxy)
 {
-    // Read here, not in the Configure callback, so a missing section fails at startup rather than on a request.
-    string[] trusted = builder.Configuration.GetRequiredSection("Ingress:TrustedNetworks").Get<string[]>()!;
+    // Read and parsed here, not in the Configure callback, so a missing or malformed section fails at startup.
+    System.Net.IPNetwork[] trusted =
+    [
+        .. builder.Configuration.GetRequiredSection("Ingress:TrustedNetworks").Get<string[]>()!
+            .Select(System.Net.IPNetwork.Parse)
+    ];
+
+    // A trusted network lets every address in it choose its own X-Forwarded-For, so ADR-214 holds it to ADR-080's
+    // floor: 0.0.0.0/0 is not an ingress, and every client behind it would pick its own rate-limit partition.
+    if (trusted.Any(n => n.PrefixLength < 8))
+    {
+        throw new InvalidOperationException(
+            "'Ingress:TrustedNetworks' holds a network wider than a /8. Every address in a trusted network " +
+            "chooses its own forwarded client address and scheme, so name the ingress controller's own range " +
+            "(ADR-214, §15.3).");
+    }
 
     builder.Services.Configure<ForwardedHeadersOptions>(o =>
     {
@@ -657,8 +671,8 @@ if (behindProxy)
         o.KnownIPNetworks.Clear();
         o.KnownProxies.Clear();
 
-        foreach (string cidr in trusted)
-            o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+        foreach (System.Net.IPNetwork network in trusted)
+            o.KnownIPNetworks.Add(network);
     });
 }
 

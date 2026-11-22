@@ -164,6 +164,34 @@ public sealed class ConditionalBlockTests
             _ = factory.Services;
         });
 
+    /// <summary>ADR-214's floor, ADR-080's: a network wider than a /8 lets most of the internet choose its own
+    /// forwarded address.</summary>
+    [Theory]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("0.0.0.0/1")]
+    [InlineData("10.0.0.0/7")]
+    [InlineData("::/0")]
+    public void Ingress_enabled_with_a_network_wider_than_a_slash_8_refuses_to_start(string network)
+    {
+        using IngressWithNetworkFactory factory = new(network);
+
+        InvalidOperationException thrown =
+            Should.Throw<InvalidOperationException>(() => _ = factory.Services);
+
+        thrown.Message.ShouldContain("wider than a /8");
+    }
+
+    /// <summary>The floor itself is kept, as ADR-080 keeps it for a NetworkPolicy peer.</summary>
+    [Theory]
+    [InlineData("10.0.0.0/8")]
+    [InlineData("fd00::/8")]
+    public void Ingress_enabled_with_a_slash_8_network_starts(string network)
+    {
+        using IngressWithNetworkFactory factory = new(network);
+
+        Should.NotThrow(() => _ = factory.Services);
+    }
+
     private sealed class CorsFactory : GatewayFactory
     {
         /// <summary>The SPA's dev origin (§14.1) — 5173 is Vite's default.</summary>
@@ -204,6 +232,15 @@ public sealed class ConditionalBlockTests
     {
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
             [new("Ingress:Enabled", "true")];
+    }
+
+    private sealed class IngressWithNetworkFactory(string network) : GatewayFactory
+    {
+        protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
+        [
+            new("Ingress:Enabled", "true"),
+            new("Ingress:TrustedNetworks:0", network)
+        ];
     }
 
     private sealed class IngressWithBadNetworkFactory : GatewayFactory

@@ -1330,7 +1330,9 @@ set `X-Forwarded-For`. A plausible default is worse than none. Too narrow, and
 the real ingress is untrusted, its forwarded header ignored, and §10.3's
 per-client limit collapses into one global bucket; too broad, and any pod in
 the range picks its own rate-limit partition and its own client IP in the
-logs. Neither shows up in a render or a rollout.
+logs. Neither shows up in a render or a rollout, but for the widest case:
+[ADR-214](adr/ADR-214-a-trusted-forwarding-network-is-refused-wider-than-a-8-2166-amending-adr-080.md)
+refuses an entry wider than a /8, in the chart and in the gateway.
 
 **The gateway's own ConfigMap is rendered by a template only this chart
 has**, `templates/edge-config.yaml`. Its two keys are read by `Gateway.Api` and
