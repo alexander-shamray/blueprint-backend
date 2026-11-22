@@ -53,6 +53,11 @@ spec:
         {{- fail (printf "routeSwitch is set on the %s chart, and only the gateway chart renders the ConfigMap it mounts: the pod would wait for it forever (ADR-119)." .Chart.Name) }}
         {{- end }}
         checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches" "routeSwitch")) (include "commerce.configmap" .) $extra | sha256sum }}
+        {{- /* ADR-217: the name and track this pod's telemetry is filed under, which the deployed collector
+        writes over the resource attributes the sender reports, so a pod cannot report another's series. The
+        semantic conventions' own keys, which the collector's k8sattributes processor reads. */}}
+        resource.opentelemetry.io/service.name: {{ include "commerce.reportedServiceName" . | quote }}
+        resource.opentelemetry.io/deployment.track: {{ include "commerce.track" . | quote }}
     spec:
       {{- /* Nothing in this platform calls the Kubernetes API, and a mounted
       service-account token would hand a cluster credential to anything able

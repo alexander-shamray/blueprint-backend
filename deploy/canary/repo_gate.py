@@ -664,12 +664,16 @@ def _shared_values_reads(name: str, workloads: dict) -> list[str]:
     return failures
 
 
-# A chart's own `strategy:` and `observability.telemetryName`, read from its values.yaml as workload_images reads
-# `image:`, so the descriptor and the chart cannot each say something different about one release.
+# A chart's own `strategy:`, `observability.telemetryName` and `observability.serviceName`, read from its values.yaml
+# as workload_images reads `image:`, so the descriptor and the chart cannot each say something different about one
+# release.
 STRATEGY = re.compile(r"(?m)^strategy:[ \t]*(\S+)[ \t]*(?:#.*)?$")
 
 # The direct two-space child alone, the key Helm and smoke.sh read; a nested one is another key.
 TELEMETRY_NAME = re.compile(r"  telemetryName:[ \t]*(\S+)")
+# `observability.serviceName`, the host's own name, which the pod's annotation states when no telemetryName does
+# (ADR-217), read the same way.
+SERVICE_NAME = re.compile(r"  serviceName:[ \t]*(\S+)")
 
 
 def _unquoted(value: str) -> str:
@@ -677,15 +681,25 @@ def _unquoted(value: str) -> str:
     return value[1:-1] if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'" else value
 
 
-def _chart_telemetry_name(values: str) -> str | None:
-    """`observability.telemetryName` in a values file, read a line at a time: a block ends at its next top-level key."""
+def _chart_observability_key(values: str, key: re.Pattern[str]) -> str | None:
+    """A key of `observability` in a values file, read a line at a time: a block ends at its next top-level key."""
     inside = False
     for line in values.splitlines():
         if line[:1] not in ("", " ", "\t", "#"):
             inside = line.rstrip() == "observability:"
-        elif inside and (found := TELEMETRY_NAME.match(line)):
+        elif inside and (found := key.match(line)):
             return _unquoted(found.group(1))
     return None
+
+
+def _chart_telemetry_name(values: str) -> str | None:
+    """`observability.telemetryName` in a values file."""
+    return _chart_observability_key(values, TELEMETRY_NAME)
+
+
+def _chart_service_name(values: str) -> str | None:
+    """`observability.serviceName` in a values file."""
+    return _chart_observability_key(values, SERVICE_NAME)
 
 
 def _chart_values(chart: object, root: Path) -> str | None:
@@ -722,7 +736,7 @@ def _ladder_reads(name: str, entry: dict, root: Path) -> list[str]:
 
 
 def _telemetry_reads(name: str, entry: dict, root: Path) -> list[str]:
-    """Check 4 for `telemetryName`: a name, not the host's own, and the one the chart sets (ADR-153)."""
+    """Check 4 for `telemetryName` and the chart's `serviceName`: each the one the chart states (ADR-153, ADR-217)."""
     failures = []
     declared = entry.get("telemetryName")
     if "telemetryName" in entry:
@@ -739,6 +753,14 @@ def _telemetry_reads(name: str, entry: dict, root: Path) -> list[str]:
         failures.append(
             f"workloads.{name}.telemetryName is {declared!r} and its chart's observability.telemetryName is "
             f"{chart_name!r}, so the release reports a name the canary does not select by (ADR-153)"
+        )
+    host = entry.get("serviceName")
+    chart_host = _chart_service_name(values)
+    if chart_host != host:
+        failures.append(
+            f"workloads.{name}.serviceName is {host!r} and its chart's observability.serviceName is "
+            f"{chart_host!r}, so the pod's annotation names a service the collector would overwrite its "
+            "series with and the canary does not select by (ADR-217)"
         )
     return failures
 

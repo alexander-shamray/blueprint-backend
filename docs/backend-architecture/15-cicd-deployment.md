@@ -1704,7 +1704,11 @@ there is no floor to raise with it. The 19 is a property of the weight, not of
 every HPA.
 
 **The two tracks are told apart by `deployment.track`**, a resource attribute
-the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4).
+the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4). A cluster does
+not take the sender's word for it: each pod states its service name and track
+as annotations, and the deployed collector writes them over what the pod
+reports
+([ADR-217](adr/ADR-217-the-deployed-collector-files-a-pods-telemetry-under-the-service-name-and-track-its-chart-states-2166-amending-adr-022.md)).
 `service.version` is the obvious discriminator and is not one:
 [§13.2](13-observability.md)'s `BuildInfo` strips the source-revision suffix on
 purpose, and no host sets an assembly version — ADR-149's two packages set one,
