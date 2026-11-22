@@ -84,8 +84,8 @@ public sealed class S3ProductImageStore(
             MetadataDirective = S3MetadataDirective.REPLACE,
             ContentType = contentType,
 
-            // The signed URL stays valid after the read, so the copy takes only the version whose bytes were checked;
-            // a re-PUT in between is refused by the store rather than published under products/ (§10.8).
+            // The signed URL outlives the read (ProductImageUploads.UrlLifetime), so the copy takes only the version
+            // whose bytes were checked; a re-PUT in between is refused by the store rather than published.
             ETagToMatch = checkedVersion
         };
         copy.Headers.CacheControl = CacheControl;
