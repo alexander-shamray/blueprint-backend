@@ -222,6 +222,7 @@ decision looks wrong.
 | **ADR-213** | [An address part holds no control, format or separator character (#2166), amending ADR-107](adr/ADR-213-an-address-part-holds-no-control-format-or-separator-character-2166-amending-adr-107.md) |
 | **ADR-214** | [A trusted forwarding network is refused wider than a /8 (#2166), amending ADR-080](adr/ADR-214-a-trusted-forwarding-network-is-refused-wider-than-a-8-2166-amending-adr-080.md) |
 | **ADR-215** | [The object store check asks the BFF's pair to write under products/ and must be refused (#2166), amending ADR-110](adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166-amending-adr-110.md) |
+| **ADR-216** | [The visible-text rule is held in Common.Domain, and an erasure amendment's reason is held to it by the aggregate (#2166), amending ADR-084](adr/ADR-216-the-visible-text-rule-is-held-in-common-domain-and-an-erasure-amendments-reason-is-held-to-it-2166-amending-adr-084.md) |
 
 ---
 
