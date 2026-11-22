@@ -58,7 +58,8 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
     }
 
     // A carrier's label, a screen and a log line all print the address, so a line break or a bidirectional
-    // override would forge or hide part of it (ADR-213). Null and blank are NotEmpty's, the bound MaximumLength's.
+    // override would forge or hide part of it (ADR-213). Null and blank pass: NotEmpty refuses a required part, and a
+    // blank line2 is stored as none.
     private static bool BeVisibleText(string? part) =>
         string.IsNullOrWhiteSpace(part) || ThirdPartyText.Recordable(part, int.MaxValue);
 }
