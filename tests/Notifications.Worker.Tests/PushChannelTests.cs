@@ -61,6 +61,18 @@ public sealed class PushChannelTests : IClassFixture<PushSimulator>, IDisposable
     }
 
     [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    public async Task An_apns_token_that_is_a_dot_segment_is_an_invalid_token_and_sends_nothing(string token)
+    {
+        // Sent, it would reach another route, and the 4xx would count against the breaker every customer shares.
+        PushResult result = await _channel.SendAsync(PushSettings.To(ApnsPushProvider.Name, token), Ct);
+
+        result.ShouldBe(new PushResult.Refused(PushRefusal.InvalidToken));
+        _simulator.Server.LogEntries.ShouldBeEmpty();
+    }
+
+    [Theory]
     [InlineData(FcmPushProvider.Name, "rejected-1", PushFault.Rejected, 400, 1)]
     [InlineData(ApnsPushProvider.Name, "rejected-1", PushFault.Rejected, 400, 1)]
     [InlineData(FcmPushProvider.Name, "unavailable-1", PushFault.Transient, 503, 2)]

@@ -218,6 +218,7 @@ decision looks wrong.
 | **ADR-209** | [NuGet's audit warns on every restore and fails only the scheduled audit and a change that could move a package (#2010), amending ADR-019](adr/ADR-209-nugets-audit-warns-on-every-restore-and-fails-only-the-scheduled-audit-and-a-change-that-could-move-a-package-2010.md) |
 | **ADR-210** | [A red first attempt of a push run on main is rerun once, and files only when the second attempt is red too (#2018), amending ADR-155](adr/ADR-210-a-red-first-attempt-of-a-push-run-on-main-is-rerun-once-and-files-only-when-the-second-attempt-is-red-too-2018-amending-adr-155.md) |
 | **ADR-211** | [The outbox claim counts each attempt, so a row whose failure is never written still reaches the attempt cap (#2073)](adr/ADR-211-the-outbox-claim-counts-each-attempt-so-a-row-whose-failure-is-never-written-still-reaches-the-attempt-cap-2073.md) |
+| **ADR-212** | [A value spliced into an outbound path segment is never a dot segment (#2165), amending ADR-084 and ADR-117](adr/ADR-212-a-value-spliced-into-an-outbound-path-segment-is-never-a-dot-segment-2165-amending-adr-084-and-adr-117.md) |
 
 ---
 

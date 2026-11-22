@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Common.Application;
 using Microsoft.Extensions.Options;
 using Notifications.Application.Push;
 using OpenTelemetry;
@@ -49,6 +50,14 @@ internal sealed class ApnsPushProvider : IPushProvider
     public async Task<PushResult> SendAsync(OutboundPush push, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(push);
+
+        // A row registered before ADR-212 could hold one; sent, Apple's answer to another route trips the breaker
+        // every customer's push shares, so it is refused as the bad token it is, and never reaches the pipeline.
+        if (!PathSegment.Holds(push.Token))
+        {
+            _metrics.Refused(Name, PushRefusal.InvalidToken);
+            return new PushResult.Refused(PushRefusal.InvalidToken);
+        }
 
         using IDisposable unrecorded = SuppressInstrumentationScope.Begin();
 

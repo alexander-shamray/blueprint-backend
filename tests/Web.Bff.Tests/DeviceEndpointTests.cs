@@ -156,6 +156,7 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
     [InlineData("fcm", BffFactory.ApnsApp, DeviceHandle, 7, "AppId")]
     [InlineData("fcm", BffFactory.FcmApp, "has a space", 7, "Token")]
     [InlineData("fcm", BffFactory.FcmApp, "", 7, "Token")]
+    [InlineData("apns", BffFactory.ApnsApp, "..", 7, "Token")]
     [InlineData("fcm", BffFactory.FcmApp, DeviceHandle, 0, "Sequence")]
     public async Task A_malformed_registration_is_a_400_and_no_call(
         string platform,

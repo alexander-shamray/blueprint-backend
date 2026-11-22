@@ -55,11 +55,11 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
                 : throw Unavailable("The carrier refused with a body that is not a refusal.");
         }
 
-        // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away. The
-        // tracking number reaches the customer, so it is held to an alphabet that links nowhere (ADR-084).
+        // The reference is a later path segment (ADR-212). The tracking number reaches the customer, so it is held to
+        // an alphabet that links nowhere (ADR-084).
         return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking } &&
             ThirdPartyText.Recordable(reference, CarrierLimits.MaxReferenceLength) &&
-            reference is not ("." or "..") &&
+            PathSegment.Holds(reference) &&
             ThirdPartyText.Recordable(tracking, CarrierLimits.MaxTrackingNumberLength) &&
             PlainReference.IsWellFormed(tracking)
             ? new BookingResult.Booked(reference, tracking)
