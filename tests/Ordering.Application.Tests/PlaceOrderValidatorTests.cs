@@ -159,6 +159,29 @@ public class PlaceOrderValidatorTests
     }
 
     [Theory]
+    [InlineData("1 Test Street\r\nDeliver to: elsewhere", "Almaty", "050000")]
+    [InlineData("1 Test Street", "Alma\u202Ety", "050000")]
+    [InlineData("1 Test Street", "Almaty", "050\u0000000")]
+    public void An_address_part_holding_a_control_format_or_separator_character_is_refused(
+        string line1,
+        string city,
+        string postalCode)
+    {
+        PlaceOrderCommand command = WithItems(1) with { ShippingAddress = new(line1, null, city, postalCode, "KZ") };
+
+        Validator.Validate(command).IsValid.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_line2_holding_a_line_break_is_refused_and_a_plain_one_is_not()
+    {
+        Validator.Validate(WithItems(1) with { ShippingAddress = AnAddress() with { Line2 = "Flat 4\nGate" } })
+            .IsValid.ShouldBeFalse();
+        Validator.Validate(WithItems(1) with { ShippingAddress = AnAddress() with { Line2 = "Flat 4, Gate 2" } })
+            .IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
     [InlineData("EURO")]
     [InlineData("EU")]
     [InlineData("E1R")]

@@ -1,3 +1,4 @@
+using Common.Application;
 using FluentValidation;
 using Web.Bff.Persistence;
 
@@ -23,19 +24,23 @@ public sealed record SavedAddress(string Line1, string? Line2, string City, stri
 
 /// <summary>§6.4's validator, which the endpoint calls itself because this host has no command pipeline.</summary>
 /// <remarks>
-/// Presence and the shape of an alpha-2 code, and the order's own widths, and no postcode format (ADR-107).
+/// Presence, an alpha-2 code's shape, the order's widths and text rule, and no postcode format (ADR-107, ADR-213).
 /// A message names the field and never repeats its value, since an address is not an exception's text.
 /// </remarks>
 internal sealed class SavedAddressValidator : AbstractValidator<SavedAddress>
 {
     public SavedAddressValidator()
     {
-        RuleFor(x => x.Line1).NotEmpty().MaximumLength(AddressLimits.Line1MaxLength);
-        RuleFor(x => x.Line2).MaximumLength(AddressLimits.Line2MaxLength);
-        RuleFor(x => x.City).NotEmpty().MaximumLength(AddressLimits.CityMaxLength);
-        RuleFor(x => x.PostalCode).NotEmpty().MaximumLength(AddressLimits.PostalCodeMaxLength);
+        RuleFor(x => x.Line1).NotEmpty().MaximumLength(AddressLimits.Line1MaxLength).Must(BeVisibleText);
+        RuleFor(x => x.Line2).MaximumLength(AddressLimits.Line2MaxLength).Must(BeVisibleText);
+        RuleFor(x => x.City).NotEmpty().MaximumLength(AddressLimits.CityMaxLength).Must(BeVisibleText);
+        RuleFor(x => x.PostalCode).NotEmpty().MaximumLength(AddressLimits.PostalCodeMaxLength).Must(BeVisibleText);
 
         // NotEmpty first, because Matches skips null; \z, because .NET's $ matches before a trailing newline.
         RuleFor(x => x.Country).NotEmpty().Matches(@"^[A-Za-z]{2}\z");
     }
+
+    // The order's own text rule, so an address that saves is still one an order accepts (ADR-213).
+    private static bool BeVisibleText(string? part) =>
+        string.IsNullOrWhiteSpace(part) || ThirdPartyText.Recordable(part, int.MaxValue);
 }

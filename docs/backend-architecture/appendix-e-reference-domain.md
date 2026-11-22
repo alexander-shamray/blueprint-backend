@@ -1592,11 +1592,13 @@ it, or 404 with the code `address.not_found`; `DELETE` answers 204.
 
 **The address is validated by the rule an order applies and by no more.** A
 `line1`, a `city` and a `postalCode` are present, a `country` is two ASCII
-letters (ISO 3166-1 alpha-2, in either case, stored in upper case), and each
-part fits the width the order's own validator admits, so an address that saves
-is one an order accepts. A postcode's format is never checked, because no
-format is every country's. A `line2` that is blank is stored as none, and every
-part is trimmed, as an order stores an address.
+letters (ISO 3166-1 alpha-2, in either case, stored in upper case), each
+part fits the width the order's own validator admits and holds no control,
+format or separator character
+([ADR-213](adr/ADR-213-an-address-part-holds-no-control-format-or-separator-character-2166-amending-adr-107.md)),
+so an address that saves is one an order accepts. A postcode's format is
+never checked, because no format is every country's. A `line2` that is blank
+is stored as none, and every part is trimmed, as an order stores an address.
 
 **It is a prefill and an input to nothing**: placing an order still carries the
 address in the order request, and no service reads the saved one.

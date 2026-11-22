@@ -125,6 +125,8 @@ public sealed class SavedAddressEndpointTests(BffServiceFixture fixture) : IAsyn
     [InlineData("1 Test Street", "Testville", "T1", "KAZ")]
     [InlineData("1 Test Street", "Testville", "T1", "K1")]
     [InlineData("1 Test Street", "Testville", "T1", "K")]
+    [InlineData("1 Test Street\r\nDeliver to: elsewhere", "Testville", "T1", "KZ")]
+    [InlineData("1 Test Street", "Test\u202Eville", "T1", "KZ")]
     public async Task An_address_missing_a_part_or_with_a_bad_country_shape_is_refused_and_nothing_is_saved(
         string line1,
         string city,
