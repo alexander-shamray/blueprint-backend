@@ -82,12 +82,12 @@ jobs:
       - name: The check's negatives
         run: python -m unittest discover -s deploy/objectstore
 
-      # The endpoint is pinned from the Environment and not read from a
-      # release, because the pairs are sent to it (docs/secrets.md). A missing
-      # variable, a pair the store does not know, an unreachable store, a
-      # sentinel the store refuses (ADR-148) and a delete the store allows all
-      # fail the step.
-      - name: Neither credential pair can delete or list the bucket
+      # The endpoint is pinned from the Environment, not read from a release,
+      # because the pairs are sent to it (docs/secrets.md). A missing variable,
+      # an unknown pair, an unreachable store, a refused sentinel (ADR-148), an
+      # allowed delete and the BFF's pair allowed a write under products/
+      # (ADR-215) all fail the step.
+      - name: Neither credential pair can delete or list the bucket, nor the BFF's publish
         id: judge
         # A step timeout, so a hung store is a failed step and not a cancelled
         # job: `failure()` below fires on the first and not on the second.
@@ -124,7 +124,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          TITLE="The deployed object store check is red: a refused sentinel, an allowed delete or list, or an unreached store"
+          TITLE="The deployed object store check is red: a refused sentinel, an allowed delete, list or publish, or an unreached store"
           # A list as long as its limit may be cut, and a listing that cannot see
           # the open issue files a second one, so it is refused, as
           # `.claude/scripts/gh-issue-list.sh` refuses one.
@@ -139,8 +139,9 @@ jobs:
 
           The deployed store refused the sentinel the two image credential pairs
           are allowed to write and read, so the bucket is not theirs or the policy
-          lost an access; or it allows one of them a delete or a list that section
-          10.8 says it cannot; or it could not be asked at all. The run log says
+          lost an access; or it allows one of them a delete or a list, or the BFF's
+          pair a write under products/, that section 10.8 says it cannot; or it
+          could not be asked at all. The run log says
           which, per pair. The procedure is in \`deploy/objectstore/README.md\`.
 
           Filed by \`.github/workflows/object-store.yml\`. Each further red run comments
