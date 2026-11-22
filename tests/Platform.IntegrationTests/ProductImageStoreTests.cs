@@ -51,24 +51,24 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     {
         (string accessKey, string secretKey) = ObjectStoreFixture.Credentials(identity);
 
-        return new AmazonS3Client(
-            new BasicAWSCredentials(accessKey, secretKey),
-            new AmazonS3Config
-            {
-                ServiceURL = store.Endpoint.ToString(),
-                ForcePathStyle = true,
-                AuthenticationRegion = "us-east-1",
-                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
-                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
-            });
+        return new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey), Config());
     }
 
-    private S3ProductImageStore ProductService()
+    private AmazonS3Config Config() => new()
+    {
+        ServiceURL = store.Endpoint.ToString(),
+        ForcePathStyle = true,
+        AuthenticationRegion = "us-east-1",
+        RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+        ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+    };
+
+    private S3ProductImageStore ProductService(IAmazonS3? s3 = null)
     {
         (string accessKey, string secretKey) = ObjectStoreFixture.Credentials("catalog");
 
         return new S3ProductImageStore(
-            S3("catalog"),
+            s3 ?? S3("catalog"),
             Options.Create(
                 new ProductImageStoreOptions
                 {
@@ -317,6 +317,32 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     }
 
     [Fact]
+    public async Task Bytes_put_again_between_the_check_and_the_copy_are_refused_and_not_copied()
+    {
+        // The signed URL outlives the check, so a second PUT can land after the bytes were read and before the copy.
+        (Guid seller, ProductImageUpload upload) = await UploadedAsync(Png, "image/png");
+        ProductImageKeys.TryParseUploadKey(upload.Key, seller, out Guid image, out string extension).ShouldBeTrue();
+        string destination = ProductImageKeys.ProductKey(seller, image, extension);
+
+        // The same length as the PNG, since the URL signs its Content-Length.
+        byte[] forged = [.. "<html>1</html>"u8, 0, 0];
+        (string accessKey, string secretKey) = ObjectStoreFixture.Credentials("catalog");
+        using ReplacedAfterTheRead catalog = new(
+            new BasicAWSCredentials(accessKey, secretKey),
+            Config(),
+            upload,
+            forged);
+
+        (await ProductService(catalog).AttachAsync(upload.Key, destination, "image/png", Ct)).Outcome
+            .ShouldBe(ImageAttachOutcome.NotAnImage);
+
+        using AmazonS3Client reader = S3("catalog");
+        (await Should.ThrowAsync<AmazonS3Exception>(() =>
+                reader.GetObjectMetadataAsync(ObjectStoreFixture.Bucket, destination, Ct))).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task A_type_stored_other_than_the_keys_is_refused()
     {
         // A JPEG body under a key the BFF would have minted for a PNG: both halves must agree with the key.
@@ -386,6 +412,26 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
 
         (await client.GetAsync(new Uri(store.Endpoint, $"{ObjectStoreFixture.Bucket}/{upload.Key}"), Ct)).StatusCode
             .ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>The product service's client, but other bytes are PUT the moment the check's read returns.</summary>
+    private sealed class ReplacedAfterTheRead(
+        AWSCredentials credentials,
+        AmazonS3Config config,
+        ProductImageUpload upload,
+        byte[] forged) : AmazonS3Client(credentials, config)
+    {
+        public override async Task<GetObjectResponse> GetObjectAsync(
+            GetObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            GetObjectResponse response = await base.GetObjectAsync(request, cancellationToken);
+
+            using HttpResponseMessage put = await PutAsync(upload, forged);
+            put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+            return response;
+        }
     }
 
     private sealed class PastClock(DateTimeOffset now) : TimeProvider
