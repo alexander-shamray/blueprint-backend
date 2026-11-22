@@ -35,7 +35,8 @@ public sealed class PushMetrics
         _refused = meter.CreateCounter<long>(
             "notifications.push.refused",
             unit: "{push}",
-            description: "Pushes a provider refused for good; a sandbox token sent to production shows here.");
+            description: "Pushes refused for good, by the provider or, for a dot-segment APNs token, by the adapter " +
+                "before any call (ADR-212); a sandbox token sent to production shows here.");
 
         // A count of possible duplicates on a device, which the event's collapse key replaces rather than stacks.
         _resent = meter.CreateCounter<long>(
