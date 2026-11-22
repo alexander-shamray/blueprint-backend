@@ -22,7 +22,9 @@ public static class ProductErrors
     public static readonly Error ImageNotUploaded =
         Error.Rule("product.image_not_uploaded", "No image has been uploaded under that key.");
 
-    /// <summary>The bytes are not the image their declared type says they are (§10.8).</summary>
+    /// <summary>The bytes could not be verified as the image their declared type says they are (§10.8).</summary>
     public static readonly Error ImageNotAnImage =
-        Error.Rule("product.image_not_an_image", "The uploaded file is not the image its content type declares.");
+        Error.Rule(
+            "product.image_not_an_image",
+            "The uploaded file could not be verified as the image its content type declares.");
 }

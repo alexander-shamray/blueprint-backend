@@ -9,7 +9,7 @@ public enum ImageAttachOutcome
     /// <summary>Nothing sits at the source key: never uploaded, expired, or the upload was refused.</summary>
     NotUploaded,
 
-    /// <summary>The object's first bytes disagree with its stored type, or its type is not an allowed one.</summary>
+    /// <summary>The object's bytes or type disagree with its key, or it changed before the copy (E.6.11).</summary>
     NotAnImage
 }
 
