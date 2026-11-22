@@ -15,9 +15,12 @@ from the pod's two annotations (`extract.otel_annotations`, which is off by
 default), before
 [ADR-022](ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)'s copy
 of the track onto the datapoint. The delete comes first because the processor
-keeps an attribute the sender already set. A resource the collector cannot
-associate with an annotated pod therefore keeps no `deployment.track`, so no
-canary query selects its series.
+keeps an attribute the sender already set. It also deletes any `service.name`
+and `deployment.track` the sender puts on a datapoint, because ADR-022's copy
+writes the datapoint only where the resource carries a track, and a label is
+made from the datapoint's attribute whichever level set it. A resource the
+collector cannot associate with an annotated pod therefore keeps no
+`deployment.track` at either level, so no canary query selects its series.
 **Why.** ADR-022 files a series under the track the sender's
 `OTEL_RESOURCE_ATTRIBUTES` reports, and the analysis selects on that track and
 on `service_name`, both of which the sender chooses, while OTLP ingest is
@@ -34,7 +37,7 @@ one owner and a checked copy. Annotations rather than labels, because a label on
 the pod template is a selector a later change could start matching, and these
 keys are the ones the processor's `otel_annotations` reads.
 **Consequences.** The requirement on the deployed collector grows from ADR-022's
-one `transform` statement to an association by connection, a delete and an
+one `transform` statement to an association by connection, two deletes and an
 extraction, and it is still a requirement on an environment this repository does
 not contain: `smoke.sh` holds the charts to rendering the annotations, and
 nothing here can check that the collector honours them. A sender that reaches
