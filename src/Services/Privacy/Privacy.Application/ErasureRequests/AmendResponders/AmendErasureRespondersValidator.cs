@@ -1,3 +1,4 @@
+using Common.Application;
 using FluentValidation;
 using Privacy.Domain.ErasureRequests;
 
@@ -26,6 +27,15 @@ public sealed class AmendErasureRespondersValidator : AbstractValidator<AmendEra
             .NotNull()
             .Must(ErasureRequest.IsResponderName)
             .WithMessage("Each name removed is a holder's name.");
-        RuleFor(x => x.Reason).NotEmpty().MaximumLength(ErasureRequest.MaxReasonLength);
+        RuleFor(x => x.Reason)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty()
+            .MaximumLength(ErasureRequest.MaxReasonLength)
+            .Must(BeVisibleText)
+            .WithMessage("The reason holds no control, format or separator character.");
     }
+
+    // The reason is the audit trail's, read wherever an amendment is shown or logged, so a line break or a
+    // bidirectional override could forge or hide part of it: the categories ThirdPartyText refuses (ADR-084).
+    private static bool BeVisibleText(string reason) => ThirdPartyText.Recordable(reason, int.MaxValue);
 }
