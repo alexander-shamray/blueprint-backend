@@ -16,14 +16,15 @@ trims, so a customer could put a line break or a bidirectional override into
 an address that a carrier's label, a screen or a log line then prints, and
 forge or hide part of it, where a product's name has been held to the same
 rule since
-[ADR-085](ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md). The rule is the building block's already, so neither host
-spells it again.
+[ADR-085](ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md).
+The rule is the building block's already, so neither host spells it again.
 **Consequences.** An order or a saved address carrying such a character is
 refused where it was accepted, and a client sees a 400 naming the part. An
 address already stored is not rewritten. The aggregate's own guard in
 `Address.Of` is unchanged: `Ordering.Domain` cannot reference
-`Common.Application` ([§4.2](../04-solution-structure.md)), and every path to
-it passes the validator first.
+`Common.Application` ([§4.2](../04-solution-structure.md)), every new address
+reaches it through the validator, and `AddressJsonConverter` rebuilds a stored
+one through it, which keeps whatever it held before this record.
 
 ---
 

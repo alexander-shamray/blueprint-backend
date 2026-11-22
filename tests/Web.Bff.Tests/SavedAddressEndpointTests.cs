@@ -125,8 +125,6 @@ public sealed class SavedAddressEndpointTests(BffServiceFixture fixture) : IAsyn
     [InlineData("1 Test Street", "Testville", "T1", "KAZ")]
     [InlineData("1 Test Street", "Testville", "T1", "K1")]
     [InlineData("1 Test Street", "Testville", "T1", "K")]
-    [InlineData("1 Test Street\r\nDeliver to: elsewhere", "Testville", "T1", "KZ")]
-    [InlineData("1 Test Street", "Test\u202Eville", "T1", "KZ")]
     public async Task An_address_missing_a_part_or_with_a_bad_country_shape_is_refused_and_nothing_is_saved(
         string line1,
         string city,
@@ -137,6 +135,22 @@ public sealed class SavedAddressEndpointTests(BffServiceFixture fixture) : IAsyn
 
         HttpResponseMessage response =
             await client.PutAsJsonAsync(Route, new SavedAddress(line1, null, city, postalCode, country), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.SavedAddresses")).ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("1 Test Street\r\nDeliver to: elsewhere", "Testville")]
+    [InlineData("1 Test Street", "Test\u202Eville")]
+    public async Task A_part_holding_a_control_format_or_separator_character_is_refused_and_nothing_is_saved(
+        string line1,
+        string city)
+    {
+        using HttpClient client = As(_buyer);
+
+        HttpResponseMessage response =
+            await client.PutAsJsonAsync(Route, new SavedAddress(line1, null, city, "T1", "KZ"), Ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.SavedAddresses")).ShouldBe(0);
