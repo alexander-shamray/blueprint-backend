@@ -39,6 +39,9 @@ public static class AssistantEndpoints
     /// <summary>The longest client tool title, description and serialised input schema, in characters.</summary>
     public static readonly (int Title, int Description, int Schema) ToolLimits = (128, 1_000, 4_096);
 
+    /// <summary>The longest serialised turn context and host options, in characters.</summary>
+    public const int MaxObjectLength = 4_096;
+
     /// <summary>The largest body a route takes, so no field a client sends reaches a prompt unbounded.</summary>
     public const long MaxBodyBytes = 128 * 1024;
 
@@ -143,6 +146,14 @@ public static class AssistantEndpoints
 
                     if (request.Locale is { } locale && BadLocale(locale))
                         return NotValid("locale", LocaleWhy);
+
+                    // The context rides in the prompt beside the text and the host options replace the conversation's,
+                    // so each is held to the open route's rule rather than to the body limit alone.
+                    if (BadObject(request.Context))
+                        return NotValid("context", ObjectWhy("context"));
+
+                    if (BadObject(request.HostOptions))
+                        return NotValid("hostOptions", ObjectWhy("hostOptions"));
 
                     if (Spent(runtime.Spend, user) is { } spent)
                         return spent;
@@ -324,6 +335,9 @@ public static class AssistantEndpoints
         if (request.ClientTools.Count > MaxClientTools)
             return ("clientTools", $"A conversation takes at most {MaxClientTools} client tools.");
 
+        if (BadObject(request.HostOptions))
+            return ("hostOptions", ObjectWhy("hostOptions"));
+
         (int id, int label, int where, int help) = CatalogueLimits;
 
         if (request.Catalogue.Any(e => Over(e.Id, id) || Over(e.Label, label) || Over(e.Where, where) ||
@@ -336,7 +350,7 @@ public static class AssistantEndpoints
 
         return request.ClientTools.Any(t => HasControl(t.Name) || Over(t.Title, title) ||
             Over(t.Description, description) ||
-            t.InputSchema.ToJsonString().Length > schema || SchemaHasControl(t.InputSchema))
+            t.InputSchema.ToJsonString().Length > schema || JsonHasControl(t.InputSchema))
             ? ("clientTools",
                 "A client tool's name is on one line, and its title, description and input schema short, on one line.")
             : null;
@@ -350,12 +364,19 @@ public static class AssistantEndpoints
     private static bool BadLocale(string locale) =>
         string.IsNullOrWhiteSpace(locale) || locale.Length > MaxLocaleLength || HasControl(locale);
 
-    // The serialised schema escapes a line break, but the provider's model reads the string it stands for: a property's
-    // description is free text, so every name and string value in the schema meets the same rule as the other fields.
-    private static bool SchemaHasControl(JsonNode? node) => node switch
+    // An optional object a client sends: short once serialised, and holding no control character in a name or value.
+    private static bool BadObject(JsonObject? node) =>
+        node is not null && (node.ToJsonString().Length > MaxObjectLength || JsonHasControl(node));
+
+    private static string ObjectWhy(string field) =>
+        $"{field} is an object of at most {MaxObjectLength} characters, each name and value on one line.";
+
+    // The serialised JSON escapes a line break, but the provider's model reads the string it stands for: a schema's
+    // description and a context's value are free text, so every name and string value meets the other fields' rule.
+    private static bool JsonHasControl(JsonNode? node) => node switch
     {
-        JsonObject o => o.Any(p => HasControl(p.Key) || SchemaHasControl(p.Value)),
-        JsonArray a => a.Any(SchemaHasControl),
+        JsonObject o => o.Any(p => HasControl(p.Key) || JsonHasControl(p.Value)),
+        JsonArray a => a.Any(JsonHasControl),
         JsonValue v => v.TryGetValue(out string? s) && HasControl(s),
         _ => false
     };
