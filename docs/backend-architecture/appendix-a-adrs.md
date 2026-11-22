@@ -221,7 +221,7 @@ decision looks wrong.
 | **ADR-212** | [A value spliced into an outbound path segment is never a dot segment (#2165), amending ADR-084 and ADR-117](adr/ADR-212-a-value-spliced-into-an-outbound-path-segment-is-never-a-dot-segment-2165-amending-adr-084-and-adr-117.md) |
 | **ADR-213** | [An address part holds no control, format or separator character (#2166), amending ADR-107](adr/ADR-213-an-address-part-holds-no-control-format-or-separator-character-2166-amending-adr-107.md) |
 | **ADR-214** | [A trusted forwarding network is refused wider than a /8 (#2166), amending ADR-080](adr/ADR-214-a-trusted-forwarding-network-is-refused-wider-than-a-8-2166-amending-adr-080.md) |
-| **ADR-215** | [The object store check asks the BFF's pair to write under products/ and must be refused (#2166), amending ADR-110](adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166.md) |
+| **ADR-215** | [The object store check asks the BFF's pair to write under products/ and must be refused (#2166), amending ADR-110](adr/ADR-215-the-object-store-check-asks-the-bffs-pair-to-write-under-products-and-must-be-refused-2166-amending-adr-110.md) |
 
 ---
 
