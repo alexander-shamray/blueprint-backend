@@ -201,6 +201,10 @@ delivery:
 
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
+  # The host's own service.name (§13.2). The pod's annotation states it, or the
+  # telemetryName where one is set, and the deployed collector overwrites the
+  # name a sender reports with it (ADR-217).
+  serviceName: Notifications.Worker
 
 extraConfigMaps: []
 

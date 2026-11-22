@@ -993,6 +993,36 @@ done
 refuses_chart catalog 'a service name that is not one fails the render' \
     'observability.telemetryName is "web bff", which is not a service name' --set-string 'observability.telemetryName=web bff'
 
+# ADR-217: every pod states the name and track its telemetry is filed under, for the deployed collector to write
+# over what the sender reports. The name is the one the canary selects by, the descriptor's telemetry name, so it is
+# the chart's telemetryName where it states one and its serviceName elsewhere; one pair per Deployment.
+for chart in $SERVICE_CHARTS; do
+    host="$(awk '/^observability:/ { o = 1; next } /^[a-z]/ { o = 0 } o && /^  serviceName:/ { print $2 }' \
+        "$CHARTS_DIR/$chart/values.yaml")"
+    named="$(awk '/^observability:/ { o = 1; next } /^[a-z]/ { o = 0 } o && /^  telemetryName:/ { print $2 }' \
+        "$CHARTS_DIR/$chart/values.yaml")"
+    reported="${named:-$host}"
+    deployments="$(count '^kind: Deployment$' "$OUT/$chart.yaml")"
+    check "$chart states its host's service name" test -n "$host"
+    stated="$(count "^        resource.opentelemetry.io/service.name: \"$reported\"\$" "$OUT/$chart.yaml")"
+    tracked="$(count '^        resource.opentelemetry.io/deployment.track: "stable"$' "$OUT/$chart.yaml")"
+    check "$chart's pods state the service name $reported for the collector" test "$stated" -eq "$deployments"
+    check "$chart's pods state the stable track for the collector" test "$tracked" -eq "$deployments"
+done
+check 'the pods'"'"' service names were read from Deployments' \
+    test "$(count '^kind: Deployment$' "$OUT/catalog.yaml")" -gt 0
+for chart in $LADDER_CHARTS; do
+    check "$chart's canary pods state the canary track for the collector" \
+        grep -q '^        resource.opentelemetry.io/deployment.track: "canary"$' "$OUT/$chart.canary.yaml"
+    check "$chart's canary pods state no stable track" test \
+        "$(count 'resource.opentelemetry.io/deployment.track: "stable"' "$OUT/$chart.canary.yaml")" -eq 0
+done
+refuses_chart catalog 'a chart that states no host service name fails the render' \
+    'observability.serviceName is required' --set observability.serviceName=null
+refuses_chart catalog 'a host service name that is not one fails the render' \
+    'observability.serviceName is "Catalog Api", which is not a service name' \
+    --set-string 'observability.serviceName=Catalog Api'
+
 # --------------------------------------------------------------------------
 section "ADR-106's object store is a capability of the charts that sign or attach an upload, and each key is placed"
 # --------------------------------------------------------------------------

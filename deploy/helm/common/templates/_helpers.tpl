@@ -188,6 +188,19 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- end -}}
 
+{{- /* The service.name a release reports: its telemetryName, else its host's own, which the chart states as
+observability.serviceName because the host takes it from ApplicationName and the chart cannot (§13.2). The pod's
+annotation states it for the deployed collector, which overwrites what a sender reports with it (ADR-217), and
+canary.py check holds both values to the descriptor. */}}
+{{- define "commerce.reportedServiceName" -}}
+{{- $host := include "commerce.require" (list (.Values.observability).serviceName "observability.serviceName is required: it is the host's own service.name, which the pod's annotation states for the deployed collector to overwrite a reported one with (ADR-217).") }}
+{{- /* telemetryName's shape is held where commerce.config renders it. */}}
+{{- if not (regexMatch "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$" $host) }}
+{{- fail (printf "observability.serviceName is %q, which is not a service name this chart will accept: dot-separated words of letters and digits, as in Catalog.Api (ADR-217)." $host) }}
+{{- end }}
+{{- (.Values.observability).telemetryName | default $host -}}
+{{- end -}}
+
 {{- /* The non-secret half of §15.4's inventory, mounted with `envFrom`: a value
 that contains a credential is a Secret, so this half is the Config rows. */}}
 {{- define "commerce.config" -}}

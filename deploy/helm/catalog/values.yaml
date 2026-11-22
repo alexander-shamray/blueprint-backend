@@ -187,6 +187,10 @@ objectStore:
 
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
+  # The host's own service.name (§13.2). The pod's annotation states it, or the
+  # telemetryName where one is set, and the deployed collector overwrites the
+  # name a sender reports with it (ADR-217).
+  serviceName: Catalog.Api
 
 # ConfigMaps to mount beyond this chart's own. Empty for every chart but the
 # gateway, which renders a second one for the two keys no service has (§15.3).

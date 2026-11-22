@@ -1504,7 +1504,7 @@ namespace read access.
 | `Ingress__TrustedNetworks__0…n` | Config | Helm `ingress.trustedNetworks` → ConfigMap — **gateway only** | ✓ **when `Ingress__Enabled`**; CIDRs of the LB/Ingress, without which the rate limiter partitions everyone together |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Config | Helm `observability.otlpEndpoint` → ConfigMap | ✓ — **every host**. The SDK does default, which is the argument for requiring it rather than against — see above |
 | `OTEL_SERVICE_NAME` | Config | Helm `observability.telemetryName` → ConfigMap, absent on every chart but `web-bff-assistant` | ✗ — a host's release under a chart of its own reports a name of its own, which §15.5's canary tells it from the first by ([§13.2](13-observability.md), [ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)) |
-| `OTEL_RESOURCE_ATTRIBUTES` | Config | Helm — derived from `canary.enabled`, never set by hand | ✓ — **every host**, as `deployment.track=stable` or `=canary`. §15.5's rollout compares the two tracks and this is the only thing that tells them apart ([ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)) |
+| `OTEL_RESOURCE_ATTRIBUTES` | Config | Helm — derived from `canary.enabled`, never set by hand | ✓ — **every host**, as `deployment.track=stable` or `=canary`. §15.5's rollout compares the two tracks and this is what tells them apart ([ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)); in a cluster the deployed collector writes the pod's `resource.opentelemetry.io/deployment.track` annotation over it ([ADR-217](adr/ADR-217-the-deployed-collector-files-a-pods-telemetry-under-the-service-name-and-track-its-chart-states-2166-amending-adr-022.md)) |
 | Host-specific keys | Config or Secret | Helm values → ConfigMap, or External Secrets | ✓ **for the host whose code reads them**, which refuses to start without a required one — a key joins a chart when its host's code reads it ([Appendix E.9](appendix-e-reference-domain.md#e9-15-cicd-and-deployment) lists the reference domain's) |
 
 | Kind | Source | Example |
@@ -1704,7 +1704,11 @@ there is no floor to raise with it. The 19 is a property of the weight, not of
 every HPA.
 
 **The two tracks are told apart by `deployment.track`**, a resource attribute
-the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4).
+the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4). A cluster does
+not take the sender's word for it: each pod states its service name and track
+as annotations, and the deployed collector writes them over what the pod
+reports
+([ADR-217](adr/ADR-217-the-deployed-collector-files-a-pods-telemetry-under-the-service-name-and-track-its-chart-states-2166-amending-adr-022.md)).
 `service.version` is the obvious discriminator and is not one:
 [§13.2](13-observability.md)'s `BuildInfo` strips the source-revision suffix on
 purpose, and no host sets an assembly version — ADR-149's two packages set one,

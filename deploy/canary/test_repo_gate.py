@@ -971,6 +971,31 @@ class SecondReleaseTests(unittest.TestCase):
         self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(quoted))
         self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(single))
 
+    def test_every_shipped_chart_states_its_hosts_service_name(self) -> None:
+        """The gate's own subject for ADR-217: a pattern that read nothing would refuse every chart, not pass one."""
+        workloads = descriptor_model.entries(descriptor_model.load_plan()["workloads"])
+        for name, entry in workloads.items():
+            with self.subTest(workload=name):
+                values = repo_gate._chart_values(entry["chart"], descriptor_model.ROOT)
+
+                self.assertEqual(entry["serviceName"], repo_gate._chart_service_name(values))
+
+    def test_a_chart_whose_service_name_is_not_its_hosts_is_refused(self) -> None:
+        entry = {"chart": "catalog", "serviceName": "Catalog.Api"}
+        for values in ("observability:\n  serviceName: Ordering.Api\n", "observability:\n  otlp: x\n",
+                       "other:\n  serviceName: Catalog.Api\n"):
+            with self.subTest(values=values):
+                with mock.patch.object(repo_gate, "_chart_values", return_value=values):
+                    failures = repo_gate._telemetry_reads("catalog", entry, descriptor_model.ROOT)
+
+                self.assertTrue(any("observability.serviceName" in f and "ADR-217" in f for f in failures), failures)
+
+    def test_a_chart_whose_service_name_is_its_hosts_passes(self) -> None:
+        entry = {"chart": "catalog", "serviceName": "Catalog.Api"}
+        values = "observability:\n  otlpEndpoint: http://x:4317\n  serviceName: 'Catalog.Api'\nnext:\n"
+        with mock.patch.object(repo_gate, "_chart_values", return_value=values):
+            self.assertEqual([], repo_gate._telemetry_reads("catalog", entry, descriptor_model.ROOT))
+
     def test_a_quoted_recreate_is_recreate(self) -> None:
         entry = {"chart": "web-bff-assistant"}
         for stated in ('"Recreate"', "'Recreate'", '"Recreate"  # one pod'):
