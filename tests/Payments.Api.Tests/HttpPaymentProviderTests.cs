@@ -636,6 +636,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(402, "{\"status\":\"approved\",\"code\":\"card_declined\"}")]
     [InlineData(201, "not json")]
     [InlineData(201, "{\"status\":\"approved\",\"reference\":\"   \"}")]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\".\"}")]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\"..\"}")]
     [InlineData(402, "{\"status\":\"declined\",\"code\":\" \"}")]
     public async Task A_body_that_contradicts_its_status_is_unavailable_never_a_verdict(int status, string body)
     {

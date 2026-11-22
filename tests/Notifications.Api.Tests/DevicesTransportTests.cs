@@ -80,6 +80,7 @@ public sealed class DevicesTransportTests : IDisposable
     [Theory]
     [InlineData("platform")]
     [InlineData("token")]
+    [InlineData("dot-segment")]
     [InlineData("sequence")]
     public async Task A_malformed_registration_is_an_invalid_argument_that_quotes_no_value(string field)
     {
@@ -94,6 +95,9 @@ public sealed class DevicesTransportTests : IDisposable
                     break;
                 case "token":
                     request.Token = Marker + " with a space";
+                    break;
+                case "dot-segment":
+                    request.Token = "..";
                     break;
                 default:
                     request.Sequence = 0;

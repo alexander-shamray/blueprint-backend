@@ -1,3 +1,4 @@
+using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.Options;
 
@@ -32,6 +33,8 @@ internal sealed class DeviceRegistrationValidator : AbstractValidator<DeviceRegi
         RuleFor(r => r.Token)
             .Must(DeviceRules.IsPrintableAscii)
             .WithMessage("must be printable ASCII.")
+            .Must(PathSegment.Holds)
+            .WithMessage("must not be a dot segment.")
             .MaximumLength(DeviceRules.MaxTokenLength)
             .WithMessage($"must be at most {DeviceRules.MaxTokenLength} characters.");
 

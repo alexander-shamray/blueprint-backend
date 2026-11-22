@@ -48,8 +48,10 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
                 : throw Unavailable("The provider declined with a body that is not a decline.");
         }
 
+        // The reference is the void's later path segment (ADR-212).
         return answer is { Status: "approved", Reference: { } reference } &&
-            ThirdPartyText.Recordable(reference, PaymentLimits.MaxReferenceLength)
+            ThirdPartyText.Recordable(reference, PaymentLimits.MaxReferenceLength) &&
+            PathSegment.Holds(reference)
             ? new AuthorisationResult.Authorised(reference)
             : throw Unavailable("The provider approved with a body that is not an approval.");
     }

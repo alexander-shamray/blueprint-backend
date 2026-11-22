@@ -1,3 +1,4 @@
+using Common.Application;
 using FluentValidation;
 
 namespace Notifications.Application.Devices.RegisterDevice;
@@ -14,7 +15,7 @@ public sealed class RegisterDeviceValidator : AbstractValidator<RegisterDeviceCo
         RuleFor(c => c.AppId).NotEmpty().MaximumLength(DeviceLimits.MaxAppIdLength).Must(PrintableAscii.Holds)
             .WithMessage("must be printable ASCII.");
         RuleFor(c => c.Token).NotEmpty().MaximumLength(DeviceLimits.MaxTokenLength).Must(PrintableAscii.Holds)
-            .WithMessage("must be printable ASCII.");
+            .WithMessage("must be printable ASCII.").Must(PathSegment.Holds).WithMessage("must not be a dot segment.");
         RuleFor(c => c.Sequence).GreaterThan(0);
     }
 }
