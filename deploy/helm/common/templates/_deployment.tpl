@@ -55,7 +55,8 @@ spec:
         checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches" "routeSwitch")) (include "commerce.configmap" .) $extra | sha256sum }}
         {{- /* ADR-217: the name and track this pod's telemetry is filed under, which the deployed collector
         writes over the resource attributes the sender reports, so a pod cannot report another's series. The
-        semantic conventions' own keys, which the collector's k8sattributes processor reads. */}}
+        semantic conventions' own keys, which k8sattributes reads with otel_annotations on; ADR-217 says what else
+        the collector must do. */}}
         resource.opentelemetry.io/service.name: {{ include "commerce.reportedServiceName" . | quote }}
         resource.opentelemetry.io/deployment.track: {{ include "commerce.track" . | quote }}
     spec:

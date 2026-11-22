@@ -188,8 +188,6 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- end -}}
 
-{{- /* The non-secret half of §15.4's inventory, mounted with `envFrom`: a value
-that contains a credential is a Secret, so this half is the Config rows. */}}
 {{- /* The service.name a release reports: its telemetryName, else its host's own, which the chart states as
 observability.serviceName because the host takes it from ApplicationName and the chart cannot (§13.2). The pod's
 annotation states it for the deployed collector, which overwrites what a sender reports with it (ADR-217), and
@@ -203,6 +201,8 @@ canary.py check holds both values to the descriptor. */}}
 {{- (.Values.observability).telemetryName | default $host -}}
 {{- end -}}
 
+{{- /* The non-secret half of §15.4's inventory, mounted with `envFrom`: a value
+that contains a credential is a Secret, so this half is the Config rows. */}}
 {{- define "commerce.config" -}}
 {{- /* §15.5's canary needs the tracks distinguishable in telemetry. The SDK's own
 OTEL_RESOURCE_ATTRIBUTES adds the attribute without Common.Web knowing the
