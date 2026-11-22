@@ -1648,8 +1648,10 @@ One out of order answers 409 with the `code` `device.stale_sequence` and a
 **The BFF refuses a malformed request before the hop**, with 400: a platform
 outside the pair,
 an app id that `PushOptions.Apps` does not name for that platform, a token
-that is empty, longer than `DeviceRules.MaxTokenLength` or outside printable
-ASCII, and a sequence of zero or below. A sequence that does not bind as an
+that is empty, longer than `DeviceRules.MaxTokenLength`, outside printable
+ASCII or a dot segment
+([ADR-212](adr/ADR-212-a-value-spliced-into-an-outbound-path-segment-is-never-a-dot-segment-2165-amending-adr-084-and-adr-117.md)),
+and a sequence of zero or below. A sequence that does not bind as an
 integer, or a `DELETE` with none, is §10.5's unreadable-request 400 instead.
 `PushOptions` is bound from the `Push` section, and an empty list is a
 deployment that sends no push and refuses every registration.
