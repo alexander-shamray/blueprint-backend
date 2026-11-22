@@ -336,10 +336,10 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
         (await ProductService(catalog).AttachAsync(upload.Key, destination, "image/png", Ct)).Outcome
             .ShouldBe(ImageAttachOutcome.NotAnImage);
 
-        using AmazonS3Client reader = S3("catalog");
-        (await Should.ThrowAsync<AmazonS3Exception>(() =>
-                reader.GetObjectMetadataAsync(ObjectStoreFixture.Bucket, destination, Ct))).StatusCode
-            .ShouldBe(HttpStatusCode.NotFound);
+        // Read through the edge, since neither pair may list and so the store answers a missing key 403, not 404.
+        using HttpClient client = new();
+        using HttpResponseMessage served = await client.GetAsync($"{store.PublicBase.AbsoluteUri}{destination}", Ct);
+        served.StatusCode.ShouldNotBe(HttpStatusCode.OK, "nothing was published under products/");
     }
 
     [Fact]
