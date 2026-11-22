@@ -220,7 +220,12 @@ before anything else:
   not a wait at all: `notifications.push.refused` by `reason` counts the
   deliveries ended `unregistered` or `invalid_token`, and a burst of
   `invalid_token` across one platform is a deployment sending to the wrong
-  sender or environment rather than devices going away. With the provider
+  sender or environment rather than devices going away. An APNs row whose
+  token is `.` or `..` is counted `invalid_token` too, refused by the adapter
+  without a call
+  ([ADR-212](../backend-architecture/adr/ADR-212-a-value-spliced-into-an-outbound-path-segment-is-never-a-dot-segment-2165-amending-adr-084-and-adr-117.md)),
+  and only a row registered before that record holds one, so it is a steady
+  trickle from a few devices, never a burst. With the provider
   healthy, the step also counts a delivery this version cannot render: the
   worker's line "renders parameters this version cannot read" names it.
 
