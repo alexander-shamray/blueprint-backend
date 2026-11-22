@@ -1100,9 +1100,9 @@ jobs:
 
       # A sighting is a flake that did not fail, so it goes where flakes are counted,
       # the flaky tests tracker (docs/harness/working-rules.md, CI), named by its file.
-      # A pull request's code writes it (ADR-197), so the name keeps a filename's
-      # characters, the body sits in a fence longer than its longest backtick run,
-      # where a mention stays inert, and one run posts at most ten.
+      # A pull request's code writes it (ADR-197): the name keeps a filename's characters,
+      # the body sits in a fence longer than its longest backtick run (counted bytewise; 16
+      # or more become quotes), where a mention stays inert, and a run posts at most ten.
       - name: "Post the sightings on #1406"
         continue-on-error: true
         run: |
@@ -1116,7 +1116,11 @@ jobs:
             shard=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
             name=$(basename "$f" .txt | tr -cd 'A-Za-z0-9._-' | head -c 128)
             head -c 60000 "$f" > sighting.txt
-            longest=$({ grep -o '`*' sighting.txt || true; } | awk '{ if (length > n) n = length } END { print n + 0 }')
+            longest=$(tr -c '`' '\n' < sighting.txt | LC_ALL=C awk '{ if (length > n) n = length } END { print n + 0 }')
+            if [ "$longest" -ge 16 ]; then
+              tr '`' "'" < sighting.txt > quoted.txt && mv quoted.txt sighting.txt
+              longest=0
+            fi
             fence=$(printf '%*s' "$(( longest < 3 ? 3 : longest + 1 ))" '' | tr ' ' '`')
             {
               echo "A passing run saw ${name}. Run $RUN_URL, shard ${shard#sightings-}, ref $REF_NAME."
@@ -1126,7 +1130,7 @@ jobs:
               echo
               echo "$fence"
             } > body.md
-            gh issue comment 1406 --body-file body.md
+            gh issue comment 1406 --body-file body.md || echo "::warning::the sighting ${name} was not posted"
             posted=$((posted + 1))
           done
 
@@ -1137,7 +1141,7 @@ jobs:
           for f in retries/warm-up-retry-*/warm-up-retry.txt; do
             # A step outcome is one of four words, so anything else is named as such.
             shard=$(basename "$(dirname "$f")" | tr -cd 'A-Za-z0-9._-' | head -c 64)
-            outcome=$(head -n 1 "$f" | head -c 16)
+            outcome=$(head -c 16 "$f" | head -n 1)
             case "$outcome" in
               success|failure|cancelled|skipped) ;;
               *) outcome='not one a step reports' ;;
