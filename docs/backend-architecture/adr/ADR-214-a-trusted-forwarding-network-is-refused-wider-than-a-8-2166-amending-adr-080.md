@@ -21,10 +21,14 @@ a rule that enumerates spellings of every address loses to a generator of
 them, as ADR-080 argues, so the bound is the same prefix length.
 **Consequences.** An overlay naming a network wider than a /8 fails the
 render, and a host configured past the chart refuses to start, each naming
-the key. `10.0.0.0/8` and `fd00::/8` are still trusted. The floor bounds each
-entry and not the list, for ADR-080's reason: enough /8 blocks still cover
-every address, and nothing refuses them. The chart still refuses IPv6 entries
-outright, so the IPv6 half of the floor is the host's alone.
+the key. `10.0.0.0/8` and `fd00::/8` are still trusted. The gateway's
+dual-mode listener sees an IPv4 client as an IPv4-mapped IPv6 address, so an
+IPv6 entry reaching `::ffff:0:0/96` is held to a /8 of IPv4 inside it, a /104:
+`::ffff:0:0/96` and `::/80` would otherwise trust every IPv4 client again. The
+floor bounds each entry and not the list, for ADR-080's reason: enough /8
+blocks still cover every address, and nothing refuses them. The chart still
+refuses IPv6 entries outright, so the IPv6 half of the floor is the host's
+alone.
 
 ---
 
