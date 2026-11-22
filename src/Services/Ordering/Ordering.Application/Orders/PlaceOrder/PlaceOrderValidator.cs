@@ -1,3 +1,4 @@
+using Common.Application;
 using Common.Contracts.Ordering.V1;
 using FluentValidation;
 
@@ -47,12 +48,17 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
             x => x.ShippingAddress is not null,
             () =>
             {
-                RuleFor(x => x.ShippingAddress.Line1).NotEmpty().MaximumLength(200);
-                RuleFor(x => x.ShippingAddress.Line2).MaximumLength(200);
-                RuleFor(x => x.ShippingAddress.City).NotEmpty().MaximumLength(100);
-                RuleFor(x => x.ShippingAddress.PostalCode).NotEmpty().MaximumLength(20);
+                RuleFor(x => x.ShippingAddress.Line1).NotEmpty().MaximumLength(200).Must(BeVisibleText);
+                RuleFor(x => x.ShippingAddress.Line2).MaximumLength(200).Must(BeVisibleText);
+                RuleFor(x => x.ShippingAddress.City).NotEmpty().MaximumLength(100).Must(BeVisibleText);
+                RuleFor(x => x.ShippingAddress.PostalCode).NotEmpty().MaximumLength(20).Must(BeVisibleText);
 
                 RuleFor(x => x.ShippingAddress.Country).NotEmpty().Matches(@"^[A-Za-z]{2}\z");
             });
     }
+
+    // A carrier's label, a screen and a log line all print the address, so a line break or a bidirectional
+    // override would forge or hide part of it (ADR-213). Null and blank are NotEmpty's, the bound MaximumLength's.
+    private static bool BeVisibleText(string? part) =>
+        string.IsNullOrWhiteSpace(part) || ThirdPartyText.Recordable(part, int.MaxValue);
 }
