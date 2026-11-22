@@ -267,9 +267,10 @@ promoted only when each thing it does was observed doing it.
   ADR-022; nothing here can check it, because the cluster's collector is not in
   this repository. Nor can it check ADR-217's: that the deployed collector
   overwrites the `service.name` and `deployment.track` a sender reports with
-  its pod's annotations, and deletes any the sender puts on a datapoint,
-  without which any pod with telemetry egress can report another service's
-  canary.
+  its pod's annotations, and, before ADR-022's copy, deletes every datapoint
+  attribute whose name escapes to the `service_name` or `deployment_track`
+  label. Without both, any pod with telemetry egress can report another
+  service's canary.
 
 ## The two things worth knowing before reading the code
 

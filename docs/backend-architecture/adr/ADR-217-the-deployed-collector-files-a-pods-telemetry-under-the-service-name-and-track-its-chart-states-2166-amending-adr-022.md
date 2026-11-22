@@ -15,12 +15,15 @@ from the pod's two annotations (`extract.otel_annotations`, which is off by
 default), before
 [ADR-022](ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)'s copy
 of the track onto the datapoint. The delete comes first because the processor
-keeps an attribute the sender already set. It also deletes any `service.name`
-and `deployment.track` the sender puts on a datapoint, because ADR-022's copy
-writes the datapoint only where the resource carries a track, and a label is
-made from the datapoint's attribute whichever level set it. A resource the
-collector cannot associate with an annotated pod therefore keeps no
-`deployment.track` at either level, so no canary query selects its series.
+keeps an attribute the sender already set. Before that copy too, it deletes
+every datapoint attribute whose name the OTLP-to-Prometheus mapping escapes to
+`service_name` or `deployment_track` (`deployment.track` and `deployment_track`
+among them), the two labels the analysis selects on. ADR-022's copy writes the
+datapoint only where the resource carries a track, a label is made from a
+datapoint's attribute whichever process set it, and a delete after the copy
+would remove the copied track and roll back every rung. A resource the collector
+cannot associate with an annotated pod therefore keeps no `deployment.track` at
+either level, so no canary query selects its series.
 **Why.** ADR-022 files a series under the track the sender's
 `OTEL_RESOURCE_ATTRIBUTES` reports, and the analysis selects on that track and
 on `service_name`, both of which the sender chooses, while OTLP ingest is
