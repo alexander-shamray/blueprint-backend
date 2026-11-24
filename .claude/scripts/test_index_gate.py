@@ -40,6 +40,14 @@ def python_312():
     return False
 
 
+def setUpModule():
+    # Not a skip: each is a stated prerequisite, and a skip on a missing tool reports a pass.
+    missing = [name for name, found in (("bash", _bash()), ("git", shutil.which("git")),
+                                        ("Python 3.12", python_312())) if not found]
+    if missing:
+        raise RuntimeError(f"the gate is run, not described, and this host lacks {', '.join(missing)}")
+
+
 def link_directory(link, destination):
     """A directory link, by whichever primitive this platform grants. Only a
     host that grants none skips: any other error, a missing parent above all,
@@ -75,8 +83,6 @@ class OnlyAHostThatGrantsNoLinkSkips(unittest.TestCase):
             self.attempt(FileNotFoundError(errno.ENOENT, "no parent"))
 
 
-@unittest.skipUnless(_bash() and shutil.which("git") and python_312(),
-                     "the gate needs bash, git and Python 3.12")
 class TheCliIsNotStartedOverAnIndexTheHookRefuses(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory()
@@ -145,6 +151,9 @@ class TheCliIsNotStartedOverAnIndexTheHookRefuses(unittest.TestCase):
 
     def test_a_git_that_fails_or_stalls_is_a_refusal_not_a_checkout_left_alone(self):
         # Only git's own "not a git repository" answer means no checkout; a dead or stalled git has said nothing.
+        # `main` sets a variable and a `sys` flag for the process it ends; here that process is the suite's.
+        self.enterContext(mock.patch.dict(os.environ))
+        self.enterContext(mock.patch.object(sys, "dont_write_bytecode", sys.dont_write_bytecode))
         spec = importlib.util.spec_from_file_location("gate_index_under_test", GATE)
         gate = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(gate)

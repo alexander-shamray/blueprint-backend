@@ -20,6 +20,7 @@ SCRIPTS = Path(__file__).resolve().parent
 CBX = SCRIPTS.parent / "skills" / "codebase-index" / "scripts" / "cbx"
 CBX_PS1 = CBX.with_suffix(".ps1")
 SKILL = SCRIPTS.parent / "skills" / "codebase-index"
+ROOT = SCRIPTS.parents[1]
 NO_CWD_SEARCH = "NoDefaultCurrentDirectoryInExePath"
 # The variables a wrapper sets for what it starts; Windows spells an environment name in any case.
 WRAPPER_VARS = {"PYTHONSAFEPATH", "CBX_NO_SKILL_AUTO_UPDATE", NO_CWD_SEARCH.upper()}
@@ -42,8 +43,13 @@ def _bash():
         return str(git)
     found = shutil.which("bash")
     if not found:
-        raise unittest.SkipTest("bash is not on PATH")
+        # Not a skip: bash is a stated prerequisite, and a skip on a missing tool reports a pass.
+        raise RuntimeError("bash is not on PATH, and the wrapper's refusals are run, not described")
     return found
+
+
+def setUpModule():
+    _bash()
 
 
 def _powershell():
@@ -484,6 +490,26 @@ class CbxWrapper(unittest.TestCase):
                 found = UNPINNED_CLI.search(path.read_text(encoding="utf-8"))
                 self.assertIsNone(found, f"{path.name} teaches the unpinned CLI: {found and found.group(0)!r}")
 
+    @staticmethod
+    def _command_markdown():
+        return sorted([*(ROOT / ".claude" / "commands").glob("*.md"), *(ROOT / "docs" / "commands").glob("*.md")])
+
+    def test_command_markdown_does_not_teach_or_grant_the_unpinned_cli(self):
+        # A command can grant the bare CLI in its frontmatter `allowed-tools`, as `Bash(codebase-index
+        # diff-impact:*)`, and tell a step to run it, and its argument under `docs/commands/` can say the same; the
+        # bare CLI never reaches `gate-index.py`. The whole file is read, frontmatter included.
+        for path in self._command_markdown():
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                found = UNPINNED_CLI.search(path.read_text(encoding="utf-8"))
+                self.assertIsNone(found, f"{path.name} teaches the unpinned CLI: {found and found.group(0)!r}")
+
+    def test_the_command_scan_reads_more_than_the_skill(self):
+        # The positive control for the case above: a glob that found nothing would pass it.
+        read = {path.relative_to(ROOT).as_posix() for path in self._command_markdown()}
+        self.assertIn(".claude/commands/ship.md", read)
+        self.assertIn("docs/commands/ship.md", read)
+        self.assertFalse(any(name.startswith(".claude/skills/") for name in read))
+
     def test_the_skill_teaches_the_wrapper_instead(self):
         # The positive control for the case above: it passes against a skill that teaches nothing at all.
         skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
@@ -496,7 +522,7 @@ class CbxWrapper(unittest.TestCase):
                      "x codebase-index  graph", "$ codebase-index doctor", "codebase-index mcp",
                      "`codebase-index clean`", "codebase-index init .", "run codebase-index watch",
                      '"codebase-index search X"', "'codebase-index verify'", "(codebase-index refs X)",
-                     "$(codebase-index impact X)"):
+                     "$(codebase-index impact X)", "allowed-tools: Bash(codebase-index diff-impact:*)"):
             with self.subTest(text=text):
                 self.assertIsNotNone(UNPINNED_CLI.search(text))
         for text in ("the `codebase-index` package", "pip install codebase-index", "skills/codebase-index/scripts/cbx",

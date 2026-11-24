@@ -9,6 +9,12 @@ set -u
 HINT_BOUND_SECONDS="${HINT_BOUND_SECONDS:-10}"
 event="${1:?event}"
 export HINT_HOOK="${2:?hook}"
+# A closed set, as index-hook.sh's: the name reaches runpy.run_path under .claude/hooks/, so `../x.py` would run any
+# file. Exit 0, as on every other path here.
+case "$HINT_HOOK" in
+  index-search-hint.py|index-query-hint.py) ;;
+  *) echo "hint-bound.sh: not a hook this launcher runs: $HINT_HOOK" >&2; exit 0 ;;
+esac
 # A file, not a substitution: a launcher's orphaned child would hold a pipe open and keep this waiting.
 out="$(mktemp)"
 trap 'rm -f "$out"' EXIT

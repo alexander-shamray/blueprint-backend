@@ -53,7 +53,8 @@ fi
 # reflog that has expired the entry, or was never kept, fails closed.
 held=$(git reflog show --format=%H "refs/heads/$branch" --) ||
   { echo "cannot read the reflog of $branch, so whether origin carries work it lacks is unknown" >&2; exit 7; }
-printf '%s\n' "$held" | grep -qxF -- "$lease" ||
+# Matched in bash, not by a pipe into `grep -q`: under pipefail its early exit fails a long reflog's writer.
+case $'\n'"$held"$'\n' in *$'\n'"$lease"$'\n'*) false ;; *) true ;; esac &&
   { echo "origin/$branch is at $lease, a commit this checkout's $branch has never been at:" >&2
     echo "it carries work from elsewhere. Look before publishing over it; where $branch already" >&2
     echo "contains it, a plain 'git push origin $branch' needs no force" >&2
