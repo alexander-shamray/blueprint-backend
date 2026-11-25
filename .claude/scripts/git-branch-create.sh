@@ -32,8 +32,12 @@ case "$(printf %s "$branch" | tr '[:upper:]' '[:lower:]')" in
 esac
 # Creation only: a name that already exists is refused, as the fork helper does,
 # rather than reset, so no caller can reach -B/-B-like behaviour through here.
-! git show-ref --verify --quiet "refs/heads/$branch" ||
-  { echo "branch already exists: $branch" >&2; exit 3; }
+# Folded, as `main` is above: a case-exact check misses `Feat/X` beside a packed `feat/x`, whose loose ref then moves
+# it on a case-insensitive filesystem. In bash, not a grep on a pipe (`docs/harness/pitfalls.md`, `pipefail`).
+wanted=$(printf %s "refs/heads/$branch" | tr '[:upper:]' '[:lower:]')
+heads=$(git for-each-ref --format='%(refname)' refs/heads/ | tr '[:upper:]' '[:lower:]')
+[[ $'\n'"$heads"$'\n' != *$'\n'"$wanted"$'\n'* ]] ||
+  { echo "branch already exists: $branch, or a spelling of it that differs only in case" >&2; exit 3; }
 case "$base" in
   origin/main)
     git show-ref --verify --quiet refs/remotes/origin/main ||

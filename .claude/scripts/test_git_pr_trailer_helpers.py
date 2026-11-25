@@ -159,6 +159,22 @@ class TrailerHelper(Fixture):
         out = self.run_helper(TRAILER)
         self.assertEqual(4, out.returncode, out.stderr)
 
+    def test_a_remote_with_the_same_trees_under_another_message_or_author_refuses(self):
+        # Equal trees are not equal commits: the lease would replace origin's message or author with the local one.
+        for change in (("--message", "docs: two, reworded"), ("--author", "Other <other@example.com>"),
+                       ("--message", "docs: two\n\nPR: #99")):
+            with self.subTest(change=change):
+                self.git("checkout", "-q", "main")
+                self.git("branch", "-q", "-D", "feat/x", check=False)
+                self.git("push", "-q", "origin", "--delete", "feat/x", check=False)
+                self.two_commit_branch()
+                self.git("commit", "-q", "--amend", "--no-edit", *change)
+                remote = self.git("rev-parse", "origin/feat/x")
+                out = self.run_helper(TRAILER)
+                self.assertEqual(4, out.returncode, out.stderr)
+                self.assertIn("push or pull first", out.stderr)
+                self.assertEqual(remote, self.git("ls-remote", "origin", "feat/x").split()[0])
+
     def test_a_second_run_changes_nothing_and_publishes_nothing(self):
         self.two_commit_branch()
         self.assertEqual(0, self.run_helper(TRAILER).returncode)
@@ -406,6 +422,20 @@ class RevertHelper(Fixture):
         self.assertEqual(["#5", "#5"], trailers)
         self.assertEqual("", self.git("ls-files", "c.txt"))
         self.assertEqual("b", self.git("show", "HEAD:b.txt"))
+
+    def test_a_narrowed_fetch_refspec_still_reads_main_as_origin_holds_it(self):
+        # Under a refspec that maps no main, a bare fetch writes FETCH_HEAD alone and leaves origin/main where it was.
+        self.land("a", 5)
+        stale = self.git("rev-parse", "HEAD")
+        self.land("c", 5)
+        self.git("update-ref", "refs/remotes/origin/main", stale)
+        self.git("config", "remote.origin.fetch", "+refs/heads/other:refs/remotes/origin/other")
+        self.git("checkout", "-q", "-b", "chore/undo")
+        out = self.run_helper(REVERT, pr="5")
+        self.assertEqual(0, out.returncode, out.stderr)
+        self.assertIn("reverted 2 commit(s) of #5", out.stdout)
+        subjects = self.git("log", "--format=%s", "main..HEAD").splitlines()
+        self.assertEqual(['Revert "docs: a"', 'Revert "docs: c"'], subjects)
 
     def test_a_pull_request_with_no_commits_refuses(self):
         self.land("a", 5)

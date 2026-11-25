@@ -18,12 +18,25 @@ from unittest import mock
 import dispatch_board as db
 import dispatch_run as dr
 from test_dispatch_board import FIXTURE, OWNED, NO_BRANCH, REMAINING_ROWS, line, stub, tasks_of
+from test_link_skips import skip_only_without_links
 
 # The run half: a run directory under a scratch root the test changes into, as the dispatcher runs from the
 # main checkout.
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 RUN = "20261101-220000"
+# A dispatched executor runs this suite too, and its marker would refuse every `tasks --run` written here.
+_ENVIRONMENT = mock.patch.dict(os.environ)
+
+
+def setUpModule():
+    _ENVIRONMENT.start()
+    os.environ.pop(db.DISPATCHED, None)
+
+
+def tearDownModule():
+    _ENVIRONMENT.stop()
+
 NOW = datetime(2026, 11, 1, 22, 0, tzinfo=timezone.utc)
 OID = "89994113e5f0c1d2a3b4c5d6e7f8091a2b3c4d5e"
 OTHER_OID = "d84f1368f0000000000000000000000000000000"
@@ -151,9 +164,15 @@ def run_fake_claude(stdout=b"{}", code=0, description="Narrow the RabbitMQ read 
     return json.loads((state_dir() / "S1.session.json").read_text(encoding="utf-8"))
 
 
+# Every reaped child stays referenced for the run: on Windows its Popen holds the process handle, and while that is
+# open the pid cannot be reused, so `alive()` reads the dead child rather than whatever took its number.
+_REAPED = []
+
+
 def finished_pid():
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child = subprocess.Popen([sys.executable, "-P", "-c", "pass"])
     child.wait()
+    _REAPED.append(child)
     return child.pid
 
 
@@ -205,6 +224,13 @@ class PathWhichTests(InRoot):
             with self.assertRaises(db.Refusal) as caught:
                 db.git(str(self.root), "status")
             self.assertEqual("no git on PATH", str(caught.exception))
+            with self.assertRaisesRegex(db.Refusal, "^no Git bash found beside the git on PATH$"):
+                db.git_bash()
+
+    def test_no_git_on_path_is_refused_on_windows_before_any_walk_for_bash(self):
+        # With no git, `_bash_beside("")` walked up from the working directory, which the checkout controls.
+        with mock.patch.object(db.os, "name", "nt"), mock.patch.object(db, "path_which", return_value=None), \
+                mock.patch.object(db, "_bash_beside", side_effect=AssertionError("walked")):
             with self.assertRaisesRegex(db.Refusal, "^no Git bash found beside the git on PATH$"):
                 db.git_bash()
 
@@ -724,7 +750,7 @@ class LaunchTests(InRoot):
         def refuse(path, text):
             raise dr.Refusal("pid file refused")
 
-        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "pass"]), \
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-P", "-c", "pass"]), \
                 mock.patch.object(dr, "_write", refuse):
             self.assertIn("refused: pid file refused", run_cli(["run", RUN, "S1"]))
         self.assertEqual([], list((self.root / "system-temp").iterdir()))
@@ -746,7 +772,7 @@ class LaunchTests(InRoot):
         blocker.write_text("a file where the temp root goes", encoding="utf-8")
         task_text()
         with mock.patch.object(dr, "TEMP_ROOT", str(blocker.resolve())), \
-                mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "print('{}')"]):
+                mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-P", "-c", "print('{}')"]):
             self.assertIn("refused: could not create the executor's temp directory", run_cli(["run", RUN, "S1"]))
         self.assertFalse((state_dir() / "S1.pid").exists())
         self.assertTrue((state_dir() / "S1.refused.json").is_file())
@@ -833,6 +859,38 @@ class ResultTests(unittest.TestCase):
             path.write_text(json.dumps(MERGED_S1), encoding="utf-8")
             self.assertIsInstance(dr.load_result(path, "S1", [1682, 1683]), dr.Result)
         self.assertEqual("relaunch", dr.classify(end(exit_code=1, is_error=True), None, 0, NOW))
+
+    def test_a_link_a_fifo_or_an_oversized_file_is_refused_unread(self):
+        # The executor writes these files; a link would copy what it points at, a FIFO hang the read, a huge file fill
+        # memory, so each is refused before or while it is opened, never read through.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside.json"
+            outside.write_text(json.dumps(MERGED_S1), encoding="utf-8")
+            link = Path(tmp) / "S1.json"
+            try:
+                os.symlink(outside, link)
+            except (OSError, NotImplementedError) as refused:
+                skip_only_without_links(refused, "symbolic link")
+            got = dr.load_result(link, "S1", [1682, 1683])
+            self.assertIsInstance(got, dr.Invalid)
+            self.assertIn("is a link", got.why)
+            for read in (dr._sha256, dr._bounded_text):
+                with self.subTest(read=read.__name__), self.assertRaisesRegex(db.Refusal, "is a link"):
+                    read(link)
+            big = Path(tmp) / "big.json"
+            big.write_bytes(b" " * (dr.RESULT_CAP + 1))
+            self.assertEqual(dr.Invalid(f"larger than {dr.RESULT_CAP} bytes"), dr.load_result(big, "S1", [1682]))
+            for read in (dr._sha256, dr._bounded_text):
+                with self.subTest(read=read.__name__), self.assertRaisesRegex(db.Refusal, "larger than"):
+                    read(big)
+            if hasattr(os, "mkfifo"):
+                fifo = Path(tmp) / "fifo.json"
+                os.mkfifo(fifo)
+                got = dr.load_result(fifo, "S1", [1682, 1683])
+                self.assertEqual(dr.Invalid("fifo.json is not a regular file"), got)
+                for read in (dr._sha256, dr._bounded_text):
+                    with self.subTest(read=read.__name__), self.assertRaisesRegex(db.Refusal, "not a regular file"):
+                        read(fifo)
 
     def test_a_result_for_another_group_is_no_result(self):
         for change in ({"group": "S2"}, {"issues": [1682]},
@@ -1108,6 +1166,43 @@ class ResultCommandTests(InRoot):
         other = {**HANDED_S1, "reason": "the run directory's"}
         self.assertEqual("S1: merged-claimed pr #1690", self.absorb(MERGED_S1, in_run_directory=other)[0])
         self.assertEqual(MERGED_S1, json.loads((state_dir() / "S1.json").read_text(encoding="utf-8")))
+
+    def test_a_result_the_executor_left_as_a_link_is_not_copied_through_it(self):
+        outside = self.root / "outside.json"
+        outside.write_text(json.dumps(MERGED_S1), encoding="utf-8")
+        self.absorb(None)
+        target = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
+        try:
+            os.symlink(outside, target)
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE, crashes=0)
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 0, "started": (NOW + timedelta(minutes=1)).isoformat(), "ended": NOW.isoformat(),
+             "stdout": json.dumps(SUCCESS), "stderr": ""}), encoding="utf-8")
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            lines = run_cli(["result", RUN, "S1"]).splitlines()
+        self.assertFalse(lines[0].startswith("S1: merged-claimed"), lines)
+        self.assertFalse((state_dir() / "S1.json").exists(), "nothing was copied through the link")
+
+    def test_a_link_at_the_copys_name_is_replaced_not_written_through(self):
+        outside = self.root / "outside.json"
+        outside.write_text("untouched", encoding="utf-8")
+        self.absorb(None)
+        record(RUN, "S1", status="running", branch=BRANCH, worktree=WORKTREE, crashes=0)
+        target = Path(WORKTREE) / "artifacts" / "dispatch" / RUN / "S1.json"
+        target.write_text(json.dumps(MERGED_S1), encoding="utf-8")
+        try:
+            os.symlink(outside, state_dir() / "S1.json")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 0, "started": (NOW + timedelta(minutes=1)).isoformat(), "ended": NOW.isoformat(),
+             "stdout": json.dumps(SUCCESS), "stderr": ""}), encoding="utf-8")
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            self.assertEqual("S1: merged-claimed pr #1690", run_cli(["result", RUN, "S1"]).splitlines()[0])
+        self.assertEqual("untouched", outside.read_text(encoding="utf-8"))
+        self.assertFalse((state_dir() / "S1.json").is_symlink())
 
     def test_usage_sums_every_session_the_group_ran(self):
         earlier = {"input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 50}
@@ -1783,7 +1878,7 @@ class WakeTests(InRoot):
                          [self.wake()[i] for i in (1, 3, 4, 5)])
         self.assertIn("relaunch S9", run_cli(["resume", RUN]))
         task_text("S9")
-        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-c", "print('{}')"]):
+        with mock.patch.object(dr, "CLAUDE_COMMAND", [sys.executable, "-P", "-c", "print('{}')"]):
             self.assertEqual("", run_cli(["run", RUN, "S9"]))
         self.assertTrue((state_dir() / "S9.session.json").is_file())
         self.assertIn("S9: relaunch - no result; exit 0", run_cli(["result", RUN, "S9"]))
@@ -1999,7 +2094,7 @@ class WakeTests(InRoot):
             real_unlink(path, missing_ok=missing_ok)
         cases = {"no claude on PATH": (None, mock.patch.object(dr, "path_which", lambda _: None),
                                        "no claude on PATH"),
-                 "a stale file it cannot remove": ([sys.executable, "-c", "pass"],
+                 "a stale file it cannot remove": ([sys.executable, "-P", "-c", "pass"],
                                                    mock.patch.object(Path, "unlink", locked),
                                                    "could not remove the stale")}
         for name, (claude, patch, why) in cases.items():
@@ -2372,6 +2467,29 @@ class TranscriptTests(unittest.TestCase):
                 with mock.patch.object(dr, "_created", lambda path: created[Path(path).name]):
                     self.assertEqual(str(folder / "new.jsonl"), dr.transcript_path(worktree, None, 200.0))
                     self.assertIsNone(dr.transcript_path(worktree, None, 250.0))
+                # A file not dated, or gone before its stat, is passed over and the rest still answer.
+                created["old.jsonl"] = None
+                with mock.patch.object(dr, "_created", lambda path: created[Path(path).name]):
+                    self.assertEqual(str(folder / "new.jsonl"), dr.transcript_path(worktree, None, 0.0))
+
+    def test_a_transcript_is_dated_by_its_first_entry_where_no_creation_time_is_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "a.jsonl")
+            path.write_text('{"type": "summary"}\n{"timestamp": "1970-01-01T00:01:40Z"}\n'
+                            '{"timestamp": "2026-01-01T00:00:00Z"}\n', encoding="utf-8")
+            # The change time a later append moved, which is all Linux and macOS keep beside the content.
+            stat = mock.Mock(spec=["st_ctime"], st_ctime=9e9)
+            with mock.patch.object(dr.os, "stat", return_value=stat):
+                with mock.patch.object(dr.os, "name", "posix"):
+                    self.assertEqual(100.0, dr._created(path))
+                with mock.patch.object(dr.os, "name", "nt"):
+                    self.assertEqual(9e9, dr._created(path))
+            born = mock.Mock(spec=["st_ctime", "st_birthtime"], st_ctime=9e9, st_birthtime=50.0)
+            with mock.patch.object(dr.os, "stat", return_value=born):
+                self.assertEqual(50.0, dr._created(path))
+            path.write_text("", encoding="utf-8")
+            self.assertIsNone(dr._first_entry_time(path))
+            self.assertIsNone(dr._created(Path(tmp, "gone.jsonl")))
 
 
 class StrangersIssues(InRoot):
@@ -2469,6 +2587,340 @@ class TaskTextIsAFile(InRoot):
     def test_the_flag_is_gone(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             db.main(["run", RUN, "S1", "--description", "x"])
+
+
+RESUMED_TREE = ".claude/worktrees/game-day"
+RESUMED_BRANCH = "chore/game-day-workflow"
+SCRIPT = "artifacts/handoff/apply-game-day.py"
+EDITED = ".github/workflows/game-day.yml"
+MARKED = f"OWNER; {db.SENT_BACK}"
+# The later night that resumes the group RUN sent back.
+NEXT = "20261102-220000"
+
+
+class ResumeTests(InRoot):
+    """A group handed back on a denied edit, resumed once the owner has run its script."""
+
+    def setUp(self):
+        super().setUp()
+        self.head, self.branch, self.status = HEAD, RESUMED_BRANCH, ""
+        self.handoff = self.root / RESUMED_TREE / "artifacts" / "handoff"
+        self.handoff.mkdir(parents=True)
+        (self.root / RESUMED_TREE / SCRIPT).write_text("print('apply')\n", encoding="utf-8")
+        self.write_record()
+
+    def write_record(self, **fields):
+        record = {"group": "Z1", "issues": [1700], "branch": RESUMED_BRANCH, "head": HEAD, "script": SCRIPT,
+                  "receipt": f"{SCRIPT}.receipt", "paths": [EDITED], **fields}
+        (self.handoff / "resume.json").write_text(json.dumps(record), encoding="utf-8")
+
+    def receipt(self, text):
+        (self.root / RESUMED_TREE / f"{SCRIPT}.receipt").write_text(text, encoding="utf-8", newline="")
+
+    def git(self, root, *args):
+        if args[:2] == ("worktree", "list"):
+            return (f"worktree {self.root.as_posix()}\nHEAD {HEAD}\nbranch refs/heads/main\n\n"
+                    f"worktree {(self.root / RESUMED_TREE).as_posix()}\nHEAD {self.head}\n"
+                    f"branch refs/heads/{self.branch}\n\n")
+        if args[0] == "rev-parse":
+            return f"{self.head}\n"
+        if args[0] == "status":
+            self.assertEqual(("status", "--porcelain", "-z", "--untracked-files=all"), args)
+            return self.status
+        raise AssertionError(f"an unexpected git read: {args}")
+
+    def row(self, depends="none", **cells):
+        return line(depends=depends, task=f"Add `{EDITED}`", **cells)
+
+    def back(self, depends="none", flag=True, **cells):
+        """Launch Z1 as a night would, then send it back the way the dispatcher does; returns what `back` printed."""
+        dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "berserk": flag, "groups": {}})
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(tasks_of(self.row(depends, **cells)))
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "Z1",
+                                      "--branch", RESUMED_BRANCH, "--worktree", RESUMED_TREE]))
+        with mock.patch.object(dr, "git", self.git):
+            self.assertEqual("", run_cli(["launch", RUN, "Z1", "--tasks", "todo.md", "--branch", RESUMED_BRANCH,
+                                          "--worktree", RESUMED_TREE]))
+            out = run_cli(["tasks", "back", "--tasks", "todo.md", "--run", RUN, "Z1"])
+        return out
+
+    def owner_runs_the_script(self):
+        self.status = f" M {EDITED}\0"
+        self.receipt(f"head {HEAD}\n{EDITED} written\napplied\n")
+
+    def listed(self):
+        with open("todo.md", encoding="utf-8", newline="") as handle:
+            return handle.read()
+
+    def wake(self, text=None, pairs=2, flag=True):
+        text = self.listed() if text is None else text
+        dr.save_state(state_dir(NEXT), {"run": NEXT, "pairs": pairs, "lang": "en", "berserk": flag, "groups": {}})
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"), mock.patch.object(dr, "git", self.git):
+            return run_cli(["wake", NEXT, "--tasks", "todo.md", "--today", "2026-11-01"],
+                           body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+
+    def board(self, text=None):
+        if text is not None:
+            with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+                handle.write(text)
+        with mock.patch.object(dr, "git", self.git):
+            return run_cli(["board", "--tasks", "todo.md", "--today", "2026-11-01"],
+                           body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+
+    def held(self):
+        lines = [text for text in self.board() if text.startswith("resume held ")]
+        self.assertEqual(1, len(lines), lines)
+        return lines[0]
+
+    def store(self):
+        return json.loads((self.root / dr.HANDBACKS).read_text(encoding="utf-8"))
+
+    def test_back_records_the_hand_back_from_the_runs_state_and_the_clean_tree(self):
+        self.assertEqual(f"resume recorded Z1: {SCRIPT} in {RESUMED_TREE}\n", self.back())
+        record = self.store()[RESUMED_TREE]
+        self.assertEqual((RUN, "Z1", [1700], RESUMED_BRANCH, HEAD, [EDITED]),
+                         (record["run"], record["group"], record["issues"], record["branch"], record["head"],
+                          record["paths"]))
+        self.assertEqual({"#1700": {"marked": MARKED, "before": "none"}}, record["rows"])
+        self.assertIn(f"| {MARKED} |", self.listed())
+
+    def test_an_applied_receipt_lifts_the_hold_on_either_night(self):
+        resumed = f"resumed Z1: owner applied {SCRIPT} in {RESUMED_TREE} on {RESUMED_BRANCH}"
+        for flag in (True, False):
+            with self.subTest(flag=flag):
+                (self.root / dr.HANDBACKS).unlink(missing_ok=True)
+                self.status = ""
+                self.assertIn("resume recorded", self.back(flag=flag))
+                self.assertEqual("end: drained", self.wake(flag=flag)[-1], "held until the owner runs the script")
+                self.owner_runs_the_script()
+                self.assertEqual([resumed, "launch: Z1"], self.wake(flag=flag)[-2:])
+        lines = self.board()
+        self.assertTrue(lines[0].startswith("Z1 | wave 1 | resumed | free"), lines)
+        self.assertEqual(resumed, lines[-1])
+
+    def test_what_the_executor_writes_alone_resumes_nothing(self):
+        # A resume.json, an applied receipt and a dirty tree in the worktree, but no back recorded them.
+        self.owner_runs_the_script()
+        text = tasks_of(self.row(MARKED))
+        self.assertEqual("end: drained", self.wake(text)[-1])
+        self.assertFalse(any(t.startswith(("resumed ", "resume held ")) for t in self.board(text)))
+
+    def test_back_records_nothing_the_tree_or_the_run_does_not_bear_out(self):
+        cases = [
+            (lambda: setattr(self, "status", f" M {EDITED}\0"), f"{RESUMED_TREE} is not clean: {EDITED}"),
+            (lambda: setattr(self, "head", OID), f"is at {OID}, not the recorded head {HEAD}"),
+            (lambda: self.write_record(branch="fix/other"), "names fix/other for [1700], not this run's"),
+            (lambda: self.write_record(issues=[1701]), "for [1701], not this run's"),
+            (lambda: self.write_record(paths=[f"{SCRIPT}.receipt"]), "paths is not a list of the paths"),
+            (lambda: (self.root / RESUMED_TREE / SCRIPT).unlink(), "could not read apply-game-day.py"),
+        ]
+        for spoil, why in cases:
+            with self.subTest(why=why):
+                self.head, self.status = HEAD, ""
+                (self.root / dr.HANDBACKS).unlink(missing_ok=True)
+                (self.root / RESUMED_TREE / SCRIPT).write_text("print('apply')\n", encoding="utf-8")
+                self.write_record()
+                spoil()
+                out = self.back()
+                self.assertTrue(out.startswith("resume not recorded Z1: "), out)
+                self.assertIn(why, out)
+                self.assertFalse((self.root / dr.HANDBACKS).exists())
+
+    def test_a_back_with_no_record_drops_the_earlier_one(self):
+        self.back()
+        (self.handoff / "resume.json").unlink()
+        self.assertEqual("", self.back())
+        self.assertEqual({}, self.store())
+
+    def test_the_lift_restores_depends_on_as_it_read_before_the_back(self):
+        for before, why in (("after #1440", "depends on open #1440"), ("2026-12-01", "waits until 2026-12-01")):
+            with self.subTest(before=before):
+                (self.root / dr.HANDBACKS).unlink(missing_ok=True)
+                self.status = ""
+                self.back(before)
+                self.owner_runs_the_script()
+                self.assertIn(f"not ready: {why}", self.board()[0])
+                self.assertEqual("end: drained", self.wake()[-1])
+
+    def test_an_owners_question_the_flag_lifted_holds_again_on_a_plain_night(self):
+        self.back("OWNER")
+        self.owner_runs_the_script()
+        lines = self.board()
+        self.assertIn("not ready: waits on a human", lines[0])
+        self.assertEqual(f"resume held {RESUMED_TREE}: Z1 is not ready: waits on a human", lines[-1])
+        self.assertEqual("end: drained", self.wake(flag=False)[-1])
+        self.assertEqual("launch: Z1", self.wake(flag=True)[-1])
+
+    def test_an_answer_given_since_the_back_is_what_a_second_back_records(self):
+        self.back("OWNER")
+        self.owner_runs_the_script()
+        # The interview answered the restored question, so the rebuild took OWNER out of the cell.
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(tasks_of(self.row(db.SENT_BACK)))
+        self.assertEqual("", self.relaunch("--resumed"))
+        self.assertEqual({"#1700": "none"}, group_state(NEXT, "Z1")["restored"])
+        self.head, self.status = OID, ""
+        self.write_record(head=OID)
+        with mock.patch.object(dr, "git", self.git):
+            self.assertIn("resume recorded Z1", run_cli(["tasks", "back", "--tasks", "todo.md", "--run", NEXT, "Z1"]))
+        self.assertEqual("none", self.store()[RESUMED_TREE]["rows"]["#1700"]["before"])
+
+    def test_a_row_edited_since_the_back_keeps_the_editors_word_less_the_flagged_words(self):
+        self.back()
+        self.owner_runs_the_script()
+        self.assertIn("no group in Remaining holds exactly #1700", self.held_for(tasks_of(line(number=5))))
+        # An OWNER written after the back where none stood before is a new question: it holds on a plain night.
+        self.assertEqual("end: drained", self.wake(tasks_of(self.row("OWNER")), flag=False)[-1])
+        lines = self.board(tasks_of(self.row(f"OWNER; {db.SENT_BACK}; after #1440")))
+        self.assertIn("not ready: waits on a human", lines[0])
+        self.assertFalse(any(t.startswith("resumed ") for t in lines), "a group not ready is the interview's")
+        # An answer that took the OWNER out leaves only the flagged words, which the owner's script answers.
+        self.assertEqual("launch: Z1", self.wake(tasks_of(self.row(db.SENT_BACK)), flag=False)[-1])
+        self.assertIn("depends on open #1440", self.board(tasks_of(self.row(f"{db.SENT_BACK}; after #1440")))[0])
+
+    def test_the_owner_resumes_the_same_night_the_group_was_sent_back(self):
+        # The move resets the run's entry for Z1, which the record is checked against.
+        self.back()
+        self.owner_runs_the_script()
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "Z1",
+                                      "--branch", RESUMED_BRANCH, "--worktree", RESUMED_TREE]))
+        with mock.patch.object(dr, "git", self.git):
+            self.assertEqual("", run_cli(["launch", RUN, "Z1", "--tasks", "todo.md", "--branch", RESUMED_BRANCH,
+                                          "--worktree", RESUMED_TREE, "--resumed"]))
+        self.assertEqual(SCRIPT, group_state(RUN, "Z1")["resumed"])
+
+    def test_a_resumed_group_handed_back_again_is_recorded_against_its_first_cell(self):
+        self.back("after #9")
+        self.owner_runs_the_script()
+        self.assertEqual("", self.relaunch("--resumed"))
+        # The executor commits the owner's edit and hands back again, with a new script, from a clean tree.
+        self.head, self.status = OID, ""
+        self.write_record(head=OID, script="artifacts/handoff/apply-again.py",
+                          receipt="artifacts/handoff/apply-again.py.receipt")
+        (self.root / RESUMED_TREE / "artifacts/handoff/apply-again.py").write_text("print(2)\n", encoding="utf-8")
+        with mock.patch.object(dr, "git", self.git):
+            out = run_cli(["tasks", "back", "--tasks", "todo.md", "--run", NEXT, "Z1"])
+        self.assertEqual(f"resume recorded Z1: artifacts/handoff/apply-again.py in {RESUMED_TREE}\n", out)
+        rows = self.store()[RESUMED_TREE]["rows"]
+        self.assertEqual("after #9", rows["#1700"]["before"], "the second back restored the first back's marks")
+
+    def held_for(self, text):
+        return next(t for t in self.board(text) if t.startswith("resume held "))
+
+    def test_a_resumed_group_goes_before_an_earlier_wave_and_a_released_one(self):
+        self.back(wave=3)
+        self.owner_runs_the_script()
+        marked = next(t for t in self.listed().splitlines() if "| Z1 |" in t)
+        text = tasks_of(line(number=1, gid="A1", task="Do `a.cs`"),
+                        line(number=2, gid="A2", depends="OWNER", task="Do `b.cs`"), marked)
+        self.assertEqual("launch: Z1", self.wake(text, pairs=1)[-1])
+        lines = self.wake(text, pairs=3)
+        self.assertEqual("launch: Z1 A1 A2", lines[-1])
+        self.assertIn("released A2: waits on a human", lines)
+        self.assertNotIn("Z1", dr.load_state(state_dir(NEXT))["released"], "a resume is the owner's, not the flag's")
+
+    def test_each_miss_keeps_the_hold_and_names_why(self):
+        script = self.root / RESUMED_TREE / SCRIPT
+        misses = [
+            (lambda: (self.root / RESUMED_TREE / f"{SCRIPT}.receipt").unlink(),
+             f"no {SCRIPT}.receipt: the owner has not run {SCRIPT}"),
+            (lambda: self.receipt(f"head {HEAD}\nfailed\n"), "last line is 'failed', not applied"),
+            (lambda: self.receipt(f"head {HEAD}\ndry-run\n"), "last line is 'dry-run', not applied"),
+            (lambda: self.receipt(f"head {OID}\napplied\n"), f"does not record the head {HEAD}"),
+            (lambda: self.receipt("applied\n"), f"does not record the head {HEAD}"),
+            (lambda: script.write_text("print('other')\n", encoding="utf-8"),
+             f"{SCRIPT} is not the script the hand-back recorded"),
+            (lambda: setattr(self, "branch", "fix/other"), f"{RESUMED_TREE} is not a worktree on {RESUMED_BRANCH}"),
+            (lambda: setattr(self, "head", OID), f"{RESUMED_TREE} is at {OID}, not the hand-back's {HEAD}"),
+            (lambda: setattr(self, "status", f" M {EDITED}\0?? payload/stray.py\0"),
+             f"changes {EDITED}, payload/stray.py, not exactly the script's {EDITED}"),
+            (lambda: setattr(self, "status", ""), f"changes nothing, not exactly the script's {EDITED}"),
+        ]
+        self.back()
+        listed = self.listed()
+        for spoil, why in misses:
+            with self.subTest(why=why):
+                self.head, self.branch = HEAD, RESUMED_BRANCH
+                script.write_text("print('apply')\n", encoding="utf-8")
+                self.owner_runs_the_script()
+                spoil()
+                self.assertTrue(self.held().startswith(f"resume held {RESUMED_TREE}: "))
+                self.assertIn(why, self.held())
+                self.assertEqual("end: drained", self.wake(listed)[-1])
+
+    def test_a_crlf_receipt_and_an_unignored_handoff_still_resume(self):
+        self.back()
+        self.owner_runs_the_script()
+        self.receipt(f"head {HEAD}\r\nAPPLIED to {EDITED}\r\napplied\r\n")
+        self.status = f" M {EDITED}\0?? {SCRIPT}\0?? artifacts/handoff/resume.json\0"
+        self.assertEqual("launch: Z1", self.wake()[-1])
+
+    def relaunch(self, *extra, red=list):
+        """A later night's move and launch of the group `back` returned; the move only once."""
+        state = state_dir(NEXT) / "state.json"
+        if not state.is_file() or "Z1" not in dr.load_state(state_dir(NEXT))["groups"]:
+            dr.save_state(state_dir(NEXT), {"run": NEXT, "pairs": 2, "lang": "en", "berserk": True, "groups": {}})
+            self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", NEXT, "Z1",
+                                          "--branch", RESUMED_BRANCH, "--worktree", RESUMED_TREE]))
+        with mock.patch.object(dr, "git", self.git):
+            return run_cli(["launch", NEXT, "Z1", "--tasks", "todo.md", "--branch", RESUMED_BRANCH,
+                            "--worktree", RESUMED_TREE, *extra], red_source=red)
+
+    def test_launch_resumed_reuses_the_worktree_spends_the_record_and_tells_the_executor(self):
+        self.back()
+        self.owner_runs_the_script()
+        self.assertEqual("", self.relaunch("--resumed"))
+        entry = group_state(NEXT, "Z1")
+        self.assertEqual(("running", SCRIPT, RESUMED_TREE), (entry["status"], entry["resumed"], entry["worktree"]))
+        self.assertEqual({}, self.store(), "the same answer would resume an executor that ended again uncommitted")
+        (state_dir(NEXT) / "Z1.task.txt").write_text("Add the game-day workflow\n", encoding="utf-8")
+        self.assertEqual(f"/ship #Z1-1700 Add the game-day workflow (resumed: the owner ran {SCRIPT} in this "
+                         "worktree and its edits are uncommitted here; commit them, the body saying the owner "
+                         f"applied them from that script, and carry on to the merge) --dispatched "
+                         f"artifacts/dispatch/{NEXT} --berserk",
+                         dr._prompt_for(state_dir(NEXT), "Z1", entry, NEXT, True))
+
+    def test_a_refused_back_or_any_launch_of_the_worktree_leaves_no_record(self):
+        self.back()
+        self.status = f" M {EDITED}\0"
+        self.assertIn("resume not recorded Z1", self.back())
+        self.assertEqual({}, self.store(), "a refused back kept the earlier record to resume on")
+        self.status = ""
+        self.back()
+        self.assertEqual("", self.relaunch())
+        self.assertEqual({}, self.store(), "a plain launch of the worktree kept its record")
+
+    def test_a_record_its_own_run_does_not_bear_out_is_held(self):
+        self.back()
+        self.owner_runs_the_script()
+        store = self.store()
+        store[RESUMED_TREE]["branch"] = "fix/forged"
+        (self.root / dr.HANDBACKS).write_text(json.dumps(store), encoding="utf-8")
+        self.assertIn(f"run {RUN} does not record Z1 sent back from {RESUMED_TREE} on fix/forged", self.held())
+        store[RESUMED_TREE].update(branch=RESUMED_BRANCH, run="20261103-220000")
+        (self.root / dr.HANDBACKS).write_text(json.dumps(store), encoding="utf-8")
+        self.assertIn("its run cannot be read", self.held())
+        self.assertEqual("end: drained", self.wake()[-1])
+
+
+    def test_launch_resumed_checks_the_record_in_code_and_spends_nothing_on_a_refusal(self):
+        self.back()
+        self.receipt(f"head {HEAD}\nfailed\n")
+        self.status = f" M {EDITED}\0"
+        self.assertIn("refused: ", self.relaunch("--resumed"))
+        self.assertIn("not applied", self.relaunch("--resumed"))
+        self.assertIsNone(group_state(NEXT, "Z1").get("status"))
+        self.receipt(f"head {HEAD}\napplied\n")
+        self.assertIn("refused: Z1 is not launched: main is red",
+                      self.relaunch("--resumed", red=lambda: ["main is red: #9 u"]))
+        self.assertIn(RESUMED_TREE, self.store(), "a refused launch spent the owner's answer")
+        (self.root / dr.HANDBACKS).unlink()
+        self.assertIn(f"refused: {dr.HANDBACKS} records no hand-back for {RESUMED_TREE}", self.relaunch("--resumed"))
+        self.assertEqual("", self.relaunch())
+        self.assertNotIn("resumed", group_state(NEXT, "Z1"), "a plain launch is told of no resume")
 
 
 if __name__ == "__main__":

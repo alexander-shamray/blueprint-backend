@@ -6,6 +6,7 @@ whose workflow writes a title it does not match reads green while `main` is red.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -144,9 +145,13 @@ class MainRedOpen(unittest.TestCase):
     def test_it_reads_open_bugs_with_no_field_beyond_the_three(self):
         self.run_helper(rows())
         call = self.log.read_text(encoding="utf-8")
-        for part in ("issue list ", "--state open", "--label bug", "--json number,title,url"):
+        for part in ("issue list ", "--state open", "--label bug"):
             with self.subTest(part=part):
                 self.assertIn(part, call)
+        # The token after `--json` whole: a substring match passes an appended `,body`.
+        listing = [line for line in call.splitlines() if line.startswith("issue list ")]
+        self.assertEqual(1, len(listing), call)
+        self.assertEqual(["number,title,url"], re.findall(r"--json ([\w,]+)", listing[0]))
         # A search reads the search index, which lags a filing: a `main is red` issue filed moments ago is not in it.
         self.assertNotIn("--search", call)
 

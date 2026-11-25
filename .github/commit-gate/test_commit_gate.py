@@ -261,16 +261,253 @@ def run_block(step: str) -> str:
 
 # Each gate directory gates.yml runs a suite in, after the verdicts.
 SUITES = {"closure-gate", "comment-gate", "commit-gate", "harness-drift", "locality-gate"}
-# A judge sits outside the checkout; the comment gate holds its path in `$judge`.
-JUDGE = re.compile(r'(?<![-\w])python(?: -I)? "\$(?:RUNNER_TEMP/[\w./-]+\.py|judge)"')
-# Reads no module from the checkout: how the drift gate reads its manifest ahead of the judge.
-ISOLATED = re.compile(r"(?<![-\w])python -I -c\b")
-# A list of spellings, so an interpreter it does not name reads as nothing: a command whose first word is a path, a
-# shell handed a file, Python, a local action, or any step set to run inside the checkout.
-HEAD_CODE = re.compile(
-    r"(?<![-\w])python3?(?:\.\d+)?(?=\s)|\bpytest\b|\bunittest\b"
-    r"|(?<![-\w])(?:bash|sh|source)[ \t]+\S|^\s*(?:- )?(?:run: )?[\w./-]*/[\w./-]+"
-    r"|^\s*(?:- )?uses: \./|^\s*working-directory:", re.M)
+# A judge sits outside the checkout; the comment gate holds its path in `$judge`, assigned under the same root.
+JUDGE = re.compile(r'(?<![-\w])python(?: -I)? "\$(?:RUNNER_TEMP/([\w./-]+\.py)|judge)"')
+JUDGE_SET = re.compile(r'(?m)^\s*judge=(.*)$')
+# `judge` as anything but a read: a write in any form, a loop variable, a `read` target, a word in a comment.
+JUDGE_WORD = re.compile(r'(?<![\w$-])judge\b')
+# The root both judge forms trust: a step that sets it, or reads it under another spelling, is not trusted.
+RUNNER_TEMP_WORD = re.compile(r'(?<![\w${])RUNNER_TEMP\b')
+# The hooks ENV_HOOKS names but for the two judge words, which the word checks above cover, and PATH, set in the
+# script itself: as a line, or as a command's prefix.
+SCRIPT_HOOKS = re.compile(r'(?<![\w$-])(?:BASH_ENV|ENV|PYTHON\w*|GIT_CONFIG\w*|GIT_EXEC_PATH|GIT_DIR|GIT_WORK_TREE'
+                          r'|HOME|XDG_CONFIG_HOME|LD_PRELOAD|NODE_OPTIONS|PATH)\+?=')
+UNDER_RUNNER_TEMP = re.compile(r'"\$RUNNER_TEMP/([\w./-]+\.py)"')
+# Reads no module from the checkout: how the drift gate reads its manifest ahead of the judge. Only the programs
+# gates.yml runs are named, since `-c` runs whatever it is handed.
+ISOLATED = re.compile(r"(?<![-\w])python -I -c '([^']*)'")
+ISOLATED_PROGRAMS = frozenset({'import json, sys; print(json.load(sys.stdin)["harness_commit"])'})
+# Deny by default: a command reads as head code unless its first word is one of these, the shell's own words or a
+# tool the workflow hands data to. An interpreter, a build tool or a path is never named here.
+# `printf` is not one: its `-v` writes any variable, under quoting no reader here unpicks, and no step needs it.
+SAFE_COMMANDS = frozenset({":", "[", "[[", "cp", "echo", "exit", "false", "gh", "git", "grep", "jq", "mkdir", "rm",
+                           "set", "test", "true"})
+# Words after which the shell expects a command, words that close a compound, and words whose header runs nothing.
+OPENERS = frozenset({"!", "{", "if", "then", "elif", "else", "while", "until", "do"})
+CLOSERS = frozenset({"}", "fi", "done"})
+HEADERS = frozenset({"for", "select"})
+# Words that open a compound command, which CLOSERS end.
+COMPOUNDS = frozenset({"if", "while", "until", "{"}) | HEADERS
+# Outside the script: a step run in a gate's directory, where an interpreter imports the head's modules, a shell
+# other than these, or an action not named here.
+STEP_HEAD_CODE = re.compile(r"^\s*working-directory:", re.M)
+USES = re.compile(r"^\s*(?:- )?uses:(.*)$", re.M)
+SAFE_ACTIONS = re.compile(r"actions/(?:checkout|setup-python)@[\w.-]+(?: +#[^\n]*)?")
+SHELL = re.compile(r"^\s*(?:- )?shell: *(.*)$", re.M)
+SAFE_SHELLS = frozenset({"bash", "sh"})
+# The step's own key, at the column steps_of splits on, so a `run:` inside an env or with block is not it.
+RUN = re.compile(r"^(?:      - |        )run:(.*)$", re.M)
+# A write to either file reaches every later step's environment or PATH, the head's code at one remove.
+RUNNER_FILES = re.compile(r"GITHUB_(?:ENV|PATH)\b")
+# Variables that make a safe word or a judge load a file: bash sources one, Python imports from one, git reads one.
+ENV_HOOKS = re.compile(r"^ +(?:BASH_ENV|ENV|PYTHON\w*|GIT_CONFIG\w*|GIT_EXEC_PATH|GIT_DIR|GIT_WORK_TREE|HOME"
+                       r"|XDG_CONFIG_HOME|LD_PRELOAD|NODE_OPTIONS|RUNNER_TEMP|judge):", re.M)
+
+
+def run_script(step: str) -> str | None:
+    """The step's own `run`: a block scalar's lines dedented, or a plain one folded as YAML folds it."""
+    found = RUN.search(step)
+    if not found:
+        return None
+    value = found.group(1).strip()
+    lines = []
+    for line in step[found.end() + 1:].split("\n"):
+        if line.strip() and len(line) - len(line.lstrip(" ")) <= 8:
+            break
+        lines.append(line)
+    if not value or value[0] not in "|>":
+        # A plain scalar's deeper lines fold into it, one space each, but a run of blank lines folds to as many
+        # newlines, each of which ends a command.
+        folded, blank = value, 0
+        for line in lines:
+            if not line.strip():
+                blank += 1
+                continue
+            folded, blank = folded + ("\n" * blank or " ") + line.strip(), 0
+        return folded + "\n"
+    width = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
+    return "\n".join(line[width:] for line in lines) + "\n"
+
+
+def command_words(script: str) -> list[str]:
+    """The first word of every command in a shell script, `$(...)` and backticks included.
+
+    Quotes and escapes are followed, and what it cannot place, a heredoc, an unclosed quote, a backtick nested in
+    another or a function defined anywhere but at the start of a line at the top, it refuses. A function's definition
+    is listed as its name and `()`, where it falls in the script."""
+    words: list[str] = []
+    frames: list[dict] = [{"kind": "code", "closer": "", "word": "", "head": True, "depth": 0, "target": False,
+                            "prefixed": False}]
+
+    def end_word(frame: dict) -> None:
+        word, quoted = frame["word"], frame.get("started")
+        frame["word"], frame["started"] = "", False
+        if not word:
+            return
+        if frame["target"]:
+            frame["target"] = False
+            frame["prefixed"] = frame["prefixed"] or frame["head"]
+        elif frame["head"]:
+            # A command follows any `&&`, `||` or `|` before it. A quoted or escaped word, or one after an assignment
+            # or a redirection, is no reserved word, so only a bare first word moves how deep the compound commands
+            # around the next command run, and only a bare `}` back at a definition's own depth closes its body.
+            frame["pending"] = False
+            reserved = not quoted and not frame["prefixed"]
+            if reserved:
+                frame["compound"] = frame.get("compound", 0) + (word in COMPOUNDS) - (word in CLOSERS)
+                if word == "}" and frame.get("body") == frame["compound"]:
+                    frame["closed"] = True
+                    del frame["body"]
+            if re.match(r"[A-Za-z_]\w*=", word):
+                frame["prefixed"] = True
+                return
+            if reserved and word in OPENERS:
+                return
+            frame["head"] = False
+            if not reserved or (word not in CLOSERS and word not in HEADERS):
+                words.append(word)
+
+    def defines_at_top(at: int) -> bool:
+        """Whether the name ending at `at` starts a line of the script itself, run by its own shell: not in a
+        substitution, a subshell or a compound, and no `&&`, `||` or `|` still waiting for its command."""
+        start = at - len(frames[0]["word"])
+        line = script.rfind("\n", 0, start) + 1
+        return (len(frames) == 1 and not frames[0]["depth"] and not frames[0].get("compound")
+                and not frames[0].get("pending") and not script[line:start].strip())
+
+    def skip_braces(at: int) -> int:
+        depth, start = 0, at
+        while at < len(script):
+            depth += {"{": 1, "}": -1}.get(script[at], 0)
+            if depth == 0:
+                if "$(" in script[start:at] or "`" in script[start:at]:
+                    raise ValueError("a substitution inside ${ in a run script")
+                return at
+            at += 1
+        raise ValueError("an unclosed ${ in a run script")
+
+    at = 0
+    while at < len(script):
+        frame, char, ahead = frames[-1], script[at], script[at + 1:at + 2]
+        # Inside double quotes a character joins the word the quote stands in.
+        word = frame if frame["kind"] == "code" else frame["parent"]
+        if char == "\\":
+            # An escaped character quotes the word, as a quote would: bash takes no quoted word for a name.
+            word["started"] = True
+            # Inside backticks the shell strips a backslash before `\``, `\\` or `$` ahead of parsing, so any there
+            # is refused.
+            if any(f["kind"] == "code" and f["closer"] == "`" for f in frames):
+                raise ValueError("a backslash inside backticks in a run script")
+            if ahead != "\n":
+                word["word"] += ahead
+            elif frame["kind"] == "code":
+                end_word(frame)
+            at += 2
+            continue
+        if char == "$" and ahead == "{":
+            end = skip_braces(at + 1)
+            word["word"] += script[at:end + 1]
+            at = end + 1
+            continue
+        if char == "$" and ahead == "(":
+            if script[at + 2:at + 3] == "(":
+                raise ValueError("arithmetic $(( in a run script")
+            word["word"] += "$"
+            frames.append({"kind": "code", "closer": ")", "word": "", "head": True, "depth": 0, "target": False,
+                            "prefixed": False})
+            at += 2
+            continue
+        if char == "`":
+            if frame["kind"] == "code" and frame["closer"] == "`":
+                end_word(frame)
+                frames.pop()
+            else:
+                word["word"] += "$"
+                frames.append({"kind": "code", "closer": "`", "word": "", "head": True, "depth": 0, "target": False,
+                            "prefixed": False})
+            at += 1
+            continue
+        if frame["kind"] == "quote":
+            if char == '"':
+                frames.pop()
+            else:
+                word["word"] += char
+            at += 1
+            continue
+        if char == '"':
+            frame["started"] = True
+            frames.append({"kind": "quote", "parent": frame})
+        elif char == "'":
+            if script[at - 1:at] == "$" and at:
+                raise ValueError("an ANSI-C $' in a run script")
+            frame["started"] = True
+            end = script.find("'", at + 1)
+            if end < 0:
+                raise ValueError("an unclosed ' in a run script")
+            frame["word"] += script[at + 1:end]
+            at = end
+        elif char == "#" and not frame["word"] and not frame.get("started"):
+            end = script.find("\n", at)
+            at = (end if end >= 0 else len(script)) - 1
+        elif char in " \t":
+            end_word(frame)
+        elif char in "\n;&|":
+            end_word(frame)
+            # A definition sent to the background or into a pipe runs in a subshell, which its callers never see;
+            # one in a list is refused with them.
+            if frame.pop("closed", False) and char in "&|":
+                raise ValueError("a function definition followed by &, | or a list in a run script")
+            if char in "&|":
+                frame["pending"] = True
+            elif char == ";":
+                frame["pending"] = False
+            frame["head"], frame["prefixed"] = True, False
+        elif char in "<>":
+            if ahead == "(":
+                raise ValueError("a process substitution in a run script")
+            if script[at:at + 3] == "<<<":
+                at += 2
+            elif script[at:at + 2] == "<<":
+                raise ValueError("a heredoc in a run script")
+            if frame["word"].isdigit():
+                frame["word"] = ""
+            end_word(frame)
+            while script[at + 1:at + 2] in (">", "&") and script[at + 1:at + 2]:
+                at += 1
+            frame["target"] = True
+        elif char == "(" and ahead == ")" and frame["head"] and re.fullmatch(r"[A-Za-z_][\w-]*", frame["word"]) \
+                and not frame.get("started"):
+            # A bare name straight before `()` defines a function; a quoted or spaced one reads as a call. Only
+            # one starting a line at the top is known to reach the calls after it, so any other is refused.
+            # Its body must be a `{` group, which runs in the caller's shell; the depth it opens at marks its close.
+            body = len(script[at + 2:]) - len(script[at + 2:].lstrip(" \t"))
+            if not defines_at_top(at) or script[at + 2 + body:at + 3 + body] != "{":
+                raise ValueError("a function defined inside a command, compound or list in a run script")
+            words.append(frame["word"] + "()")
+            frame["word"], frame["body"], at = "", frame.get("compound", 0), at + 2
+            continue
+        elif char == "(":
+            end_word(frame)
+            frame["depth"] += 1
+            frame["head"], frame["prefixed"] = True, False
+        elif char == ")":
+            end_word(frame)
+            if frame["depth"]:
+                frame["depth"] -= 1
+                frame["head"], frame["prefixed"] = True, False
+            elif frame["closer"] == ")":
+                frames.pop()
+            else:
+                raise ValueError("an unmatched ) in a run script")
+        else:
+            frame["word"] += char
+        at += 1
+    if len(frames) != 1 or frames[0]["depth"]:
+        raise ValueError("an unclosed quote, substitution or group in a run script")
+    end_word(frames[0])
+    return words
+
+
 VERDICTS = re.compile(r"(?m)^ +(?:- )?id: verdicts$")
 
 
@@ -284,8 +521,47 @@ def verdicts_at(steps: list[str]) -> int:
     return at[0]
 
 
+def outside_the_checkout(path: str) -> bool:
+    return ".." not in path.split("/")
+
+
+def a_judge(found: re.Match, script: str) -> bool:
+    """Whether a JUDGE match runs a file under the runner's temp directory: named there, or `$judge` assigned there
+    once, on a line of its own, ahead of the run. Any other write to `judge` leaves the value unknown."""
+    if found.group(1) is not None:
+        return outside_the_checkout(found.group(1))
+    sets, words = list(JUDGE_SET.finditer(script)), JUDGE_WORD.findall(script)
+    if len(sets) != 1 or len(words) != 1 or sets[0].start() > found.start():
+        return False
+    under = UNDER_RUNNER_TEMP.fullmatch(sets[0].group(1).strip())
+    return bool(under) and outside_the_checkout(under.group(1))
+
+
 def runs_head_code(step: str) -> bool:
-    return bool(HEAD_CODE.search(JUDGE.sub("", ISOLATED.sub("", step))))
+    shell, uses = SHELL.search(step), USES.search(step)
+    if STEP_HEAD_CODE.search(step) or (shell and shell.group(1).strip() not in SAFE_SHELLS):
+        return True
+    if RUNNER_FILES.search(step) or ENV_HOOKS.search(step):
+        return True
+    if uses and not SAFE_ACTIONS.fullmatch(uses.group(1).strip()):
+        return True
+    script = run_script(step)
+    if script is None:
+        return False
+    if RUNNER_TEMP_WORD.search(script) or SCRIPT_HOOKS.search(script):
+        return True
+    # A judge and an isolated read stand in as `:`, so their arguments are read as arguments; one that climbs out of
+    # the runner's temp directory, or runs a program gates.yml does not, stays itself and reads as head code.
+    script = ISOLATED.sub(lambda read: ":" if read.group(1) in ISOLATED_PROGRAMS else read.group(0), script)
+    script = JUDGE.sub(lambda judge: ":" if a_judge(judge, script) else judge.group(0), script)
+    # A function stands in for its name only from its definition on, as the shell runs it.
+    defined: set[str] = set()
+    for word in command_words(script):
+        if word.endswith("()"):
+            defined.add(word[:-2])
+        elif word not in SAFE_COMMANDS and word not in defined:
+            return True
+    return False
 
 
 def name_of(step: str) -> str:
@@ -295,7 +571,10 @@ def name_of(step: str) -> str:
 
 def head_code_before_the_verdicts(text: str, job: str = "gates") -> list[str]:
     steps = steps_of(text, job)
-    return [name_of(step) for step in steps[:verdicts_at(steps) + 1] if runs_head_code(step)]
+    # The workflow's and the job's own keys reach every step, so a hook or a default shell there is named too.
+    above = text.split("\njobs:\n", 1)[0] + "\n" + job_of(text, job).split("\n    steps:\n", 1)[0]
+    hooked = ["the workflow or job env"] if ENV_HOOKS.search(above) or re.search(r"(?m)^ *defaults:", above) else []
+    return hooked + [name_of(step) for step in steps[:verdicts_at(steps) + 1] if runs_head_code(step)]
 
 
 def workflow(*steps: str) -> str:
@@ -443,7 +722,75 @@ class TheReader(unittest.TestCase):
                          "        run: .github/gate/suite.sh",
                          "        run: |\n          set -e\n          .github/gate/suite.sh",
                          "        uses: ./.github/actions/suite",
-                         "        working-directory: .github/gate\n        run: make"):
+                         "        working-directory: .github/gate\n        run: make",
+                         # Deny by default: a tool no list spelled is named for not being one of the safe words.
+                         "        run: npm test",
+                         "        run: node .github/gate/check.mjs",
+                         "        run: dotnet test",
+                         "        run: pwsh .github/gate/suite.ps1",
+                         "        run: make check",
+                         "        run: env CI=1 npm test",
+                         "        run: git log -1 && npm test",
+                         "        run: git log -1 | node",
+                         "        run: out=$(npm test)",
+                         '        run: echo "$(./tool)"',
+                         "        run: echo `make`",
+                         "        run: |\n          if true; then\n            npm ci\n          fi",
+                         "        run: |\n          for gate in a b; do\n            make \"$gate\"\n          done",
+                         "        run: |\n          check() { npm test; }\n          check",
+                         # A function stands in for a name only once defined, and a blank line ends a plain run's
+                         # command.
+                         "        run: |\n          npm test\n          npm() { :; }",
+                         '        run: |\n          echo "\n          npm() { :; }"\n          npm test',
+                         "        run: |\n          set +e\n          n\\pm() { :; }\n          npm test",
+                         "        run: true\n\n          npm test",
+                         "        shell: python {0}\n        run: print(1)",
+                         "        shell: pwsh\n        run: true",
+                         "        uses: './.github/actions/suite'",
+                         "        uses: actions/github-script@v7\n        with:\n          script: require('./x.js')()",
+                         '        run: echo ""# ; npm test',
+                         "        run: git log -1 &&\n          npm test",
+                         '        run: cp .github/gate/env "$GITHUB_ENV"',
+                         '        run: echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"',
+                         "        env:\n          NOTE: |\n            run: true\n        run: npm test",
+                         "        env:\n          BASH_ENV: .github/gate/env.sh\n        run: true",
+                         "        env:\n          PYTHONPATH: .\n        run: true",
+                         # A judge path that climbs back into the checkout, or a `$judge` set anywhere but under the
+                         # runner's temp directory, is the head's code; so is an isolated read of a program
+                         # gates.yml does not run.
+                         '        run: python "$RUNNER_TEMP/../x.py"',
+                         '        run: |\n          judge=.github/x.py\n          python "$judge"',
+                         '        run: python "$judge"',
+                         '        run: |\n          judge="$RUNNER_TEMP/../x.py"\n          python "$judge"',
+                         "        run: python -I -c 'exec(open(\".github/x.py\").read())'",
+                         # `$judge` read before its one assignment, written a second time, set in another form, or
+                         # taken from the environment; and the root the judges trust, set by the step.
+                         '        run: |\n          python "$judge"\n          judge="$RUNNER_TEMP/a.py"',
+                         '        run: |\n          judge="$RUNNER_TEMP/a.py"\n          judge=.github/x.py\n'
+                         '          python "$judge"',
+                         '        run: |\n          judge="$RUNNER_TEMP/a.py"\n          true; judge=.github/x.py\n'
+                         '          python "$judge"',
+                         '        run: for judge in .github/x.py; do python "$judge"; done',
+                         '        env:\n          judge: .github/x.py\n        run: |\n          python "$judge"\n'
+                         '          judge="$RUNNER_TEMP/a.py"',
+                         '        run: |\n          RUNNER_TEMP=.github\n          python "$RUNNER_TEMP/x.py"',
+                         '        env:\n          RUNNER_TEMP: .github\n        run: python "$RUNNER_TEMP/x.py"',
+                         # `printf -v` writes `judge` or the root under a spelling no word count sees, and a hook
+                         # variable set in the script reaches a judge or a safe word as its env key would.
+                         '        run: |\n          judge="$RUNNER_TEMP/a.py"\n          printf -vjudge .github/x.py\n'
+                         '          python "$judge"',
+                         '        run: |\n          judge="$RUNNER_TEMP/a.py"\n'
+                         "          printf -v ju''dge .github/x.py\n          python \"$judge\"",
+                         "        run: |\n          printf -v RUNNER''_TEMP .github\n"
+                         '          python "$RUNNER_TEMP/x.py"',
+                         '        run: PYTHONPATH=.github python "$RUNNER_TEMP/gate/gate.py"',
+                         '        run: |\n          PATH=.github/bin:$PATH\n          git log -1',
+                         # A home or git directory the step points into the checkout: Python and git read config there.
+                         '        run: HOME=.github python "$RUNNER_TEMP/gate/gate.py"',
+                         '        run: GIT_DIR=.github/repo git log -1',
+                         '        env:\n          XDG_CONFIG_HOME: .github\n        run: git log -1',
+                         "        run: |\n          judge=\"$RUNNER_TEMP/a.py\"\n"
+                         "          pr''intf '-v' ju''dge .github/x.py\n          python \"$judge\""):
             with self.subTest(spelling=spelling):
                 self.assertEqual(["step 1"], head_code_before_the_verdicts(workflow(JUDGES, spelling, REPORTS)))
 
@@ -465,12 +812,57 @@ class TheReader(unittest.TestCase):
 
     def test_what_runs_nothing_from_the_checkout_is_not_named(self) -> None:
         for spelling in ("        uses: actions/setup-python@v7\n        with:\n          python-version: '3.12'",
-                         "        run: python -I -c 'import json'",
+                         "        run: python -I -c "
+                         "'import json, sys; print(json.load(sys.stdin)[\"harness_commit\"])'",
+                         '        run: |\n          judge="$RUNNER_TEMP/comment_gate.py"\n          python "$judge"',
                          "        shell: bash\n        env:\n          GATE: .github/gate/gate.py\n        run: true",
                          "        run: git show \"$BASE_SHA:$GATE\" > \"$RUNNER_TEMP/gate/gate.py\"",
-                         "        # python -m unittest\n        run: true"):
+                         "        # python -m unittest\n        run: true",
+                         "        run: echo 'npm test; make' \"a;b | node\"",
+                         '        run: git log -1 > "$RUNNER_TEMP/log" 2>&1',
+                         "        run: |\n          take() { git show \"$1\"; }\n          take HEAD",
+                         "        run: true\n          git log -1"):
             with self.subTest(spelling=spelling):
                 self.assertEqual([], head_code_before_the_verdicts(workflow(spelling, JUDGES, REPORTS)))
+
+    def test_a_script_the_reader_cannot_place_is_refused(self) -> None:
+        for spelling in ("        run: |\n          cat <<EOF\n          npm test\n          EOF",
+                         "        run: echo 'unclosed",
+                         '        run: echo "$(git log"',
+                         "        run: echo $((1 + 2))",
+                         '        run: echo "${OUT:-$(npm test)}"',
+                         "        run: grep -q ok <(npm test)",
+                         "        run: cp >(make) out",
+                         "        run: echo $'\\'' ; npm test ; echo $'\\''",
+                         "        run: echo `echo \\`npm test\\` `",
+                         # A definition whose shell is not the caller's, or that may never run, is not trusted.
+                         "        run: ( npm() { :; } ); npm test",
+                         "        run: x=$(npm() { :; }); npm test",
+                         "        run: false && npm() { :; }; npm test",
+                         "        run: if false; then npm() { :; }; fi; npm test",
+                         "        run: |\n          if false; then\n            npm() { :; }\n          fi\n"
+                         "          npm test",
+                         "        run: |\n          false &&\n          npm() { :; }\n          npm test",
+                         "        run: |\n          npm() { :; } &\n          npm test",
+                         "        run: |\n          npm() { :; } | cat\n          npm test",
+                         "        run: |\n          false && # why\n          npm() { :; }\n          npm test",
+                         "        run: |\n          if false; then\n            \"fi\"\n"
+                         "            npm() { :; }\n          fi\n          npm test",
+                         "        run: |\n          npm() ( : )\n          npm test",
+                         "        run: |\n          if false; then\n            x=1 fi\n            npm() { :; }\n"
+                         "          fi\n          npm test",
+                         "        run: |\n          if false; then\n            >/dev/null fi\n"
+                         "            npm() { :; }\n          fi\n          npm test",
+                         "        run: echo `echo \\\\'; npm test; echo \\\\'`"):
+            with self.subTest(spelling=spelling), self.assertRaises(ValueError):
+                head_code_before_the_verdicts(workflow(spelling, JUDGES, REPORTS))
+
+    def test_the_reader_finds_the_commands_the_workflow_runs(self) -> None:
+        # The order case above passes on a reader that finds nothing, so its subject is checked here.
+        steps = workflow_steps()
+        found = {word for step in steps[:verdicts_at(steps) + 1] if (script := run_script(step))
+                 for word in command_words(script)}
+        self.assertLessEqual({"git", "gh", "jq", "mkdir", "python"}, found)
 
     def test_a_workflow_with_no_verdicts_two_or_no_judge_ahead_is_refused(self) -> None:
         for steps in ((JUDGES,), (JUDGES, REPORTS, REPORTS), (REPORTS, JUDGES)):
@@ -482,6 +874,16 @@ class TheReader(unittest.TestCase):
         self.assertEqual([], head_code_before_the_verdicts(workflow(JUDGES, REPORTS) + second))
         self.assertEqual(["- run: python -m unittest"], [name_of(step) for step in steps_of(
             workflow(JUDGES, REPORTS) + second, "other") if runs_head_code(step)])
+
+    def test_a_hook_in_the_workflow_or_job_env_is_named(self) -> None:
+        clean = workflow(JUDGES, REPORTS)
+        for text in (clean.replace("name: Gate\n", "name: Gate\nenv:\n  BASH_ENV: .github/x.sh\n"),
+                     clean.replace("    runs-on:", "    env:\n      PYTHONPATH: .\n    runs-on:"),
+                     clean.replace("    runs-on:", "    defaults:\n      run:\n        shell: python {0}\n"
+                                   "    runs-on:")):
+            with self.subTest(text=text):
+                self.assertEqual(["the workflow or job env"], head_code_before_the_verdicts(text))
+        self.assertEqual([], head_code_before_the_verdicts(clean))
 
     def test_a_job_that_is_not_there_is_refused(self) -> None:
         with self.assertRaises(ValueError):

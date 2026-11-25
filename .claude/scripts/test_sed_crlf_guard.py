@@ -1,10 +1,12 @@
 """What `.claude/hooks/guard-sed-crlf.py` refuses, and what it must not.
 
-Verdict cases call `offence` with `strips_cr=True`, since only Git Bash's sed drops the CR and they run on every
-`payload-suites` leg; process cases run the hook as the harness does, and only the Windows leg reaches its refusal and
-`/c/...` translation. The last class has the registration as its subject."""
+Verdict cases call `offence` with `strips_cr=True`, since only Git Bash's sed drops the CR, on every leg; process
+cases run the hook as the harness does, and only the Windows leg reaches its refusal and `/c/...` translation. The
+crash case runs `main` in process with `offence` raising, a deny on every leg; the last, the registration."""
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -253,6 +255,31 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
         # `popd +1` drops sub from the stack, so the bare `popd` after it lands here, not in sub: unplaceable too.
         self.assertAdmitted("pushd sub; pushd ..; popd +1; popd; sed -i 's/one/uno/' crlf.txt")
 
+    def test_env_chdir_moves_the_sed_after_it(self):
+        # `env -C DIR` runs sed from DIR, so its operand is looked for there, not where the shell stands.
+        for command in (
+            "env -C sub sed -i 's/one/uno/' inner.txt",
+            "env -Csub sed -i 's/one/uno/' inner.txt",
+            "env --chdir=sub sed -i 's/one/uno/' inner.txt",
+            "env --chdir sub sed -i 's/one/uno/' inner.txt",
+            "env --ch=sub sed -i 's/one/uno/' inner.txt",
+            "env -u X -C sub sed -i 's/one/uno/' inner.txt",
+            "env -u env -C sub sed -i 's/one/uno/' inner.txt",
+            "cd sub && env -C .. sed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, os.path.basename(command.split()[-1]))
+        # Looked for where the shell stands, these would draw a refusal no rewrite earns; a directory nobody can read
+        # leaves the operand unplaced, and `-u C` moves nothing.
+        for command in (
+            "env -C sub sed -i 's/one/uno/' crlf.txt",
+            "env -C \"$D\" sed -i 's/one/uno/' crlf.txt",
+            "env -C nowhere sed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+        self.assertRefused("env -u C sed -i 's/one/uno/' crlf.txt", "crlf.txt")
+
     def test_a_cd_or_pushd_to_a_missing_directory_is_unplaceable(self):
         # Bash refuses a directory that is not there and stays put, and a failed `pushd` pushes nothing, so after `;`
         # these lines run their `sed` in the line's own directory, where no inner.txt is. Followed as moves, the `pushd`
@@ -274,9 +301,83 @@ class ARewriteOfATrackedCrlfFileIsRefused(ACheckout):
             # Review R3.3: `shlex` returns `)>` as one token, which read as a redirection never closed the group.
             "(cd sub && true)>out.log; sed -i 's/one/uno/' crlf.txt",
             "(cd sub && true)2>&1; sed -i 's/one/uno/' crlf.txt",
+            # Bash runs a command a lone `&` ends in a subshell, so the `sed` runs where the line started.
+            "cd sub & sed -i 's/one/uno/' crlf.txt",
+            "cd sub &\nsed -i 's/one/uno/' crlf.txt",
+            "pushd sub & sed -i 's/one/uno/' crlf.txt",
+            # The `&` backgrounds the whole list before it, a group closed inside it included.
+            "cd sub && true & sed -i 's/one/uno/' crlf.txt",
+            "{ cd sub; } & sed -i 's/one/uno/' crlf.txt",
+            "if true; then cd sub; fi & sed -i 's/one/uno/' crlf.txt",
+            "time { cd sub; } & sed -i 's/one/uno/' crlf.txt",
+            "! { cd sub; } & sed -i 's/one/uno/' crlf.txt",
+            # A newline after `&&` continues the list the `&` ends.
+            "cd sub &&\ntrue &\nsed -i 's/one/uno/' crlf.txt",
         ):
             with self.subTest(command=command):
                 self.assertRefused(command, "crlf.txt")
+        # `&&`, `>&` and `&>` background nothing, so the `cd` still moves the `sed` after it.
+        for command in (
+            "cd sub && sed -i 's/one/uno/' inner.txt",
+            "cd sub >&2; sed -i 's/one/uno/' inner.txt",
+            "cd sub &>/dev/null; sed -i 's/one/uno/' inner.txt",
+            "cd sub && true |& cat; sed -i 's/one/uno/' inner.txt",
+            "case x in x) cd sub;& y) true;; esac; sed -i 's/one/uno/' inner.txt",
+            "case x in x) cd sub;;& y) true;; esac; sed -i 's/one/uno/' inner.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, "inner.txt")
+
+    def test_a_cd_that_may_not_run_leaves_the_files_after_it_in_both_places(self):
+        # Bash skips a `cd` behind a failed `&&`, a succeeding `||` or an untaken clause, so the `sed` after it
+        # may run where the line started. Followed as a move, only sub was searched and the call was admitted.
+        for command in (
+            "[ -f absent ] && cd sub; sed -i 's/one/uno/' crlf.txt",
+            "true || cd sub; sed -i 's/one/uno/' crlf.txt",
+            "if [ -f absent ]; then cd sub; fi; sed -i 's/one/uno/' crlf.txt",
+            "for d in; do cd sub; done; sed -i 's/one/uno/' crlf.txt",
+            "[ -f absent ] && pushd sub; sed -i 's/one/uno/' crlf.txt",
+            # A `cd` later in a clause, or in a group behind `&&`, may not run either.
+            "if [ -f absent ]; then true; cd sub; fi; sed -i 's/one/uno/' crlf.txt",
+            "for d in; do echo; cd sub; done; sed -i 's/one/uno/' crlf.txt",
+            "[ -f absent ] && { true; cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            # A compound opened behind another reserved word pushes its own frame, so its `fi` closes only it.
+            "if [ -f absent ]; then if true; then true; fi; cd sub; fi; sed -i 's/one/uno/' crlf.txt",
+            # A newline after `&&`, spaced or behind a comment, still joins the `cd` to the test.
+            "[ -f absent ] && \ncd sub; sed -i 's/one/uno/' crlf.txt",
+            "[ -f absent ] && # note\ncd sub; sed -i 's/one/uno/' crlf.txt",
+            "[ -f absent ] &&\ncd sub; sed -i 's/one/uno/' crlf.txt",
+            # A function's body runs only when it is called, and `time -p` still opens the group behind it.
+            "f() { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "f () { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "function f { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "function f() { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "f ( ) { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "f()\n{ cd sub; }\nsed -i 's/one/uno/' crlf.txt",
+            "function f\n{ cd sub; }\nsed -i 's/one/uno/' crlf.txt",
+            "{ function f\n{ cd sub; }\n}; sed -i 's/one/uno/' crlf.txt",
+            "if [ -f absent ]; then time -p { true; }; cd sub; fi; sed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertRefused(command, "crlf.txt")
+        # A definition whose body is a subshell has had it, so the group after it runs, and its `cd` is followed alone.
+        for command in (
+            "f() ( true ); { cd sub; }; sed -i 's/one/uno/' crlf.txt",
+            "function f\n( true )\n{ cd sub; }\nsed -i 's/one/uno/' crlf.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
+        # It may also have run, so the files where it moves are judged too.
+        self.assertRefused("true && cd sub; sed -i 's/one/uno/' inner.txt", "inner.txt")
+        self.assertRefused("[ -f absent ] && cd sub; bash -c \"sed -i 's/one/uno/' crlf.txt\"", "crlf.txt")
+        # A `cd` joined by `&&` to a move already followed runs wherever that one landed, so it is followed alone.
+        self.put(os.path.join("sub", "deep", "lf.txt"), b"one\n")
+        self.put(os.path.join("sub", "crlf.txt"), b"one\r\n")
+        self.git("-c", "core.autocrlf=false", "add", "sub/crlf.txt")
+        self.assertAdmitted("cd sub && cd deep && sed -i 's/one/uno/' crlf.txt")
+        # A `popd` after a `pushd` that may not have run reads a stack the hook does not know: unplaceable, which
+        # admits the call by the guard's stated fail-open, whether or not that `pushd` ran.
+        self.assertAdmitted("pushd sub; false && pushd ..; popd; sed -i 's/one/uno/' inner.txt")
 
     def test_a_sed_inside_a_clause_or_a_group_is_judged(self):
         for command in (
@@ -429,12 +530,13 @@ class WhatTheHookCannotPlaceFailsOpen(ACheckout):
         original = GUARD.glob.iglob
         GUARD.glob.iglob = endless
         self.addCleanup(setattr, GUARD.glob, "iglob", original)
+        # Exactly the bound: a walk that never ran, as when candidates() stops calling iglob, proves nothing.
         self.assertAdmitted("sed -i 's/one/uno/' *.cs")
-        self.assertLessEqual(len(walked), GUARD.MAX_FILES + 1)
+        self.assertEqual(GUARD.MAX_FILES + 1, len(walked))
         # One bound for the operand, not one for each word its braces make.
         walked.clear()
         self.assertAdmitted("sed -i 's/one/uno/' {a,b,c,d}*.cs")
-        self.assertLessEqual(len(walked), GUARD.MAX_FILES + 1)
+        self.assertEqual(GUARD.MAX_FILES + 1, len(walked))
 
     def test_a_comma_quoted_inside_a_brace_list_is_the_stated_residual(self):
         # Review R1: the quotes are gone before the list is read, so the `a,b.txt` bash passes is never looked up.
@@ -605,6 +707,50 @@ class TheHookAsTheHarnessRunsIt(ACheckout):
                 self.assertEqual(0, result.returncode)
                 self.assertEqual(b"", result.stdout.strip())
                 self.assertIn(b"guard-sed-crlf", result.stderr)
+
+    def test_an_event_that_is_not_utf8_is_refused(self):
+        # Not the fail-open above: bytes nothing could decode hold a command nothing read.
+        result = subprocess.run([sys.executable, str(HOOK)], input=b"\xff", capture_output=True)
+        self.assertEqual(0, result.returncode)
+        verdict = json.loads(result.stdout.decode("utf-8"))["hookSpecificOutput"]
+        self.assertEqual("deny", verdict["permissionDecision"])
+        self.assertIn("not UTF-8", verdict["permissionDecisionReason"])
+
+
+class ACrashWhileJudgingRefuses(ACheckout):
+
+    def test_a_crash_while_judging_refuses_the_command(self):
+        # Any exception under offence() escaped main() as a traceback and empty stdout, which admits the sed -i.
+        module = guard_module()
+        event = {"hook_event_name": "PreToolUse", "cwd": self.root, "tool_name": "Bash",
+                 "tool_input": {"command": "sed -i 's/one/uno/' crlf.txt"}}
+        stdin = io.TextIOWrapper(io.BytesIO(json.dumps(event).encode("utf-8")), encoding="utf-8")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "offence", side_effect=ValueError("a digit limit")), \
+                mock.patch.object(sys, "stdin", stdin), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(0, module.main())
+        verdict = json.loads(stdout.getvalue())["hookSpecificOutput"]
+        self.assertEqual("deny", verdict["permissionDecision"])
+        self.assertIn("crashed the sed line-ending guard", verdict["permissionDecisionReason"])
+        self.assertIn("a digit limit", stderr.getvalue())
+
+
+    def test_a_grammar_that_will_not_load_refuses_every_command(self):
+        # path_grammar.py loads at import, outside main()'s try; a crash there exited 1, which admits.
+        hooks = os.path.join(self.root, "copy")
+        os.makedirs(hooks)
+        hook = shutil.copy(HOOK, hooks)
+        with open(os.path.join(hooks, "path_grammar.py"), "w", encoding="utf-8") as handle:
+            handle.write("def (\n")
+        event = {"hook_event_name": "PreToolUse", "cwd": self.root, "tool_name": "Bash",
+                 "tool_input": {"command": "sed -i 's/one/uno/' crlf.txt"}}
+        result = subprocess.run([sys.executable, hook], input=json.dumps(event).encode("utf-8"), capture_output=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        verdict = json.loads(result.stdout.decode("utf-8"))["hookSpecificOutput"]
+        self.assertEqual("deny", verdict["permissionDecision"])
+        self.assertIn("crashed the sed line-ending guard", verdict["permissionDecisionReason"])
+        self.assertIn(b"did not load", result.stderr)
 
 
 class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):

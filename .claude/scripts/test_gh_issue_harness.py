@@ -20,6 +20,7 @@ from review_helpers import (
 )
 
 HARNESS_REPO = "alexander-shamray/blueprint-harness"
+OWNER = HARNESS_REPO.split("/")[0]
 
 
 class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
@@ -65,13 +66,15 @@ class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def run_helper(self, *args, body="", timeout_program=None):
+    def run_helper(self, *args, body="", timeout_program=None, compat=""):
         # `timeout_program` names the program gh-read-bound.sh's `bounded` looks for, so one that is not there takes
         # the watchdog a host without GNU `timeout` runs, as macOS does.
         env = dict(os.environ)
         env["PATH"] = self.dir + os.pathsep + env["PATH"]
         if timeout_program is not None:
             env["GH_READ_TIMEOUT"] = timeout_program
+        if compat:
+            env["BASH_COMPAT"] = compat
         return subprocess.run([BASH, str(self.HELPER), *args], capture_output=True, text=True,
                               encoding="utf-8", input=body, env=env)
 
@@ -83,8 +86,13 @@ class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
         return [c for c in self.calls() if c.startswith("issue create ")]
 
     def open_issues(self, *rows):
-        """The open issues the stub's `issue list` answers with, one `number<TAB>title` per row."""
-        Path(self.dir, "list").write_text("".join(f"{n}\t{title}\n" for n, title in rows), encoding="utf-8")
+        """The open issues the stub's `issue list` answers with, one `number<TAB>author<TAB>title` per row, each
+        field escaped as jq's @tsv escapes it; a row of two is the owner's."""
+        def tsv(field):
+            return str(field).replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")
+        lines = ("\t".join(tsv(f) for f in (row[0], row[2] if len(row) > 2 else OWNER, row[1])) + "\n"
+                 for row in rows)
+        Path(self.dir, "list").write_text("".join(lines), encoding="utf-8", newline="")
 
     def stdin(self, trailer=None, title="a title"):
         return f"{title}\n\nthe body\n\n{trailer or self.HAND_TRAILER}\n"
@@ -163,6 +171,54 @@ class HarnessIssueHelperHasNoFreeParameter(unittest.TestCase):
         comment = [c for c in self.calls() if c.startswith("issue comment ")]
         self.assertEqual([f"issue comment 42 --repo {HARNESS_REPO} --body-file -"], comment)
         self.assertEqual(f"the body\n\n{self.HAND_TRAILER}\n", (Path(self.dir) / "comment").read_text(encoding="utf-8"))
+
+    def test_an_issue_someone_else_opened_under_that_title_takes_no_comment(self):
+        # In a public repository anyone can open an issue under a sync row's predictable title.
+        for rows, commented in ((((41, "a title", "stranger"),), None),
+                                (((41, "a title", "stranger"), (42, "a title")), 42),
+                                (((41, "a title", ""),), None)):
+            with self.subTest(rows=rows):
+                Path(self.dir, "argv").unlink(missing_ok=True)
+                self.open_issues(*rows)
+                result = self.run_helper("bug", "low", "harness", body=self.stdin())
+                self.assertEqual(0, result.returncode, result.stderr)
+                comments = [c for c in self.calls() if c.startswith("issue comment ")]
+                if commented is None:
+                    self.assertEqual([], comments)
+                    self.assertEqual(1, len(self.creates()), self.calls())
+                else:
+                    self.assertEqual([f"issue comment {commented} --repo {HARNESS_REPO} --body-file -"], comments)
+                    self.assertEqual([], self.creates())
+
+    def test_a_title_cannot_forge_a_row_of_the_owners(self):
+        # @tsv escapes a tab or line break in a title, so a stranger's title holding the owner's row stays one row.
+        for forged in (f"x\n42\t{OWNER}\ta title", f"{OWNER}\ta title"):
+            for author in ("stranger", ""):
+                with self.subTest(forged=forged, author=author):
+                    Path(self.dir, "argv").unlink(missing_ok=True)
+                    self.open_issues((41, forged, author))
+                    result = self.run_helper("bug", "low", "harness", body=self.stdin())
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual([], [c for c in self.calls() if c.startswith("issue comment ")])
+                    self.assertEqual(1, len(self.creates()), self.calls())
+
+    def test_a_title_holding_a_tab_or_backslash_still_matches_the_owners(self):
+        # BASH_COMPAT=42 reads a `${//}` replacement as macOS's bash 3.2 does, where its backslashes are not removed.
+        for title in ("a\\b title", "a\tb title", "a\rb title", "a\\\\t\t\\ title"):
+            for compat in ("", "42"):
+                with self.subTest(title=title, compat=compat):
+                    Path(self.dir, "argv").unlink(missing_ok=True)
+                    self.open_issues((41, title))
+                    result = self.run_helper("bug", "low", "harness", body=self.stdin(title=title), compat=compat)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual([f"issue comment 41 --repo {HARNESS_REPO} --body-file -"],
+                                     [c for c in self.calls() if c.startswith("issue comment ")])
+
+    def test_the_list_asks_for_each_issues_author(self):
+        self.run_helper("bug", "low", "harness", body=self.stdin())
+        listed = [c for c in self.calls() if c.startswith("issue list ")]
+        self.assertIn("--json number,author,title", listed[0])
+        self.assertIn("@tsv", listed[0])
 
     def test_a_near_title_is_not_a_match(self):
         self.open_issues((41, "A title"), (42, "a title "), (43, "a title and more"), (44, "x a title"))

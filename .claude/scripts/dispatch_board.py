@@ -5,6 +5,7 @@ the run's commands are dispatch_run.py's, reached from here so one grant covers 
 """
 
 import argparse
+import collections
 import contextlib
 import functools
 import hashlib
@@ -31,7 +32,16 @@ TASK_AT = {"In progress": 2, "Remaining": 3, "Tracking": 3, "Paused": 1}
 NUMBER_AT = {"In progress": 1, "Remaining": 2, "Tracking": 2, "Paused": 0}
 WAVE, GROUP, TASK, LABELS, DEPENDS, MODEL, CONFLICTS = 0, 1, 3, 4, 5, 6, 7
 MODELS = {"Opus": "opus", "Sonnet": "sonnet"}
-EXTENSIONS = "cs|csproj|py|sh|md|json|ya?ml|sql|ps1|props|slnx|toml"
+# Common source and config types of the backend and the frontend: a path this misses narrows a claim.
+EXTENSIONS = ("cs|csproj|py|sh|md|json|ya?ml|sql|ps1|props|slnx|toml|tsx?|[mc]?js|html|s?css|xml|gradle|kts?|java|"
+              "swift|plist|properties|pbxproj|xcconfig|storyboard")
+# A slashless `<name>.js`, `Node.js` or `zone.js`, is as often a product or a package as a file: read as one, it
+# would make an empty claim look known. A script still claims by a path with a slash, but for the bare pair of
+# product names `_product_pair` reads.
+PRODUCT = re.compile(r"[^/]+\.[mc]?js")
+# Lower-case first names of such a pair, beside a `PRODUCT` one; any other lower-case first segment may be a
+# directory the task creates.
+PRODUCT_TOOLS = frozenset({"bun", "deno", "node", "npm", "pnpm", "yarn"})
 BARE_PATH = re.compile(rf"(?<![\w./\\-])([\w.\\/-]+\.(?:{EXTENSIONS}))(?!\w)", re.IGNORECASE)
 KNOWN_FILE = re.compile(rf"\.(?:{EXTENSIONS})$", re.IGNORECASE)
 # A code span may cross a line break inside a paragraph, but no block boundary: a fence's delimiter line, a blank
@@ -296,12 +306,46 @@ def extract_paths(text):
     for quoted in (span for block in blocks for span in re.findall(r"`([^`]+)`", block)):
         for piece in quoted.split():
             path = _normalise(piece)
-            # A slash command or a dotted identifier is not a file: it would make an empty claim look known.
-            if KNOWN_FILE.search(path) or _slash_path(path):
+            # A slash command or a dotted identifier is not a file: it would make an empty claim look known. A trailing
+            # slash names a directory, top-level ones included, which `_normalise` has stripped.
+            directory = re.search(r"[/\\][.,;:)\]>'\"]*$", piece) is not None
+            if PRODUCT.fullmatch(path):
+                continue
+            if KNOWN_FILE.search(path) or _slash_path(path + "/" if directory else path):
                 found.add(path)
-    found.update(_normalise(m) for m in BARE_PATH.findall(text))
+    found.update(_bare_paths(text))
     found.discard("")
     return frozenset(found)
+
+
+def _bare_paths(text):
+    for raw in BARE_PATH.findall(text):
+        path = _normalise(raw)
+        parts = path.split("/")
+        # The match is greedy across a slash, so `README.md/client.ts` names two files: at each segment ending in a
+        # known type, what lies before and after it claims too, or either file would drop out of the claim.
+        for end in range(1, len(parts)):
+            if KNOWN_FILE.search(parts[end - 1]):
+                yield from (side for side in ("/".join(parts[:end]), "/".join(parts[end:]))
+                            if side and not PRODUCT.fullmatch(side))
+        if not PRODUCT.fullmatch(path) and not _product_pair(raw, parts):
+            yield path
+
+
+def _product_pair(raw, parts):
+    """Whether a bare match is two product names, `npm/Node.js` or `React.js/Next.js`, and so no path.
+
+    Only a capitalised second name under a product first, capitalised, in `PRODUCT_TOOLS` or a `PRODUCT` name,
+    that names no directory; anything else claims, as does every pair when the checkout cannot be walked, since
+    `_slash_path` errs towards exclusive too."""
+    if len(parts) != 2 or not PRODUCT.fullmatch(parts[1]):
+        return False
+    first, second = raw.replace("\\", "/").rsplit("/", 1)
+    product = first[:1].isupper() or parts[0] in PRODUCT_TOOLS or PRODUCT.fullmatch(parts[0])
+    if not second[:1].isupper() or not product:
+        return False
+    names = _directory_names()
+    return names is not None and parts[0] not in names
 
 
 def _numbers(text):
@@ -350,9 +394,10 @@ def _touch(a, b):
     if "/" in a and "/" in b:
         # Either may be partial, named from below the root, so one matches the other at any run of whole segments.
         return f"/{b}/" in f"/{a}/" or f"/{a}/" in f"/{b}/"
+    # A slash-free name is a file or a directory, so it touches a path holding it as any whole segment.
     if "/" in b:
-        return b.endswith("/" + a)
-    return "/" in a and a.endswith("/" + b)
+        return a in b.split("/")
+    return "/" in a and b in a.split("/")
 
 
 def overlaps(a, a_id, a_issues, b, b_id, b_issues):
@@ -376,20 +421,25 @@ def model_problem(model):
     return None if model in MODELS else f"model {model!r} is not one of {', '.join(MODELS)}"
 
 
-def _blocker(row, open_issues, today, bodies, berserk=False):
-    """Why a row cannot launch, or None. `berserk` lifts the human wait and the .claude/ reach and nothing else."""
+def _blocker(row, open_issues, today, bodies, berserk=False, restored=None):
+    """Why a row cannot launch, or None. `berserk` lifts the human wait and the .claude/ reach and nothing else;
+    `restored`, for a row whose owner ran its hand-back script, is *Depends on* as it read before `tasks back`
+    marked it, so the lift is those marks and nothing a human wrote."""
     if row.number is None:
         return "owed, not filed"
+    cell = row.cells[DEPENDS] if restored is None else restored
     # GitHub's label names are case-insensitive: `Question` asks as `question` does.
     labels = {label.strip().casefold() for label in row.cells[LABELS].split(",")}
-    if not berserk and ("question" in labels or OWNER.search(f"{row.cells[TASK]} {row.cells[DEPENDS]}")):
+    # The cell is rewritten only when the row changes section; a label added on GitHub since holds it all the same.
+    labels |= getattr(open_issues, "labels", {}).get(row.number, frozenset())
+    if not berserk and ("question" in labels or OWNER.search(f"{row.cells[TASK]} {cell}")):
         return "waits on a human"
     for label in ("paused", "tracking"):
         if label in labels:
             return f"labelled {label}"
-    if berserk and SENT_BACK in row.cells[DEPENDS]:
+    if berserk and SENT_BACK in cell:
         return SENT_BACK
-    depends = _without_owner(row.cells[DEPENDS]) if berserk else row.cells[DEPENDS]
+    depends = _without_owner(cell) if berserk else cell
     if UNPLACED in depends:
         return "unplaced: no session has chosen its wave and group"
     if depends.strip().casefold() != "none":
@@ -422,10 +472,12 @@ def _blocker(row, open_issues, today, bodies, berserk=False):
     return model_problem(row.cells[MODEL])
 
 
-def ready(group, open_issues, today, bodies=None, berserk=False, kept=frozenset()):
-    """Whether every row may launch, and the first that may not. A row in `kept` is one the flag does not lift."""
+def ready(group, open_issues, today, bodies=None, berserk=False, kept=frozenset(), restored=None):
+    """Whether every row may launch, and the first that may not. A row in `kept` is one the flag does not lift;
+    `restored` maps a resumed row's key to its *Depends on* before `tasks back`."""
     for row in group.rows:
-        why = _blocker(row, open_issues, today, bodies or {}, berserk and row.key not in kept)
+        why = _blocker(row, open_issues, today, bodies or {}, berserk and row.key not in kept,
+                       (restored or {}).get(row.key))
         if why:
             return False, why
     return True, ""
@@ -436,17 +488,19 @@ def strangers(group, owned):
     return [row.key for row in group.rows if row.number is not None and row.number not in owned]
 
 
-def runnable(group, owned, open_issues, today, bodies=None, berserk=False, kept=frozenset()):
+def runnable(group, owned, open_issues, today, bodies=None, berserk=False, kept=frozenset(), restored=None):
     """`ready`, behind the gate no flag lifts: on a public repository an issue is a work order only from the owner."""
     held = strangers(group, owned)
     if held:
         return False, f"{NOT_OWNERS}: {', '.join(held)}"
-    return ready(group, open_issues, today, bodies, berserk, kept)
+    return ready(group, open_issues, today, bodies, berserk, kept, restored)
 
 
-def released(candidates, ready_map, open_issues, today, bodies):
-    """Each group `ready_map` holds ready that would not be without the flag, with what the flag lifted."""
-    plain = ((g.id, ready(g, open_issues, today, bodies)) for g in candidates if ready_map[g.id][0])
+def released(candidates, ready_map, open_issues, today, bodies, restored=None):
+    """Each group `ready_map` holds ready that would not be without the flag, with what the flag lifted; a resumed
+    row is judged with its resume, since that lift is the owner's own and not the flag's."""
+    plain = ((g.id, ready(g, open_issues, today, bodies, restored=restored))
+             for g in candidates if ready_map[g.id][0])
     return {gid: why for gid, (ok, why) in plain if not ok}
 
 
@@ -454,15 +508,17 @@ def _own_issues(group):
     return {r.number for r in group.rows if r.number is not None}
 
 
-def pick(candidates, ready_map, claims, running, taken, slots, lifted=()):
+def pick(candidates, ready_map, claims, running, taken, slots, lifted=(), first=()):
     """Up to `slots` group ids to launch. `candidates` is every group, running ones included, so a running
-    group's issues are known; the earliest wave goes first, within it a group in `lifted` after the rest, so a limit
-    ends the night on the riskier work, and table order breaks a tie."""
+    group's issues are known; a group in `first`, one the owner's script resumed, goes before every other, its work
+    all but done; then the earliest wave, within it a group in `lifted` after the rest, so a limit ends the night on
+    the riskier work, and table order breaks a tie."""
     held = [(claims[g.id], g.id, _own_issues(g)) for g in candidates if g.id in running and g.id in claims]
     held += [(claim, claim.ident, set(claim.issues)) for claim in taken]
     unknown = Claim(frozenset(), frozenset(), frozenset(), True)
     chosen = []
-    order = sorted(range(len(candidates)), key=lambda i: (candidates[i].wave, candidates[i].id in lifted, i))
+    order = sorted(range(len(candidates)),
+                   key=lambda i: (candidates[i].id not in first, candidates[i].wave, candidates[i].id in lifted, i))
     for i in order:
         group = candidates[i]
         if len(chosen) >= slots:
@@ -531,6 +587,11 @@ def _place(lines, new_line, name="Remaining"):
 
 
 def move_to_in_progress(text, group, branch, worktree, today):
+    # `start_issue`'s checks: a pipe, a line break or a backtick in either cell would split or misread the row.
+    if not BRANCH_NAME.fullmatch(branch):
+        raise Refusal(f"branch {branch!r} is not a branch name")
+    if "`" in _one_line(worktree, "worktree"):
+        raise Refusal(f"worktree {worktree!r} holds a backtick")
     lines = _lines(text)
     cr = _cr(lines)
     _, _, rows, _ = _table(lines, _scan(lines), "Remaining")
@@ -543,7 +604,7 @@ def move_to_in_progress(text, group, branch, worktree, today):
            for r in group.rows]
     _remove(lines, "Remaining", {r.key for r in group.rows})
     _append(lines, "In progress", new)
-    return "\n".join(lines)
+    return _checked("\n".join(lines), text)
 
 
 def delete_in_progress(text, keys):
@@ -587,8 +648,6 @@ def place(text, wave, group, issue, task=None, labels=None, depends=None, model=
     for section in (tasks.in_progress, tasks.remaining, tasks.tracking, tasks.paused):
         if any(r.key == key for r in section):
             raise Refusal(f"{key} already has a row; a row lives in one table only")
-    if any(r.group == group for r in tasks.in_progress):
-        raise Refusal(f"{group} is held by an In progress row; a re-cut never reuses its letter and number")
     existing = next((g for g in groups(tasks) if g.id == group), None)
     cells = (str(wave), group, str(issue), task or "Filed by /dispatch; read the issue", labels or "code",
              depends or "OWNER", model or (existing.model if existing else "Opus"), conflicts or "none")
@@ -596,17 +655,43 @@ def place(text, wave, group, issue, task=None, labels=None, depends=None, model=
     _place(lines, _line(cells, _cr(lines)))
     result = "\n".join(lines)
     groups(parse_tasks(result))
+    unheld(tasks, parse_tasks(result))
     return result
+
+
+def unheld(before, after):
+    """Refuse a Remaining or Tracking row of `after` in a group an In progress row holds, unless it carried that
+    group in `before`: a re-cut never reuses a held letter and number, which the night reads as one claim.
+
+    An owed row's key is its task's wording, which a rewrite may change, so owed rows are counted by group instead:
+    a held group may keep or reword its owed rows, never gain one."""
+    held = {r.group for r in after.in_progress if r.group}
+    carried = {(r.key, r.group) for r in before.remaining + before.tracking + before.in_progress}
+    for row in after.remaining + after.tracking:
+        if row.number is not None and row.group in held and (row.key, row.group) not in carried:
+            raise Refusal(f"{row.group} is held by an In progress row; a re-cut never reuses its letter and number")
+
+    def owed(tasks):
+        return collections.Counter(r.group for r in tasks.remaining + tasks.tracking + tasks.in_progress
+                                   if r.number is None)
+
+    was, now = owed(before), owed(after)
+    gained = sorted(g for g in held if now[g] > was[g])
+    if gained:
+        raise Refusal(f"{gained[0]} is held by an In progress row; a re-cut never reuses its letter and number")
 
 
 # A day session's moves: one issue's row, keyed by its number, with no run
 
-def _checked(text):
-    """The list a day write would leave, refused unless `board`'s parser reads it, so the night never stops on it."""
+def _checked(text, before=None):
+    """The list a write would leave, refused unless `board`'s parser reads it, so the night never stops on it, or,
+    given the list `before` it, where it puts a row in a group In progress holds."""
     try:
         groups(parse_tasks(text))
     except Refusal as refusal:
         raise Refusal(f"the list this write leaves is one board refuses: {refusal}") from None
+    if before is not None:
+        unheld(parse_tasks(before), parse_tasks(text))
     return text
 
 
@@ -702,7 +787,7 @@ def return_issue(text, number, saved):
         raise Refusal(f"the row saved for {key} is {row.key}'s")
     _place(lines, _line(row.cells, _cr(lines)))
     # A row someone wrote for the issue since its start is a clash `board`'s parser names here.
-    return _checked("\n".join(lines))
+    return _checked("\n".join(lines), text)
 
 
 def set_issue_state(text, number, state, branch=None):
@@ -816,16 +901,18 @@ def _cells_for(section, issue, tasks, cells, old=None, owned=frozenset()):
         return str(issue.number), task, labels, cells.get("why", PAUSED_WHY), cells.get("resume", PAUSED_RESUME)
     kept = old if old is not None and old.section in ("Remaining", "Tracking") else None
     waves = [r.wave for r in tasks.remaining + tasks.tracking if r.wave is not None]
-    wave = cells.get("wave") or (str(kept.wave) if kept else str(max(waves, default=1)))
     group = cells.get("group") or (kept.group if kept else None)
     fresh = section == "Remaining" and not (group and re.fullmatch(ROW_GROUP.pattern, group))
     if fresh:
         group = _fresh_group(tasks)
+    existing = next((g for g in groups(tasks) if g.id == group), None) if section == "Remaining" else None
+    # A group never spans a wave, so a row joining one already in Remaining takes its wave unless the caller names one.
+    wave = cells.get("wave") or (str(existing.wave) if existing else str(kept.wave) if kept
+                                 else str(max(waves, default=1)))
     # A group the helper made up is no session's placement, so the row waits until one regroups it.
     depends = cells.get("depends") or (UNPLACED if fresh else kept.cells[DEPENDS] if kept else "none")
     if "question" in issue.labels and not OWNER.search(depends):
         depends = "OWNER" if depends.casefold() == "none" else f"OWNER; {depends}"
-    existing = next((g for g in groups(tasks) if g.id == group), None) if section == "Remaining" else None
     model = cells.get("model") or (existing.model if existing else None) or (kept.cells[MODEL] if kept else None)
     if section == "Remaining" and model not in MODELS:
         model = "Opus"
@@ -861,7 +948,7 @@ def settle(text, issue, cells=None, new=False, owned=frozenset()):
         if row is None:
             return None, f"{key} is closed and has no row"
         _remove(lines, row.section, {key})
-        return _checked("\n".join(lines)), f"deleted {key} from {row.section}: the issue is closed"
+        return _checked("\n".join(lines), text), f"deleted {key} from {row.section}: the issue is closed"
     if row is not None and row.section == target:
         return None, f"{key} is already in {target}"
     if row is not None:
@@ -869,7 +956,7 @@ def settle(text, issue, cells=None, new=False, owned=frozenset()):
         tasks = parse_tasks("\n".join(lines))
     _insert(lines, target, _cells_for(target, issue, tasks, cells, row, owned))
     done = f"moved {key} from {row.section} to {target}" if row else f"added {key} to {target}"
-    return _checked("\n".join(lines)), done
+    return _checked("\n".join(lines), text), done
 
 
 def reconcile(text, issues, merged=lambda _branch: False, owned=frozenset()):
@@ -931,7 +1018,7 @@ def rewrite_day(live, rebuilt):
     cr = _cr(_lines(live))
     rebuilt = rebuilt.replace("\r\n", "\n").replace("\n", cr + "\n")
     before, after = parse_tasks(live), parse_tasks(rebuilt)
-    _checked(rebuilt)
+    _checked(rebuilt, live)
     if sorted(r.line for r in before.in_progress) != sorted(r.line for r in after.in_progress):
         raise Refusal("the rewrite changes In progress; its rows change only through start, state, done and back")
     _same_issues(before, after)
@@ -1175,20 +1262,27 @@ def _held(tasks, bodies, branch_source):
 
 
 def board(text, today, bodies, open_issues, branch_source=lambda _branch: frozenset(), berserk=False,
-          kept=frozenset(), *, owned):
+          kept=frozenset(), *, owned, resumed=None, restored=None):
+    """One line per Remaining group, then, from `resumed` (group id to its line and its worktree), a `resumed` line
+    for each resumed group that is ready and a `resume held` line for each that is not: one a restored question
+    still holds is the interview's, as any row waiting on a human is."""
     tasks = parse_tasks(text)
     held = _held(tasks, bodies, branch_source)
-    out = []
+    out, resumed, ready_resumed = [], resumed or {}, []
     for group in groups(tasks):
         claim = group_claim(group, bodies)
-        ok, why = runnable(group, owned, open_issues, today, bodies, berserk, kept)
-        lifted = released([group], {group.id: (ok, why)}, open_issues, today, bodies).get(group.id)
+        ok, why = runnable(group, owned, open_issues, today, bodies, berserk, kept, restored)
+        lifted = released([group], {group.id: (ok, why)}, open_issues, today, bodies, restored).get(group.id)
         by = next((c.ident or r.key for c, r in held
                    if overlaps(claim, group.id, _own_issues(group), c, c.ident or r.key, set(c.issues))), None)
-        readiness = f"released: {lifted}" if lifted else "ready" if ok else f"not ready: {why}"
+        readiness = (f"released: {lifted}" if lifted else "resumed" if ok and group.id in resumed
+                     else "ready" if ok else f"not ready: {why}")
         out.append(" | ".join((group.id, f"wave {group.wave}", readiness,
                                "free" if by is None else f"taken by {by}", f"{len(claim.paths)} paths")))
-    return out or ["no groups in Remaining"]
+        if group.id in resumed:
+            line, worktree = resumed[group.id]
+            ready_resumed.append(line if ok else f"resume held {worktree}: {group.id} is not ready: {why}")
+    return (out or ["no groups in Remaining"]) + ready_resumed
 
 
 READ_COPY = "tasks.read.md"
@@ -1211,6 +1305,7 @@ def rewrite(live, read, rebuilt):
         raise Refusal("the rebuild changes the note above the sections, which is the owner's")
     before, after = parse_tasks(live), parse_tasks(rebuilt)
     groups(after)
+    unheld(before, after)
     # Another session's row is never the dispatcher's to drop or edit (spec section 4), whatever state.json holds.
     if sorted(r.line for r in before.in_progress) != sorted(r.line for r in after.in_progress):
         raise Refusal("the rebuild changes the In progress section; its rows change only through move, done and back")
@@ -1234,11 +1329,12 @@ def _placement(directory, issue):
 
 def _tasks_command(args, today):
     # The run's state.json is dispatch_run's, which imports this module, so it is reached at call time.
-    from dispatch_run import _close, _field, _note_placed, _record_move, _texts, berserk, load_state, run_dir
+    from dispatch_run import (_close, _field, _note_placed, _record_move, _texts, berserk, load_state,
+                              record_handback, reused, run_dir)
     directory = run_dir(args.root, args.run)
     # Only a run `start` opened is written to, so a mistyped name leaves no phantom state.json behind.
     state = load_state(directory)
-    after, undo = [], []
+    after, undo, returned = [], [], []
 
     def update(text):
         if args.action == "rewrite":
@@ -1250,6 +1346,10 @@ def _tasks_command(args, today):
             return rewrite(text, _read(copy) if copy.is_file() else None, source)
         tasks = parse_tasks(text)
         if args.action == "place":
+            # The placed issue has no row yet, so it is never one a sent-back group held.
+            reason = reused(state, args.group, [f"#{args.issue}"])
+            if reason is not None:
+                raise Refusal(reason)
             after.append(lambda: _note_placed(directory, args.issue))
             return place(text, args.wave, args.group, args.issue, **_placement(directory, args.issue))
         if args.action == "move":
@@ -1284,7 +1384,8 @@ def _tasks_command(args, today):
             raise Refusal(f"{args.group} is {status}: a claimed merge is verified and done, never sent back")
         # The In progress row no longer holds the wave, labels, depends, model or conflicts, so `back` needs these.
         after.append(lambda: _close(directory, args.group, "returned"))
-        return return_to_remaining(text, rows, keys, berserk(state)[0])
+        returned.append(entry)
+        return _checked(return_to_remaining(text, rows, keys, berserk(state)[0]), text)
 
     # The file is read here, at the moment of the write, so another session's edit since `board` is kept. A move's
     # record is written first and undone if the list write is refused, so neither is left without the other.
@@ -1305,6 +1406,11 @@ def _tasks_command(args, today):
         raise
     for step in after:
         step()
+    for entry in returned:
+        # Made here, by the list's one writer and after the executor exited, never from what the executor wrote alone.
+        line = record_handback(args.root, args.run, args.group, entry, text)
+        if line:
+            print(line)
 
 
 # The helpers both halves read GitHub and git through
@@ -1364,7 +1470,13 @@ def path_which(name):
 
 
 def git_bash():
-    return _no_relay(_bash_beside(path_which("git") or "") if os.name == "nt" else path_which("bash"))
+    if os.name != "nt":
+        return _no_relay(path_which("bash"))
+    git = path_which("git")
+    # `_bash_beside("")` would walk up from the working directory, which the checkout controls.
+    if git is None:
+        raise Refusal("no Git bash found beside the git on PATH")
+    return _no_relay(_bash_beside(git))
 
 
 @functools.cache
@@ -1498,10 +1610,11 @@ def branch_paths(root, branch):
         return frozenset()
     for ref in (branch, f"origin/{branch}"):
         try:
-            out = git(root, "diff", "--name-only", f"origin/main...{ref}", "--")
+            # --no-renames lists a move's vacated path too, and -z leaves a non-ASCII name unquoted.
+            out = git(root, "diff", "--name-only", "--no-renames", "-z", f"origin/main...{ref}", "--")
         except Refusal:
             continue
-        return frozenset(path for path in (_normalise(p) for p in out.splitlines()) if path)
+        return frozenset(path for path in (_normalise(p) for p in out.split("\0")) if path)
     return frozenset()
 
 
@@ -1516,11 +1629,13 @@ def issue_body(root, number):
 
 
 class OpenIssues(frozenset):
-    """The open issues' numbers, and as `known` every number the list holds, open or closed."""
+    """The open issues' numbers, as `known` every number the list holds, open or closed, and as `labels` each
+    listed issue's live labels, casefolded."""
 
-    def __new__(cls, numbers=(), known=None):
+    def __new__(cls, numbers=(), known=None, labels=None):
         made = super().__new__(cls, numbers)
         made.known = None if known is None else frozenset(known)
+        made.labels = {number: frozenset(names) for number, names in (labels or {}).items()}
         return made
 
     @classmethod
@@ -1538,7 +1653,14 @@ def open_issues(root):
         raise Refusal("gh-issue-list.sh did not print a list")
     issues = [item for item in data if isinstance(item, dict) and _number(item.get("number"))]
     return OpenIssues((item["number"] for item in issues if item.get("state") == "OPEN"),
-                      known=(item["number"] for item in issues))
+                      known=(item["number"] for item in issues),
+                      labels={item["number"]: _label_names(item) for item in issues})
+
+
+def _label_names(item):
+    labels = item.get("labels")
+    names = (label.get("name") if isinstance(label, dict) else label for label in labels or ())
+    return {name.casefold() for name in names if isinstance(name, str) and name} if isinstance(labels, list) else set()
 
 
 def all_issues(root):
@@ -1686,12 +1808,21 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
                 # What this board read is the only base `tasks rewrite` accepts a rebuild from, so it is kept
                 # before anything below can refuse: a list the board refuses is the one a rebuild must repair.
                 _write(directory / READ_COPY, text)
-            bodies = _bodies(parse_tasks(text), directory, bodies_from)
+            tasks = parse_tasks(text)
+            bodies = _bodies(tasks, directory, bodies_from)
             listed = OpenIssues.of(open_from())
-            print("\n".join(board(text, today, bodies, listed, branch_from, *flag, owned=owned_from())))
+            found, holds = dispatch_run.resumes(root, groups(tasks))
+            lines = {gid: (dispatch_run.resumed_line(gid, r), r.worktree) for gid, r in found.items()}
+            print("\n".join(board(text, today, bodies, listed, branch_from, *flag, owned=owned_from(),
+                                  resumed=lines, restored=dispatch_run.restored(found)) + holds))
         elif args.command == "tasks" and getattr(args, "run", None) is None:
             _day_command(args, issues_from_, merged_from, owned_from)
         elif args.command == "tasks":
+            # The granted `tasks` prefixes reach --run, whose state.json and handbacks.json decide what the
+            # dispatcher launches; an executor's `--root` could name the main checkout's.
+            if DISPATCHED in os.environ:
+                raise Refusal("a /dispatch executor writes no run: the dispatcher alone writes its state.json and "
+                              "handbacks.json")
             if not args.tasks:
                 raise Refusal(f"tasks {args.action} --run takes --tasks")
             _tasks_command(args, today)

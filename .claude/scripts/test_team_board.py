@@ -225,6 +225,12 @@ class ARoundThatCannotBeReadDidNotHappen(Checkout):
         self.assert_refused(1, "p2.json is not JSON")
         self.assertEqual([], list((self.run_path / "round-01").glob("*.md")), "a refused round left a record")
 
+    def test_a_reply_that_cannot_be_read_is_refused_and_no_peer_record_is_left(self):
+        self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+        (self.run_path / "round-01" / "p2.json").mkdir()  # matches p*.json, and reading it raises OSError
+        self.assert_refused(1, "p2.json cannot be read")
+        self.assertEqual([], list((self.run_path / "round-01").glob("*.md")), "a refused round left a record")
+
     def test_a_board_cut_short_is_a_refusal_naming_it(self):
         (self.run_path / "board.json").write_text('{"peers": ["p1", "p2"], "cla', encoding="utf-8")
         self.reply(1, "p1")

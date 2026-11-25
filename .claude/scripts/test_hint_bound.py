@@ -92,6 +92,18 @@ class HintBound(unittest.TestCase):
         r, _ = self.run_wrapper("PreToolUse", "index-search-hint.py", "exit 0\n")
         self.assertEqual((0, ""), (r.returncode, r.stdout))
 
+    def test_a_hook_outside_the_set_starts_nothing(self):
+        # A `py` that leaves a mark if it runs at all: a name outside the two hints must not reach an interpreter.
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        mark = Path(d) / "ran"
+        for hook in ("../scripts/sync_pr.py", "index-hook.sh", "refresh-index.py"):
+            with self.subTest(hook=hook):
+                r, _ = self.run_wrapper("PreToolUse", hook, f'touch "{mark.as_posix()}"\n')
+                self.assertEqual((0, ""), (r.returncode, r.stdout), r.stderr)
+                self.assertIn("not a hook this launcher runs", r.stderr)
+                self.assertFalse(mark.exists())
+
 
 class HintBoundUnderTheWatchdog(HintBound):
     """Every case above where no `timeout` is installed, as on macOS, so the bound is the watchdog's."""

@@ -55,7 +55,7 @@ jobs:
       # records.
       HARNESS_REPO: https://github.com/alexander-shamray/blueprint-harness
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The enforcing copies come out of the base commit, the commit gate's
           # range is base..head and the comment gate's diff needs the merge
@@ -65,7 +65,7 @@ jobs:
           # every git command below is local or reads the public harness.
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         id: setup
         with:
           python-version: '3.12'
@@ -173,8 +173,8 @@ jobs:
           fi
 
       # The pull request that introduces the gate has a base carrying none, so
-      # it is judged by its own copy, with a notice. A base that predates the
-      # gate while the head also lacks it still fails.
+      # it is judged by its own copy, with a notice. A base commit that is
+      # missing, or a head that also lacks the gate, fails.
       - name: Take the enforcing commit gate from the base commit
         id: commit_take
         if: ${{ !cancelled() && steps.dependabot.outcome == 'success' && steps.dependabot.outputs.own != 'true' }}
@@ -185,6 +185,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/commit-gate"
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::the base commit $BASE_SHA is not in the checkout"
+            exit 1
+          fi
           if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
             git show "$BASE_SHA:$GATE" > "$RUNNER_TEMP/commit-gate/commit_gate.py"
             echo "enforcing with the gate as of $BASE_SHA"
@@ -326,6 +330,10 @@ jobs:
         run: |
           set -euo pipefail
           judge="$RUNNER_TEMP/comment_gate.py"
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::the base commit $BASE_SHA is not in the checkout"
+            exit 1
+          fi
           if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
             git show "$BASE_SHA:$GATE" > "$judge"
             # An empty judge would read nothing and pass.
@@ -341,6 +349,10 @@ jobs:
             echo "::warning::base commit $BASE_SHA carries no comment gate;" \
               "this pull request is judged by the gate it proposes (bootstrap)"
             cp "$GATE" "$judge"
+            if [ ! -s "$judge" ]; then
+              echo "::error::$GATE in this pull request is empty"
+              exit 1
+            fi
           fi
           python "$judge" --base "$BASE_SHA" --head "$HEAD_SHA"
 

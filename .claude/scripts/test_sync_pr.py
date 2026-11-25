@@ -20,6 +20,15 @@ import dispatch_board
 import sync_pr
 from review_helpers import copy_template, fixture_template
 
+
+def link_directory(target, linkpath):
+    """A directory link: a symlink, or a junction where Windows refuses this process one."""
+    try:
+        os.symlink(target, linkpath, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        from _winapi import CreateJunction
+        CreateJunction(str(target), str(linkpath))
+
 NEW_H = "1234567890abcdef1234567890abcdef12345678"
 OLD_H = "a" * 40
 HEAD_NAME = f"chore/harness-sync-{NEW_H[:7]}"
@@ -862,6 +871,27 @@ class ReviewDiffTests(SyncCase):
                     str(self.root / "artifacts/review/x.txt")):
             self.assertEqual(2, self.cli("review-diff", "7", bad)[0], bad)
         self.assertEqual("target\n", (self.root / "README.md").read_text(encoding="utf-8"))
+
+    def test_review_diff_refuses_an_artifacts_directory_that_is_a_link(self):
+        # Resolving both sides follows the link, so the .diff would land wherever it points, outside the checkout.
+        self.start()
+        for linked in ("artifacts", "artifacts/review"):
+            with self.subTest(linked=linked), tempfile.TemporaryDirectory() as away:
+                if (self.root / "artifacts").exists():
+                    shutil.rmtree(self.root / "artifacts")
+                elsewhere, link = Path(away), self.root / linked
+                if linked == "artifacts":
+                    (elsewhere / "review").mkdir()
+                else:
+                    (self.root / "artifacts").mkdir()
+                link_directory(elsewhere, link)
+                try:
+                    code, _, err = self.cli("review-diff", "7", self.out_path())
+                    self.assertEqual(2, code, err)
+                    self.assertIn("is one", err)
+                    self.assertEqual([], [p.name for p in elsewhere.rglob("*.diff")])
+                finally:
+                    os.unlink(link) if os.path.islink(link) else os.rmdir(link)
 
     def test_review_diff_writes_nothing_when_a_read_fails(self):
         self.start()

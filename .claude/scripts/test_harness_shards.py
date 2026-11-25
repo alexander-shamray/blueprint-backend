@@ -608,7 +608,7 @@ class OneRunAtATime(unittest.TestCase):
                 "r = importlib.util.module_from_spec(spec); spec.loader.exec_module(r)\n"
                 "h = open(sys.argv[2], 'a+b')\n"
                 "sys.exit(0 if not r.try_lock(h) else os._exit(7))\n")
-            out = subprocess.run([sys.executable, "-c", child, str(RUNNER),
+            out = subprocess.run([sys.executable, "-P", "-c", child, str(RUNNER),
                                   str(path)], timeout=120)
             self.assertEqual(7, out.returncode, "the child never held the lock")
             with open(path, "a+b") as after:

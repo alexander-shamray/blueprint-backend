@@ -4,6 +4,7 @@ A stub `gh` sits first on PATH, so a refusal that regressed records a call rathe
 the positive control records the argv, the environment and the body `gh pr create` read, from where it ran.
 """
 
+import fnmatch
 import os
 import re
 import subprocess
@@ -215,6 +216,22 @@ def frontmatter_grants(name):
     return [item.strip() for item in line.split(":", 1)[1].split(",")]
 
 
+RAW_CREATE = "gh pr create"
+
+
+def grants_raw_create(grant):
+    """Whether one `allowed-tools` item admits `gh pr create`: its own spelling, a prefix rule that reaches it, or a
+    wildcard pattern it matches. A bare `Bash` or `Bash(*)` is another case's to refuse."""
+    rule = re.fullmatch(r"Bash\((.+)\)", grant)
+    if not rule:
+        return False
+    pattern = rule.group(1).strip()
+    if pattern.endswith(":*"):
+        prefix = pattern[:-2].rstrip()
+        return RAW_CREATE.startswith(prefix) or prefix.startswith(RAW_CREATE)
+    return pattern.startswith(RAW_CREATE) or ("*" in pattern and fnmatch.fnmatchcase(RAW_CREATE, pattern))
+
+
 class TheCommandsOpenThroughTheHelper(unittest.TestCase):
     """The raw grant is withdrawn from every command, and the two that open a pull request are granted the helper."""
 
@@ -225,8 +242,18 @@ class TheCommandsOpenThroughTheHelper(unittest.TestCase):
         for path in sorted(COMMANDS.glob("*.md")):
             seen += 1
             with self.subTest(command=path.name):
-                self.assertNotIn("Bash(gh pr create", path.read_text(encoding="utf-8").split("---")[1])
+                self.assertEqual([], [grant for grant in frontmatter_grants(path.name) if grants_raw_create(grant)])
         self.assertGreater(seen, 5, "found almost no commands")
+
+    def test_a_prefix_grant_that_reaches_the_raw_form_is_caught(self):
+        # The subject of the case above: `gh:*` and `gh pr:*` admit `gh pr create` as surely as its own spelling.
+        for grant in ("Bash(gh:*)", "Bash(gh pr:*)", "Bash(gh pr create:*)", "Bash(gh pr create --fill)",
+                      "Bash(gh pr *)", "Bash(gh *)"):
+            with self.subTest(grant=grant):
+                self.assertTrue(grants_raw_create(grant))
+        for grant in ("Bash(gh pr checks:*)", "Bash(bash .claude/scripts/gh-pr-create.sh:*)", "Read", "Bash(git:*)"):
+            with self.subTest(grant=grant):
+                self.assertFalse(grants_raw_create(grant))
 
     def test_pr_and_ship_are_granted_the_helper(self):
         # The positive control: withdrawing the raw grant and granting nothing would pass the case above and break

@@ -84,6 +84,9 @@ NOT_SEARCHES = (
     "cat build.log | rg Error",
     "rg Error < build.log",
     "git diff | rg ClaimAsync -",
+    "git diff |(rg ClaimAsync)",
+    "git diff | (rg ClaimAsync)",
+    "(git diff)| rg ClaimAsync",
     "grep -r ClaimAsync -",
     "rg ClaimAsync <<< \"$text\"",
     "grep -rn Saga docs/backend-architecture",
@@ -130,6 +133,12 @@ def bash_call(command):
 def tool_use(call_id, name, given):
     return {"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "tool_use", "id": call_id, "name": name, "input": given}]}}
+
+
+def asked_directory() -> str:
+    """The hook's record directory under the temp root: per user where the
+    root is shared."""
+    return "claude-index-ask" if not hasattr(os, "getuid") else f"claude-index-ask-{os.getuid()}"
 
 
 class Session:
@@ -489,8 +498,45 @@ class WhenItAsks(Scratch):
                 done = Session(self.scratch).before(*grep_call(), session_id=session)
                 self.assertEqual("", reason(done))
         session = Session(self.scratch)
-        (session.temp / "claude-index-ask").write_text("", encoding="utf-8")
+        (session.temp / asked_directory()).write_text("", encoding="utf-8")
         self.assertEqual("", reason(session.before(*grep_call())))
+
+    def test_the_records_sit_in_a_directory_of_this_users_shut_to_others(self):
+        session = Session(self.scratch)
+        self.assertTrue(reason(session.before(*grep_call())))
+        made = session.temp / asked_directory()
+        self.assertTrue((made / session.id).is_file())
+        self.assertEqual(["claude-index-ask"] if not hasattr(os, "getuid") else [f"claude-index-ask-{os.getuid()}"],
+                         [entry.name for entry in session.temp.iterdir()])
+        if hasattr(os, "getuid"):
+            self.assertEqual(0o700, made.stat().st_mode & 0o777)
+
+    def test_a_directory_another_user_could_have_made_is_never_written_into(self):
+        """A shared temp root lets anyone make the directory first, or a
+        link in its place; the call then goes through, as an unrecorded one
+        does, and nothing lands where the other user can read it."""
+        if not hasattr(os, "getuid"):
+            hook = module()
+            plain = self.scratch / "plain"
+            plain.mkdir()
+            self.assertTrue(hook.private(plain), "Windows keeps a temp root per user")
+            return
+        for shape in ("open to others", "a link"):
+            with self.subTest(shape=shape):
+                own = self.scratch / shape.replace(" ", "-")
+                own.mkdir()
+                session = Session(own)
+                elsewhere = self.scratch / f"elsewhere-{shape.replace(' ', '-')}"
+                elsewhere.mkdir(mode=0o700)
+                made = session.temp / asked_directory()
+                if shape == "a link":
+                    made.symlink_to(elsewhere, target_is_directory=True)
+                else:
+                    made.mkdir()
+                    made.chmod(0o777)
+                self.assertEqual("", reason(session.before(*grep_call())))
+                self.assertEqual([], list(elsewhere.iterdir()))
+                self.assertEqual([], list(made.iterdir()))
 
     def test_text_that_mentions_a_tool_call_is_not_one(self):
         mention = {"type": "user", "message": {"role": "user", "content": [

@@ -105,6 +105,24 @@ class GuardIndexArgv(unittest.TestCase):
                 self.assertIsNotNone(reason)
                 self.assertIn("write redirection", reason)
 
+    def test_a_redirection_to_the_null_device_is_admitted(self):
+        cbx = "bash .claude/skills/codebase-index/scripts/cbx search Foo --json"
+        for redirect in ("2>/dev/null", "> /dev/null", ">>/dev/null",
+                         "&>/dev/null", "&>> /dev/null", ">|/dev/null",
+                         "2>&1 >/dev/null", ">&/dev/null"):
+            with self.subTest(redirect=redirect):
+                self.assertIsNone(self.judge(f"{cbx} {redirect}"))
+
+    def test_only_the_bare_null_device_is_admitted(self):
+        cbx = "bash .claude/skills/codebase-index/scripts/cbx search Foo --json"
+        for redirect in ("2>/dev/nullx", "> /dev/null/../../tmp/x",
+                         "> /dev/null.json", "2>'/dev/null'",
+                         "> /dev/null 2> /tmp/err"):
+            with self.subTest(redirect=redirect):
+                reason = self.judge(f"{cbx} {redirect}")
+                self.assertIsNotNone(reason)
+                self.assertIn("write redirection", reason)
+
     def test_a_descriptor_duplication_is_admitted(self):
         self.assertIsNone(self.judge(
             "bash .claude/skills/codebase-index/scripts/cbx search x 2>&1"))

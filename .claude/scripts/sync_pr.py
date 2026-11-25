@@ -478,10 +478,26 @@ def review_target(raw):
     """The file review-diff may write: a .diff directly under artifacts/review, in this checkout."""
     path = Path(raw)
     path = path if path.is_absolute() else ROOT / path
+    link = linked_below(ROOT, REVIEW_DIR)
+    if link is not None:
+        raise Refusal(f"review-diff writes under {REVIEW_DIR}/ only where no part of it is a link, and {link} is one")
     allowed = (ROOT / REVIEW_DIR).resolve()
     if path.suffix != ".diff" or path.resolve().parent != allowed:
         raise Refusal(f"review-diff writes only a .diff file directly under {REVIEW_DIR}/, not {raw}")
     return path
+
+
+def linked_below(root, relative):
+    """The first directory of `relative` under `root`, itself included, that is a symlink or a junction, or None.
+
+    Resolving both sides of a containment check follows such a link, so a linked artifacts/ would move the boundary
+    the check holds; this is asked of each part before the check is trusted."""
+    path = Path(root)
+    for part in Path(relative).parts:
+        path = path / part
+        if os.path.islink(path) or getattr(os.path, "isjunction", lambda _: False)(path):
+            return path
+    return None
 
 
 def local_suites():

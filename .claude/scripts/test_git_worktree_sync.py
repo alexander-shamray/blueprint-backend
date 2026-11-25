@@ -66,7 +66,7 @@ class SyncShape(unittest.TestCase):
         self.assertNotIn(".claude", status.stdout)
 
     def test_a_narrowed_fetch_refspec_never_opens_a_stale_origin_tip(self):
-        # A bare `git fetch origin <branch>` leaves an unmapped origin/<branch> where it was; `--track` is what refuses it.
+        # The explicit refspec moves an unmapped origin/<branch> to the tip; `--track` still refuses a ref no remote maps.
         root = self.fixture()
         checkout = f"{root}/checkout"
         made = run_bash(
@@ -79,6 +79,11 @@ class SyncShape(unittest.TestCase):
         self.assertIn("is not a branch", result.stderr)
         listed = run_bash('git -C "$C" worktree list --porcelain', C=checkout)
         self.assertNotIn("sync-abcdef0", listed.stdout)
+        tips = run_bash('git -C "$C" rev-parse "refs/remotes/origin/$B" && git -C "$S" rev-parse "$B"',
+                        C=checkout, S=f"{root}/seed", B=BRANCH)
+        self.assertEqual(0, tips.returncode, tips.stderr)
+        fetched, seed = tips.stdout.split()
+        self.assertEqual(seed, fetched, "the fetch wrote origin's tip into the tracking ref")
 
     def test_the_add_spells_core_longpaths_in_a_code_line(self):
         # Only a Windows run can fail on a path past 260 characters, so the spelling is held on every platform,
@@ -113,6 +118,17 @@ class SyncShape(unittest.TestCase):
         result = self.sync(f"{root}/checkout")
         self.assertEqual(3, result.returncode)
         self.assertIn("branch already exists", result.stderr)
+
+    def test_a_local_branch_differing_only_in_case_is_refused(self):
+        # Packed, so a case-insensitive filesystem holds both spellings and only the fold refuses there; a
+        # case-sensitive one holds both anyway, where the exact check misses the sibling.
+        root = self.fixture()
+        run_bash('git -C "$C" branch "$B" && git -C "$C" pack-refs --all', C=f"{root}/checkout", B=BRANCH.upper())
+        before = run_bash('git -C "$C" for-each-ref', C=f"{root}/checkout").stdout
+        result = self.sync(f"{root}/checkout")
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertIn("differs only in case", result.stderr)
+        self.assertEqual(before, run_bash('git -C "$C" for-each-ref', C=f"{root}/checkout").stdout)
 
     def test_a_branch_origin_lacks_is_refused(self):
         root = self.fixture()

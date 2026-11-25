@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # File one issue in the harness repository from a target, for /ship's sync row,
 # and nowhere else: closed-set kind, severity and area, title and body as bytes
-# on stdin with the hand route's last line. An open issue of that exact title
-# takes the body as a comment, so a re-taken sync adds to its issue.
+# on stdin with the hand route's last line. The owner's open issue of that exact
+# title takes the body as a comment, so a re-taken sync adds to its issue.
 set -euo pipefail
 # `bounded`, which every `gh` call below runs under: GNU `timeout` where it is installed, a watchdog on macOS.
 . "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
@@ -62,16 +62,37 @@ repo=alexander-shamray/blueprint-harness
 # nothing, since filing would repeat what a match takes; so does a list that
 # fills the limit, which may hide the match.
 limit=1000
+# Only the owner's issue takes the comment, as gh-issue-suppresses.sh judges:
+# anyone can open one under a sync row's predictable title.
+owner="${repo%%/*}"
 open=$(bounded 60 gh issue list --repo "$repo" --state open --limit "$limit" \
-  --json number,title --jq '.[] | "\(.number)\t\(.title)"') ||
+  --json number,author,title --jq '.[] | [.number, (.author.login // ""), .title] | @tsv') ||
   { echo "cannot search the harness's open issues" >&2; exit 3; }
 if [ -n "$open" ] && [ "$(printf '%s\n' "$open" | wc -l)" -ge "$limit" ]; then
   echo "cannot search the harness's open issues: $limit or more are open, so the list may hide a match" >&2
   exit 3
 fi
-while IFS=$'\t' read -r number existing; do
-  existing="${existing%$'\r'}"
-  if [ "$existing" = "$title" ] && [[ "$number" =~ ^[0-9]+$ ]]; then
+# @tsv escapes a backslash, tab, CR or line break in a title, so no title text
+# can make a row of its own. The title sought is escaped the same way, a
+# character at a time: a `${//}` replacement's backslashes differ by bash version.
+wanted=""
+i=0
+while [ "$i" -lt "${#title}" ]; do
+  c="${title:i:1}"
+  case "$c" in
+    '\') wanted+='\\' ;;
+    $'\t') wanted+='\t' ;;
+    $'\r') wanted+='\r' ;;
+    *) wanted+="$c" ;;
+  esac
+  i=$((i + 1))
+done
+while IFS= read -r row; do
+  row="${row%$'\r'}"
+  number="${row%%$'\t'*}"; rest="${row#*$'\t'}"
+  author="${rest%%$'\t'*}"; existing="${rest#*$'\t'}"
+  [ "$rest" != "$row" ] && [ "$existing" != "$rest" ] && [ -n "$author" ] || continue
+  if [ "$existing" = "$wanted" ] && [ "$author" = "$owner" ] && [[ "$number" =~ ^[0-9]+$ ]]; then
     printf '%s' "$body" | bounded 60 gh issue comment "$number" --repo "$repo" --body-file -
     exit 0
   fi
