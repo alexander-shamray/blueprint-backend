@@ -15,12 +15,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_link_skips import skip_only_without_links
+
 SCRIPTS = Path(__file__).resolve().parent
 CLAUDE = SCRIPTS.parent
 HOOK = CLAUDE / "hooks" / "index-mcp-root.py"
 SETTINGS = CLAUDE / "settings.json"
 CBX = CLAUDE / "skills" / "codebase-index" / "scripts" / "cbx"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
+GATE = CLAUDE / "skills" / "codebase-index" / "scripts" / "gate-index.py"
 EVENT = "PreToolUse"
 MATCHER = "mcp__codebase-index__.*"
 WRAPPER = CLAUDE / "hooks" / "index-hook.sh"
@@ -144,6 +147,71 @@ class WhenItRefuses(Checkouts):
         outside = self.main.parent / "loose"
         outside.mkdir()
         self.assertEqual("", self.ask("find_refs", {"symbol": "X"}, cwd=outside))
+
+
+class WhenTheIndexIsNotOpenable(Checkouts):
+    """The `cbx` route's gate refuses an index `index_openable` would not
+    open; the MCP route asks the same question of the same function, per
+    call, so a journal a checkout plants after the server started is caught
+    too (`docs/harness-boundaries.md`, *Index refresh and worktree seeding*)."""
+
+    SENTENCE = ("a link on its path, a rollback journal beside it, or a header that is not WAL mode. "
+                "Remove what the branch tracked under .claude/cache/codebase-index/ and run it again.")
+
+    def plant(self, root: Path, name: str, content: bytes = b"") -> Path:
+        cache = root / ".claude" / "cache" / "codebase-index"
+        cache.mkdir(parents=True, exist_ok=True)
+        (cache / name).write_bytes(content)
+        return cache / name
+
+    def test_a_journal_beside_the_served_index_refuses_every_tool(self):
+        self.plant(self.main, "index.sqlite-journal")
+        for tool in ("healthcheck", "find_refs", "search_code", "index_stats"):
+            with self.subTest(tool=tool):
+                text = self.ask(tool, {}, cwd=self.main)
+
+                self.assertIn(f"refusing to open the index under {self.main}", text)
+                self.assertIn(self.SENTENCE, text)
+
+    def test_a_journal_in_the_working_checkout_refuses_the_call(self):
+        self.plant(self.tree, "index.sqlite-journal")
+
+        text = self.ask("find_refs", {"symbol": "X"})
+
+        self.assertIn(f"index-mcp-root: refusing to open the index under {self.tree}", text)
+        self.assertNotIn("where it now works", text)
+
+    def test_a_header_not_in_wal_mode_refuses_the_call(self):
+        self.plant(self.main, "index.sqlite", b"SQLite format 3\x00" + b"\x10\x00\x01\x01" + bytes(80))
+
+        self.assertIn(self.SENTENCE, self.ask("healthcheck", {}, cwd=self.main))
+
+    def test_a_wal_header_is_let_through(self):
+        self.plant(self.main, "index.sqlite", b"SQLite format 3\x00" + b"\x10\x00\x02\x02" + bytes(80))
+
+        self.assertEqual("", self.ask("healthcheck", {}, cwd=self.main))
+
+    def test_a_link_at_the_index_refuses_the_call(self):
+        target = self.plant(self.main.parent, "elsewhere.sqlite")
+        cache = self.main / ".claude" / "cache" / "codebase-index"
+        cache.mkdir(parents=True)
+        try:
+            os.symlink(target, cache / "index.sqlite")
+        except (OSError, NotImplementedError) as refused:
+            skip_only_without_links(refused, "symbolic link")
+
+        self.assertIn(self.SENTENCE, self.ask("find_symbol", {"name": "X"}, cwd=self.main))
+
+    def test_the_refusal_says_what_the_cli_gate_says(self):
+        """Run the gate over the same planted journal, so the two routes'
+        sentence cannot drift apart."""
+        loose = self.main.parent / "loose"
+        self.plant(loose, "index.sqlite-journal")
+        done = subprocess.run([sys.executable, str(GATE)], capture_output=True, timeout=30, check=False,
+                              cwd=loose, encoding="utf-8", errors="replace")
+
+        self.assertEqual(3, done.returncode, done.stderr)
+        self.assertIn(self.SENTENCE, done.stderr)
 
 
 class WhatItNames(Checkouts):

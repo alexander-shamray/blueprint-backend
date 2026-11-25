@@ -34,6 +34,12 @@ NO_LINK = frozenset({errno.EPERM, errno.ENOTSUP, errno.ENOSYS})
 NO_LINK_ON_WINDOWS = frozenset({1, 50, 1314})
 
 
+def setUpModule() -> None:
+    # Not a skip, as the commit gate's suite refuses one: a skip reports a pass for checks nothing has run.
+    if shutil.which("git") is None:
+        raise RuntimeError("git is not on PATH, and the drift gate's checkout and git-lookup cases need it")
+
+
 def host_grants_no_link(refused: BaseException) -> bool:
     if isinstance(refused, NotImplementedError):
         return True
@@ -182,8 +188,6 @@ class DriftGate(unittest.TestCase):
         self.assertEqual(check(tree.root), [])
 
     def _git(self, root: Path, *args: str) -> None:
-        if shutil.which("git") is None:
-            self.skipTest("git is not on PATH")
         subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
 
     def test_an_ignored_file_under_a_managed_directory_passes_in_a_checkout(self) -> None:
@@ -244,8 +248,6 @@ class DriftGate(unittest.TestCase):
 
     def test_a_git_in_the_tree_or_the_working_directory_is_never_run(self) -> None:
         real = shutil.which("git")
-        if real is None:
-            self.skipTest("git is not on PATH")
         name = "git.exe" if os.name == "nt" else "git"
         tree = Tree(self.tmp)
         cwd = Path(self.tmp).parent / f"{Path(self.tmp).name}-cwd"
@@ -264,8 +266,6 @@ class DriftGate(unittest.TestCase):
     def test_a_path_entry_whose_resolve_raises_is_skipped(self) -> None:
         """PermissionError for an unreadable entry; RuntimeError is 3.12's symlink-loop error."""
         real = shutil.which("git")
-        if real is None:
-            self.skipTest("git is not on PATH")
         tree = Tree(self.tmp)
         bad = str(Path(self.tmp).parent / f"{Path(self.tmp).name}-unreadable")
         path = os.pathsep.join([bad, str(Path(real).parent)])
@@ -286,8 +286,6 @@ class DriftGate(unittest.TestCase):
     def test_a_path_entry_that_is_a_symlink_loop_is_skipped(self) -> None:
         """Python 3.12's non-strict resolve() raises RuntimeError, not OSError, on a loop."""
         real = shutil.which("git")
-        if real is None:
-            self.skipTest("git is not on PATH")
         tree = Tree(self.tmp)
         loop = Path(self.tmp).parent / f"{Path(self.tmp).name}-loop"
         try:

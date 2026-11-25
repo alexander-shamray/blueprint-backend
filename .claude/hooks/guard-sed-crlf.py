@@ -12,6 +12,7 @@ import re
 import shlex
 import subprocess
 import sys
+import traceback
 import types
 from pathlib import Path
 
@@ -26,7 +27,15 @@ def path_grammar():
     return module
 
 
-GRAMMAR = path_grammar()
+def _loaded_grammar():
+    """The grammar, or `None` and why: a sibling broken mid-edit must reach main()'s refusal, not crash the import."""
+    try:
+        return path_grammar(), None
+    except Exception:  # noqa: BLE001
+        return None, traceback.format_exc()
+
+
+GRAMMAR, GRAMMAR_FAILURE = _loaded_grammar()
 
 # What a refusal names as the forms that keep the file's endings. `--binary` is admitted: measured under Git Bash's
 # GNU sed 4.9, `sed --binary -i` writes the CR back where a plain `-i` drops it.
@@ -94,6 +103,9 @@ SHORT_WITH_ARGUMENT = set("efl")
 MAX_FILES = 200
 MAX_READ = 4 << 20
 GIT_TIMEOUT = 5
+# The directories one subshell is followed in at once: each `cd` that may not run can double them, so past the bound
+# the rest are dropped, and the files they would name are unplaced.
+MAX_PLACES = 16
 
 
 def prepared(command):
@@ -177,16 +189,26 @@ def prepared(command):
 
 
 class Segment:
-    """One simple command: its words, the subshells it runs in, and whether it is a stage of a pipeline.
+    """One simple command: its words, its subshells, whether it is piped or backgrounded, and any `&&` or `||` before.
 
-    The last two say whether a `cd` in it moves the commands after it: bash runs a `( … )` group and every stage of
-    a pipeline in a subshell of its own, so a `cd` there is gone once the group or the pipeline ends.
+    These say whether a `cd` in it moves the commands after it: bash runs a `( … )` group, a pipeline stage and a
+    command a lone `&` ends in a subshell, so a `cd` there is gone after it, and one behind `&&` or `||` may not run.
     """
 
     def __init__(self, scope):
         self.words = []
         self.scope = scope
         self.piped = False
+        self.backgrounded = False
+        self.joined = None
+        # The separator that ends it, and whether it sits in a compound command that may not run it.
+        self.ended = None
+        self.guarded = False
+        # Whether it follows a `()`, as a function's body does: `f() { … }` defines it and runs nothing.
+        self.defines = False
+        # Whether `judge` followed this command as a `cd`, `pushd` or `popd` to a placed directory, so the command
+        # an `&&` joins to it runs only where it moved.
+        self.moved = False
         # What a heredoc or a here-string feeds it, which a shell reading its input runs as a command line.
         self.stdin = None
 
@@ -206,7 +228,10 @@ def segments(command):
     scope = ()
     found = [Segment(scope)]
     redirection = None
-    for token in tokens:
+    # A `()`, or a `(` and `)` with nothing between, is a function's name ending: the next command to take a word
+    # is its body, past any newline.
+    defining, previous = False, None
+    for token, previous in zip(tokens, [previous, *tokens]):
         current = found[-1]
         if redirection is not None:
             # The word after a redirection is its file, a heredoc's body or a here-string's text.
@@ -217,8 +242,13 @@ def segments(command):
             redirection = None
             continue
         if not token or not set(token) <= set(PUNCTUATION):
+            if defining and not current.words:
+                current.defines = True
+            defining = False
             current.words.append(token)
             continue
+        if "()" in token or token.startswith(")") and previous is not None and previous.endswith("("):
+            defining = True
         # A run can join a group's paren to a redirection, as `)>` does, so the parens are taken out of it first:
         # each opens or closes a subshell and ends the command before it.
         rest = token.replace("(", "").replace(")", "")
@@ -236,11 +266,66 @@ def segments(command):
             if current.words and current.words[-1].isdigit():
                 current.words.pop()
         elif rest:
+            if not rest.strip("\n") and not current.words:
+                # A newline after `&&` or `||`, spaced or behind a comment, continues the list it joins.
+                continue
             following = Segment(scope)
             if "|" in rest.replace("||", ""):
                 current.piped = following.piped = True
+            current.ended = rest
+            if rest.strip("\n") in ("&&", "||"):
+                following.joined = rest.strip("\n")
             found.append(following)
-    return [segment for segment in found if segment.words]
+    return lists([segment for segment in found if segment.words])
+
+
+# The reserved words that open and close a compound command, read as a segment's first word.
+OPENERS = {"{", "if", "while", "until", "for", "select", "case"}
+CLOSERS = {"}", "fi", "done", "esac"}
+
+
+def lists(found):
+    """`found`, each marked backgrounded where a lone `&` ends its list, and guarded where a compound may skip it.
+
+    A lone `&` runs the whole and-or list before it in a subshell, a `{ … }` or a clause closed inside it included.
+    Every command in an `if`, a loop or a `case`, and in a group behind `&&` or `||`, may not run.
+    """
+    frames = []
+    start, guarded, carried = 0, False, False
+    for position, segment in enumerate(found):
+        # A compound may open behind another reserved word, as `then if` or `! {` does, or behind `time` and its
+        # options. A function's body runs only when it is called, so it is guarded as a clause is.
+        defining, timing, named, carried = segment.defines or carried, False, False, False
+        for word in segment.words:
+            if named:
+                named = False
+            elif word == "function":
+                defining = named = True
+            elif word in OPENERS:
+                frames.append((start, guarded))
+                guarded = guarded or defining or word != "{" or segment.joined is not None
+                defining = False
+            elif word == "time" or timing and word.startswith("-"):
+                timing = True
+            elif word not in PREFIXES:
+                break
+        else:
+            # A line that ends at a definition's name, as `function NAME` alone, opens its body on the next. One whose
+            # body is a command of another kind, as `f() ( true )`, has had its body, and carries nothing.
+            carried = defining and "\n" in (segment.ended or "")
+        segment.guarded = guarded
+        if segment.words[0] in CLOSERS and frames:
+            start, guarded = frames.pop()
+        # `&&`, `|&` and a `case` clause's `;&` or `;;&` background nothing, and a list goes on past a newline after
+        # `&&`, `||` or a pipe.
+        ended = segment.ended or ""
+        lone = "&" in ended.replace("&&", "").replace("|&", "").replace(";;&", "").replace(";&", "")
+        if lone:
+            for earlier in found[start:position + 1]:
+                earlier.backgrounded = True
+        if lone or ";" in ended or "\n" in ended and ended.strip("\n") not in ("&&", "||", "|", "|&"):
+            start = position + 1
+    return found
 
 
 def option_width(option, valued):
@@ -605,6 +690,8 @@ def offence(event, strips_cr=os.name == "nt"):
     `strips_cr` is whether this platform's sed drops the CR, which only Git Bash's does: GNU sed on Linux and macOS
     keeps it as an ordinary character, so refusing there would block an edit that is harmless.
     """
+    if GRAMMAR is None:
+        raise RuntimeError(f"path_grammar.py did not load:\n{GRAMMAR_FAILURE}")
     if not strips_cr or event.get("tool_name") != "Bash":
         return None
     tool_input = event.get("tool_input")
@@ -618,15 +705,69 @@ def offence(event, strips_cr=os.name == "nt"):
     return judge(command, cwd, git_on_path(cwd), [0], 0)
 
 
+def moved_to(directory, cwd):
+    """Where a plain `cd directory` from `cwd` lands, or `None` where that cannot be placed.
+
+    Bash refuses a directory that is not there and stays put, and a failed `pushd` pushes nothing; one an earlier
+    command on the line makes is not there yet either. Either way the move is not followed.
+    """
+    target = native(directory)
+    if not (os.path.isabs(target) or elsewhere(target)):
+        target = os.path.join(cwd, target) if cwd else None
+    if target is None or elsewhere(target) or not os.path.isdir(target):
+        return None
+    return target
+
+
+def env_directories(prefix):
+    """The directories each `env -C` or `--chdir` among the wrapper words `prefix` names, in order; `None` for one
+    holding an expansion."""
+    found, position = [], 0
+    for index, word in enumerate(prefix):
+        # A word an earlier `env` took as an option's value is no `env` of its own.
+        if word != "env" or index < position:
+            continue
+        position = index + 1
+        while position < len(prefix) and prefix[position].startswith("-") and prefix[position] not in ("-", "--"):
+            option = prefix[position]
+            position += 1
+            if option.startswith("--"):
+                name, given, value = option[2:].partition("=")
+                if not (name and "chdir".startswith(name)):
+                    position += 0 if given or option_width(option, WRAPPERS["env"]) == 1 else 1
+                    continue
+                if not given:
+                    value = prefix[position] if position < len(prefix) else None
+                    position += 1
+            else:
+                at = next((at for at, letter in enumerate(option[1:], 1) if f"-{letter}" in WRAPPERS["env"]), None)
+                if at is None:
+                    continue
+                value = option[at + 1:]
+                if not value:
+                    value = prefix[position] if position < len(prefix) else None
+                    position += 1
+                if option[at] != "C":
+                    continue
+            found.append(None if value is None or "$" in value or "`" in value else value)
+    return found
+
+
+def places(found):
+    """`found` without repeats, in order, and at most `MAX_PLACES` of them."""
+    return tuple(dict.fromkeys(found))[:MAX_PLACES]
+
+
 def judge(command, cwd, git, checked, depth):
     """The refusal for one command line run from `cwd`, or `None`; `checked` counts the files read across calls."""
     found = segments(command)
     if found is None:
         return None
-    # The directory each subshell stands in. One opened here starts where its parent stands when it is first seen,
-    # which is where bash forks it, since the commands are read in order.
-    directories = {(): cwd}
-    # Each subshell's `pushd` stack, inherited as its directory is.
+    # The directories each subshell may stand in, `None` among them for one that cannot be placed. One opened here
+    # starts where its parent stands when it is first seen, which is where bash forks it, since the commands are read
+    # in order.
+    directories = {(): (cwd,)}
+    # Each subshell's `pushd` stack, inherited as its directories are; `None` once it is not followed.
     stacks = {(): []}
     for position, segment in enumerate(found):
         previous = found[position - 1] if position else None
@@ -636,7 +777,7 @@ def judge(command, cwd, git, checked, depth):
                           if scope[:length] in directories)
             directories[scope] = directories[parent]
             stacks[scope] = None if stacks[parent] is None else list(stacks[parent])
-        cwd = directories[scope]
+        here = directories[scope]
         words = segment.words
         start = command_word(words)
         if start >= len(words):
@@ -644,37 +785,40 @@ def judge(command, cwd, git, checked, depth):
         name = words[start]
         arguments = words[start + 1:]
         if name in ("cd", "pushd", "popd"):
-            # A pipeline stage's `cd` moves nothing after it. Only a plain `cd <dir>` or `pushd <dir>`, and a bare
-            # `popd` back to a placed entry, can be followed; any other form leaves the files after it unplaceable.
-            if segment.piped:
+            # A pipeline stage's or a backgrounded `cd` moves nothing after it. Only a plain `cd <dir>` or
+            # `pushd <dir>`, and a bare `popd` back to a placed entry, can be followed; any other form leaves the files
+            # after it unplaceable.
+            if segment.piped or segment.backgrounded:
                 continue
+            # One that may not run leaves the commands after it where they were as well as where it moves them: in a
+            # compound that may skip it, behind `||`, or behind `&&` unless what it joins is a move already followed.
+            # A loop's body is followed for one pass.
+            conditional = segment.guarded or segment.joined == "||" or segment.joined == "&&" and not (
+                previous is not None and previous.moved and previous.scope == scope)
             if name == "popd":
                 stack = stacks[scope]
-                directories[scope] = stack.pop() if not arguments and stack else None
-                if arguments:
+                moved = stack.pop() if not arguments and stack else (None,)
+                if arguments or conditional:
                     stacks[scope] = None
-                continue
-            plain = not (len(arguments) != 1 or "$" in arguments[0] or arguments[0] == "-" or (
-                name == "pushd" and arguments[0][:1] in ("+", "-")))
-            if plain:
-                target = native(arguments[0])
-                if not (os.path.isabs(target) or elsewhere(target)):
-                    target = os.path.join(cwd, target) if cwd else None
-                # Bash refuses a directory that is not there and stays put, and a failed `pushd` pushes nothing; one an
-                # earlier command on the line makes is not there yet either. Either way the move is not followed.
-                if target is not None and (elsewhere(target) or not os.path.isdir(target)):
-                    plain, target = False, None
             else:
-                target = None
-            if name == "pushd":
-                # Any other `pushd` form, `-n <dir>` among them, changes the stack in ways not followed here, so every
-                # `popd` after it is unplaceable too.
-                if plain and stacks[scope] is not None:
-                    stacks[scope].append(cwd)
-                else:
-                    stacks[scope] = None
-            directories[scope] = target
+                plain = not (len(arguments) != 1 or "$" in arguments[0] or arguments[0] == "-" or (
+                    name == "pushd" and arguments[0][:1] in ("+", "-")))
+                moved = tuple(moved_to(arguments[0], place) if plain else None for place in here)
+                plain = plain and None not in moved
+                if name == "pushd":
+                    # Any other `pushd` form, `-n <dir>` among them, changes the stack in ways not followed here, and
+                    # one that may not run leaves it unknown, so every `popd` after either is unplaceable too.
+                    if plain and not conditional and stacks[scope] is not None:
+                        stacks[scope].append(here)
+                    else:
+                        stacks[scope] = None
+            segment.moved = None not in moved and not conditional
+            directories[scope] = places(here + moved if conditional else moved)
             continue
+        # `env -C DIR` runs the command after it from DIR, so its files are looked for there.
+        for directory in env_directories(words[:start]):
+            here = tuple(None if place is None or directory is None else moved_to(directory, place)
+                         for place in here)
         program = os.path.basename(native(name)).lower()
         if program in SHELLS:
             # The line runs from here: a `-c` line, whose `-c` may share a cluster as in `-lc`, or the shell's input.
@@ -683,13 +827,14 @@ def judge(command, cwd, git, checked, depth):
                 stdin = echoed(previous)
             line = shell_line(arguments, stdin)
             if line and depth < MAX_DEPTH:
-                reason = judge(line, cwd, git, checked, depth + 1)
-                if reason:
-                    return reason
+                for place in here:
+                    reason = judge(line, place, git, checked, depth + 1)
+                    if reason:
+                        return reason
             continue
         if program not in ("sed", "sed.exe"):
             continue
-        for operand in in_place_files(arguments):
+        for cwd, operand in ((place, operand) for operand in in_place_files(arguments) for place in here):
             for path in candidates(operand, cwd):
                 checked[0] += 1
                 if checked[0] > MAX_FILES:
@@ -708,21 +853,7 @@ def judge(command, cwd, git, checked, depth):
     return None
 
 
-def main():
-    try:
-        event = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-        # As in guard-edit-target.py: a hook that cannot read its own input has established nothing, and refusing
-        # every command on a malformed event would turn a defect here into a dead session.
-        print("guard-sed-crlf: unreadable hook event; not judging", file=sys.stderr)
-        return 0
-    if not isinstance(event, dict):
-        print("guard-sed-crlf: hook event is not an object; not judging", file=sys.stderr)
-        return 0
-
-    reason = offence(event)
-    if reason is None:
-        return 0
+def deny(reason):
     json.dump(
         {
             "hookSpecificOutput": {
@@ -734,6 +865,37 @@ def main():
         sys.stdout,
     )
     return 0
+
+
+def main():
+    # An event that is not UTF-8 holds a command nothing read, so it is refused, as the argv guards refuse one.
+    try:
+        text = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError:
+        return deny("guard-sed-crlf: this hook event is not UTF-8, so the command in it cannot be read; refusing "
+                    "rather than admitting what nothing judged.")
+    try:
+        event = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        # As in guard-edit-target.py: a hook that cannot read its own input has established nothing, and refusing
+        # every command on a malformed event would turn a defect here into a dead session.
+        print("guard-sed-crlf: unreadable hook event; not judging", file=sys.stderr)
+        return 0
+    if not isinstance(event, dict):
+        print("guard-sed-crlf: hook event is not an object; not judging", file=sys.stderr)
+        return 0
+
+    # A crash here would be empty stdout, which PreToolUse reads as admitted: the argv guards' fail-open, refused as
+    # they refuse it (`docs/harness-boundaries.md`, *The sed line-ending guard*).
+    try:
+        reason = offence(event)
+    except Exception:  # noqa: BLE001
+        traceback.print_exc(file=sys.stderr)
+        reason = ("guard-sed-crlf: this command crashed the sed line-ending guard, so nothing about it is "
+                  "established; refusing rather than admitting what nothing judged. The traceback is on stderr.")
+    if reason is None:
+        return 0
+    return deny(reason)
 
 
 if __name__ == "__main__":

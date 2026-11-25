@@ -166,6 +166,10 @@ def _span_opens_a_file_for_write(span, git):
     target = rest[len(operator):].lstrip()
     if target.startswith(">(") or target.startswith("<("):
         return True
+    # The null device discards what it is handed, so `2>/dev/null` writes no
+    # file; only the bare spelling is admitted, never a quoted or longer one.
+    if target == "/dev/null":
+        return False
     if operator in ("<", "<&"):
         return False
     if operator == ">&":

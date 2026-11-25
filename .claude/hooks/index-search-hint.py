@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import sys
 import tempfile
 import types
@@ -183,7 +184,10 @@ def segments(command: str, escape: str = "\\"):
             skip = False
         elif token and set(token) <= SEPARATORS:
             yield argv, piped, token
-            argv, piped = [], token.strip("\n") in ("|", "|&")
+            # shlex fuses a run of operators, so `|(` and `)|` pipe as `|` does; a bare `(` opens a
+            # subshell that reads what its own command would have read.
+            opens = set(token) == {"("}
+            argv, piped = [], piped if opens else token.strip("\n()") in ("|", "|&")
         elif token and set(token) <= SEPARATORS | REDIRECTS:
             skip, piped = True, piped or set(token) == {"<"}
         elif not (token.isdigit() and following and set(following) & REDIRECTS
@@ -504,15 +508,34 @@ def record(session: object) -> Path | None:
     cannot name one."""
     if not isinstance(session, str) or not SESSION.match(session):
         return None
-    return Path(tempfile.gettempdir()) / ASKED / session
+    # The temp root is shared on POSIX, so each user's records sit apart.
+    uid = os.getuid() if hasattr(os, "getuid") else None
+    return Path(tempfile.gettempdir()) / (ASKED if uid is None else f"{ASKED}-{uid}") / session
+
+
+def private(directory: Path) -> bool:
+    """True when `directory` is this user's own, not a link and shut to
+    others; Windows keeps a temp root per user, so there it is a directory."""
+    try:
+        found = os.lstat(directory)
+    except OSError:
+        return False
+    if not stat.S_ISDIR(found.st_mode):
+        return False
+    if not hasattr(os, "getuid"):
+        return True
+    return found.st_uid == os.getuid() and not found.st_mode & 0o077
 
 
 def first(asked: Path) -> bool:
     """True for the one call that creates `asked`, so a parallel batch is
-    refused once."""
+    refused once. A directory another user made or reached by a link is
+    never written into, and the call goes through as one unrecorded would."""
     try:
-        asked.parent.mkdir(exist_ok=True)
-        os.close(os.open(asked, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        asked.parent.mkdir(mode=0o700, exist_ok=True)
+        if not private(asked.parent):
+            return False
+        os.close(os.open(asked, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600))
     except OSError:
         return False
     return True

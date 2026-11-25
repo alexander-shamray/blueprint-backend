@@ -83,6 +83,18 @@ checkout and removes the worktree, however the review ended.
   setting, secret, environment, ruleset, release or visibility and opens no
   billing: such an issue ends as a hand-back with its recommended answer. (why:
   docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
+- **A dispatched hand-back on a denied edit leaves its script in the
+  worktree**, not the scratchpad, which the dispatcher removes: everything
+  else committed, so the tree is clean, it writes the script to
+  `artifacts/handoff/`, its receipt as `docs/harness/working-rules.md`
+  *Hand-back scripts* shapes it, and `artifacts/handoff/resume.json`
+  holding exactly `group`, `issues`, `branch`, `head` (`git rev-parse
+  HEAD`), `script` and `receipt` (both worktree-relative) and `paths`, the
+  files the script edits; `reason` gives the owner the script's line. Once
+  the owner runs it, a later `/dispatch` launches this worktree again, its
+  prompt saying so: the dirty-tree row commits the edits, the body saying
+  the owner applied them from the script. (why: docs/commands/ship.md,
+  *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
   reported unconverged, and step 6 merges anyway.
 - **Never skip step 2**: this command merges, so it is the last gate before

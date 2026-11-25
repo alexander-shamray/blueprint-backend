@@ -237,8 +237,8 @@ guard misses, is unmeasured, and so is a command that computes its path.
 `Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)` matches the
 typed string; the shell still runs `$(…)` and a second command on that line.
 `.claude/hooks/guard-index-argv.py` is the argv-level guard: substitutions,
-extra command runs, write redirections, and `graph` / `clean` / `init` /
-`watch` are refused.
+extra command runs, write redirections but one to a bare `/dev/null`, and
+`graph` / `clean` / `init` / `watch` are refused.
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 `cbx.ps1` runs in its caller's process, so the two variables it sets
@@ -473,6 +473,8 @@ the `finally` still holds. `test_cbx.py`'s launcher stubs answer the gate's
 `-I` call with the exit `CBX_STUB_GATE_EXIT` names; the bash wrapper's
 stubs always pass it. The window between the
 gate's look and the CLI's own open is the one every check here leaves.
+The MCP route asks it too, per call: `index-mcp-root.py`, below, refuses
+every `codebase-index` MCP tool over an index this judgement would not open.
 
 **The approval of `.mcp.json`'s servers belongs to a directory, so the fork
 carries it.** A session started in a worktree reads that worktree's own
@@ -487,21 +489,30 @@ servers the main checkout approves and does not disable, with an
 `enableAllProjectMcpServers` expanded to the servers `.mcp.json` defines at
 the fork, and nothing else. The rest of that file is the main checkout's own
 `permissions` rows, and copying it would widen every worktree by them; the
-approve-all itself would approve servers defined after the fork. `.mcp.json`
-is gitignored and not copied: the session finds the main checkout's by
-walking up, because the helper forks only under `.claude/worktrees/` and the
-worktree has none of its own. Two residuals stand. The helper writes a file
+approve-all itself would approve servers defined after the fork. The helper
+copies no `.mcp.json`: where a target gitignores it, the session finds the
+main checkout's by walking up, because the helper forks only under
+`.claude/worktrees/` and the worktree has none of its own; where a target
+tracks it, so that every clone shares one server map, the worktree checks out
+the branch's own. Two residuals stand. The helper writes a file
 the session's `Edit` is denied, and what it writes is one key read from a
 file the session is denied too, or, under an approve-all, from `.mcp.json`,
 which the session's `Edit` is denied as well and whose servers the main
 checkout's approve-all already approves. And the approval names servers
 rather than definitions, so a `.mcp.json` that reaches a worktree through
-git, force-added past the ignore, is found before the main checkout's and
-approved under the same name without a prompt. The fork writes nothing at a
-`settings.local.json` the branch already carries, a dangling link included,
-and the locality gate refuses a pull request that leaves an ignored path in
-the tree, so neither file reaches `main`; a branch checked out before its
-pull request is judged still can carry a `.mcp.json`.
+git is found before the main checkout's and approved under the same name
+without a prompt: whatever `command`, `args` or `env` the branch gave a server
+the approval names runs at session start, before any hook. Where the target
+gitignores `.mcp.json` that takes a force-add past the ignore; the fork writes
+nothing at a `settings.local.json` the branch already carries, a dangling link
+included, and the locality gate refuses a pull request that leaves an ignored
+path in the tree, so neither file reaches `main`, and a branch checked out
+before its pull request is judged still can carry a `.mcp.json`. **A target
+may track `.mcp.json`, and its residual is then the wider one**: any branch,
+not only a force-add, carries its own server definitions under the by-name
+approval, and the locality gate's ignored-path refusal does not reach a
+tracked file. Such a target records it in its own `docs/harness-local.md`
+*Residuals*, with whatever its locality gate refuses of a change to the file.
 
 **`SessionStart` runs the same script, for the moves no tool call makes.** A
 merge, a switch or a pull made outside the session rewrites the tree with no
@@ -572,7 +583,10 @@ completely and a ranked top three does not, and so is a search confined to
 by creating a file named after the session under the temporary directory,
 which only one call can create, so a parallel batch is refused once and a
 session whose file cannot be made is never refused, since the rerun would be
-refused too. A lookup made by any route — an MCP tool or the CLI, through
+refused too. On POSIX the file sits in a directory named for the user's id
+and shut to others; one another user made first, one open to others, or a
+link in its place is never written into, and counts as a file that cannot be
+made. A lookup made by any route — an MCP tool or the CLI, through
 either shell — lets every search through, and the hook reads that from the
 session's transcript, parsing a call's line only when it names the index
 and a result's only when it answers a lookup, and stopping at the first
@@ -612,11 +626,26 @@ command to run alone from the session's checkout: the whole line, arguments
 quoted for the shell, where it can carry every argument the call holds, and
 otherwise the subcommand alone, since a line that dropped an option such as
 a depth or a limit would answer another question. `healthcheck` is never
-refused, since its `root` is how a session sees which tree the server reads,
-and a session started in a worktree is let through, since its server reads
-that worktree. `test_index_mcp_root.py` holds the wiring, the map from tool
-to command against `index-query-hint.py`'s and the wrapper's whitelist, and
-every command it emits to `guard-index-argv.py`.
+refused for a mismatch, since its `root` is how a session sees which tree the
+server reads, and a session started in a worktree is let through, since its
+server reads that worktree.
+
+**It refuses every `codebase-index` MCP tool, `healthcheck` included, over an
+index that is not openable**, before it compares roots: it loads
+`refresh-index.py` and asks `index_openable` of the checkout the server reads
+and of the one the session works in, as `gate-index.py` asks it for `cbx`,
+and refuses with that gate's sentence. Without it a branch that force-tracks
+a `-journal` or a link under `.claude/cache/codebase-index/` is refused on
+the CLI route and opened on this one. It asks on every call, so a journal a
+checkout plants after the server started is caught too, which a launch-time
+gate in `.mcp.json` would miss, and it needs no change to a `.mcp.json` a
+branch can rewrite. A question it could not ask, the hook failing to load,
+is a refusal, as the gate's is; its residuals are the gate's window between
+the look and the server's open, and a hook that did not start at all (*The
+guard launcher*). `test_index_mcp_root.py` holds the wiring, the map from
+tool to command against `index-query-hint.py`'s and the wrapper's whitelist,
+every command it emits to `guard-index-argv.py`, and the refusal over a
+planted journal, link or rollback header against the gate's own.
 
 **The two hint hooks run under `.claude/hooks/hint-bound.sh`, because a hook
 the harness kills leaves nothing to say it did not run.** Raising their
@@ -628,14 +657,19 @@ the settings timeout, and on a stall, or any non-zero exit, prints one
 `additionalContext` line naming the hook that did not run. It leaves with 0
 either way, since exit 2 under these events blocks the prompt or the call,
 and it writes the hook's output to a file and not a pipe, so a launcher's
-orphaned child cannot hold it past the bound. **It wraps the two hints and
-no other hook**: the guards fail closed on their own and carry no timeout,
-and `index-mcp-root` and `refresh-index` print nothing a session reads as
-advice. Those two run under `.claude/hooks/index-hook.sh` instead, which
-takes the interpreter as this wrapper does and leaves the same way, with 0
-and a line naming the hook on any non-zero exit, but holds no bound: the
-root check reads two paths, and the refresh hands its work to a detached
-worker inside a 3 s git budget, so once started neither waits long. Its
+orphaned child cannot hold it past the bound. It takes the hook's name from
+its argument and hands it to `runpy.run_path` under `.claude/hooks/`, so it
+runs those two names alone, a closed set as `index-hook.sh`'s is: any other,
+a path included, exits 0 with a line on stderr and starts nothing. **It wraps
+the two hints and no other hook**: the guards fail closed on their own and
+carry no timeout, and `index-mcp-root` and `refresh-index` print nothing a
+session reads as advice. Those two run under `.claude/hooks/index-hook.sh`
+instead, which takes the interpreter as this wrapper does and leaves the same
+way, with 0 and a line naming the hook on any non-zero exit, but holds no
+bound: the
+root check reads two paths and asks `index_openable` of each, and the
+refresh hands its work to a detached worker inside a 3 s git budget, so
+once started neither waits long. Its
 residual is the one this wrapper closes: an interpreter start that stalls
 past the settings timeout is killed by the harness and leaves no line, so
 a root check or refresh that did not run then looks like one with nothing
@@ -655,8 +689,9 @@ timeout. A `shell` field with an invocation that needs no `bash` would
 close the second, and is not taken: it would run a hint hook the wrapper
 cannot bound.
 `test_hint_bound.py` runs the wrapper against a launcher that never answers,
-one that fails and one that answers, and holds `settings.json` to routing
-both hints through it with a timeout above the bound. `test_index_hook.py`
+one that fails, one that answers and a name outside its set, and holds
+`settings.json` to routing both hints through it with a timeout above the
+bound. `test_index_hook.py`
 runs each registered root check and refresh with no `py` on `PATH`, holds
 them to the launcher under their own events, and `test_run_guard.py` holds
 no hook command to naming `py -3.12` itself.
@@ -1002,6 +1037,10 @@ because a join or `abspath` puts the working directory's drive before
 `\??\`: `C:\??\UNC\host\…` is not the grammar, yet git and Windows read the
 `\??\UNC\host\…` that was written.
 
+A grammar that will not load is refused, not skipped: the three guards load it
+through `_loaded_grammar` and refuse every call they judge while it is
+missing, since a crash at import exits 1, which `PreToolUse` admits.
+
 `test_host_paths.py` runs each hook in process with every filesystem and
 process entry point the hooks use fenced, and fails on any call that names
 its share, joined to a directory or not; the grammar is switched on there,
@@ -1071,10 +1110,12 @@ command through its config. It runs the five guards and nothing else.
 The hints keep `hint-bound.sh`, which bounds them, and the root check and
 the refresh take `index-hook.sh`, and both leave with 0 (*Index hint hooks
 and hook wiring*): this launcher's exit 2 would erase a prompt or block
-every index call. `index-mcp-root.py` does refuse calls, but it fails open
-by design, letting through every call it cannot judge, so a check that did
-not start gives the answer it gives on any failure, and says so in a line;
-the refresh refuses nothing.
+every index call. `index-mcp-root.py` does refuse calls, but its root
+comparison fails open by design, letting through every call it cannot judge,
+so a check that did not start gives the answer that comparison gives on any
+failure, and says so in a line; its openability question, which refuses what
+it cannot ask, is then not asked at all, which is that hook's residual. The
+refresh refuses nothing.
 
 **Residuals.** A machine without Git Bash runs a hook command under
 PowerShell, which has no `sh`: the command fails with a status that is not
@@ -1314,10 +1355,13 @@ registered on `Bash` alone, so git through the PowerShell tool was judged by
 nothing here: a second registration sends PowerShell calls to the git guard,
 which parses Bash's grammar and not PowerShell's, so it admits a PowerShell
 command only as one of a few read-only cmdlets over plain words that do not
-name `git`. A quote, an escape, a variable, a call, a separator, a wildcard, a
-backslash or any other first word refuses it, because each is a way another
-interpreter, an encoded command or a computed name could run git unseen, and a
-list of launchers would trail PowerShell's. The index guard stays on
+name `git`. A quote, an escape, a variable, a call, a separator, a wildcard or
+any other first word refuses it, because each is a way another interpreter, an
+encoded command or a computed name could run git unseen, and a list of
+launchers would trail PowerShell's. A backslash is admitted, as a Windows
+path's separator: PowerShell's escape is the backtick, and the other
+interpreters that read a backslash as one are first words already refused.
+The index guard stays on
 `Bash`, because the skill's prefix grants are `Bash(...)` rules and a
 PowerShell call is prompted like any other.
 And a heredoc with no closing line, whose body then fails to tokenise, is
@@ -1344,7 +1388,25 @@ a copy or a move puts into a directory is judged by the name it lands under, so
 glob or brace source has no known name, and `-T` lands on the directory itself,
 so each is judged as the whole directory.
 `~` and the variables this process shares with the session are expanded and
-judged, and a literal `cd` is followed, through a subshell's end as well.
+judged, and a literal `cd` is followed, through a subshell's end as well. A
+`cd` bash may not make, one that can fail before a `;`, one `||`, a branch or a
+loop can skip, one in a pipeline stage or backgrounded, `pushd -n`, or one under
+`!`, leaves the directory before it possible too, and a relative write is judged
+from every directory the shell may stand in; only the runs after `cd X &&` are
+judged from `X` alone. A writing verb behind `env -C DIR` or `--chdir` is
+judged from `DIR`, and a script behind one from `DIR` as well; where `DIR`
+cannot be read, or `-S` may hold it, the verb is judged from no directory
+at all, so only an absolute operand is placed. Each `find -exec` command
+starts again from find's own directory. In a command with a loop every run
+is also judged from every directory one walk of it reaches, so a relative
+`cd` the loop repeats is followed once, not on each pass, and that is a
+residual.
+A script a shell, an evaluator or a substitution runs is judged from every
+directory its outer command stands in, so
+`cd .claude && bash -c 'ls > settings.json'` is refused, and so is the rarer
+command that would place the write there only from a point it never runs at.
+Past `MAX_STANDINGS` directories a write or a script is refused rather than
+judged, and past `MAX_EXTRA_JUDGEMENTS` judgements beyond one a run, a write.
 
 **The same check holds three more writes, each narrowed by what agents type.**
 `find` is judged by what it writes: `-delete` as `rm -r` from each start, so
@@ -1361,11 +1423,12 @@ directory, so `rm -rf ..` and `rm -rf ../*` are refused from the root, and
 `rm -rf .`, `rm -rf ../foo*` and `mv notes.md ..` are not.
 
 **What it cannot read it admits, and that is the narrowing, not a gap.** An
-unknown variable, a computed operand, or a relative target after a `cd` nothing
-can read is admitted: `> "$var…"` was typed 523 times, `cd x && … > y` 736 and
-`cp "$a" "$b"` 107, so refusing them is the false refusal *The guards' threat
-model* files. An expansion's readings, which exist to find a hidden program,
-place no file. The list of verbs trails the programs that write: `curl -o`,
+unknown variable, a computed operand, or a relative target after `cd X &&`
+where nothing can read `X` is admitted: `> "$var…"` was typed 523 times,
+`cd x && … > y` 736 and `cp "$a" "$b"` 107, so refusing them is the false
+refusal *The guards' threat model* files. An expansion's readings, which
+exist to find a hidden program, place no file. The list of verbs trails the
+programs that write: `curl -o`,
 `rsync`, `tar -x`, `patch` and an interpreter's own writes are not on it, and
 that is a residual. A write under `.claude/worktrees/<name>/` is judged as that
 worktree's by its place, with a `.git` left there or not, since it lands in that
@@ -1757,8 +1820,9 @@ refused every sync; that fails closed.
 `Bash(bash .claude/scripts/git-worktree-sync.sh:*)` admits `<path> <branch>`
 and nothing else. A prefix grant on `git worktree add` also buys `-B`, which
 resets an existing branch past the `git branch --force` deny, so the helper
-spells `git fetch origin <branch>` and `git worktree add --track -b <branch>
-<path> origin/<branch>` itself. The branch must match `SYNC_HEAD` in full,
+spells the fetch of `<branch>` into `origin/<branch>`, by an explicit refspec,
+and `git worktree add --track -b <branch> <path> origin/<branch>` itself. The
+branch must match `SYNC_HEAD` in full,
 `main` included, and a harness test holds the helper's pattern to `pr.py`'s;
 the path and root checks are `git-worktree-fork.sh`'s; a branch that exists
 locally, or that origin lacks, is refused. A name that matches is not a proved
@@ -1810,11 +1874,13 @@ to declare, which is why no command is granted that helper. So
 the grant is the boundary: `/ship`'s frontmatter names the helper, the settings
 do not allow it, and both sweeps deny it by the same key as the force-push
 helpers, for the day someone allows it globally. It first searches the open
-issues for that exact title and comments on a match instead of creating, every
-`gh` call under a timeout, and a failed search files nothing. It skips the label
-sibling, which resolves the checkout's repository, so a label the harness lacks
-fails the create rather than being made. Residual: `/ship` can file any text in
-the harness with it, which is its whole use.
+issues for that exact title and comments on a match the repository owner
+opened instead of creating, as `gh-issue-suppresses.sh` judges authorship, so
+an issue anyone else opened under a sync row's predictable title takes nothing;
+every `gh` call is under a timeout, and a failed search files nothing. It skips
+the label sibling, which resolves the checkout's repository, so a label the
+harness lacks fails the create rather than being made. Residual: `/ship` can
+file any text in the harness with it, which is its whole use.
 
 **The issue route is the entry point a command is granted, never an argument.**
 `gh-issue-create.sh` takes the route as its fourth word and so lets whoever
@@ -1981,7 +2047,9 @@ whole run, because a verdict list with one line withheld reads as complete.
 For the same reason it reads the pull request's `changedFiles` and exits 3
 when the endpoint's count of `filename`s differs, a rename being one file: the
 endpoint stops short of a very large pull request, and a short list would print
-verdicts for part of the diff.
+verdicts for part of the diff. A pull request with no changed file exits 3
+too, as the CI gate refuses an empty subject: a lone `class` line would read as
+a diff with nothing outside its set.
 
 **Its grammar refuses rather than guesses.** A body carrying neither row
 prints nothing, and the caller skips its touch-set check and says so; one
@@ -2290,16 +2358,16 @@ and its gate stays green.
 **That guard holds no copy of any deny list, and refusing to write one is
 the whole of why it is safe to run on every write this repository makes.**
 A path deny is *correct* when the spelling is true of the file, so inside a
-checkout the session stands in, the home's own names aside, the hook judges
-only the disagreement and leaves every list — `.claude/settings.json`'s and
-both commands' frontmatter — to say what may be edited; where no rule
-reaches it reads that list rather than copying it, as the next paragraph
-says. Nothing here goes stale as those change, and the PR that lifts a deny
-to edit a helper is not refused by the guard on its way past. A test pins
-that control: a denied tree spelled as itself is **admitted** here.
+checkout the session stands in, the home's own names and a build's names above
+another checkout aside, the hook judges only the disagreement and leaves every
+list — `.claude/settings.json`'s and both commands' frontmatter — to say what
+may be edited; where no rule reaches it reads that list rather than copying it,
+as the next paragraph says. Nothing here goes stale as those change, and the PR
+that lifts a deny to edit a helper is not refused by the guard on its way past.
+A test pins that control: a denied tree spelled as itself is **admitted** here.
 
-**Two things a path deny may not reach are judged here all the same, and
-neither takes a copy of a list.** A rule of more than one component anchors at
+**Things a path deny may not reach are judged here all the same, and none
+takes a copy of a deny list.** A rule of more than one component anchors at
 the session's permission root (*Normalisation, residuals and the sweeps* has
 the shapes that do not), so a worktree of this repository that the session has
 not entered, the main checkout seen from a linked one included, launched there
@@ -2324,7 +2392,12 @@ a target is not owning it, and the denies of one inside a place are anchored
 at its own root and name none of them.
 `~/.ssh`, the shell profiles, `~/.gitconfig` and git's XDG
 `~/.config/git/config`, with `$XDG_CONFIG_HOME/git/config` wherever the hook's
-environment moves it (#589), run at login under every session, and
+environment moves it (#589), and `~/.npmrc`, read on every npm call, whose
+`script-shell` and `node-options` run a program under each one that runs a
+script (#597), with `$NPM_CONFIG_USERCONFIG` wherever the hook's environment
+moves it and npm's Windows global config,
+`~/AppData/Roaming/npm/etc/npmrc`, which its default prefix puts below the
+home (#611), run at login under every session, and
 `~/.claude.json` and `~/.claude`'s credentials, settings, hooks, commands,
 agents, plugins, scripts, skills and sandbox apply to every project (#585),
 judged on the first component only, so a name below `projects` is a session's
@@ -2341,7 +2414,7 @@ one list, `HOME_TREES` and its neighbours in `guard-git-argv.py`, which the edit
 guard loads; if it cannot load them it refuses a target under the home
 directory. A redirect and a writing verb's operand are judged by spelling and by
 resolution, with `HOME` and the process's own home both read as the root, and
-`$XDG_CONFIG_HOME` expanded as `HOME` is,
+`$XDG_CONFIG_HOME` and `$NPM_CONFIG_USERCONFIG` expanded as `HOME` is,
 whatever checkout holds the target, the one the session stands in included: a
 checkout at `~/.claude` or inside a place below excuses none of these names, as
 the edit guard's does not (#512, #537).
@@ -2349,6 +2422,33 @@ The shell also may not write `~/.claude/projects/`,
 `~/.claude/output-styles/` or `~/.claude/CLAUDE.md`, which the edit guard
 admits: a `Write` there meets a command's deny in the turn that holds one, and a
 shell write meets none (#586).
+
+**Under `HARNESS_DISPATCHED`, both guards also refuse a main checkout's
+`artifacts/dispatch/`**, the dispatcher's own state; *Headless dispatched
+sessions* has the rule and its reason (#604).
+
+**Above a checkout, both guards refuse the names a build loads from there**
+(#596): `Directory.Build.props`, `.targets` and `.rsp`,
+`Directory.Solution.props` and `.targets`, `Directory.Packages.props`,
+`NuGet.Config` and `global.json`, folded, with a `:` stream and trailing dots
+and spaces dropped as Windows drops them, in any directory above a checkout the
+session stands in, a worktree's main checkout root included. The .NET SDK takes
+the nearest above a project, which a root file importing no parent stops, but
+NuGet merges every `NuGet.Config` from the drive root down, so a key the root's
+leaves unset falls through to the planted one, and no deny, anchored at a root,
+reaches above it. The checkouts are the project's, the session's, the command's
+and the guard's own; one in the checkout's own root, below it or in a sibling is
+the checkout's to judge. A glob in a write's own target is asked as bash expands
+it, so `echo x >> ../nuget.conf?g` is refused. A glob, a brace, a `.` or a `-T`
+copy or move into such a directory lands under names the shell guard cannot
+know, so it is refused where it can match one of these, `mv * ..`, `cp -r x/.
+..` or `cp -rT x ..`, with a bash `[^...]` read as bash reads it and a
+`[:alpha:]` class as any name, and `mv *.md ..` stays admitted. An extended
+glob, and a `$` inside single quotes such as `'NuGet.Config::$DATA'`, are not
+read as bash reads them, so they are spellings built to hide a name, outside
+*The guards' threat model*; the edit guard has no shell to misread and refuses
+the stream. `BUILD_ANCESTOR_FILES` in `guard-git-argv.py` is the one list; if
+the edit guard cannot load it, it refuses a name of that shape anywhere.
 
 **A replay narrowed it.** 79,469 commands of these repositories' sessions since
 2026-10-01 gave 34 new refusals, none under the login or control names. 30 wrote
@@ -2651,9 +2751,19 @@ reads the file a `sed -i` names, because nothing in the command's text says
 what line endings that file holds. It reads the command's lines as bash
 does, continuations joined and comments and heredoc bodies dropped, splits
 them into simple commands with `shlex`, follows a plain `cd <dir>` within
-its subshell, finds `sed` behind the prefix words, past the options of
+its subshell — none at all in a pipeline stage or in a list a lone `&`
+ends, which bash runs in a subshell, and one behind `&&` or `||`, or
+anywhere in an `if`, a loop, a `case`, a group behind either or a
+function's body, to where it
+moves and to where it may not have, judging the files in both, up to
+`MAX_PLACES` at once; one joined by `&&` to a move already followed runs
+only where that move landed and is followed alone, a loop's body is
+followed for one pass, and a `popd`
+after a `pushd` that may not have run is unplaceable — finds `sed` behind
+the prefix words, past the options of
 `command`, `exec`, `time`, `builtin` and `nohup`, and behind the `env`,
-`nice`, `timeout` and `stdbuf` wrappers, judges what a shell runs — its
+`nice`, `timeout` and `stdbuf` wrappers, looks for its files where an
+`env -C` or `--chdir` moves it, judges what a shell runs — its
 `-c` line,
 or a heredoc, a here-string, or an `echo` or a `cat` piped into one reading
 its input —
@@ -2714,7 +2824,11 @@ at one (*Paths on another machine*), a file that does not exist or cannot
 be read, a command `shlex` cannot tokenise, no
 git on `PATH`, or a git that cannot answer: each is admitted, because a
 guard that refuses what it cannot resolve blocks ordinary work for want of
-a resolution. An unreadable event is admitted, as in the other guards.
+a resolution. An event that is UTF-8 but not a JSON object is admitted, as in
+the other guards, and one that is not UTF-8 is refused, as they refuse it. A
+crash while judging is refused too, as the argv guards refuse one: an
+exception is empty stdout, which a `PreToolUse` hook's caller reads as
+admitted.
 
 **Its residuals, stated rather than left to be found, and pinned in its
 suite as what the hook returns.** The launchers and wrappers *The guards'
@@ -2755,7 +2869,7 @@ It also changes the executor: it never tears down its workspace, step 6 runs
 only lines 1 and 8, step 0's finished teardown is skipped, and it never
 writes the task list, not even for an issue it files or closes, which goes
 only in its result's `filed`: `dispatch_run.py` sets `HARNESS_DISPATCHED` in
-its environment, under which every run-less `tasks` write refuses and the
+its environment, under which every `tasks` write refuses, `--run` too, and the
 filing helper places no row. The dispatcher grants no agent type and
 denies every one, because it spawns sessions.
 
@@ -2804,6 +2918,22 @@ against `dispatch_run.py`'s schema by `result`, and a claimed merge is read
 from GitHub by `verify` before it counts; a missing or mis-shaped file is a
 crash, never a success.
 
+**An executor writes none of the dispatcher's state.** Each run's
+`state.json` and `handbacks.json`, under the main checkout's
+`artifacts/dispatch/`, decide what the dispatcher launches, so a forged pair
+could relaunch a group every wake (#604). With `HARNESS_DISPATCHED` set, set
+at all being the test, both guards refuse a write under a main checkout's
+`artifacts/dispatch/`, one whose `.git` is a directory, as spelled and as
+resolved and folded for case: `guard-edit-target.py` an editing tool's, and
+`guard-git-argv.py`, which owns the predicate `dispatcher_state`, a
+redirection's or a writing verb's, a parent `rm -r` names included. The
+executor's result goes under its own worktree's `artifacts/dispatch/`, which
+a `.git` file marks, and stays writable. The granted `tasks` prefixes reach
+`--run`, whose `--root` could name the main checkout, so `dispatch_board.py`
+refuses every `tasks --run` while `HARNESS_DISPATCHED` is set. No settings
+deny states it: a rule cannot read the environment, and one anchored at the
+worktree would refuse that result.
+
 **Residuals.**
 
 - The dispatcher's and `issue_decisions.py`'s `path_which` take a `.bat` or
@@ -2827,9 +2957,12 @@ crash, never a success.
   (`docs/superpowers/plans/2026-11-01-dispatch-spike.md`), so an executor
   may run on past the limit.
 - The `Edit(artifacts/dispatch/**)` grant also reaches the helper-owned
-  `state.json`. No step edits it, so an honest mistake does not reach it,
+  `state.json` in the dispatcher's own session, which `HARNESS_DISPATCHED`
+  does not mark. No step edits it, so an honest mistake does not reach it,
   and a session setting out to defeat the helper's checks is what *The
-  guards' threat model* puts outside what the guards defend.
+  guards' threat model* puts outside what the guards defend. An executor's
+  write there by a path no guard reads, an interpreter's own file call or a
+  computed word, is the same residual.
 - A stranger's issue still reaches the dispatcher as data: its row is added
   and held, and the rebuild and the interview read its text. A collaborator's
   is held like a stranger's, and under a repository an organisation owns every

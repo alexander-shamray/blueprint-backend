@@ -15,12 +15,12 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 # each at most about a tenth over its landed size: a runbook past it has regrown its argument.
 # The payload's split commands; a target declares its own in `CEILINGS` in its `local_commands.py`.
 CEILINGS = {
-    "ship.md": 49900,
+    "ship.md": 51400,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
     "branch.md": 9300,
     "team.md": 6300,
-    "dispatch.md": 19500,
+    "dispatch.md": 21000,
 }
 
 ROOT = COMMANDS.parent.parent

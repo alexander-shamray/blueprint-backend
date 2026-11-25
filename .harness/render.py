@@ -90,8 +90,24 @@ def _covers(deny: str, allow: str) -> bool:
             return command == prefix or command.startswith(prefix + " ")
         return fnmatch.fnmatchcase(command, denied) if "*" in denied else allowed == denied
     if tool in _PATH_TOOLS:
-        return fnmatch.fnmatchcase(allowed.removeprefix("./"), denied.removeprefix("./"))
+        reach = _reach(allowed)
+        return any(fnmatch.fnmatchcase(reach, pattern) for pattern in (_reach(denied), _reach(denied, root=True)))
     return allowed == denied
+
+
+def _reach(path: str, root: bool = False) -> str:
+    """A path rule's specifier as a glob from the project root, by the shapes `docs/harness-boundaries.md`
+    measures: `./` decides nothing, a leading `/` anchors at the root, a rule of more than one component is anchored
+    anyway, and one of one component, `x` or `x/**`, reaches any depth unless anchored. `root` is that last kind's
+    match at the root itself. `//` and `~/` name paths outside the project, and stay as they are."""
+    if path.startswith(("//", "~")):
+        return path
+    if path.startswith("/"):
+        return path[1:]
+    path = path.removeprefix("./")
+    if "/" in path.removesuffix("/**") or root:
+        return path
+    return "**/" + path
 
 
 def render_settings(base: dict, cfg: object) -> dict:

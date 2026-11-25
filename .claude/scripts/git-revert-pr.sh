@@ -20,10 +20,13 @@ esac
 dirty=$(git status --porcelain --untracked-files=all)
 [ -z "$dirty" ] || { echo "the tree is not clean: commit or stash first" >&2; exit 3; }
 
-git fetch --quiet origin main
+# Into the tracking ref by an explicit refspec, as git-trailer-pr.sh fetches: under a narrowed remote.origin.fetch a
+# bare fetch writes FETCH_HEAD alone, and a stale origin/main would revert part of the pull request and say it was all.
+git fetch --quiet origin "+refs/heads/main:refs/remotes/origin/main" ||
+  { echo "cannot fetch main from origin, so nothing is reverted" >&2; exit 6; }
 wanted="PR: #$pr"
 picked=()
-for sha in $(git log origin/main --topo-order --format=%H -E --grep="^PR: #$pr\$"); do
+for sha in $(git log refs/remotes/origin/main --topo-order --format=%H -E --grep="^PR: #$pr\$"); do
   named=$(git show -s --format=%B "$sha" | git interpret-trailers --parse | grep -E '^PR:' || true)
   if [ "$named" = "$wanted" ]; then
     picked+=("$sha")

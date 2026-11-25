@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -250,7 +252,11 @@ class IssueFormGateTests(unittest.TestCase):
             self.check()
 
     def test_main_refuses_an_empty_label_list(self) -> None:
-        self.assertEqual(1, self.main("[]"))
+        # An empty set also fails every "option is not a label" check with exit 1, so the refusal is named.
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(1, self.main("[]"))
+        self.assertIn("stdin holds no label", stderr.getvalue())
 
     def test_main_refuses_stdin_that_is_not_json(self) -> None:
         self.assertEqual(1, self.main(""))

@@ -115,6 +115,44 @@ class Residue(TemporaryRepository):
         self.assertEqual(code, 1)
         self.assertIn("tests/Catalog.Domain.Tests/bin/", output)
 
+    def test_a_package_s_bin_under_node_modules_is_not_residue(self) -> None:
+        """`npm ci` under a web project in `src/` installs packages that ship
+        a `bin/`; the walk does not enter `node_modules/` or `.angular/`."""
+        tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
+        (self.root / "src/Web/node_modules/typescript/bin").mkdir(parents=True)
+        (self.root / "src/Web/node_modules/.bin").mkdir(parents=True)
+        (self.root / "src/Web/.angular/cache/obj").mkdir(parents=True)
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 0, output)
+
+    def test_output_beside_a_web_project_s_node_modules_still_fails(self) -> None:
+        """Only the two directories are pruned, not the tree that holds them."""
+        tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
+        (self.root / "src/Web/node_modules/typescript/bin").mkdir(parents=True)
+        (self.root / "src/Web/obj").mkdir(parents=True)
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("src/Web/obj/", output)
+        self.assertNotIn("node_modules", output)
+
+    def test_a_package_s_csproj_under_node_modules_is_not_a_project_on_disk(self) -> None:
+        """A package may ship a `.csproj`; the subject walk prunes the same
+        two directories the residue walk does, so it is not called missing
+        from the solution."""
+        tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
+        (self.root / "src/Web/node_modules/some-package").mkdir(parents=True)
+        (self.root / "src/Web/node_modules/some-package/Shipped.csproj").write_text("<Project />")
+        (self.root / "src/Web/.angular/cache").mkdir(parents=True)
+        (self.root / "src/Web/.angular/cache/Cached.csproj").write_text("<Project />")
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 0, output)
+
     def test_an_obj_beside_a_project_under_tools_fails(self) -> None:
         """`tools/` holds a project the solution builds, so it is source too."""
         tree(self.root, {"BffReplay": "tools/bff-replay"})
