@@ -98,8 +98,32 @@ public sealed class S3ProductImageStore(
         {
             return new ImageAttachment(ImageAttachOutcome.NotAnImage);
         }
+        catch (AmazonS3Exception ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+        {
+            // An upload that expired since the read answers as the read does; a refused write to products/ is a fault.
+            if (!await SourceGoneAsync(store.Bucket, sourceKey, ct))
+                throw;
+
+            Missing(logger, sourceKey, (int)ex.StatusCode, null);
+            return new ImageAttachment(ImageAttachOutcome.NotUploaded);
+        }
 
         return new ImageAttachment(ImageAttachOutcome.Attached, store.PublicUrlOf(destinationKey));
+    }
+
+    private async Task<bool> SourceGoneAsync(string bucket, string sourceKey, CancellationToken ct)
+    {
+        try
+        {
+            using GetObjectResponse response = await s3.GetObjectAsync(
+                new GetObjectRequest { BucketName = bucket, Key = sourceKey, ByteRange = new ByteRange(0, 0) },
+                ct);
+            return false;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+        {
+            return true;
+        }
     }
 
     private static bool HasSignature(ReadOnlySpan<byte> head, string contentType) => contentType switch

@@ -317,6 +317,39 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     }
 
     [Fact]
+    public async Task An_upload_gone_between_the_check_and_the_copy_is_not_uploaded()
+    {
+        // Expiry, stood in for by asking after a key nobody wrote once the first read has passed.
+        (Guid seller, ProductImageUpload upload) = await UploadedAsync(Png, "image/png");
+        ProductImageKeys.TryParseUploadKey(upload.Key, seller, out Guid image, out string extension).ShouldBeTrue();
+        using RedirectedAfterTheRead catalog = new(Config(), $"{upload.Key}.gone", destinationKey: null);
+
+        (await ProductService(catalog).AttachAsync(
+                upload.Key,
+                ProductImageKeys.ProductKey(seller, image, extension),
+                "image/png",
+                Ct)).Outcome.ShouldBe(ImageAttachOutcome.NotUploaded);
+    }
+
+    [Fact]
+    public async Task A_copy_refused_while_the_upload_is_still_there_is_a_fault_and_not_a_missing_upload()
+    {
+        // The catalog pair may not write uploads/, so the copy is refused 403 with its source still present.
+        (Guid seller, ProductImageUpload upload) = await UploadedAsync(Png, "image/png");
+        ProductImageKeys.TryParseUploadKey(upload.Key, seller, out Guid image, out string extension).ShouldBeTrue();
+        using RedirectedAfterTheRead catalog = new(Config(), sourceKey: null, destinationKey: $"{upload.Key}.copy");
+
+        AmazonS3Exception refused = await Should.ThrowAsync<AmazonS3Exception>(() =>
+            ProductService(catalog).AttachAsync(
+                upload.Key,
+                ProductImageKeys.ProductKey(seller, image, extension),
+                "image/png",
+                Ct));
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Bytes_put_again_between_the_check_and_the_copy_are_refused_and_not_copied()
     {
         // The signed URL outlives the check, so a second PUT can land after the bytes were read and before the copy.
@@ -437,6 +470,39 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
             put.StatusCode.ShouldBe(HttpStatusCode.OK);
 
             return response;
+        }
+    }
+
+    /// <summary>The catalog pair, its copy and its later reads redirected where a key is given.</summary>
+    private sealed class RedirectedAfterTheRead(AmazonS3Config config, string? sourceKey, string? destinationKey)
+        : AmazonS3Client(Catalog(), config)
+    {
+        private bool _read;
+
+        public override Task<GetObjectResponse> GetObjectAsync(
+            GetObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (_read && sourceKey is not null)
+                request.Key = sourceKey;
+
+            _read = true;
+            return base.GetObjectAsync(request, cancellationToken);
+        }
+
+        public override Task<CopyObjectResponse> CopyObjectAsync(
+            CopyObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            request.SourceKey = sourceKey ?? request.SourceKey;
+            request.DestinationKey = destinationKey ?? request.DestinationKey;
+            return base.CopyObjectAsync(request, cancellationToken);
+        }
+
+        private static BasicAWSCredentials Catalog()
+        {
+            (string accessKey, string secretKey) = ObjectStoreFixture.Credentials("catalog");
+            return new BasicAWSCredentials(accessKey, secretKey);
         }
     }
 
