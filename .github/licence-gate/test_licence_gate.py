@@ -9,6 +9,8 @@ proves nothing about what it would catch.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -126,12 +128,7 @@ class ReadPins(unittest.TestCase):
 
 
 class ScanProjects(unittest.TestCase):
-    """The three project-level spellings that restore an unpinned package.
-
-    Every case here is a document the pin reader sees nothing in, which is the
-    whole point of the pass: none of them puts a PackageVersion element in
-    Directory.Packages.props.
-    """
+    """The project-level spellings that restore an unpinned package."""
 
     def test_the_scan_finds_the_projects_it_is_checking(self):
         """The subject, before the assertions. A glob that matched nothing would
@@ -159,6 +156,60 @@ class ScanProjects(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("Directory.Build.props", findings[0])
         self.assertIn("Evil", findings[0])
+
+    def test_fails_a_pin_element_written_outside_the_props_file(self):
+        """NuGet restores a pin from any imported file, and the pin reader reads
+        one, so a pin anywhere else would restore a package nobody registered."""
+        for element in ("PackageVersion", "GlobalPackageReference"):
+            body = f'  <ItemGroup>\n    <{element} Include="Evil" Version="1.0.0" />\n  </ItemGroup>\n'
+            with self.subTest(element=element):
+                findings = scan(("Directory.Build.props", csproj(body)))
+                self.assertEqual(len(findings), 1)
+                self.assertIn("Directory.Build.props", findings[0])
+                self.assertIn(element, findings[0])
+                self.assertIn("Evil", findings[0])
+
+    def test_fails_a_nested_props_file_of_the_same_name(self):
+        """Central management reads the nearest Directory.Packages.props, so a
+        nested one is a second pins file the reader never opens."""
+        findings = scan(("src/Directory.Packages.props", pins("Evil")))
+        self.assertEqual(len(findings), 1)
+        self.assertIn("src/Directory.Packages.props", findings[0])
+
+    def test_reads_a_pin_element_without_regard_to_its_case(self):
+        for element in ("packageversion", "GLOBALPACKAGEREFERENCE", "PACKAGEDOWNLOAD"):
+            body = f'  <ItemGroup>\n    <{element} Include="Evil" Version="1.0.0" />\n  </ItemGroup>\n'
+            with self.subTest(element=element):
+                findings = scan(("Directory.Build.props", csproj(body)))
+                self.assertEqual(len(findings), 1)
+                self.assertIn(f"{element} Evil", findings[0])
+
+    def test_the_pins_file_is_the_one_named_and_not_the_root_s(self):
+        """main passes --pins, so the exemption follows it; the root's own props
+        file is then one more file outside it."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Directory.Packages.props").write_text(pins("Evil"), encoding="utf-8")
+            named = root / "build" / "Pins.props"
+            named.parent.mkdir()
+            named.write_text(pins("Dapper"), encoding="utf-8")
+
+            findings = licence_gate.scan_projects(root, named)
+
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("Directory.Packages.props", findings[0])
+        self.assertIn("Evil", findings[0])
+
+    def test_passes_the_pins_in_the_props_file_itself(self):
+        self.assertEqual(scan(("Directory.Packages.props", pins("Dapper"))), [])
+
+    def test_fails_a_package_download_in_any_file(self):
+        body = '  <ItemGroup>\n    <PackageDownload Include="Evil" Version="[1.0.0]" />\n  </ItemGroup>\n'
+        for name in ("Directory.Packages.props", "src/Thing/Thing.csproj"):
+            with self.subTest(name=name):
+                findings = scan((name, csproj(body)))
+                self.assertEqual(len(findings), 1)
+                self.assertIn("PackageDownload Evil", findings[0])
 
     def test_passes_a_project_that_pins_nothing_of_its_own(self):
         body = '  <ItemGroup>\n    <PackageReference Include="Dapper" />\n  </ItemGroup>\n'
@@ -470,6 +521,26 @@ class ChapterPins(unittest.TestCase):
         # covering the copy that lands in the next chapter along.
         findings = chapters_with("09-messaging.md", self.PIN)
         self.assertEqual(len(findings), 1)
+
+
+class Main(unittest.TestCase):
+    def test_the_pins_argument_reaches_the_scan(self):
+        """--pins names the exempt file, so the root's own props file is judged."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Directory.Packages.props").write_text(pins("Evil"), encoding="utf-8")
+            named = root / "build" / "Pins.props"
+            named.parent.mkdir()
+            named.write_text(pins(), encoding="utf-8")
+            (root / "chapters").mkdir()
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = licence_gate.main(
+                    ["--pins", str(named), "--projects", str(root), "--chapters", str(root / "chapters")])
+
+        self.assertEqual(status, 1)
+        self.assertIn("Directory.Packages.props: PackageVersion Evil pins a package outside build/Pins.props",
+                      output.getvalue())
 
 
 class RealRepository(unittest.TestCase):
