@@ -131,6 +131,28 @@ public sealed class PushChannelTests : IClassFixture<PushSimulator>, IDisposable
     }
 
     [Theory]
+    [InlineData("array")]
+    [InlineData("string")]
+    [InlineData("error-string")]
+    public async Task An_fcm_503_whose_body_is_not_the_error_object_is_still_transient(string shape)
+    {
+        // A gateway's answer, not FCM's: the status alone decides, as for a body that is not JSON at all.
+        Answer(FcmPushProvider.Name, "gateway-1", 503, shape switch
+        {
+            "array" => Array.Empty<object>(),
+            "string" => "Service Unavailable",
+            _ => new { error = "Service Unavailable" }
+        });
+
+        PushUnavailableException thrown = await Should.ThrowAsync<PushUnavailableException>(() =>
+            _channel.SendAsync(PushSettings.To(FcmPushProvider.Name, "gateway-1"), Ct));
+
+        thrown.Cause.ShouldBe(PushFault.Transient);
+        thrown.HttpStatus.ShouldBe(503);
+        Sends(FcmPushProvider.Name).ShouldBe(2, "a 503 is retried (§9.7)");
+    }
+
+    [Theory]
     [InlineData("ExpiredProviderToken", true)]
     [InlineData("InvalidProviderToken", false)]
     public async Task Only_an_expired_apns_token_is_minted_again_inside_its_lifetime(string reason, bool again)
