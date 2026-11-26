@@ -95,6 +95,14 @@ Only comments are removed. An instrument's name is a string literal, so
 blanking strings as well would find nothing at all — and a `//` inside a string
 is not a comment, which the gate's own probe asserts in both directions.
 
+**An instrument the scan cannot read is a failure, not a skip.** A `Create`
+call whose name is not its first argument, as a string literal, is counted
+and refused, since it would otherwise vanish from checks 4, 5 and 6; and a
+unit passed by position, or as anything but a string literal, is refused,
+since it would read as none and check 4 would pass a series the exporter
+suffixes. Arguments are read at the top level, so a string inside `tags:` or
+an observable's callback is not mistaken for one.
+
 **What it does not do.** It reaches no Prometheus, no Grafana and no cluster,
 and it does **not** check that a rules file is valid to Prometheus. The Compose
 smoke does, for `platform-alerts.yaml` alone:
