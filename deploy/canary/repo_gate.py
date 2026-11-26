@@ -438,9 +438,10 @@ def _minimum_requests_express_the_error_rate(thresholds: dict) -> list[str]:
     minimum = thresholds.get("minimumRequests")
     if "errorRate" not in thresholds or "minimumRequests" not in thresholds:
         return []
+    # Finite as well: json.loads admits NaN, which every comparison below and analyse()'s answers False.
     for name, value in (("errorRate", rate), ("minimumRequests", minimum)):
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return [f"thresholds.{name} is {value!r}, which is not a number"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return [f"thresholds.{name} is {value!r}, which is not a finite number"]
     if rate <= 0:
         return [f"thresholds.errorRate is {rate}, so no sample can express it"]
     if minimum * rate < 1 - 1e-9:
