@@ -199,6 +199,15 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(verdict["decision"], analysis.ROLLBACK)
         self.assertIn("40", verdict["reason"])
 
+    def test_a_minimum_no_count_compares_with_rolls_back(self) -> None:
+        """A NaN minimum answers False to every comparison, so the question is
+        asked as whether the count is enough, not whether it falls short."""
+        verdict = analysis.analyse(
+            readings(canary={"http": {"requests": 40.0}}), THRESHOLDS | {"minimumRequests": float("nan")}, HTTP)
+
+        self.assertEqual(verdict["decision"], analysis.ROLLBACK)
+        self.assertIn("calls enough to judge", verdict["reason"])
+
     def test_a_quiet_consume_signal_rolls_back(self) -> None:
         """A declared signal below its minimum is the same silence as an HTTP
         series nobody published, and it is declared precisely so that it

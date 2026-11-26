@@ -487,6 +487,16 @@ class MinimumRequestsTests(unittest.TestCase):
 
                 self.assertTrue(repo_gate._minimum_requests_express_the_error_rate(thresholds))
 
+    def test_a_value_that_is_not_finite_fails_rather_than_passes(self) -> None:
+        for name in ("errorRate", "minimumRequests"):
+            for bad in (float("nan"), float("inf")):
+                with self.subTest(name=name, value=bad):
+                    thresholds = self.shipped() | {name: bad}
+
+                    failures = repo_gate._minimum_requests_express_the_error_rate(thresholds)
+
+                    self.assertTrue(any(name in f and "finite" in f for f in failures), failures)
+
     def test_check_runs_it(self) -> None:
         plan = descriptor_model.load_plan()
         plan["thresholds"] = dict(plan["thresholds"]) | {"minimumRequests": 50}

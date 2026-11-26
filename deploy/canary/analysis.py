@@ -160,11 +160,12 @@ def analyse(readings: dict, thresholds: dict, signals: dict) -> dict:
     minimum = thresholds["minimumRequests"]
     for signal in sorted(signals):
         counted = readings["canary"][signal]["requests"]
-        if counted < minimum:
+        # Asked as "enough?", so a minimum or a count no number compares with rolls back too.
+        if not counted >= minimum:
             return _verdict(
                 ROLLBACK,
                 f"the canary's {signal} signal counted {counted:.0f} in the "
-                f"step's window, below the {minimum} this plan calls enough to "
+                f"step's window, not the {minimum} this plan calls enough to "
                 "judge. Promoting on that is promoting on no evidence",
             )
 
