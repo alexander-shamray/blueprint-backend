@@ -14,6 +14,8 @@ public class ErasedIntakeTests
     private static readonly Guid Customer = Guid.CreateVersion7();
     private static readonly DateTimeOffset EventAt = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
 
+    private static readonly TimeProvider Clock = new FixedClock(EventAt.AddHours(1));
+
     private readonly RecordingDispatcher _dispatcher = new();
 
     [Fact]
@@ -21,7 +23,7 @@ public class ErasedIntakeTests
     {
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
 
-        await new ErasedIntake(_dispatcher, new Answers(erased: true))
+        await new ErasedIntake(_dispatcher, new Answers(erased: true), Clock)
             .RecordAsync(command, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldBe([command, new EndErasedOrderCommand(Customer, command.Parameters.OrderId)]);
@@ -32,7 +34,7 @@ public class ErasedIntakeTests
     {
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
 
-        await new ErasedIntake(_dispatcher, new Answers(erased: false))
+        await new ErasedIntake(_dispatcher, new Answers(erased: false), Clock)
             .RecordAsync(command, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(command);
@@ -45,7 +47,7 @@ public class ErasedIntakeTests
         Guid request = Guid.CreateVersion7();
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null, [request]));
 
-        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
 
         answers.PlacedAfter.ShouldHaveSingleItem().ShouldBe([request]);
     }
@@ -56,7 +58,7 @@ public class ErasedIntakeTests
         Answers answers = new(erased: false);
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
 
-        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
 
         answers.PlacedAfter.ShouldHaveSingleItem().ShouldBeEmpty();
     }
@@ -67,10 +69,25 @@ public class ErasedIntakeTests
         Answers answers = new(erased: false);
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
 
-        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
 
         answers.SourcedAt.ShouldHaveSingleItem()
             .ShouldBe(command.Parameters.OccurredAt, "the data left the owner then (ADR-139)");
+    }
+
+    [Fact]
+    public async Task A_forward_dated_event_is_checked_from_now_as_it_is_recorded()
+    {
+        // Past ClockMargin, where SqlErasedSubjects' ClosedAt > @Since would pass over a closed erasure (ADR-139).
+        Answers answers = new(erased: false);
+        RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null)) with
+        {
+            Parameters = new NotificationParameters { OrderId = Guid.CreateVersion7(), OccurredAt = EventAt.AddDays(3) }
+        };
+
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
+
+        answers.SourcedAt.ShouldHaveSingleItem().ShouldBe(Clock.GetUtcNow());
     }
 
     [Fact]
@@ -79,7 +96,7 @@ public class ErasedIntakeTests
         Answers answers = new(erased: true);
         RecordNotificationCommand command = Command(order: null);
 
-        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(command);
         answers.Asked.ShouldBeEmpty();
@@ -92,7 +109,7 @@ public class ErasedIntakeTests
         RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
         answers.OnAsked = () => _dispatcher.Sent.ShouldBe([command], "the record has to commit before the check");
 
-        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+        await new ErasedIntake(_dispatcher, answers, Clock).RecordAsync(command, TestContext.Current.CancellationToken);
 
         answers.Asked.ShouldBe([Customer]);
     }
@@ -128,6 +145,11 @@ public class ErasedIntakeTests
 
             return Task.FromResult(erased);
         }
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class RecordingDispatcher : IDispatcher

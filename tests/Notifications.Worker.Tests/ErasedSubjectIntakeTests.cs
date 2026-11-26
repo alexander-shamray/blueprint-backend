@@ -130,7 +130,11 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
             order,
             _subject,
             new SqlErasedSubjects(services.GetRequiredService<IDbConnectionFactory>()));
-        OrderPlacedHandler handler = new(new ErasedIntake(services.GetRequiredService<IDispatcher>(), between));
+        OrderPlacedHandler handler = new(
+            new ErasedIntake(
+                services.GetRequiredService<IDispatcher>(),
+                between,
+                services.GetRequiredService<TimeProvider>()));
 
         await handler.HandleAsync(
             OrderEvents.Placed(order, _subject, At),
