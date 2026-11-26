@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""Fail the build on a package pin whose licence has not been cleared.
+"""Fail the build on a package pin whose licence has not been cleared (Section 4.4).
 
-Appendix B registers what is cleared and `Directory.Packages.props` is what
-CI restores; Section 4.4 asks for a check that the two agree. Two ways a
-package reaches a restore around that file are read with it: a project
-pinning its own version, and one opting out of central management. The
-chapters are read for a different fault — a pin printed there restores
-nothing, but it gives the version a second owner the next raise must edit.
+The README's *What it reads* names every file read, and why.
 """
 
 from __future__ import annotations
@@ -78,15 +73,9 @@ SKIPPED_DIRECTORIES = frozenset({"obj", "bin", ".git"})
 # projects answer to that branch's pins and not to this one's.
 SKIPPED_ROOT_PATH = (".claude", "worktrees")
 
-# What a restore reads and this gate therefore has to. The props and targets
-# files are here because a `PackageReference` carrying a `Version` is legal in
-# any of them and reaches every project at once — a wider hole than the one a
-# `.csproj` opens, behind a spelling nobody looks at.
-#
-# `Directory.Packages.props` is deliberately NOT excluded. Its own elements are
-# `PackageVersion` and `GlobalPackageReference`, which this scan does not judge,
-# so including it costs nothing and a stray `PackageReference` written there is
-# caught rather than being the one file the check declines to read.
+# What a restore reads: a `PackageReference` carrying a `Version` is legal in a
+# props or targets file too, and reaches every project at once. The props file is
+# not excluded, so a stray `PackageReference` or `PackageDownload` there is caught.
 PROJECT_SUFFIXES = (".csproj", ".props", ".targets")
 
 # An MSBuild tag, and the two attributes that make a pin of it read one tag at
@@ -185,22 +174,11 @@ def find_projects(root: Path) -> list[Path]:
     return sorted(projects)
 
 
-def scan_projects(root: Path) -> list[str]:
-    """Every project-level spelling that restores what the pins do not name.
+def scan_projects(root: Path, pins_file: Path | None = None) -> list[str]:
+    """Every project-level spelling that restores what the pins do not name (README, *What it reads*).
 
-    All of them are ordinary central package management rather than anything
-    exotic: a `PackageReference` carrying a `Version` attribute, a
-    `VersionOverride`, or a `<Version>` child element resolves a version the
-    props file never declared, and a project setting
-    `ManagePackageVersionsCentrally` to anything but `true` takes itself out of
-    that file's reach entirely.
-
-    Parsed rather than grepped: a multi-line `PackageReference` with child
-    elements reads to a line pattern as unrelated lines.
-
-    An empty subject is a finding, not a clean result: a glob matching nothing
-    reports exactly what a repository with no fault reports, and from inside the
-    gate the two are indistinguishable.
+    Parsed rather than grepped, and an empty subject is a finding: a glob that
+    matched nothing reports what a repository with no fault reports.
     """
     projects = find_projects(root)
     if not projects:
@@ -209,12 +187,29 @@ def scan_projects(root: Path) -> list[str]:
                 f"nothing, "
                 f"which is not the same result as a scan that found nothing"]
 
+    pins_path = (pins_file or root / "Directory.Packages.props").resolve()
+    pins_name = pins_path.relative_to(root.resolve()).as_posix() if pins_path.is_relative_to(root.resolve()) \
+        else str(pins_path)
+
     findings: list[str] = []
     for project in projects:
         name = project.relative_to(root).as_posix()
         for element in parse_msbuild(project).iter():
             tag = local_name(element)
-            if tag.lower() == "packagereference":
+            # NuGet restores a pin from any imported file and read_pins reads one, and a
+            # PackageDownload names its own version wherever it is (README, What it refuses).
+            if tag.lower() in PIN_NAMES and project.resolve() != pins_path:
+                identity = element.attrib.get("Include", element.attrib.get("Update", "?"))
+                findings.append(
+                    f"{name}: {tag} {identity} pins a package outside {pins_name}, "
+                    f"which this gate reads alone, so it restores a package no register "
+                    f"row was asked about")
+            elif tag.lower() == "packagedownload":
+                identity = element.attrib.get("Include", element.attrib.get("Update", "?"))
+                findings.append(
+                    f"{name}: {tag} {identity} restores a version of its own, "
+                    f"which no pin declares and no register row was asked about")
+            elif tag.lower() == "packagereference":
                 identity = element.attrib.get("Include", element.attrib.get("Update", "?"))
                 # Item metadata is a name MSBuild reads without regard to case,
                 # as an attribute or as a child element alike.
@@ -390,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     projects = find_projects(args.projects)
     findings = audit(pins, rows, read_allowed(args.allowed))
     findings += chapter_pins(args.chapters)
-    findings += scan_projects(args.projects)
+    findings += scan_projects(args.projects, args.pins)
 
     if findings:
         print(f"Licence gate: {len(findings)} finding(s) across {len(pins)} pinned package(s) "
@@ -399,7 +394,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {finding}")
         print(f"\nReconcile {args.pins.name} and {args.register.name} in the same"
               f" change. A project naming a version of its own is reconciled the other"
-              f" way: move the pin into {args.pins.name} and register it. A chapter"
+              f" way: move the pin into {args.pins.name} and register it; a PackageDownload,"
+              f" which no pin can declare, is removed. A chapter"
               f" printing one loses the version and cites the file.")
         return 1
 

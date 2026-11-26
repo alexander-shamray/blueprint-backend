@@ -1,9 +1,9 @@
 # The licence gate
 
 **The claim: every package `Directory.Packages.props` pins has a licence
-somebody cleared, no project steps past that file by the `PackageReference`
-and central-management forms listed below, and no chapter writes a version
-the file owns as an MSBuild `Include`/`Version` pair.**
+somebody cleared, no project steps past that file by the `PackageReference`,
+pin-element and central-management forms listed below, and no chapter writes
+a version the file owns as an MSBuild `Include`/`Version` pair.**
 [§4.4](../../docs/backend-architecture/04-solution-structure.md) states the
 rule; this file owns what the gate reads to enforce it, what it refuses, and
 where its claim stops — which is narrower than "no package reaches a restore
@@ -22,13 +22,15 @@ uncleared", for the reason under *What it does not claim*.
   `SKIPPED_DIRECTORIES` in `licence_gate.py` names and outside
   `.claude/worktrees/`, where `/branch`'s worktrees hold other branches'
   checkouts, the props file included,
-  for the two ways a
+  for the ways a
   project steps past central pinning: a `PackageReference` naming its own
   version — a `Version` attribute, a `Version` child element or a
-  `VersionOverride` — and `ManagePackageVersionsCentrally` set to anything
-  but `true`. A shared `.props` does either for every project that imports
-  it — every project, for `Directory.Build.props` — which is why the scan
-  reaches past the projects.
+  `VersionOverride` — a `PackageVersion` or `GlobalPackageReference` in any
+  file but the props file, a `PackageDownload` in any file, and
+  `ManagePackageVersionsCentrally` set to anything but `true`. A shared
+  `.props` does any of these for every project that imports it — every
+  project, for `Directory.Build.props` — which is why the scan reaches past
+  the projects.
 - Every chapter and appendix under `docs/backend-architecture/`, for an
   MSBuild `Include`/`Version` pair — a pin printed into the blueprint.
   [`docs/change-locality.md`](../../docs/change-locality.md) §2 gives a
@@ -47,7 +49,11 @@ it off the build's path: it runs beside the build, never downstream of it.
   outlived its dependency. §4.4's carve-outs are encoded as exceptions to this
   one: the Aspire rows are deliberately unpinned, and an either/or row
   expects only its chosen half;
-- a project that pins for itself rather than through the props file;
+- a project that pins for itself rather than through the props file,
+  including a pin element written in another file, a file the props file
+  imports among them, since the pins are read from that one alone, and a
+  `PackageDownload` anywhere, since it names its own version and no pin can
+  declare one;
 - a pinned package whose register row's licence cell names nothing, empty
   or slashes alone: a cell read as no licences would otherwise clear itself;
 - a registered licence any part of which is outside `allowed-licences.txt`.
@@ -74,11 +80,6 @@ it off the build's path: it runs beside the build, never downstream of it.
   Aspire package is refused as unregistered, since the rows name globs, so
   the cell is read only once a row names the package and leaves
   `UNPINNED_ROWS`.
-- **A pin written anywhere but the props file.** A `PackageVersion` or
-  `GlobalPackageReference` in another imported `.props` or `.targets` is not
-  read as a pin, so a package supplied that way passes unregistered. That is
-  a gap in the gate rather than a decision, and closing it is a change to
-  `licence_gate.py` and its suite.
 - **Whether a version is current or safe.** It asks where a `Version` is
   written and nothing else about it, so currency and vulnerability scanning
   are a separate obligation and nothing here meets it.
