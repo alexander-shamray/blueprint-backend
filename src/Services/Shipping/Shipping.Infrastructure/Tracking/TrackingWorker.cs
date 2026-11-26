@@ -132,7 +132,9 @@ public sealed class TrackingWorker(
         // Asked before the carrier is, so a carrier that never answers cannot hold an address past the age (ADR-054).
         if (scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= GiveUpAge)
         {
-            Result abandoned = await dispatcher.SendAsync(new AbandonShipmentCommand(new ShipmentId(work.Id)), ct);
+            Result abandoned = await dispatcher.SendAsync(
+                new AbandonShipmentCommand(new ShipmentId(work.Id), work.LockedUntil),
+                ct);
 
             if (abandoned.IsSuccess)
                 Abandoned(log, work.Id, work.OrderId, GiveUpAge, null);
@@ -150,7 +152,7 @@ public sealed class TrackingWorker(
 
         // The command releases the claim through Shipment.PollApplied, in the commit that applied the page.
         Result result = await dispatcher.SendAsync(
-            new ApplyTrackingPageCommand(new ShipmentId(work.Id), page, nextPollAt),
+            new ApplyTrackingPageCommand(new ShipmentId(work.Id), page, nextPollAt, work.LockedUntil),
             ct);
 
         // A refusal rolled the unit back (§6.3), so it is not an applied page.

@@ -21,7 +21,7 @@ public class ShipmentPollTests
     {
         Shipment shipment = Booked();
 
-        shipment.PollApplied(Now.AddSeconds(30));
+        shipment.PollApplied(Now.AddSeconds(30), Now.AddSeconds(45));
 
         shipment.NextPollAt.ShouldBe(Now.AddSeconds(30));
     }
@@ -32,7 +32,7 @@ public class ShipmentPollTests
         Shipment shipment = Booked();
         shipment.Record("e1", TrackingStatus.Delivered, Now, Now);
 
-        shipment.PollApplied(Now.AddSeconds(30));
+        shipment.PollApplied(Now.AddSeconds(30), Now.AddSeconds(45));
 
         shipment.NextPollAt.ShouldBeNull(
             "a terminal shipment has no further fact to learn, and a row still due is a row the claim keeps");
@@ -60,7 +60,7 @@ public class ShipmentPollTests
         shipment.Cancel(Now);
         shipment.CarrierCancelled(Now);
 
-        shipment.PollApplied(Now.AddSeconds(30));
+        shipment.PollApplied(Now.AddSeconds(30), Now.AddSeconds(45));
 
         shipment.NextPollAt.ShouldBeNull();
     }

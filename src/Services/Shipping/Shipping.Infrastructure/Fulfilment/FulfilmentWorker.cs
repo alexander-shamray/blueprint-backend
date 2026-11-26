@@ -175,6 +175,7 @@ public sealed class FulfilmentWorker(
                 CommitOutcome ended = await CommitAsync(
                     sp,
                     id,
+                    work.LockedUntil,
                     (shipment, at) => shipment.CarrierRefusedCancellation(at),
                     ct);
 
@@ -190,6 +191,7 @@ public sealed class FulfilmentWorker(
             CommitOutcome answered = await CommitAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => cancellation switch
                 {
                     CancellationResult.Cancelled => shipment.CarrierCancelled(now),
@@ -209,6 +211,7 @@ public sealed class FulfilmentWorker(
             CommitOutcome abandoned = await CommitPendingAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => shipment.MarkUnfulfillable(GaveUpReason, now),
                 ct);
 
@@ -231,6 +234,7 @@ public sealed class FulfilmentWorker(
                 CommitOutcome unfulfillable = await CommitPendingAsync(
                     sp,
                     id,
+                    work.LockedUntil,
                     (shipment, now) => shipment.MarkUnfulfillable("no_such_order", now),
                     ct);
 
@@ -267,6 +271,7 @@ public sealed class FulfilmentWorker(
             CommitOutcome erased = await CommitPendingAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
                 ct);
 
@@ -280,6 +285,7 @@ public sealed class FulfilmentWorker(
             CommitOutcome declined = await CommitPendingAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => shipment.MarkUnfulfillable(refused.Reason, now),
                 ct);
 
@@ -295,6 +301,7 @@ public sealed class FulfilmentWorker(
             committed = await CommitPendingAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now),
                 ct);
         }
@@ -362,6 +369,7 @@ public sealed class FulfilmentWorker(
             await CommitAsync(
                 sp,
                 id,
+                work.LockedUntil,
                 (shipment, now) => shipment.KeepUnreturnedBooking(booked.Reference, booked.TrackingNumber, now),
                 CancellationToken.None);
         }
@@ -381,22 +389,24 @@ public sealed class FulfilmentWorker(
     private static async Task<CommitOutcome> CommitPendingAsync(
         IServiceProvider sp,
         ShipmentId id,
+        DateTimeOffset lease,
         Func<Shipment, DateTimeOffset, bool> move,
         CancellationToken ct)
     {
         try
         {
-            return await CommitAsync(sp, id, move, ct);
+            return await CommitAsync(sp, id, lease, move, ct);
         }
         catch (DbUpdateConcurrencyException)
         {
-            return await CommitAsync(sp, id, move, ct);
+            return await CommitAsync(sp, id, lease, move, ct);
         }
     }
 
     private static async Task<CommitOutcome> CommitAsync(
         IServiceProvider sp,
         ShipmentId id,
+        DateTimeOffset lease,
         Func<Shipment, DateTimeOffset, bool> move,
         CancellationToken ct)
     {
@@ -411,7 +421,7 @@ public sealed class FulfilmentWorker(
                 bool moved = move(shipment, sp.GetRequiredService<TimeProvider>().GetUtcNow());
 
                 // Released whatever the move decided, so a finished row does not hold its lease until it lapses.
-                shipment.ReleaseClaim();
+                shipment.ReleaseClaim(lease);
                 await unitOfWork.SaveChangesAsync(inner);
 
                 return new CommitOutcome(moved, shipment.Status);

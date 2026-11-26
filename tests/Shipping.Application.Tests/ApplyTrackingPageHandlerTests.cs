@@ -131,7 +131,7 @@ public class ApplyTrackingPageHandlerTests
         ShipmentId id,
         IReadOnlyList<CarrierEvent> page) =>
         new ApplyTrackingPageHandler(repository, new FixedClock(Recorded)).HandleAsync(
-            new ApplyTrackingPageCommand(id, page, Now.AddSeconds(30)),
+            new ApplyTrackingPageCommand(id, page, Now.AddSeconds(30), Now.AddSeconds(45)),
             TestContext.Current.CancellationToken);
 
     /// <summary><c>IShipmentRepository</c>, whole, whose members this handler never calls throw.</summary>

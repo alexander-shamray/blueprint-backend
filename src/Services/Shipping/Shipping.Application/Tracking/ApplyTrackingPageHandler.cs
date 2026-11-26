@@ -22,7 +22,7 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
         foreach (CarrierEvent carrierEvent in command.Page.OrderBy(Rank).ThenBy(e => e.OccurredAt))
             shipment.Record(carrierEvent.CarrierEventId, carrierEvent.Status, carrierEvent.OccurredAt, now);
 
-        shipment.PollApplied(command.NextPollAt);
+        shipment.PollApplied(command.NextPollAt, command.Lease);
 
         return Result.Success();
     }
