@@ -187,7 +187,38 @@ INSTRUMENT = re.compile(
     r"\s*(?:<[^>]+>)?\s*\(\s*\"([^\"]+)\"((?:\"(?:[^\"\\]|\\.)*\"|[^;\"])*?)\)\s*;",
     re.DOTALL)
 
-UNIT_ARGUMENT = re.compile(r"\bunit:\s*\"([^\"]*)\"")
+# Every instrument call, read or not, so a call INSTRUMENT cannot read is counted rather than dropped.
+INSTRUMENT_CALL = re.compile(r"Create(?:Observable)?(?:Histogram|Counter|Gauge|UpDownCounter)\s*(?:<[^>]+>)?\s*\(")
+
+STRING = re.compile(r"\"(?:[^\"\\]|\\.)*\"")
+NAMED = re.compile(r"(\w+)\s*:(?!:)")
+GENERIC = re.compile(r"(?<=\w)<[^<>;()]*(?:<[^<>;()]*>[^<>;()]*)*>")
+
+
+def top_level_arguments(rest: str) -> list[str] | None:
+    """The arguments after an instrument's name, split where no bracket, generic or string encloses; None
+    when the name is more than its literal or the arguments do not close where INSTRUMENT ended them."""
+    arguments, current, depth, i = [], "", 0, 0
+    while i < len(rest):
+        enclosed = STRING.match(rest, i) or GENERIC.match(rest, i)
+        if enclosed:
+            current += enclosed.group(0)
+            i = enclosed.end()
+            continue
+        char = rest[i]
+        depth += (char in "([{") - (char in ")]}")
+        if depth < 0:
+            return None
+        if char == "," and depth == 0:
+            arguments.append(current.strip())
+            current = ""
+        else:
+            current += char
+        i += 1
+    arguments.append(current.strip())
+    # Anything between the name and the first comma, `+ Suffix` or `.ToLower()`, would make the name a misreading.
+    return arguments[1:] if depth == 0 and not arguments[0] else None
+
 
 failures: list[str] = []
 
@@ -414,13 +445,36 @@ def declared_instruments() -> set[str]:
     for source in (ROOT / "src").rglob("*.cs"):
         if "/obj/" in source.as_posix() or "/bin/" in source.as_posix():
             continue
-        for match in INSTRUMENT.finditer(strip_comments(read(source))):
+        text = strip_comments(read(source))
+        matches = list(INSTRUMENT.finditer(text))
+        matched = {match.start() for match in matches}
+        unread = sum(1 for call in INSTRUMENT_CALL.finditer(text) if call.start() not in matched)
+        if unread:
+            # A name passed by `name:` or a constant would otherwise drop the instrument without a word.
+            fail(f"{source.relative_to(ROOT).as_posix()}: {unread} instrument call(s) INSTRUMENT cannot read; "
+                 "pass the name as the first argument, a string literal")
+        for match in matches:
             observable, kind, name, rest = match.groups()
-            unit_match = UNIT_ARGUMENT.search(rest or "")
-            unit = unit_match.group(1) if unit_match else ""
+            where = f"{source.relative_to(ROOT).as_posix()}: {name}"
+            arguments = top_level_arguments(rest or "")
+            if arguments is None:
+                fail(f"{where}: its name is more than a literal, or its arguments do not close where INSTRUMENT "
+                     "ends them, so it cannot be read")
+                continue
+            named = {m.group(1): a[m.end():].strip() for a in arguments if (m := NAMED.match(a))}
+            # An observable's callback is its first argument; any other positional one would be the unit.
+            positional = [a for a in arguments[1 if observable else 0:] if not NAMED.match(a)]
+            if positional:
+                fail(f"{where} passes {positional[0]!r} by position; name it unit: or description:")
+                continue
+            unit = named.get("unit", '""')
+            if not STRING.fullmatch(unit):
+                fail(f"{where} passes unit {unit!r}, which is not a string literal the scan can read")
+                continue
+            unit = unit[1:-1]
             if unit and unit not in UNIT_SUFFIX and not (unit.startswith("{") and unit.endswith("}")):
                 # A suffix this map does not know would name a series nobody writes, and check 4 would pass it.
-                fail(f"{source.relative_to(ROOT).as_posix()}: {name} has unit {unit!r}, which UNIT_SUFFIX "
+                fail(f"{where} has unit {unit!r}, which UNIT_SUFFIX "
                      "does not map; teach it the exporter's suffix for that unit")
                 continue
 

@@ -109,6 +109,64 @@ class InstrumentUnitTests(unittest.TestCase):
         self.assertEqual([], list(failures))
         self.assertIn("relay_unavailable_total", names)
 
+    def declared(self, source: str) -> tuple[set[str], list[str]]:
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "src").mkdir()
+        (root / "src" / "Metrics.cs").write_text(source, encoding="utf-8")
+        with (
+            mock.patch.object(check, "ROOT", root),
+            mock.patch.object(check, "failures", []) as failures,
+        ):
+            return check.declared_instruments(), list(failures)
+
+    def test_a_positional_unit_is_refused_rather_than_read_as_none(self) -> None:
+        names, found = self.declared('_d = meter.CreateHistogram<double>("request.duration", "ms");\n')
+
+        self.assertTrue(any("by position" in f for f in found), found)
+        self.assertNotIn("request_duration_bucket", names)
+
+    def test_a_description_continued_across_lines_is_not_positional(self) -> None:
+        names, found = self.declared(
+            '_c = meter.CreateCounter<long>("relay.sent", unit: "{send}",\n'
+            '    description: "One half, " +\n        "and the other.");\n')
+
+        self.assertEqual([], found)
+        self.assertIn("relay_sent_total", names)
+
+    def test_an_instrument_named_otherwise_than_first_is_counted_and_refused(self) -> None:
+        for call in ('meter.CreateCounter<long>(name: "relay.sent");', "meter.CreateCounter<long>(RelaySent);"):
+            with self.subTest(call=call):
+                _, found = self.declared(f"_c = {call}\n")
+
+                self.assertTrue(any("1 instrument call(s)" in f for f in found), found)
+
+    def test_a_unit_that_is_not_a_literal_is_refused(self) -> None:
+        for call, refusal in (
+                ('CreateHistogram<double>("x.duration", unit: Units.Seconds);', "not a string literal"),
+                ('CreateHistogram<double>("x.duration", Units.Seconds);', "by position"),
+                ('CreateHistogram<double>("x.duration", global::Units.Seconds);', "by position"),
+                ('CreateObservableGauge("x.duration", observeValue: () => 1, "s");', "by position"),
+                ('CreateObservableGauge("x.duration", () => { return Read(); }, unit: "s");', "cannot be read"),
+                ('CreateHistogram<double>("x.duration" + Suffix, unit: "s");', "cannot be read"),
+                ('CreateHistogram<double>("x.duration".ToLowerInvariant(), unit: "s");', "cannot be read")):
+            with self.subTest(call=call):
+                names, found = self.declared(f"_d = meter.{call}\n")
+
+                self.assertTrue(any(refusal in f for f in found), found)
+                self.assertNotIn("x_duration_bucket", names)
+                self.assertNotIn("x_duration", names)
+
+    def test_strings_inside_tags_or_a_callback_are_not_a_unit(self) -> None:
+        names, found = self.declared(
+            '_c = meter.CreateCounter<long>("relay.sent", unit: "{send}", description: "Sends.",\n'
+            '    tags: new Dictionary<string, object?> { ["lane"] = "x" });\n'
+            '_g = meter.CreateObservableGauge("relay.depth", () => Read(unit: "s"), unit: "{message}");\n')
+
+        self.assertEqual([], found)
+        self.assertIn("relay_sent_total", names)
+        self.assertIn("relay_depth", names)
+
     def test_an_unmapped_unit_is_refused(self) -> None:
         names, found = self.instruments("ms")
 
