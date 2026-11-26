@@ -93,6 +93,22 @@ class InstrumentUnitTests(unittest.TestCase):
         self.assertEqual([], found)
         self.assertIn("request_duration_bucket", names)
 
+    def test_a_semicolon_inside_a_description_does_not_end_the_arguments(self) -> None:
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "src").mkdir()
+        (root / "src" / "Metrics.cs").write_text(
+            '_c = meter.CreateCounter<long>("relay.unavailable", unit: "{attempt}",\n'
+            '    description: "A \\"fault; the row backs off.");\n', encoding="utf-8")
+        with (
+            mock.patch.object(check, "ROOT", root),
+            mock.patch.object(check, "failures", []) as failures,
+        ):
+            names = check.declared_instruments()
+
+        self.assertEqual([], list(failures))
+        self.assertIn("relay_unavailable_total", names)
+
     def test_an_unmapped_unit_is_refused(self) -> None:
         names, found = self.instruments("ms")
 
