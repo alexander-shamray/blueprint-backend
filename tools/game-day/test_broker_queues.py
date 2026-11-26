@@ -337,6 +337,34 @@ class DeadLetterScenarios(unittest.TestCase):
         self.assertTrue(error_queue.settled(world(Broker(queues={}), Alerts()))[0])
 
 
+class BacklogLag(unittest.TestCase):
+    """The first phase's first step, which reads the runbook's two queries for the paused consumer."""
+
+    def first_step(self, lag):
+        row = {"metric": {"service_name": queue_backlog.LOG_SERVICE}}
+        alerts = Alerts(query={queue_backlog.CONSUME_RATE: [{**row, "value": [0, "0.5"]}],
+                               queue_backlog.LAG_P95: [{**row, "value": [0, lag]}]})
+        original = queue_backlog.QUERY_WAIT_SECONDS
+        queue_backlog.QUERY_WAIT_SECONDS = 0
+        try:
+            return queue_backlog.first_step(world(Broker(), alerts, Compose(running=True)))
+        finally:
+            queue_backlog.QUERY_WAIT_SECONDS = original
+
+    def test_a_lag_past_two_seconds_is_the_runbooks_reading(self):
+        ok, detail = self.first_step("4.5")
+        self.assertTrue(ok, detail)
+        self.assertIn("p95 lag 4.5s", detail)
+
+    def test_a_nan_lag_is_no_reading_and_fails(self):
+        ok, detail = self.first_step("NaN")
+        self.assertFalse(ok, detail)
+        self.assertIn("lag 0", detail)
+
+    def test_a_short_lag_fails(self):
+        self.assertFalse(self.first_step("1.0")[0])
+
+
 class Backlog(unittest.TestCase):
     def setUp(self):
         self.backlog = queue_backlog.NEXT

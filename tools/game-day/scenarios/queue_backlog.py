@@ -66,8 +66,10 @@ def first_step(world: harness.World) -> tuple[bool, str]:
     found: dict[str, list] = {}
 
     def reads() -> tuple[bool, str]:
+        # A window with no delivery answers NaN, which is no reading: latency.py's first step skips it too.
         for key, query in (("rate", CONSUME_RATE), ("lag", LAG_P95)):
-            found[key] = [row for row in world.alerts.query(query) if row["metric"].get("service_name") == LOG_SERVICE]
+            found[key] = [row for row in world.alerts.query(query)
+                          if row["metric"].get("service_name") == LOG_SERVICE and row["value"][1] != "NaN"]
         counts = ", ".join(f"{key} {len(rows)}" for key, rows in found.items())
         return all(found.values()), f"series for {LOG_SERVICE}: {counts}"
 
@@ -76,7 +78,7 @@ def first_step(world: harness.World) -> tuple[bool, str]:
     except harness.Timeout as error:
         return False, str(error)
     rate, lag = found["rate"], found["lag"]
-    if float(lag[0]["value"][1]) <= 2:
+    if not float(lag[0]["value"][1]) > 2:
         return False, f"the runbook's lag query does not read past 2s for {LOG_SERVICE}: {lag}"
     return True, f"{LOG_SERVICE} finishes {float(rate[0]['value'][1]):.3f} messages/s, p95 lag {float(lag[0]['value'][1]):.1f}s"
 
