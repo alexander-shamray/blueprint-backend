@@ -12,4 +12,5 @@ public sealed record OutboxClaim(
     int Attempts,
     DateTimeOffset OccurredAt,
     string? TraceParent,
-    string? TraceState);
+    string? TraceState,
+    DateTimeOffset Lease);

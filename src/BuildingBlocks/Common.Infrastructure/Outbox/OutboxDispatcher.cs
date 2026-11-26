@@ -134,7 +134,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.Attempts,
                 inserted.OccurredAt,
                 inserted.TraceParent,
-                inserted.TraceState
+                inserted.TraceState,
+                inserted.LockedUntil AS Lease
             FROM {table.QualifiedName} AS outbox
             INNER JOIN claimable
                 ON claimable.Id = outbox.Id;
@@ -152,6 +153,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
 
         // Backs off by pushing the lease forward, on the attempts before the one the claim counted (ADR-211). At the
         // cap the lease is cleared instead, since §13.6's abandoned count skips a leased row as maybe still tried.
+        // Only while the lease is still this pass's: a lapsed pass would overwrite a reclaimer's lease (ADR-217).
         _failSql =
             $"""
             UPDATE {table.QualifiedName}
@@ -166,7 +168,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                                       ELSE Attempts - 1 END) * {BackoffBaseSeconds},
                         SYSDATETIMEOFFSET())
                 END
-            WHERE Id = @Id;
+            WHERE Id = @Id
+                AND LockedUntil = @Lease;
             """;
     }
 
@@ -318,7 +321,10 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             try
             {
                 await connection.ExecuteAsync(
-                    new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
+                    new CommandDefinition(
+                        _failSql,
+                        new { message.Id, message.Lease, Error = ex.ToString() },
+                        cancellationToken: ct));
             }
             catch (Exception write) when (!ct.IsCancellationRequested)
             {

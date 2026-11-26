@@ -535,7 +535,7 @@ populated on the write path:
 | Type | Used by | Shape |
 |---|---|---|
 | `OutboxMessage` | EF entity, `db.OutboxMessages` | All columns but `ClaimBucket`, a shadow property its configuration declares |
-| `OutboxClaim` | Dapper, the dispatcher's `OUTPUT` projection | Id, MessageId, CorrelationId, MessageType, Payload, Lane, Attempts, OccurredAt, TraceParent, TraceState |
+| `OutboxClaim` | Dapper, the dispatcher's `OUTPUT` projection | Id, MessageId, CorrelationId, MessageType, Payload, Lane, Attempts, OccurredAt, TraceParent, TraceState, Lease |
 
 Both live in `Common.Infrastructure/Outbox`. `OutboxMessage.Stage` is the one
 constructor, and its guards are what make §9.3's allow-list structural rather
@@ -926,7 +926,8 @@ OUTPUT
     inserted.Attempts,
     inserted.OccurredAt,
     inserted.TraceParent,
-    inserted.TraceState
+    inserted.TraceState,
+    inserted.LockedUntil AS Lease
 FROM {table.QualifiedName} AS outbox
 INNER JOIN claimable
     ON claimable.Id = outbox.Id;
@@ -966,12 +967,18 @@ SET
                           ELSE Attempts - 1 END) * {BackoffBaseSeconds},
             SYSDATETIMEOFFSET())
     END
-WHERE Id = @Id;
+WHERE Id = @Id
+    AND LockedUntil = @Lease;
 ```
 
 At the cap the lease is cleared rather than pushed forward: the claim will
 never take the row again, and §13.6's abandoned count skips a leased row, which
 since the claim counts an attempt before its outcome may still be delivering.
+`@Lease` is the `LockedUntil` the claim set, which its `OUTPUT` returns as
+`OutboxClaim.Lease`, so a pass whose lease lapsed and was claimed again fails
+no row: it would otherwise back off, or clear, the lease of the replica now
+delivering it
+([ADR-217](adr/ADR-217-the-outbox-fail-statement-matches-only-the-lease-its-pass-holds-2186.md)).
 
 The truncation and the column are one decision read twice: `LEFT` writes what
 `LastError` holds, so `OutboxMessage` states the width, the statement above
@@ -1043,7 +1050,10 @@ catch (Exception ex) when (!ct.IsCancellationRequested)
     try
     {
         await connection.ExecuteAsync(
-            new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
+            new CommandDefinition(
+                _failSql,
+                new { message.Id, message.Lease, Error = ex.ToString() },
+                cancellationToken: ct));
     }
     catch (Exception write) when (!ct.IsCancellationRequested)
     {
@@ -1206,22 +1216,22 @@ Consequences of the per-row design worth stating explicitly:
   ([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md));
   a batch slower than the lease lets a second replica reclaim
   the whole batch — the rows this one has not reached yet, and since completion
-  waits for the pass's end (ADR-161), the ones it has delivered too — and the
-  complete and fail statements match on `Id` alone, so the slow worker can then
-  write over a lease it no longer holds. Every outcome is a **duplicate
-  delivery**, which is exactly what at-least-once already promises and what
+  waits for the pass's end (ADR-161), the ones it has delivered too. The fail
+  statement matches only the lease its pass holds, as above; the complete
+  statement matches on `Id` alone, so the slow worker still marks processed
+  a row it delivered while the second replica delivers it again. Every
+  outcome is a **duplicate delivery**, which is exactly what at-least-once
+  already promises and what
   §9.5's inbox and §6.6's idempotent projections already absorb — so nothing
   here is unsound, and the cost is a redelivery, and one more attempt counted
   on each reclaimed row (ADR-211), rather than a lost or double-applied
   message.
 
-  Closing it properly means a claim token: the claim returns the
-  `LockedUntil` it set, and completion carries `AND LockedUntil = @Claimed` so
-  a stale worker's update matches no row. That is a change to the claim
-  protocol and to every test that drives it, and it belongs with the §13.6
-  work that alerts on this table. Until then the mitigation is operational and
-  stated: a lane whose pass approaches `LeaseSeconds` wants a smaller
-  `ClaimBatchSize` or a longer `LeaseSeconds`, and §13.6's outbox-age alert is
+  Completion is left unguarded on purpose
+  ([ADR-217](adr/ADR-217-the-outbox-fail-statement-matches-only-the-lease-its-pass-holds-2186.md)).
+  The mitigation is operational and stated: a lane whose pass approaches
+  `LeaseSeconds` wants a smaller `ClaimBatchSize` or a longer `LeaseSeconds`,
+  and §13.6's outbox-age alert is
   what makes that visible. A `Broker` pass lasts its rows' delivery over
   `BrokerConcurrency`; a `Local` pass its rows' delivery over
   `LocalConcurrency`, but never less than its largest command's rows one after
