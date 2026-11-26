@@ -183,7 +183,8 @@ UNIT_SUFFIX = {"s": "_seconds", "By": "_bytes", "1": "_ratio"}
 # queries a name nothing writes. The whole point of check 4 is that it cannot.
 INSTRUMENT = re.compile(
     r"Create(Observable)?(Histogram|Counter|Gauge|UpDownCounter)"
-    r"\s*(?:<[^>]+>)?\s*\(\s*\"([^\"]+)\"([^;]*?)\)\s*;",
+    # The arguments read a string whole, since strip_comments keeps strings and a description may hold a `;`.
+    r"\s*(?:<[^>]+>)?\s*\(\s*\"([^\"]+)\"((?:\"(?:[^\"\\]|\\.)*\"|[^;\"])*?)\)\s*;",
     re.DOTALL)
 
 UNIT_ARGUMENT = re.compile(r"\bunit:\s*\"([^\"]*)\"")
