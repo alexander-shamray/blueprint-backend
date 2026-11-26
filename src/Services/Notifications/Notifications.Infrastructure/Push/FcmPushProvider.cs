@@ -178,7 +178,10 @@ internal sealed class FcmPushProvider : IPushProvider
             await using Stream body = await response.Content.ReadAsStreamAsync(ct);
             using JsonDocument answer = await JsonDocument.ParseAsync(body, cancellationToken: ct);
 
-            if (!answer.RootElement.TryGetProperty("error", out JsonElement error) ||
+            // Each level asked its kind first, since TryGetProperty throws on a non-object, as an intermediary sends.
+            if (answer.RootElement.ValueKind != JsonValueKind.Object ||
+                !answer.RootElement.TryGetProperty("error", out JsonElement error) ||
+                error.ValueKind != JsonValueKind.Object ||
                 !error.TryGetProperty("details", out JsonElement details) ||
                 details.ValueKind != JsonValueKind.Array)
             {
