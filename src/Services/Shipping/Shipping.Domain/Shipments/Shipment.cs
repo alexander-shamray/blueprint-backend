@@ -200,19 +200,27 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     }
 
     /// <summary>Drops the fulfilment pass's lease and resets its backoff, the claim itself being raw SQL.</summary>
-    public void ReleaseClaim()
+    /// <remarks>A lease that lapsed and was claimed again is left to the pass now holding it (ADR-052).</remarks>
+    public void ReleaseClaim(DateTimeOffset lease)
     {
-        LockedUntil = null;
+        Release(lease);
         Attempts = 0;
     }
 
     /// <summary>Drops the tracking pass's lease, resets its backoff, and schedules a live row's poll.</summary>
     /// <remarks><c>Attempts</c> is the fulfilment pass's, and this pass leaves it alone (ADR-054).</remarks>
-    public void PollApplied(DateTimeOffset nextPollAt)
+    public void PollApplied(DateTimeOffset nextPollAt, DateTimeOffset lease)
     {
         NextPollAt = Status is ShipmentStatus.Booked or ShipmentStatus.Dispatched ? nextPollAt : null;
-        LockedUntil = null;
+        Release(lease);
         PollAttempts = 0;
+    }
+
+    // The SQL back-offs' AND LockedUntil = @Lease, held here because both commits load the row after any reclaim.
+    private void Release(DateTimeOffset lease)
+    {
+        if (LockedUntil == lease)
+            LockedUntil = null;
     }
 
     private bool Dispatch(DateTimeOffset now)

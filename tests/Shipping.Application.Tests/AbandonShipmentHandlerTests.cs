@@ -60,7 +60,7 @@ public class AbandonShipmentHandlerTests
 
     private static Task<Result> Handle(FakeShipments repository, ShipmentId id) =>
         new AbandonShipmentHandler(repository, new FixedClock(Handled)).HandleAsync(
-            new AbandonShipmentCommand(id),
+            new AbandonShipmentCommand(id, Handled.AddSeconds(45)),
             TestContext.Current.CancellationToken);
 
     /// <summary><c>IShipmentRepository</c>, whole, answering one shipment by id; its other members throw.</summary>

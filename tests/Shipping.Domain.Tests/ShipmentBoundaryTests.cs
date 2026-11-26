@@ -163,10 +163,35 @@ public class ShipmentBoundaryTests
         SetPrivately(shipment, nameof(Shipment.LockedUntil), (DateTimeOffset?)Now.AddMinutes(5));
         SetPrivately(shipment, nameof(Shipment.Attempts), 3);
 
-        shipment.ReleaseClaim();
+        shipment.ReleaseClaim(Now.AddMinutes(5));
 
         shipment.LockedUntil.ShouldBeNull();
         shipment.Attempts.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Releasing_a_claim_whose_lease_was_claimed_again_leaves_the_new_lease()
+    {
+        // The fulfilment commit loads the row after any reclaim, so the version check cannot tell the two apart.
+        Shipment shipment = Booked();
+        SetPrivately(shipment, nameof(Shipment.LockedUntil), (DateTimeOffset?)Now.AddMinutes(6));
+
+        shipment.ReleaseClaim(Now.AddMinutes(5));
+
+        shipment.LockedUntil.ShouldBe(Now.AddMinutes(6), "the lease is the pass's that claimed the row again");
+    }
+
+    [Fact]
+    public void A_page_applied_under_a_lease_claimed_again_leaves_the_new_lease()
+    {
+        // The tracking commit's mirror: a lapsed poll must not free a row the fulfilment pass is cancelling.
+        Shipment shipment = Booked();
+        SetPrivately(shipment, nameof(Shipment.LockedUntil), (DateTimeOffset?)Now.AddMinutes(6));
+
+        shipment.PollApplied(Now.AddSeconds(30), Now.AddMinutes(5));
+
+        shipment.LockedUntil.ShouldBe(Now.AddMinutes(6), "the lease is the pass's that claimed the row again");
+        shipment.NextPollAt.ShouldBe(Now.AddSeconds(30));
     }
 
     [Fact]

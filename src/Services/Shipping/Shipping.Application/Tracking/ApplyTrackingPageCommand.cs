@@ -8,4 +8,5 @@ namespace Shipping.Application.Tracking;
 public sealed record ApplyTrackingPageCommand(
     ShipmentId ShipmentId,
     IReadOnlyList<CarrierEvent> Page,
-    DateTimeOffset NextPollAt) : ICommand<Result>;
+    DateTimeOffset NextPollAt,
+    DateTimeOffset Lease) : ICommand<Result>;
