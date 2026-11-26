@@ -238,7 +238,7 @@ public class IntakeMappingTests
         handlers.Length.ShouldBe(TemplateKeys.Placeholders.Count);
     }
 
-    private ErasedIntake Intake() => new(_dispatcher, new NobodyErased());
+    private ErasedIntake Intake() => new(_dispatcher, new NobodyErased(), TimeProvider.System);
 
     private sealed class NobodyErased : IErasedSubjects
     {
