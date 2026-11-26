@@ -345,7 +345,7 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     [Fact]
     public async Task A_type_stored_other_than_the_keys_is_refused()
     {
-        // A JPEG body under a key the BFF would have minted for a PNG: both halves must agree with the key.
+        // A PNG body stored as a JPEG under a PNG key: the bytes agree with the key, so only the stored type refuses.
         Guid seller = Guid.CreateVersion7();
         Guid image = Guid.CreateVersion7();
         string source = ProductImageKeys.UploadKey(seller, image, "png");
@@ -357,7 +357,7 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
                 {
                     BucketName = ObjectStoreFixture.Bucket,
                     Key = source,
-                    InputStream = new MemoryStream(Jpeg),
+                    InputStream = new MemoryStream(Png),
                     ContentType = "image/jpeg"
                 },
                 Ct);
