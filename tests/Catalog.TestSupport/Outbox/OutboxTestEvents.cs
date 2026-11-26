@@ -29,6 +29,12 @@ public sealed record BlocksUntilReleased : IDomainEvent
     public DateTimeOffset OccurredAt { get; init; }
 }
 
+/// <summary>Blocks like <see cref="BlocksUntilReleased"/>, then fails, so a lapsed pass fails on cue.</summary>
+public sealed record BlocksThenThrows : IDomainEvent
+{
+    public DateTimeOffset OccurredAt { get; init; }
+}
+
 /// <summary>Holds <see cref="BlocksUntilReleased"/>'s handler; static, as the container resolves it per row.</summary>
 public static class DeliveryGate
 {
@@ -62,6 +68,17 @@ public sealed class BlockingProjection : IProjectionHandler<BlocksUntilReleased>
     {
         DeliveryGate.Entered.TrySetResult();
         await DeliveryGate.Wait;
+    }
+}
+
+/// <summary>Waits on the gate, then fails, so the failure lands after the test has moved the lease.</summary>
+public sealed class BlockingThrowingProjection : IProjectionHandler<BlocksThenThrows>
+{
+    public async Task HandleAsync(BlocksThenThrows domainEvent, CancellationToken ct)
+    {
+        DeliveryGate.Entered.TrySetResult();
+        await DeliveryGate.Wait;
+        throw new InvalidOperationException("this projection fails once released");
     }
 }
 

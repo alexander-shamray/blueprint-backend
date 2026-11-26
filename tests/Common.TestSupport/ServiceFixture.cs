@@ -377,6 +377,13 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             lane.ToString(),
             messageId);
 
+    /// <summary>Leases a row as another replica's claim would, through the column the claim writes.</summary>
+    public Task SetOutboxLeaseAsync(Guid messageId, DateTimeOffset lockedUntil) =>
+        ExecuteAsync(
+            $"UPDATE {_schema}.OutboxMessages SET LockedUntil = {{0}} WHERE MessageId = {{1}};",
+            lockedUntil,
+            messageId);
+
     /// <summary>The engine's own clock, which stamps every back-off, since the container's and the host's can
     /// disagree.</summary>
     public Task<DateTimeOffset> DatabaseNowAsync() =>

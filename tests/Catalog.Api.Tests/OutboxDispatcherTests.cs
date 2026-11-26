@@ -152,6 +152,40 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task A_pass_whose_lease_lapsed_leaves_the_reclaimers_lease_and_error_alone()
+    {
+        // A delivery outlasting LeaseSeconds, stood in for by leasing the row afresh while the first pass is still
+        // inside its handler, as a second replica's claim would; the first pass's failure must then match no row.
+        DeliveryGate.Close();
+        try
+        {
+            OutboxMessage row = OutboxRows.BlockingPoison(fixture);
+            await fixture.StageOutboxAsync(row);
+
+            Task<int> lapsed = fixture.ProcessOutboxBatchAsync();
+            await DeliveryGate.Entered.Task.WaitAsync(
+                TimeSpan.FromSeconds(30),
+                TestContext.Current.CancellationToken);
+
+            DateTimeOffset reclaimed =
+                (await fixture.DatabaseNowAsync()).AddSeconds(OutboxDispatcher.LeaseSeconds);
+            await fixture.SetOutboxLeaseAsync(row.MessageId, reclaimed);
+
+            DeliveryGate.Open();
+            (await lapsed).ShouldBe(0);
+
+            OutboxMessage after = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+            after.LockedUntil.ShouldBe(reclaimed);
+            after.LastError.ShouldBeNull();
+        }
+        finally
+        {
+            // Opened whatever happened, as the test above does.
+            DeliveryGate.Open();
+        }
+    }
+
+    [Fact]
     public async Task A_broker_row_is_published_and_completed()
     {
         // The Broker half of DeliverAsync against the fixture's real broker, asserted by the row's completion.
